@@ -1,6 +1,6 @@
 # ADR 0007: Exit code 4 for incomplete runs
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-14
 - **Deciders:** @Ludocius
 - **Changes:** the exit-code contract (architecture §4, `internal/exitcode`)
