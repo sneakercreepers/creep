@@ -12,4 +12,14 @@
 // deadline, and the host validates every record the guest returns before it
 // builds a Tree. A Tree holds grammar node types and byte offsets only; the
 // source text stays in the caller's buffer.
+//
+// An Extractor turns Python trees into a Graph of Flask and FastAPI routes,
+// the sinks their handlers reach (SQL, shell, file, HTTP client, template)
+// and how auth was seen (decorator, dependency, call). Graph holds only IDs,
+// enums, booleans and counts, so it can go to the planner; paths, handler
+// names and lines go to a separate Locations value for the report.
+// Extraction works per file, from syntax alone: imports resolve aliases,
+// blueprints and routers compose prefixes within the file, and auth is a
+// name-based hint. Every walk is iterative and every per-route list and
+// string is capped, so a hostile file costs linear time and bounded memory.
 package static

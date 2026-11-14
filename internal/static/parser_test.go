@@ -15,7 +15,7 @@ var sharedParser = sync.OnceValues(func() (*Parser, error) {
 	return NewParser(context.Background())
 })
 
-func testParser(t *testing.T) *Parser {
+func testParser(t testing.TB) *Parser {
 	t.Helper()
 	p, err := sharedParser()
 	if err != nil {
