@@ -7,6 +7,8 @@
 //
 //	runs/<id>/events.jsonl   append-only event log of one run
 //	cache/<sha256>.json      one recorded model response, shared across runs
+//	calibrations/<sha256>.json  one model calibration (internal/calibrate),
+//	                         kept in a store under the user's cache directory
 //
 // The run directory is also where the gateway writes egress.log (Run.Dir).
 //
