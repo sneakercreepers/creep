@@ -71,7 +71,7 @@ A package may import only packages in **lower** layers and only those listed in 
 | `static` | tree-sitter (WASM) routes, sinks and auth; optional scanners | Output is IDs and enums only; grammars run in wazero with memory, node and time caps, and guest records are validated; `DynamicArg` fails closed (constant only if every binding is a constant simple assignment); vendor, generated (exact generator markers in the leading comments) and minified files are listed as `File.Ignored`, never dropped; paths are repo-relative | ✅ parsing (#85), Flask/FastAPI routes, sinks and auth (#86), fail-closed `DynamicArg` (#185), vendor and generated code listed as ignored (#88); ⬜ #87, #10 |
 | `calibrate` | Seeded tasks, per-class score, tier, 30-day cache | Same seed gives the same tasks; runs through gateway | ✅ task generator (#89), per-class Wilson score, probes and tier (#90), 30-day cache per model and task set, `--recalibrate`, report header line (#91) |
 | `planner` | Hypotheses from IDs and enums | **Never receives repository text** (no import of `reader`, `redact`, `static` text types) | ⬜ #12 |
-| `reader` | Quarantined reading, closed output schema | Output never flows to planner as text: the planner gets only `Signal` (IDs, enums, numbers) | ✅ prompts and schema (#92, #93); ⬜ #94, #95 |
+| `reader` | Quarantined reading, closed output schema | Output never flows to planner as text: the planner gets only `Signal` (IDs, enums, numbers) | ✅ prompts and schema (#92, #93), slices from redacted files (#94); ⬜ #95 |
 | `report` | SARIF, JSON (`schema_version`), Markdown, coverage, data handling from `egress.log` | Every class is covered, partial or not evaluated; every not-scanned file is listed; an incomplete run is never clean; repository strings escaped | ✅ (#14; `creep why` and scan wiring wait for the pipeline) |
 | `sandbox`, `verify` | Container runtime, internal network, PoC runs | No internet; never on the host | ⬜ v0.2 |
 | `mcp` | Read-only MCP server | No sandbox, no writes | ⬜ v0.3 |
@@ -94,7 +94,7 @@ These follow semver once v1.0 ships. Before then, any change needs a note in the
 | HTTP model contract | `models` | OpenAI-compatible + Anthropic |
 | Command model contract | `models` | stdin prompt, stdout JSON |
 | Recipes, presets, language kits | `recipes/`, `presets/`, kits | own `version:`; data, not code |
-| Prompts | `prompts/` in the package that sends them: `internal/reader/prompts/` (one variant per tier S/M/L), `internal/calibrate/prompts/` (one variant, since calibration runs before a tier is known) | `PromptVersion` per package; token-budget test (`prompts_test.go`) |
+| Prompts | `prompts/` in the package that sends them: `internal/reader/prompts/` (one variant per tier S/M/L), `internal/calibrate/prompts/` (one variant, since calibration runs before a tier is known); the reader user turn (`HYPOTHESIS` line, numbered `CODE` lines, truncation notes) is built by `internal/reader/render.go` within `sliceBudget` per tier | `PromptVersion` per package; token-budget test (`prompts_test.go`) |
 
 ## 5. Extension points
 
@@ -151,7 +151,8 @@ Automated checks that guard an architectural property. A new property needs a ch
 | Small files | Go file cap of 400 lines, build-tagged files included (`lineProblems`) | `make budget` |
 | Agent loop cannot erode | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md, PR template (`policy.go`) | `make budget` |
 | Workflows are pinned and safe | Immutable action/image pins, no `pull_request_target`; actionlint, zizmor | `make budget`, CI |
-| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`), gateway fragment scan test | `make check` |
+| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`), gateway fragment scan test, reader slice tests: a slice masks a secret that only whole-file redaction finds (`reader/slice_test.go`) | `make check` |
+| Reader slices fail closed and keep repository text as data | Unreadable and redact-rejected files are listed as not scanned; `ErrRunFull` stops the run as incomplete; lines out of range are refused, and a file whose lines redaction shifted is listed as not scanned; every repository line sits behind its number with control, format and separator runes escaped, so none can fake a code line or header; the slice budget holds after escaping (`reader/slice_test.go`, `render_test.go`, `flow_test.go`) | `make check` |
 | Model spend is bounded | Over-budget and concurrent-overspend tests, AIMD table test (`gateway/budget_test.go`, `aimd_test.go`; race on Linux CI) | `make check` |
 | Redaction stays linear | `TestRedactLargeInputIsBounded`; `Benchmark*` in `internal/redact` | `make check`; benchmarks at the per-version review |
 | No known-vulnerable code or leaked secret | govulncheck, gitleaks over full history, CodeQL | CI |
@@ -167,7 +168,7 @@ Automated checks that guard an architectural property. A new property needs a ch
 | Static hints fail closed and nothing is silently skipped | Any non-constant or unmodeled binding (branches, try, tuple targets, loops, with, walrus, parameters, nested headers, lists changed in place) makes a sink `DynamicArg`; vendor, generated and minified files keep a `File` entry with their `Ignored` reason; loose generator wording, strings and docstrings never mark a file generated; absolute paths are refused (`internal/static/pybind_test.go`, `ignore_test.go`) | `make check` |
 | Parser stays sandboxed and pinned | Embedded grammars match `SHA256SUMS`; modules import only the allowlisted WASI calls; hostile records and over-limit files fail closed (`internal/static/grammar_test.go`, `parser_test.go`, `tree_test.go`) | `make check` |
 | A cached calibration is never stale or planted | Expiry boundaries, key on model, endpoint, seed and task set, corrupt, planted, re-tiered and newer-version files (`calibrate/cache_test.go`, `state/calibration_test.go`, v1 fixture `state/testdata/v1/calibration.json`) | `make check` |
-| Prompts stay within their token budget | System prompt plus schema per reader tier, and plus the largest user turn per calibration call kind, against `promptBudget` (`reader/prompts_test.go`, `calibrate/prompts_test.go`) | `make check` |
+| Prompts stay within their token budget | System prompt plus schema per reader tier, plus the largest slice against `sliceBudget` and the whole call per tier, and plus the largest user turn per calibration call kind, against `promptBudget` (`reader/prompts_test.go`, `reader/render_test.go`, `calibrate/prompts_test.go`) | `make check` |
 | Reader output never reaches the planner as text (invariant 3) | No string, byte or rune sequence, map, interface, func or chan is reachable from `reader.Signal`; hostile replies (unknown fields, trailing text, out-of-range or overlapping lines, huge numbers) are rejected (`reader/signal_test.go`, `output_test.go`) | `make check` |
 
 Function length has no automated check; the auditor reviews it.

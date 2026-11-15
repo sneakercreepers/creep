@@ -33,6 +33,37 @@ func TestPromptTokenBudget(t *testing.T) {
 	}
 }
 
+// TestCallTokenBudget fails when a whole reader call can grow past its
+// tier's budget: system prompt, schema and the largest slice Build makes
+// (TestSliceStaysWithinBudget holds every slice to sliceBudget). Smaller
+// tiers must not get a larger call than bigger ones.
+func TestCallTokenBudget(t *testing.T) {
+	callBudget := map[Tier]int{TierS: 4000, TierM: 6400, TierL: 11000}
+	src, sink := hugeHandler()
+	prev := 0
+	for _, tier := range tiers {
+		system, err := System(tier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		slice, ok := sliceBudget[tier]
+		if !ok {
+			t.Fatalf("tier %s has no slice budget", tier)
+		}
+		largest := build(t, tier, map[string]string{"h.py": src}, Target{1, ClassSQLInjection, "h.py", 2, sink}).Slices[0]
+		if len(largest.Text) > slice {
+			t.Errorf("tier %s slice takes %d tokens, budget %d", tier, len(largest.Text), slice)
+		}
+		if used := len(system) + len(Schema()) + slice; used > callBudget[tier] || used < prev {
+			t.Errorf("tier %s call takes up to %d tokens, budget %d, smaller tier %d", tier, used, callBudget[tier], prev)
+		}
+		prev = len(system) + len(Schema()) + slice
+	}
+	if len(sliceBudget) != len(tiers) {
+		t.Errorf("sliceBudget has %d tiers, want %d", len(sliceBudget), len(tiers))
+	}
+}
+
 // TestPromptsMatchSchema keeps every variant describing the same answer
 // the schema accepts, so editing one tier cannot drift from the decoder.
 func TestPromptsMatchSchema(t *testing.T) {
