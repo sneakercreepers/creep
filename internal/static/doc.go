@@ -23,14 +23,18 @@
 // name-based hint. A sink argument is constant only when every binding of
 // each name it uses is a simple assignment of a constant anywhere in the
 // function; branches, loops, try, tuple targets, walrus, parameters and any
-// binding not understood make it dynamic (fails closed, #185). Every walk is
+// binding not understood make it dynamic (fails closed, #185). Nested def
+// and class headers (decorators, defaults, annotations, bases) count as part
+// of the enclosing function, and a name never holds a list, since a list can
+// change in place before the sink. Every walk is
 // iterative, every per-route list and string is capped, and argument
 // analysis is memoized per name under a per-file visit budget (past it,
 // sinks count as dynamic and the route and file are marked partial), so a
 // hostile file costs linear time and bounded memory.
 //
-// IgnoreReason marks vendor directories, files with a generated-code
-// marker near the top and minified scripts; callers list them with
+// IgnoreReason marks vendor directories (in a repo-relative path), files
+// whose leading comment block carries an exact generator marker and
+// minified scripts; callers list them with
 // AddIgnored (AddPython does so itself) as File.Ignored with a reason, so
 // they are reported as not evaluated, never silently dropped.
 //

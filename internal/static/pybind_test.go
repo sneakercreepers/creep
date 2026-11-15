@@ -46,6 +46,66 @@ var dynamicArgCases = []struct {
 	{"comprehension variable over-marks, fails closed", "q = 'ls'\n[q for q in request.args]", true},
 	{"attribute target does not bind", "q = 'ls'\nself.q = request.args['q']", false},
 	{"subscript target does not bind", "q = 'ls'\nd[q] = request.args['q']", false},
+	// Tester probes on PR #189: a list bound to a name can change in place.
+	{"list append", "q = ['ls']\nq.append(request.args['q'])", true},
+	{"list extend", "q = ['ls']\nq.extend(request.args)", true},
+	{"list insert", "q = ['ls']\nq.insert(0, request.args['q'])", true},
+	{"list subscript set", "q = ['ls', 'x']\nq[1] = request.args['q']", true},
+	{"list slice set", "q = ['ls']\nq[:] = request.args['q']", true},
+	{"list del item", "q = ['ls', '-l']\ndel q[0]", true},
+	{"list augmented subscript", "q = ['ls']\nq[0] += request.args['q']", true},
+	{"list passed to a call", "q = ['ls']\nmutate(q)", true},
+	{"list nested in tuple", "q = ('ls', ['-l'])", true},
+	{"tuple of strings", "q = ('ls', '-l')", false},
+	// Nested def and class headers run in the enclosing scope.
+	{"walrus in decorator", "q = 'ls'\n@(q := request.args['q'])\ndef f():\n    pass", true},
+	{"walrus in default", "q = 'ls'\ndef f(a=(q := request.args['q'])):\n    pass", true},
+	{"walrus in annotation", "q = 'ls'\ndef f(a: (q := request.args['q'])):\n    pass", true},
+	{"walrus in return annotation", "q = 'ls'\ndef f() -> (q := request.args['q']):\n    pass", true},
+	{"walrus in class base", "q = 'ls'\nclass C((q := request.args['q'])):\n    pass", true},
+	{"walrus in lambda default", "q = 'ls'\nf = lambda a=(q := request.args['q']): a", true},
+	{"except star as", "q = 'ls'\ntry:\n    pass\nexcept* Exception as q:\n    pass", true},
+	{"async for", "q = 'ls'\nasync for q in request.args:\n    pass", true},
+	{"async with", "q = 'ls'\nasync with c() as q:\n    pass", true},
+	{"match as", "q = 'ls'\nmatch request.args:\n    case str() as q:\n        pass", true},
+	{"match bare capture", "q = 'ls'\nmatch request.args:\n    case q:\n        pass", true},
+	{"match mapping rest", "q = 'ls'\nmatch request.args:\n    case {**q}:\n        pass", true},
+	{"match star", "q = 'ls'\nmatch request.args:\n    case [*q]:\n        pass", true},
+	{"parenthesized target", "q = 'ls'\n(q) = request.args['q']", true},
+	{"chained with input", "q = r = request.args['q']", true},
+	{"chained tuple inner", "q = 'ls'\nr = (q, s) = request.args", true},
+	{"type alias", "q = 'ls'\ntype q = int", true},
+	{"walrus in comprehension condition", "q = 'ls'\n[v for v in x if (q := v)]", true},
+	{"walrus in generator", "q = 'ls'\nlist((q := v) for v in x)", true},
+	{"f-string", "q = f\"{request.args['q']}\"", true},
+	{"conditional expression", "q = 'a' if x else request.args['q']", true},
+	{"global in a nested def is another scope", "q = 'ls'\ndef g():\n    global q\n    q = request.args['q']", false},
+}
+
+// TestSinkInNestedHeaderIsFound: a call in a nested def's decorator or
+// default runs in the enclosing function, so its sinks belong to it.
+func TestSinkInNestedHeaderIsFound(t *testing.T) {
+	for _, body := range []string{
+		"@cache(os.system(request.args['c']))\ndef f():\n    pass",
+		"def f(a=os.system(request.args['c'])):\n    pass",
+		"class C(base(os.system(request.args['c']))):\n    pass",
+	} {
+		src := "import os\nfrom flask import Flask, request\napp = Flask(__name__)\n@app.get('/a')\ndef h():\n" + indent(body)
+		g, _ := extractSource(t, src)
+		if len(g.Sinks) != 1 || g.Sinks[0].Kind != SinkShell || !g.Sinks[0].DynamicArg {
+			t.Errorf("%q: sinks %+v, want one dynamic shell sink", body, g.Sinks)
+		}
+	}
+}
+
+// TestFreshListArgumentStaysConstant: a list literal written in the sink
+// call itself cannot be changed before the call.
+func TestFreshListArgumentStaysConstant(t *testing.T) {
+	src := "import subprocess\nfrom flask import Flask\napp = Flask(__name__)\n@app.get('/a')\ndef h():\n    flag = '-l'\n    subprocess.run(['ls', flag])\n"
+	g, _ := extractSource(t, src)
+	if len(g.Sinks) != 1 || g.Sinks[0].DynamicArg {
+		t.Errorf("sinks %+v, want one constant", g.Sinks)
+	}
 }
 
 func TestDynamicArgFailsClosed(t *testing.T) {

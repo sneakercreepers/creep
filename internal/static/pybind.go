@@ -44,10 +44,10 @@ func (x *pyExtraction) scanNode(s *bodyScan, n *Node) bool {
 	switch n.Type {
 	case "function_definition", "class_definition":
 		x.bindAll(*s, field(n, "name"))
-		return false
-	case "decorated_definition":
-		x.bindAll(*s, field(field(n, "definition"), "name"))
-		return false
+		x.scanHeader(s, n)
+		return false // the body is its own scope; decorators were walked
+	case "type_alias_statement":
+		x.bindAll(*s, n)
 	case "call":
 		s.calls = append(s.calls, n)
 	case "assignment":
@@ -68,6 +68,20 @@ func (x *pyExtraction) scanNode(s *bodyScan, n *Node) bool {
 		}
 	}
 	return true
+}
+
+// scanHeader walks the parts of a nested def or class that run in the
+// enclosing scope: defaults and annotations, the return annotation, type
+// parameters and base classes. A walrus or a sink there belongs to the
+// enclosing function. Each header belongs to one definition, so every node
+// is still scanned a bounded number of times.
+func (x *pyExtraction) scanHeader(s *bodyScan, def *Node) {
+	for _, c := range def.Children {
+		switch c.Field {
+		case "parameters", "return_type", "type_parameters", "superclasses":
+			walk(c, func(n *Node) bool { return x.scanNode(s, n) })
+		}
+	}
 }
 
 // addAssign records `name = value` (also chained `a = b = value` and
@@ -109,8 +123,11 @@ func (x *pyExtraction) bindAll(s bodyScan, n *Node) {
 
 // constant reports whether n is built only from literals. It does not
 // descend into calls, so the arguments of different sinks never share
-// visited nodes.
-func (x *pyExtraction) constant(n *Node, s bodyScan) bool {
+// visited nodes. A list counts only when fresh, written in the sink call
+// itself: a list bound to a name can be changed in place (q.append(user),
+// q[0] = user, f(q)) between the assignment and the sink, so a name only
+// holds immutable constants (strings, numbers, tuples of them).
+func (x *pyExtraction) constant(n *Node, s bodyScan, fresh bool) bool {
 	x.constBudget--
 	if x.constBudget < 0 {
 		return false
@@ -122,8 +139,11 @@ func (x *pyExtraction) constant(n *Node, s bodyScan) bool {
 	case "integer", "float", "true", "false", "none":
 		return true
 	case "list", "tuple", "parenthesized_expression", "binary_operator":
+		if n.Type == "list" && !fresh {
+			return false
+		}
 		for _, c := range namedChildren(n) {
-			if !x.constant(c, s) {
+			if !x.constant(c, s, fresh) {
 				return false
 			}
 		}
@@ -153,7 +173,7 @@ func (x *pyExtraction) constantName(name string, s bodyScan) bool {
 	s.names[name] = nameBusy
 	v := nameConst
 	for _, r := range rhs {
-		if !x.constant(r, s) {
+		if !x.constant(r, s, false) {
 			v = nameDynamic
 			break
 		}

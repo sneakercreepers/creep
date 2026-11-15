@@ -105,7 +105,7 @@ func (x *pyExtraction) directSinks(s bodyScan) []foundSink {
 		out = append(out, foundSink{
 			api:           api,
 			line:          line(call),
-			dynamic:       first != nil && !x.constant(first, s),
+			dynamic:       first != nil && !x.constant(first, s, true),
 			parameterized: api.Kind() == SinkSQL && (len(pos) > 1 || hasKeyword(x.file, kw, "parameters", "params")),
 			partial:       x.constBudget < 0,
 		})
