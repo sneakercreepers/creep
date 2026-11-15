@@ -120,6 +120,8 @@ def c(db=Depends(get_db)):
 GET /b fastapi auth=dependency params=0 dynamic=false handler=b:11
 GET /c fastapi auth=decorator params=0 dynamic=false handler=c:15
 `},
+	// q is also bound by `q += user`, so both sinks on q are dynamic: the
+	// analysis is flow-insensitive and fails closed (#185).
 	{"helpers, assignments and two routes on one handler", `from flask import Flask, render_template_string
 app = Flask(__name__)
 def run(sql):
@@ -139,12 +141,12 @@ def h():
     nested_only()
     return render_template_string(t)
 `, `GET /a flask auth=none params=0 dynamic=false handler=h:10
-  sql .execute line=12 dynamic=false parameterized=false indirect=false
+  sql .execute line=12 dynamic=true parameterized=false indirect=false
   sql .execute line=14 dynamic=true parameterized=false indirect=false
   template flask.render_template_string line=18 dynamic=true parameterized=false indirect=false
   sql .execute line=4 dynamic=true parameterized=true indirect=true
 GET /b flask auth=none params=0 dynamic=false handler=h:10
-  sql .execute line=12 dynamic=false parameterized=false indirect=false
+  sql .execute line=12 dynamic=true parameterized=false indirect=false
   sql .execute line=14 dynamic=true parameterized=false indirect=false
   template flask.render_template_string line=18 dynamic=true parameterized=false indirect=false
   sql .execute line=4 dynamic=true parameterized=true indirect=true
