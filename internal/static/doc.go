@@ -20,23 +20,34 @@
 // names and lines go to a separate Locations value for the report.
 // Extraction works per file, from syntax alone: imports resolve aliases,
 // blueprints and routers compose prefixes within the file, and auth is a
-// name-based hint. A sink argument is constant only when every binding of
-// each name it uses is a simple assignment of a constant anywhere in the
-// function; branches, loops, try, tuple targets, walrus, parameters and any
-// binding not understood make it dynamic (fails closed, #185). Nested def
-// and class headers (decorators, defaults, annotations, bases) count as part
-// of the enclosing function, and a name never holds a list, since a list can
-// change in place before the sink. Every walk is
-// iterative, every per-route list and string is capped, and argument
-// analysis is memoized per name under a per-file visit budget (past it,
-// sinks count as dynamic and the route and file are marked partial), so a
-// hostile file costs linear time and bounded memory.
+// name-based hint.
 //
-// IgnoreReason marks vendor directories (in a repo-relative path), files
-// whose leading comment block carries an exact generator marker and
-// minified scripts; callers list them with
-// AddIgnored (AddPython does so itself) as File.Ignored with a reason, so
-// they are reported as not evaluated, never silently dropped.
+// DynamicArg fails closed (#185): a name counts as constant only when every
+// binding of it in the function is a simple assignment of a string, number
+// or tuple of them, whatever the control flow between them. Branches, try,
+// tuple and starred targets, for, with, except, walrus, augmented
+// assignment, parameters, imports, global, nonlocal (also from a nested
+// function), match captures, nested def or class names, cycles and any
+// binding not understood make it dynamic. Nested def and class headers
+// (decorators, defaults, annotations, bases) are scanned as part of the
+// enclosing function. A name never holds a list, since a list can change in
+// place before the sink; a list literal written in the sink call can.
+//
+// Every walk is iterative, every per-route list and string is capped, and
+// argument analysis is memoized per name under a per-file visit budget
+// (past it, sinks count as dynamic and the route and file are marked
+// partial), so a hostile file costs linear time and bounded memory.
+//
+// IgnoreReason decides, before parsing, which files are not evaluated:
+// vendor directories (vendor, node_modules, site-packages, virtualenvs and
+// the like, matched on directory segments of a repo-relative path; absolute
+// or escaping paths are an error), files whose leading comment block
+// carries an exact generator marker ("Code generated ... DO NOT EDIT.",
+// "@generated" as the first word, or protoc's header; strings, docstrings
+// and loose wording never count), and minified scripts (*.min.js, or an
+// average line over 500 bytes; never Python). Callers list them with
+// AddIgnored (AddPython does so itself) as File.Ignored with the reason, so
+// the report shows them as not evaluated; they are never silently dropped.
 //
 // Known limits: a blueprint or router mounted from another file
 // (register_blueprint or include_router across modules) keeps only the
