@@ -13,7 +13,7 @@
 //     it; prompts_test.go fails when a prompt grows past it. Tokens are
 //     counted as bytes, the same upper bound models reserves per call.
 //   - The model's reply decodes into Answer, a closed struct (output.go):
-//     models.Complete refuses unknown fields, prose around the JSON object
+//     models.Complete refuses unknown, duplicate and case-variant keys, prose around the JSON object
 //     and wrong types, then Answer.Validate allows only a verdict from the
 //     enum, at most MaxEvidence ascending, non-overlapping line ranges and
 //     an integer confidence from 0 to 100. Schema and Grammar send the same

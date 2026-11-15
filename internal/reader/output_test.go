@@ -104,6 +104,12 @@ func TestAnswerRejectsHostileOutput(t *testing.T) {
 		{"repeated range", `{"verdict":"vulnerable","evidence":[{"start":3,"end":3},{"start":3,"end":3}],"confidence":9}`},
 		{"descending ranges", `{"verdict":"vulnerable","evidence":[{"start":7,"end":8},{"start":3,"end":4}],"confidence":9}`},
 		{"too many ranges", `{"verdict":"vulnerable","evidence":[` + ranges(MaxEvidence+1) + `],"confidence":9}`},
+		{"duplicate verdict", `{"verdict":"not_vulnerable","verdict":"vulnerable",` + ok + `}`},
+		{"duplicate confidence", `{"verdict":"vulnerable","evidence":[{"start":3,"end":4}],"confidence":5,"confidence":90}`},
+		{"case-variant key", `{"Verdict":"vulnerable",` + ok + `}`},
+		{"case-variant beside exact", `{"verdict":"vulnerable","VERDICT":"inconclusive",` + ok + `}`},
+		{"nested duplicate", `{"verdict":"vulnerable","evidence":[{"start":3,"end":4,"end":9}],"confidence":9}`},
+		{"nested case variant", `{"verdict":"vulnerable","evidence":[{"Start":3,"end":4}],"confidence":9}`},
 		{"array reply", `[{"verdict":"vulnerable",` + ok + `}]`},
 		{"empty reply", ``},
 	}
