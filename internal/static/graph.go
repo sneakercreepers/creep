@@ -44,6 +44,9 @@ type Route struct {
 	// literal, so the full path is unknown.
 	DynamicPath bool
 	Auth        AuthVia
+	// Partial is set when the route's sinks were cut at a cap or their
+	// analysis ran out of budget; File.Truncated is set too.
+	Partial bool
 }
 
 // Sink is a dangerous call reachable from a route handler.

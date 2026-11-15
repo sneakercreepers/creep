@@ -10,6 +10,9 @@ type foundSink struct {
 	api                         SinkAPI
 	line                        int
 	dynamic, parameterized, ind bool
+	// partial is set when the constant-argument budget ran out, so dynamic
+	// is a conservative guess.
+	partial bool
 }
 
 // handlerFacts is what a function body shows: its sinks (direct, then those
@@ -18,6 +21,7 @@ type handlerFacts struct {
 	sinks     []foundSink
 	authCall  bool
 	truncated bool // more than maxRouteSinks sinks
+	partial   bool // a sink's analysis ran out of budget
 }
 
 // bodyScan is one pass over a function body.
@@ -29,8 +33,10 @@ type bodyScan struct {
 // maxRouteSinks caps the sinks kept per handler.
 const maxRouteSinks = 256
 
-// maxConstDepth bounds how many `name = ...` hops DynamicArg follows.
-const maxConstDepth = 3
+// maxConstVisits caps the nodes DynamicArg analysis visits per file. With
+// memoized assignments real files need far fewer; past the cap every sink is
+// treated as dynamic and its route marked partial (fails closed).
+const maxConstVisits = 1 << 16
 
 // authWords mark a function, decorator or dependency as an auth check.
 var authWords = []string{"auth", "login", "jwt", "token", "permission", "admin", "require", "current_user", "role", "oauth", "api_key", "apikey", "credential", "signed_in", "logged_in", "protected"}
@@ -80,6 +86,7 @@ func (h *handlerFacts) add(sinks []foundSink, indirect bool) {
 			return
 		}
 		s.ind = indirect
+		h.partial = h.partial || s.partial
 		h.sinks = append(h.sinks, s)
 	}
 }
@@ -146,16 +153,22 @@ func (x *pyExtraction) directSinks(s bodyScan) []foundSink {
 		out = append(out, foundSink{
 			api:           api,
 			line:          line(call),
-			dynamic:       first != nil && !x.constant(first, s, first.StartByte, maxConstDepth),
+			dynamic:       first != nil && !x.constant(first, s, first.StartByte),
 			parameterized: api.Kind() == SinkSQL && (len(pos) > 1 || hasKeyword(x.file, kw, "parameters", "params")),
+			partial:       x.constBudget < 0,
 		})
 	}
 	return out
 }
 
 // constant reports whether n is built only from literals, following local
-// assignments made before offset `before`.
-func (x *pyExtraction) constant(n *Node, s bodyScan, before uint32, depth int) bool {
+// assignments made before offset `before`. It does not descend into calls,
+// so the arguments of different sinks never share visited nodes.
+func (x *pyExtraction) constant(n *Node, s bodyScan, before uint32) bool {
+	x.constBudget--
+	if x.constBudget < 0 {
+		return false
+	}
 	switch n.Type {
 	case "string", "concatenated_string":
 		_, ok := x.file.literalString(n)
@@ -164,16 +177,31 @@ func (x *pyExtraction) constant(n *Node, s bodyScan, before uint32, depth int) b
 		return true
 	case "list", "tuple", "parenthesized_expression", "binary_operator":
 		for _, c := range namedChildren(n) {
-			if !x.constant(c, s, before, depth) {
+			if !x.constant(c, s, before) {
 				return false
 			}
 		}
 		return true
 	case "identifier":
 		rhs := lastAssignBefore(s.assigns[x.file.text(n)], before)
-		return depth > 0 && rhs != nil && x.constant(rhs, s, rhs.StartByte, depth-1)
+		return rhs != nil && x.constantAssign(rhs, s)
 	}
 	return false
+}
+
+// constantAssign memoizes constant per right-hand side, so a chain such as
+// z = "a" + ...; y = z + z; x = y + y is evaluated once per assignment
+// instead of once per path through the chain. An identifier only resolves to
+// an assignment that starts earlier, so the recursion cannot cycle.
+func (x *pyExtraction) constantAssign(rhs *Node, s bodyScan) bool {
+	if v, ok := x.constMemo[rhs]; ok {
+		return v
+	}
+	v := x.constant(rhs, s, rhs.StartByte)
+	if x.constBudget >= 0 {
+		x.constMemo[rhs] = v
+	}
+	return v
 }
 
 // lastAssignBefore picks the last right-hand side starting before offset;

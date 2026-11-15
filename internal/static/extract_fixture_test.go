@@ -24,8 +24,12 @@ func summarize(g Graph, l Locations) string {
 	}
 	for _, r := range g.Routes {
 		loc := l.Routes[r.ID]
-		fmt.Fprintf(&b, "%s %s %s auth=%s params=%d dynamic=%v handler=%s:%d\n",
-			r.Methods, loc.Path, r.Framework, r.Auth, r.PathParams, r.DynamicPath, loc.Handler, loc.Line)
+		partial := ""
+		if r.Partial {
+			partial = " partial=true"
+		}
+		fmt.Fprintf(&b, "%s %s %s auth=%s params=%d dynamic=%v handler=%s:%d%s\n",
+			r.Methods, loc.Path, r.Framework, r.Auth, r.PathParams, r.DynamicPath, loc.Handler, loc.Line, partial)
 		for _, s := range g.Sinks {
 			if s.Route == r.ID {
 				fmt.Fprintf(&b, "  %s %s line=%d dynamic=%v parameterized=%v indirect=%v\n",

@@ -13,18 +13,24 @@ const maxFileRoutes = 4096
 // ErrGraphFull means the graph ran out of 32-bit IDs.
 var ErrGraphFull = errors.New("route graph full")
 
+// extractLimits are the per-file caps; tests lower them.
+type extractLimits struct {
+	routes      int // routes kept per file
+	constVisits int // node visits for DynamicArg analysis per file
+}
+
 // Extractor builds one Graph from many parsed files. IDs are assigned in the
 // order files and routes are added, so the same input gives the same graph.
 // It is not safe for concurrent use.
 type Extractor struct {
-	graph     Graph
-	locs      Locations
-	maxRoutes int
+	graph Graph
+	locs  Locations
+	lim   extractLimits
 }
 
 // NewExtractor returns an empty Extractor.
 func NewExtractor() *Extractor {
-	return &Extractor{maxRoutes: maxFileRoutes}
+	return &Extractor{lim: extractLimits{routes: maxFileRoutes, constVisits: maxConstVisits}}
 }
 
 // AddPython extracts Flask and FastAPI routes, their sinks and auth from a
@@ -39,11 +45,11 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 	case int(tree.Root.EndByte) > len(src):
 		return fmt.Errorf("extract %s: tree does not match source", path)
 	}
-	routes, truncated := extractPython(tree.Root, src, e.maxRoutes)
+	routes, truncated := extractPython(tree.Root, src, e.lim)
 	sinks := 0
 	for _, r := range routes {
 		sinks += len(r.facts.sinks)
-		truncated = truncated || r.facts.truncated
+		truncated = truncated || r.facts.truncated || r.facts.partial
 	}
 	if !fits(len(e.graph.Files)+1) || !fits(len(e.graph.Routes)+len(routes)) || !fits(len(e.graph.Sinks)+sinks) {
 		return fmt.Errorf("extract %s: %w", path, ErrGraphFull)
@@ -62,6 +68,7 @@ func (e *Extractor) addRoute(file FileID, r pyRoute) {
 	e.graph.Routes = append(e.graph.Routes, Route{
 		ID: id, File: file, Framework: r.framework, Methods: r.methods,
 		PathParams: pathParams(r.framework, r.path), DynamicPath: r.dynamic, Auth: r.auth,
+		Partial: r.facts.truncated || r.facts.partial,
 	})
 	e.locs.Routes = append(e.locs.Routes, RouteLocation{Path: r.path, Handler: r.handler, Line: r.line})
 	for _, s := range r.facts.sinks {

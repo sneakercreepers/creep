@@ -36,6 +36,9 @@ type pyExtraction struct {
 	helpers   map[*Node][]foundSink
 	scans     map[*Node]bodyScan
 	prefixes  map[string]mountPrefix
+	// constMemo and constBudget bound DynamicArg analysis (pyhandler.go).
+	constMemo   map[*Node]bool
+	constBudget int // nodes DynamicArg analysis may still visit
 }
 
 // pyRoute is a route before it gets IDs.
@@ -50,17 +53,19 @@ type pyRoute struct {
 	facts     handlerFacts
 }
 
-// extractPython returns the routes in one file, at most maxRoutes; truncated
+// extractPython returns the routes in one file, at most lim.routes; truncated
 // is set when more were declared.
-func extractPython(root *Node, src []byte, maxRoutes int) (routes []pyRoute, truncated bool) {
+func extractPython(root *Node, src []byte, lim extractLimits) (routes []pyRoute, truncated bool) {
 	x := &pyExtraction{
-		file:      newPyFile(root, src),
-		receivers: map[string]*receiver{},
-		authVars:  map[string]bool{},
-		handlers:  map[*Node]handlerFacts{},
-		helpers:   map[*Node][]foundSink{},
-		scans:     map[*Node]bodyScan{},
-		prefixes:  map[string]mountPrefix{},
+		file:        newPyFile(root, src),
+		receivers:   map[string]*receiver{},
+		authVars:    map[string]bool{},
+		handlers:    map[*Node]handlerFacts{},
+		helpers:     map[*Node][]foundSink{},
+		scans:       map[*Node]bodyScan{},
+		prefixes:    map[string]mountPrefix{},
+		constMemo:   map[*Node]bool{},
+		constBudget: lim.constVisits,
 	}
 	x.collectReceivers(root)
 	walk(root, func(n *Node) bool {
@@ -68,8 +73,8 @@ func extractPython(root *Node, src []byte, maxRoutes int) (routes []pyRoute, tru
 			return !truncated
 		}
 		routes = append(routes, x.decorated(n)...)
-		if len(routes) > maxRoutes {
-			routes, truncated = routes[:maxRoutes], true
+		if len(routes) > lim.routes {
+			routes, truncated = routes[:lim.routes], true
 		}
 		return true
 	})
@@ -105,10 +110,11 @@ func (x *pyExtraction) decorated(n *Node) []pyRoute {
 		auth |= AuthCall
 	}
 	handler := capText(x.file.text(field(def, "name")), maxHandlerBytes)
+	paramsAuth := x.paramsAuth(def) // once per def, not per decorator
 	for i := range routes {
 		r := &routes[i]
 		r.auth |= auth
-		if r.framework == FastAPI && x.paramsAuth(def) {
+		if r.framework == FastAPI && paramsAuth {
 			r.auth |= AuthDependency
 		}
 		r.handler, r.line, r.facts = handler, line(def), facts

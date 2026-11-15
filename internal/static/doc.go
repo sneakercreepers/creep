@@ -20,6 +20,15 @@
 // names and lines go to a separate Locations value for the report.
 // Extraction works per file, from syntax alone: imports resolve aliases,
 // blueprints and routers compose prefixes within the file, and auth is a
-// name-based hint. Every walk is iterative and every per-route list and
-// string is capped, so a hostile file costs linear time and bounded memory.
+// name-based hint. Every walk is iterative, every per-route list and string
+// is capped, and argument analysis is memoized per assignment under a
+// per-file visit budget (past it, sinks count as dynamic and the route and
+// file are marked partial), so a hostile file costs linear time and bounded
+// memory.
+//
+// Known limits: a blueprint or router mounted from another file
+// (register_blueprint or include_router across modules) keeps only the
+// prefix and dependencies visible in its own file; add_url_rule,
+// add_api_route and class-based views are not read; sinks are followed one
+// helper deep within the file.
 package static

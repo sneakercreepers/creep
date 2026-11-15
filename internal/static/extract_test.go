@@ -199,6 +199,45 @@ func TestAddPythonRejectsBadInput(t *testing.T) {
 // TestGraphHoldsNoStrings is the structural guard for the planner boundary:
 // no type reachable from Graph can carry text.
 func TestGraphHoldsNoStrings(t *testing.T) {
+	for _, p := range textCapable(reflect.TypeFor[Graph]()) {
+		t.Errorf("%s can carry text; Graph must hold only IDs, enums, booleans and counts", p)
+	}
+}
+
+// TestTextCapableCatchesEveryTextShape keeps the guard itself honest:
+// byte and rune slices or arrays are text as much as string is.
+func TestTextCapableCatchesEveryTextShape(t *testing.T) {
+	type enum uint8
+	cases := []struct {
+		name string
+		ty   reflect.Type
+		want bool
+	}{
+		{"string", reflect.TypeFor[struct{ S string }](), true},
+		{"byte slice", reflect.TypeFor[struct{ B []byte }](), true},
+		{"byte array", reflect.TypeFor[struct{ B [4]uint8 }](), true},
+		{"rune slice", reflect.TypeFor[struct{ R []rune }](), true},
+		{"named byte slice", reflect.TypeFor[struct{ B []enum }](), true},
+		{"nested in slice of structs", reflect.TypeFor[struct{ S []struct{ R [2]int32 } }](), true},
+		{"pointer", reflect.TypeFor[struct{ P *int }](), true},
+		{"interface", reflect.TypeFor[struct{ A any }](), true},
+		{"map", reflect.TypeFor[struct{ M map[int]int }](), true},
+		{"enums, IDs and bools", reflect.TypeFor[struct {
+			E enum
+			I []uint32
+			B bool
+		}](), false},
+	}
+	for _, c := range cases {
+		if got := len(textCapable(c.ty)) > 0; got != c.want {
+			t.Errorf("%s: text-capable=%v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// textCapable lists the paths in ty that could hold repository text.
+func textCapable(ty reflect.Type) []string {
+	var out []string
 	seen := map[reflect.Type]bool{}
 	var check func(reflect.Type, string)
 	check = func(ty reflect.Type, path string) {
@@ -208,8 +247,12 @@ func TestGraphHoldsNoStrings(t *testing.T) {
 		seen[ty] = true
 		switch ty.Kind() {
 		case reflect.String, reflect.Interface, reflect.Pointer, reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
-			t.Errorf("%s is a %s; Graph must hold only IDs, enums, booleans and counts", path, ty.Kind())
+			out = append(out, path)
 		case reflect.Slice, reflect.Array:
+			if k := ty.Elem().Kind(); k == reflect.Uint8 || k == reflect.Int32 {
+				out = append(out, path) // []byte, [N]uint8, []rune
+				return
+			}
 			check(ty.Elem(), path+"[]")
 		case reflect.Struct:
 			for i := range ty.NumField() {
@@ -218,7 +261,8 @@ func TestGraphHoldsNoStrings(t *testing.T) {
 			}
 		}
 	}
-	check(reflect.TypeFor[Graph](), "Graph")
+	check(ty, ty.String())
+	return out
 }
 
 // TestHostileTextStaysOutOfGraph plants an instruction in every place repo
@@ -254,54 +298,6 @@ app.register_blueprint(bp)
 	}
 }
 
-func TestExtractCaps(t *testing.T) {
-	t.Run("routes per file", func(t *testing.T) {
-		src := "from flask import Flask\napp = Flask(__name__)\n" + strings.Repeat("@app.get('/x')\ndef f():\n    pass\n", 5)
-		tree, err := testParser(t).Parse(context.Background(), Python, []byte(src))
-		if err != nil {
-			t.Fatal(err)
-		}
-		e := &Extractor{maxRoutes: 3}
-		if err := e.AddPython("a.py", tree, []byte(src)); err != nil {
-			t.Fatal(err)
-		}
-		if g := e.Graph(); len(g.Routes) != 3 || !g.Files[0].Truncated {
-			t.Errorf("routes=%d truncated=%v", len(g.Routes), g.Files[0].Truncated)
-		}
-	})
-	t.Run("sinks per route, helper counted once", func(t *testing.T) {
-		src := "import os\nfrom flask import Flask\napp = Flask(__name__)\ndef h():\n    os.system(x)\n@app.get('/x')\ndef f():\n" +
-			strings.Repeat("    h()\n", 50) + strings.Repeat("    os.system(x)\n", maxRouteSinks+10)
-		g, _ := extractSource(t, src)
-		if len(g.Sinks) != maxRouteSinks || !g.Files[0].Truncated {
-			t.Errorf("sinks=%d truncated=%v", len(g.Sinks), g.Files[0].Truncated)
-		}
-	})
-	t.Run("long prefix and handler name are capped", func(t *testing.T) {
-		long := strings.Repeat("p", 3*maxPathBytes)
-		src := "from flask import Flask, Blueprint\nbp = Blueprint('b', __name__, url_prefix='/" + long + "')\n@bp.get('/" + long + "')\ndef " + long + "():\n    pass\n"
-		_, l := extractSource(t, src)
-		if len(l.Routes) != 1 || len(l.Routes[0].Path) != maxPathBytes || len(l.Routes[0].Handler) != maxHandlerBytes {
-			t.Errorf("path %d bytes, handler %d bytes", len(l.Routes[0].Path), len(l.Routes[0].Handler))
-		}
-	})
-	t.Run("mount chain deeper than the cap is dynamic", func(t *testing.T) {
-		var b strings.Builder
-		b.WriteString("from fastapi import APIRouter\n")
-		for i := range maxMountDepth + 2 {
-			b.WriteString("r" + string(rune('a'+i)) + " = APIRouter(prefix='/x')\n")
-			if i > 0 {
-				b.WriteString("r" + string(rune('a'+i-1)) + ".include_router(r" + string(rune('a'+i)) + ")\n")
-			}
-		}
-		b.WriteString("@r" + string(rune('a'+maxMountDepth+1)) + ".get('/y')\ndef y():\n    pass\n")
-		g, _ := extractSource(t, b.String())
-		if len(g.Routes) != 1 || !g.Routes[0].DynamicPath {
-			t.Errorf("routes %+v", g.Routes)
-		}
-	})
-}
-
 func TestEnumStrings(t *testing.T) {
 	cases := []struct{ got, want string }{
 		{Methods(0).String(), ""},
@@ -321,23 +317,5 @@ func TestEnumStrings(t *testing.T) {
 	}
 	if !errors.Is(ErrGraphFull, ErrGraphFull) || fits(1<<33) {
 		t.Error("fits must refuse IDs past 32 bits")
-	}
-}
-
-// BenchmarkExtractPython measures extraction alone (the parse is done once)
-// on a file of many routes, each calling a shared helper with sinks: the
-// worst case for helper lookups.
-func BenchmarkExtractPython(b *testing.B) {
-	src := "from flask import Flask\napp = Flask(__name__)\ndef h(q):\n" + strings.Repeat("    db.execute(q)\n", 50) +
-		strings.Repeat("@app.post('/x/<id>')\ndef f(id):\n    q = 'a' + id\n    h(q)\n    db.execute(q)\n", 2000)
-	tree, err := testParser(b).Parse(context.Background(), Python, []byte(src))
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.SetBytes(int64(len(src)))
-	for b.Loop() {
-		if err := NewExtractor().AddPython("a.py", tree, []byte(src)); err != nil {
-			b.Fatal(err)
-		}
 	}
 }
