@@ -2,12 +2,17 @@
 *                        @Ludocius
 
 # Security-sensitive: two approvals once there are two or more maintainers (see GOVERNANCE.md)
+# egress.log lives in internal/gateway; sandbox and planner are listed before they exist
+# so their first PR already needs owner review.
 /internal/gateway/       @Ludocius
 /internal/redact/        @Ludocius
-/internal/egress/        @Ludocius
+/internal/models/        @Ludocius
+/internal/reader/        @Ludocius
+/internal/static/        @Ludocius
 /internal/sandbox/       @Ludocius
 /internal/planner/       @Ludocius
-/prompts/                @Ludocius
+# Prompts sit next to each package that sends them (internal/reader/prompts, internal/calibrate/prompts).
+prompts/                 @Ludocius
 /.github/workflows/      @Ludocius
 /.github/rulesets/       @Ludocius
 /.github/settings/       @Ludocius
@@ -22,6 +27,10 @@
 /Makefile                @Ludocius
 /internal/tools/         @Ludocius
 /docs/adr/               @Ludocius
+# Public contracts: exit codes, report schemas and the config schema
+/internal/exitcode/      @Ludocius
+/docs/schemas/           @Ludocius
+/schema/                 @Ludocius
 /go.mod                  @Ludocius
 /go.sum                  @Ludocius
 /.github/CODEOWNERS      @Ludocius
