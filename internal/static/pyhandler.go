@@ -1,9 +1,6 @@
 package static
 
-import (
-	"sort"
-	"strings"
-)
+import "strings"
 
 // foundSink is a sink call before it gets an ID.
 type foundSink struct {
@@ -22,12 +19,6 @@ type handlerFacts struct {
 	authCall  bool
 	truncated bool // more than maxRouteSinks sinks
 	partial   bool // a sink's analysis ran out of budget
-}
-
-// bodyScan is one pass over a function body.
-type bodyScan struct {
-	calls   []*Node
-	assigns map[string][]*Node // name -> right-hand sides in source order
 }
 
 // maxRouteSinks caps the sinks kept per handler.
@@ -101,45 +92,6 @@ func (x *pyExtraction) helperSinks(def *Node) []foundSink {
 	return s
 }
 
-// scan collects calls and simple assignments in a body once, skipping nested
-// function and class bodies so no node is scanned for two handlers.
-func (x *pyExtraction) scan(def *Node) bodyScan {
-	if s, ok := x.scans[def]; ok {
-		return s
-	}
-	s := bodyScan{assigns: map[string][]*Node{}}
-	body := field(def, "body")
-	if body == nil {
-		x.scans[def] = s
-		return s
-	}
-	walk(body, func(n *Node) bool {
-		switch n.Type {
-		case "function_definition", "class_definition", "decorated_definition":
-			return false
-		case "call":
-			s.calls = append(s.calls, n)
-		case "assignment", "augmented_assignment":
-			x.addAssign(s, n)
-		}
-		return true
-	})
-	x.scans[def] = s
-	return s
-}
-
-func (x *pyExtraction) addAssign(s bodyScan, n *Node) {
-	left, right := field(n, "left"), field(n, "right")
-	if left == nil || right == nil || left.Type != "identifier" {
-		return
-	}
-	if n.Type == "augmented_assignment" {
-		right = n // `q += x` is never treated as constant
-	}
-	name := x.file.text(left)
-	s.assigns[name] = append(s.assigns[name], right)
-}
-
 func (x *pyExtraction) directSinks(s bodyScan) []foundSink {
 	var out []foundSink
 	for _, call := range s.calls {
@@ -153,65 +105,12 @@ func (x *pyExtraction) directSinks(s bodyScan) []foundSink {
 		out = append(out, foundSink{
 			api:           api,
 			line:          line(call),
-			dynamic:       first != nil && !x.constant(first, s, first.StartByte),
+			dynamic:       first != nil && !x.constant(first, s, true),
 			parameterized: api.Kind() == SinkSQL && (len(pos) > 1 || hasKeyword(x.file, kw, "parameters", "params")),
 			partial:       x.constBudget < 0,
 		})
 	}
 	return out
-}
-
-// constant reports whether n is built only from literals, following local
-// assignments made before offset `before`. It does not descend into calls,
-// so the arguments of different sinks never share visited nodes.
-func (x *pyExtraction) constant(n *Node, s bodyScan, before uint32) bool {
-	x.constBudget--
-	if x.constBudget < 0 {
-		return false
-	}
-	switch n.Type {
-	case "string", "concatenated_string":
-		_, ok := x.file.literalString(n)
-		return ok
-	case "integer", "float", "true", "false", "none":
-		return true
-	case "list", "tuple", "parenthesized_expression", "binary_operator":
-		for _, c := range namedChildren(n) {
-			if !x.constant(c, s, before) {
-				return false
-			}
-		}
-		return true
-	case "identifier":
-		rhs := lastAssignBefore(s.assigns[x.file.text(n)], before)
-		return rhs != nil && x.constantAssign(rhs, s)
-	}
-	return false
-}
-
-// constantAssign memoizes constant per right-hand side, so a chain such as
-// z = "a" + ...; y = z + z; x = y + y is evaluated once per assignment
-// instead of once per path through the chain. An identifier only resolves to
-// an assignment that starts earlier, so the recursion cannot cycle.
-func (x *pyExtraction) constantAssign(rhs *Node, s bodyScan) bool {
-	if v, ok := x.constMemo[rhs]; ok {
-		return v
-	}
-	v := x.constant(rhs, s, rhs.StartByte)
-	if x.constBudget >= 0 {
-		x.constMemo[rhs] = v
-	}
-	return v
-}
-
-// lastAssignBefore picks the last right-hand side starting before offset;
-// binary search keeps many assignments to one name from going quadratic.
-func lastAssignBefore(rhs []*Node, before uint32) *Node {
-	i := sort.Search(len(rhs), func(i int) bool { return rhs[i].StartByte >= before })
-	if i == 0 {
-		return nil
-	}
-	return rhs[i-1]
 }
 
 // callArgs splits a call's arguments into positional and keyword nodes.

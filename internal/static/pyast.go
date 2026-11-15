@@ -9,12 +9,15 @@ type pyFile struct {
 	imports map[string]string // local name -> dotted module path
 	// funcs maps module-level function names to their definitions, for
 	// one-level helper lookups.
-	funcs          map[string]*Node
+	funcs map[string]*Node
+	// nonlocals holds names any nested function rebinds with `nonlocal`,
+	// so an enclosing function never treats them as constant.
+	nonlocals      map[string]bool
 	flask, fastapi bool // the file imports the framework
 }
 
 func newPyFile(root *Node, src []byte) *pyFile {
-	f := &pyFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}}
+	f := &pyFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}, nonlocals: map[string]bool{}}
 	walk(root, func(n *Node) bool {
 		switch n.Type {
 		case "import_statement":
@@ -22,6 +25,10 @@ func newPyFile(root *Node, src []byte) *pyFile {
 		case "import_from_statement":
 			if mod := field(n, "module_name"); mod != nil && mod.Type == "dotted_name" {
 				f.addImport(n, f.dotted(mod))
+			}
+		case "nonlocal_statement":
+			for _, c := range namedChildren(n) {
+				f.nonlocals[f.text(c)] = true
 			}
 		}
 		return true
