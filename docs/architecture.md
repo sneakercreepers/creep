@@ -94,7 +94,7 @@ These follow semver once v1.0 ships. Before then, any change needs a note in the
 | HTTP model contract | `models` | OpenAI-compatible + Anthropic |
 | Command model contract | `models` | stdin prompt, stdout JSON |
 | Recipes, presets, language kits | `recipes/`, `presets/`, kits | own `version:`; data, not code |
-| Prompts | `prompts/` in the package that sends them: `internal/reader/prompts/` (one variant per tier S/M/L), `internal/calibrate/prompts/` (one variant, since calibration runs before a tier is known) | `PromptVersion` per package; token-budget test (`prompts_test.go`) |
+| Prompts | `prompts/` in the package that sends them: `internal/reader/prompts/` (one variant per tier S/M/L), `internal/calibrate/prompts/` (one variant, since calibration runs before a tier is known); the reader user turn (`HYPOTHESIS` line, numbered `CODE` lines, truncation notes) is built by `internal/reader/render.go` within `sliceBudget` per tier | `PromptVersion` per package; token-budget test (`prompts_test.go`) |
 
 ## 5. Extension points
 
@@ -151,7 +151,8 @@ Automated checks that guard an architectural property. A new property needs a ch
 | Small files | Go file cap of 400 lines, build-tagged files included (`lineProblems`) | `make budget` |
 | Agent loop cannot erode | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md, PR template (`policy.go`) | `make budget` |
 | Workflows are pinned and safe | Immutable action/image pins, no `pull_request_target`; actionlint, zizmor | `make budget`, CI |
-| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`), gateway fragment scan test | `make check` |
+| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`), gateway fragment scan test, reader slice tests: a slice masks a secret that only whole-file redaction finds (`reader/slice_test.go`) | `make check` |
+| Reader slices fail closed and keep repository text as data | Unreadable and redact-rejected files are listed as not scanned; `ErrRunFull` stops the run as incomplete; lines out of range or shifted by redaction are refused; every repository line sits behind its number in the user turn (`reader/slice_test.go`, `render_test.go`, `flow_test.go`) | `make check` |
 | Model spend is bounded | Over-budget and concurrent-overspend tests, AIMD table test (`gateway/budget_test.go`, `aimd_test.go`; race on Linux CI) | `make check` |
 | Redaction stays linear | `TestRedactLargeInputIsBounded`; `Benchmark*` in `internal/redact` | `make check`; benchmarks at the per-version review |
 | No known-vulnerable code or leaked secret | govulncheck, gitleaks over full history, CodeQL | CI |

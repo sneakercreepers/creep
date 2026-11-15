@@ -46,6 +46,23 @@
 //     repository line sits behind its line number in the user turn, so
 //     prompt-injection text stays data and never reaches the system prompt.
 //
+// The user turn is a "HYPOTHESIS: <class>, source line N, sink line M"
+// line built from enums and integers only, a "CODE:" line, the slice's
+// lines as "N| text" in file order, and "[slice truncated: ...]" when
+// lines were left out or cut. Budgets per tier: S 2048, M 4096, L 8192
+// bytes; a line is cut at budget/8. Hypotheses that get no slice are
+// listed in SliceReport.NotEvaluated with a closed SkipReason:
+// file_not_scanned (the file is in NotScanned with its gateway.SkipReason),
+// run_full, line_out_of_range (past the file's end or MaxLine) and
+// lines_shifted (redaction joined lines, as a multi-line private key does,
+// so the file's numbers would not match).
+//
+// Known limits: slicing reads Python only, by names and indentation; it
+// follows names within one file and the function around the sink, not
+// into helpers in other files or across calls; a guard contributes only
+// its first body line; and it over-approximates, since an assignment never
+// stops a name from being tracked.
+//
 // Calling the model per hypothesis (#13) is not here yet; it must send
 // Slice.Text through the gateway with Slice.Redactions.
 package reader
