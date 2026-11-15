@@ -74,6 +74,12 @@ const (
 	SkipLinesShifted   SkipReason = "lines_shifted"     // redaction joined lines, so numbers would not match
 )
 
+// FileLinesShifted is the NotScanned reason for a file whose redaction
+// joined lines (a multi-line private key): it was redacted but never
+// sliced. It extends gateway's closed set of file reasons with one only
+// slicing can hit.
+const FileLinesShifted = gateway.SkipReason(SkipLinesShifted)
+
 // NotEvaluated is a hypothesis no slice was built for.
 type NotEvaluated struct {
 	Hypothesis HypothesisID
@@ -83,7 +89,7 @@ type NotEvaluated struct {
 // SliceReport is the outcome of Slicer.Build.
 type SliceReport struct {
 	Slices       []Slice
-	NotScanned   []gateway.NotScanned // files never read into a slice, in first-use order
+	NotScanned   []gateway.NotScanned // files never sliced, in first-use order (gateway reasons or FileLinesShifted)
 	NotEvaluated []NotEvaluated
 	// Incomplete means redact.ErrRunFull stopped the run: it must never be
 	// reported as a clean result.
@@ -179,10 +185,10 @@ func (s Slicer) buildFile(f fileTargets, budget int, rep *SliceReport) error {
 		return nil
 	}
 	if strings.Count(text, "\n") != bytes.Count(content, []byte{'\n'}) {
-		rep.skipTargets(f, SkipLinesShifted)
+		rep.skipFile(f, FileLinesShifted, SkipLinesShifted)
 		return nil
 	}
-	lines := splitLines(text)
+	lines := escapeLines(splitLines(text))
 	for _, t := range f.targets {
 		s.buildTarget(t, lines, budget, rep)
 	}

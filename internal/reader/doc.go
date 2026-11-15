@@ -43,19 +43,24 @@
 //     and is marked Partial; it is never dropped. A file Read or redact.File
 //     rejects is listed as not scanned and its hypotheses as not evaluated;
 //     redact.ErrRunFull stops the run and marks it incomplete. Every
-//     repository line sits behind its line number in the user turn, so
-//     prompt-injection text stays data and never reaches the system prompt.
+//     repository line sits behind its line number in the user turn, and
+//     escape.go first turns every control and format rune and every line
+//     or paragraph separator (CR, FF, VT, NEL, U+2028, U+2029, ESC, bidi
+//     controls) and every non-UTF-8 byte into a visible escape, so no
+//     repository line can render as a fake code line or HYPOTHESIS header.
+//     Prompt-injection text stays data and never reaches the system prompt.
 //
 // The user turn is a "HYPOTHESIS: <class>, source line N, sink line M"
 // line built from enums and integers only, a "CODE:" line, the slice's
-// lines as "N| text" in file order, and "[slice truncated: ...]" when
-// lines were left out or cut. Budgets per tier: S 2048, M 4096, L 8192
-// bytes; a line is cut at budget/8. Hypotheses that get no slice are
-// listed in SliceReport.NotEvaluated with a closed SkipReason:
-// file_not_scanned (the file is in NotScanned with its gateway.SkipReason),
-// run_full, line_out_of_range (past the file's end or MaxLine) and
-// lines_shifted (redaction joined lines, as a multi-line private key does,
-// so the file's numbers would not match).
+// escaped lines as "N| text" in file order, and "[slice truncated: ...]"
+// when lines were left out or cut. Budgets per tier: S 2048, M 4096, L 8192
+// bytes, a hard cap measured after escaping; a line is cut at budget/8.
+// Hypotheses that get no slice are listed in SliceReport.NotEvaluated with
+// a closed SkipReason: file_not_scanned (the file is in NotScanned with its
+// gateway.SkipReason), run_full, line_out_of_range (past the file's end or
+// MaxLine) and lines_shifted (redaction joined lines, as a multi-line
+// private key does, so the file's numbers would not match; the file is
+// also in NotScanned with FileLinesShifted).
 //
 // Known limits: slicing reads Python only, by names and indentation; it
 // follows names within one file and the function around the sink, not

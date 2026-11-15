@@ -233,6 +233,15 @@ func TestBuildRefusesLinesItCannotShow(t *testing.T) {
 			if len(rep.Slices) != 0 || rep.Incomplete || !reflect.DeepEqual(rep.NotEvaluated, want) {
 				t.Fatalf("report = %+v; want only %v", rep, want)
 			}
+			// A shifted file was redacted but never sliced, so it is listed
+			// as not scanned too; a stale line leaves the file scanned.
+			var wantFiles []gateway.NotScanned
+			if tt.want == SkipLinesShifted {
+				wantFiles = []gateway.NotScanned{{Path: "f.py", Reason: FileLinesShifted}}
+			}
+			if !reflect.DeepEqual(rep.NotScanned, wantFiles) {
+				t.Fatalf("NotScanned = %v, want %v", rep.NotScanned, wantFiles)
+			}
 		})
 	}
 }
