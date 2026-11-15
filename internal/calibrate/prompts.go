@@ -12,3 +12,13 @@ var (
 	//go:embed prompts/context.txt
 	contextSystem string
 )
+
+// promptBudget is the most tokens one call of each kind may take: system
+// prompt, output schema and the largest user turn the seeds can produce
+// (for context probes, the largest of contextSizes). Raising a budget is a
+// reviewed change to this table.
+var promptBudget = map[string]int{
+	purposeTask:    2000,
+	purposeTool:    800,
+	purposeContext: 132 << 10, // the 128 KiB probe plus 4 KiB for prompt and schema
+}
