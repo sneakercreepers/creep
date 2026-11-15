@@ -65,9 +65,9 @@ func findKeyBlocks(text string) []span {
 
 // bodyLine is the base64 token that ends one line of the text, if any.
 type bodyLine struct {
-	start, end int // token bounds in the text; start == end when none
-	lineStart  int
-	pure       bool // nothing but blanks or an opening quote before the token
+	start, end         int // token bounds in the text; start == end when none
+	lineStart, lineEnd int
+	pure               bool // nothing but blanks, "+" or an opening quote before the token
 }
 
 // findBodyRuns masks key bodies with no header or footer: two or more
@@ -77,7 +77,7 @@ type bodyLine struct {
 // The run takes in a short line on either side.
 func findBodyRuns(text string) []span {
 	lines := bodyLines(text)
-	var out []span
+	out := findCutEdges(text, lines)
 	for i := 0; i < len(lines); {
 		n := runLength(lines, i)
 		if n == 0 {
@@ -137,7 +137,8 @@ func runSpan(lines []bodyLine, i, n int) span {
 
 // bodyLines splits text into lines and finds each line's trailing token.
 // Lines in the blank tail of the text are left out, so a key line followed
-// by blank lines still touches the end of the text.
+// by blank lines still touches the end of the text. A "\n" escape in a
+// string literal also ends a line (appendSegments).
 func bodyLines(text string) []bodyLine {
 	// Trimmed once: re-trimming the tail for each dropped line made a text
 	// ending in many blank lines quadratic (#74).
@@ -151,22 +152,58 @@ func bodyLines(text string) []bodyLine {
 		if end < 0 {
 			end = len(text) - start
 		}
-		lines = append(lines, trailingToken(text, start, start+end))
+		lines = appendSegments(lines, text, start, start+end)
 		start += end + 1
 	}
 	return lines
 }
 
+// appendSegments adds the body lines of the text line text[from:to]. A "\n"
+// escape before the line's closing glue splits it, so a key written on one
+// line of a string literal (a JSON "private_key" value) is seen line by line,
+// while a "\n" in the glue of `"MIIE...\n" +` only ends the line (#72).
+func appendSegments(lines []bodyLine, text string, from, to int) []bodyLine {
+	glue := glueStart(text, from, to)
+	for {
+		i := strings.Index(text[from:glue], `\n`)
+		if i < 0 {
+			return append(lines, trailingToken(text, from, to))
+		}
+		lines = append(lines, trailingToken(text, from, from+i))
+		from += i + 2
+	}
+}
+
+// glueChars may close a key line written as a string literal: blanks,
+// closing quotes and brackets, separators, "+" and a backslash whose escape
+// a boundary cut off.
+const glueChars = " \t\r\"'`,;)+\\"
+
+// glueStart returns where the closing glue of text[from:to] begins: glue
+// characters and "\n" or "\r" escapes, as in `"MIIE...\n" +` (#72).
+func glueStart(text string, from, to int) int {
+	end := to
+	for end > from {
+		c := text[end-1]
+		switch {
+		case strings.IndexByte(glueChars, c) >= 0:
+			end--
+		case (c == 'n' || c == 'r') && end-2 >= from && text[end-2] == '\\':
+			end -= 2
+		default:
+			return end
+		}
+	}
+	return end
+}
+
 // trailingToken finds the base64 run (with up to two "=" of padding) that
-// ends the line text[from:to], ignoring closing quotes, commas and blanks.
+// ends the line text[from:to], ignoring its closing glue (glueStart).
 // The run must start the line or follow a blank or an opening quote, so
 // prefixed digests (go.sum "h1:", "sha256:") and paths do not count.
 func trailingToken(text string, from, to int) bodyLine {
-	line := bodyLine{lineStart: from}
-	end := to
-	for end > from && strings.IndexByte(" \t\r\"'`,;)", text[end-1]) >= 0 {
-		end--
-	}
+	line := bodyLine{lineStart: from, lineEnd: to}
+	end := glueStart(text, from, to)
 	start := end
 	for pad := 0; start > from && text[start-1] == '=' && pad < 2; pad++ {
 		start--
@@ -181,7 +218,7 @@ func trailingToken(text string, from, to int) bodyLine {
 		return line
 	}
 	line.start, line.end = start, end
-	line.pure = strings.Trim(text[from:start], " 	\"'`") == ""
+	line.pure = strings.Trim(text[from:start], " 	\"'`+") == ""
 	return line
 }
 

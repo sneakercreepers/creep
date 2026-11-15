@@ -37,8 +37,16 @@
 //     differ, since a boundary leaves partial lines), or one such line that
 //     reaches the start or end of the fragment, directly or through one short
 //     partial line; the run takes in a short line on either side. Prefixed digests
-//     (go.sum "h1:", "sha256:") and lowercase hex do not count. This can mask
-//     ordinary data, which is the safe side.
+//     (go.sum "h1:", "sha256:") and lowercase hex do not count. A line may be a
+//     string literal ("MIIE...\n" +, adjacent literals, a JSON value with "\n"
+//     escapes, which also end a line). A header or footer line cut at the edge
+//     of the fragment ("-----END RSA PRIV") anchors the body lines next to it,
+//     even one shorter than 40 bytes (pem_edge.go). This can mask ordinary
+//     data, which is the safe side.
+//   - The generic-api-key rule skips a word compared with == or === (key ===
+//     "constructor"): letters, "_", "." and "-" only, as in the gitleaks
+//     allowlist. Assigned values, and compared values with any digit or other
+//     character, are still masked.
 //
 // When matches overlap they are merged and the most specific label names the
 // marker; each part is also remembered, so it is masked when it shows up

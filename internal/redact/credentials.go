@@ -90,3 +90,21 @@ func labelRank(label string) int {
 	}
 	return 3
 }
+
+// wordValueRe is the gitleaks allowlist for generic-api-key values: letters,
+// "_", "." and "-" with no digit make a word, not a key.
+var wordValueRe = regexp.MustCompile(`^[A-Za-z_.-]+$`)
+
+// comparedWord reports a generic-api-key value that is a word compared with
+// "==" or "===", as in key === "constructor": code testing a name, not a key
+// being set (#167). Only the generic rule is exempt, and only for a
+// comparison: an assigned value, or a compared one with a digit or any other
+// character, is still masked.
+func (r secretRule) comparedWord(text string, start, end int) bool {
+	if r.label != genericLabel || !wordValueRe.MatchString(text[start:end]) {
+		return false
+	}
+	// The rule allows at most 5 quotes or blanks before the value, so this
+	// trim stops within a few bytes.
+	return strings.HasSuffix(strings.TrimRight(text[:start], " \t\"'`"), "==")
+}
