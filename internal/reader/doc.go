@@ -12,12 +12,14 @@
 //     a token budget that covers the prompt and the output schema sent with
 //     it; prompts_test.go fails when a prompt grows past it. Tokens are
 //     counted as bytes, the same upper bound models reserves per call.
+//
 //   - The model's reply decodes into Answer, a closed struct (output.go):
 //     models.Complete refuses unknown, duplicate and case-variant keys, prose around the JSON object
 //     and wrong types, then Answer.Validate allows only a verdict from the
 //     enum, at most MaxEvidence ascending, non-overlapping line ranges and
 //     an integer confidence from 0 to 100. Schema and Grammar send the same
 //     shape to endpoints that can constrain output.
+//
 //   - Project (signal.go) checks the ranges against the lines the model was
 //     shown and returns a Signal: hypothesis ID, verdict enum, confidence
 //     and line numbers. Signal is the only reader output the planner may
@@ -25,7 +27,25 @@
 //     interface or any other type that can carry text becomes reachable
 //     from it, so free text from the model can never reach planner input.
 //
-// Building slices (#94) and calling the model per hypothesis (#13) are not
-// here yet; both must send the user turn as gateway.FileScan fragments of
-// redact.File output.
+//   - Slicer.Build (slice.go) builds the user turn for each route→sink
+//     hypothesis from redact.File output only: each file is redacted whole
+//     before a line is picked, and the raw content is used only to check
+//     that redaction kept every line in place. The slice holds the sink
+//     line, the handler's def, decorators and def continuation, the def
+//     around the sink, then the assignments and guards that reach the sink
+//     (flow.go: a backward walk by names and Python indentation, each walk
+//     capped at maxScanBytes). Lines are numbered as in the file and Shown
+//     lists them, so Project refuses citations of lines not shown.
+//
+//   - Each tier caps the user turn (sliceBudget in render.go; prompts_test.go
+//     holds system prompt, schema and slice under one budget). A slice over
+//     it keeps its most important lines, cuts long lines, ends with a note
+//     and is marked Partial; it is never dropped. A file Read or redact.File
+//     rejects is listed as not scanned and its hypotheses as not evaluated;
+//     redact.ErrRunFull stops the run and marks it incomplete. Every
+//     repository line sits behind its line number in the user turn, so
+//     prompt-injection text stays data and never reaches the system prompt.
+//
+// Calling the model per hypothesis (#13) is not here yet; it must send
+// Slice.Text through the gateway with Slice.Redactions.
 package reader
