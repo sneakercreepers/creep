@@ -22,7 +22,9 @@
 //     and no error quotes it or the endpoint.
 //   - Model output is untrusted data (invariant 4). It is decoded into the
 //     caller's closed struct with unknown fields refused, after a size cap,
-//     and never executed. A reply that does not parse, is cut off, is a
+//     and never executed. A second token pass (strictkeys.go) refuses
+//     duplicate keys and keys that differ from a json tag only in case, at
+//     any depth, which encoding/json would otherwise accept. A reply that does not parse, is cut off, is a
 //     refusal or fails the struct's Validate is retried at most Retries
 //     times, each retry carrying the reason as context; then Complete
 //     returns an *InvalidOutputError. The reason is creep's fixed text, which

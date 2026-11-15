@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 )
 
@@ -59,6 +60,9 @@ func decodeOutput[T any](content []byte) (T, string) {
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return v, "it had data after the JSON object"
+	}
+	if reason := strictKeys(trimmed, reflect.TypeFor[T]()); reason != "" {
+		return v, reason
 	}
 	if val, ok := any(&v).(Validator); ok {
 		if err := val.Validate(); err != nil {
