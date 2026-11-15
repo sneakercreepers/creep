@@ -54,5 +54,28 @@
 //     first miss). A probe refused for its size (HTTP 400 or 413, or the
 //     token budget) is a miss, not a failed run.
 //   - The Result records the seed, a hash of the task set and
-//     PromptVersion, so a cached result (#91) is tied to what it measured.
+//     PromptVersion, so a cached result is tied to what it measured.
+//
+// RunCached (cache.go) keeps one result per model for MaxAge (30 days by
+// default, calibration.cache_days) in a state.Store, normally the user's
+// cache directory:
+//   - The key is the SHA-256 of the model's identity (contract, endpoint
+//     URL, model name), the seed, the task-set hash and PromptVersion. The
+//     model name is the model's version as far as creep can tell: a dated
+//     name gets its own entry; an alias is measured again after MaxAge. A
+//     new creep whose templates or prompts changed never reuses a tier.
+//   - A cached result is used only when its age is in [0, MaxAge), its line
+//     is authenticated by internal/state, it decodes strictly, it matches
+//     the key, and the current rules give it the tier it records. A torn,
+//     planted, linked or inconsistent file is recalibrated over, never
+//     read. A file from a newer creep fails closed (state.ErrUnsupported-
+//     Version) unless Recalibrate (--recalibrate) replaces it.
+//   - The clock is injected (CacheOptions.Now), so expiry is tested at its
+//     boundaries.
+//   - Header is the report's calibration line: model, tier, date, seed,
+//     task set and prompt version.
+//
+// The CLI (#14) must build Options.Model on models.Through(egressLog,
+// client) and give calibration its own redact.Redactor, separate from the
+// scan's, so calibration markers never mix with repository markers.
 package calibrate

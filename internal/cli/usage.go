@@ -34,6 +34,7 @@ func globalFlagsHelp() string {
 		"  --format <format>   output format: %s (default %q)\n"+
 		"  --log-level <level> log level: %s (default %q)\n"+
 		"  --record            call every model and record the responses for replay\n"+
-		"  --replay            serve recorded responses only; never use the network\n",
+		"  --replay            serve recorded responses only; never use the network\n"+
+		"  --recalibrate       calibrate the model again even if a calibration is cached\n",
 		strings.Join(formats, ", "), d.format, strings.Join(logLevels, ", "), d.logLevel)
 }

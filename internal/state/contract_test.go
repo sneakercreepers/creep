@@ -21,6 +21,7 @@ func TestV1FixtureDecodes(t *testing.T) {
 	}{
 		{"events.jsonl", func() any { return &Event{} }},
 		{"cache-entry.json", func() any { return &entry{} }},
+		{"calibration.json", func() any { return &calibrationEntry{} }},
 	}
 	for _, tt := range tests {
 		data, err := os.ReadFile(filepath.Join("testdata", "v1", tt.file))
@@ -65,6 +66,15 @@ func TestV1FixtureMeaning(t *testing.T) {
 	}
 	if name := filepath.Base(testKey("x").fileName()); len(name) != 64+len(".json") {
 		t.Fatalf("cache file name %q changed shape", name)
+	}
+
+	data, err = os.ReadFile(filepath.Join("testdata", "v1", "calibration.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := decodeCalibration(data, calKeyA, testSecret)
+	if err != nil || !c.At.Equal(calAt) || string(c.Result) != `{"seed":1,"tier":"M"}` {
+		t.Fatalf("v1 calibration = %+v, %v", c, err)
 	}
 }
 

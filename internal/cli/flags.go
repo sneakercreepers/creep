@@ -24,6 +24,9 @@ type globalOptions struct {
 	configPath string
 	record     bool // state.ModeRecord: call every model and overwrite recordings
 	replay     bool // state.ModeReplay: serve recordings only, never the network
+	// recalibrate is calibrate.CacheOptions.Recalibrate: ignore a cached
+	// calibration and measure the model again (used by scan, #14).
+	recalibrate bool
 	// explicit holds the names of flags the user passed, so only those
 	// become the flags config layer; defaults must not override files.
 	explicit map[string]bool
@@ -61,6 +64,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.configPath, "config", opts.configPath, "")
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
+	fs.BoolVar(&opts.recalibrate, "recalibrate", opts.recalibrate, "")
 	return fs
 }
 

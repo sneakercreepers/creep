@@ -108,6 +108,9 @@ func TestRecordReplayFlags(t *testing.T) {
 		{"replay after command", []string{"version", "--replay"}, exitcode.OK, ""},
 		{"both", []string{"--record", "version", "--replay"}, exitcode.ConfigError, "cannot be used together"},
 		{"scan still fails closed", []string{"scan", "--replay", "."}, exitcode.ConfigError, "not implemented yet"},
+		{"recalibrate", []string{"--recalibrate", "version"}, exitcode.OK, ""},
+		{"recalibrate scan still fails closed", []string{"scan", "--recalibrate", "."}, exitcode.ConfigError, "not implemented yet"},
+		{"recalibrate takes no value", []string{"--recalibrate=maybe", "version"}, exitcode.ConfigError, "recalibrate"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

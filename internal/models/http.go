@@ -73,6 +73,7 @@ type Options struct {
 // HTTP is a configured client for one model endpoint. It is safe for
 // concurrent use; the gateway bounds concurrency per endpoint.
 type HTTP struct {
+	contract   string
 	wire       wire
 	url        string
 	model      string
@@ -97,10 +98,23 @@ func NewHTTP(opts Options) (*HTTP, error) {
 		return nil, err
 	}
 	return &HTTP{
-		wire: w, url: url, model: opts.Model, key: opts.Key,
+		contract: opts.Contract, wire: w, url: url, model: opts.Model, key: opts.Key,
 		structured: opts.Structured, maxOutput: opts.MaxOutputTokens,
 		retries: opts.Retries, send: opts.Send,
 	}, nil
+}
+
+// Identity names the model a client talks to. Callers key per-model state
+// (the calibration cache) on it; it never holds the API key.
+type Identity struct {
+	Contract string `json:"contract"`
+	URL      string `json:"url"` // endpoint URL with the contract's path
+	Model    string `json:"model"`
+}
+
+// Identity returns the contract, endpoint URL and model name of h.
+func (h *HTTP) Identity() Identity {
+	return Identity{Contract: h.contract, URL: h.url, Model: h.model}
 }
 
 func wireFor(contract string, s Structured) (wire, error) {
