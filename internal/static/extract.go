@@ -35,7 +35,9 @@ func NewExtractor() *Extractor {
 
 // AddPython extracts Flask and FastAPI routes, their sinks and auth from a
 // Python tree that Parser.Parse built from src. path is kept only in
-// Locations. Each file is parsed once by the caller and passed here.
+// Locations. Each file is parsed once by the caller and passed here. A file
+// that IgnoreReason rejects is listed as ignored instead of extracted, so a
+// caller that skips the check still never reads vendor or generated code.
 func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 	switch {
 	case tree == nil || tree.Root == nil:
@@ -44,6 +46,9 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 		return fmt.Errorf("extract %s: %s tree is not python", path, tree.Language)
 	case int(tree.Root.EndByte) > len(src):
 		return fmt.Errorf("extract %s: tree does not match source", path)
+	}
+	if why := IgnoreReason(path, src); why != 0 {
+		return e.AddIgnored(path, why)
 	}
 	routes, truncated := extractPython(tree.Root, src, e.lim)
 	sinks := 0

@@ -20,11 +20,19 @@
 // names and lines go to a separate Locations value for the report.
 // Extraction works per file, from syntax alone: imports resolve aliases,
 // blueprints and routers compose prefixes within the file, and auth is a
-// name-based hint. Every walk is iterative, every per-route list and string
-// is capped, and argument analysis is memoized per assignment under a
-// per-file visit budget (past it, sinks count as dynamic and the route and
-// file are marked partial), so a hostile file costs linear time and bounded
-// memory.
+// name-based hint. A sink argument is constant only when every binding of
+// each name it uses is a simple assignment of a constant anywhere in the
+// function; branches, loops, try, tuple targets, walrus, parameters and any
+// binding not understood make it dynamic (fails closed, #185). Every walk is
+// iterative, every per-route list and string is capped, and argument
+// analysis is memoized per name under a per-file visit budget (past it,
+// sinks count as dynamic and the route and file are marked partial), so a
+// hostile file costs linear time and bounded memory.
+//
+// IgnoreReason marks vendor directories, files with a generated-code
+// marker near the top and minified scripts; callers list them with
+// AddIgnored (AddPython does so itself) as File.Ignored with a reason, so
+// they are reported as not evaluated, never silently dropped.
 //
 // Known limits: a blueprint or router mounted from another file
 // (register_blueprint or include_router across modules) keeps only the

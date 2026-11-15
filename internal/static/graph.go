@@ -30,6 +30,9 @@ type File struct {
 	// Truncated is set when the file hit a route or sink cap; the scan of
 	// that file is incomplete.
 	Truncated bool
+	// Ignored is set when the file is vendor, generated or minified code
+	// that was listed but not parsed; it has no routes.
+	Ignored Ignored
 }
 
 // Route is one HTTP endpoint and the handler that serves it.
