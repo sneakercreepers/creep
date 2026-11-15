@@ -102,15 +102,39 @@
 // MaxLineBytes, and both fail closed above their caps. The constants document
 // the measured worst case. Values from earlier fragments are re-masked through
 // an index of 8-byte windows, linear in the input however many values the run
-// knows. A rule whose matches overlap densely stops searching again after a
-// fixed multiple of the input and masks the rest of it instead.
+// knows. A rule whose matches overlap densely (a block of .env lines with
+// long names) stops searching again after a fixed multiple of the input,
+// masks the rest of the current line and searches the next lines with a
+// budget of the bytes it masked, so the dense block hides only its own lines
+// and the code after it stays visible. A match that starts in the masked part
+// of that line and continues past its newline is not followed onto the next
+// line (a known limit). After a hard total of one more input length, the rest
+// of the input is masked instead. The masked guesses are not remembered as
+// values.
+//
+// Encoded separators: URL-shaped rules (a literal "/" in the regex, such as
+// the Discord, Slack and Teams webhook rules) run again on a copy of the text
+// with "\/", "%2F" and "%3A" (either case) decoded, and each match is mapped
+// back onto the original bytes, so every byte of an escaped or
+// percent-encoded webhook URL's secret is masked, escapes included, and the
+// vendored rules stay byte for byte upstream. Other encodings (/,
+// double percent-encoding) are not decoded.
 //
 // Run limits: one run remembers at most about 128k values or 32 MiB of them
-// (a private key without an END line is one value up to the end of its file),
-// and at most 256 values whose every 8-byte window already indexes 16 others
-// (runs of one byte or short pattern, such as "xxxxxxxx" placeholders).
-// When a new value does not fit, that call and every later call on the
-// Redactor return ErrRunFull and no output, because a value the run cannot
-// remember would not be re-masked in later fragments. Callers must stop
-// sending that run's fragments and report the scan as incomplete.
+// (a private key without an END line is one value up to the end of its file,
+// counted about once: TestFileKeyCountsOnce), and at most 256 values whose
+// every 8-byte window already indexes 16 others (runs of one byte or short
+// pattern, such as "xxxxxxxx" placeholders). When a new value does not fit,
+// that call and every later call on the Redactor return ErrRunFull and no
+// output, because a value the run cannot remember would not be re-masked in
+// later fragments. Callers must stop sending that run's fragments and report
+// the scan as incomplete.
+//
+// Per-call share: one Redact or File call may add at most a quarter of the
+// run's values or bytes and 32 overflow values (share.go), so one crafted file
+// cannot fill the run. A call over its share returns ErrTooManyValues and no
+// output, and everything it stored is rolled back; the run goes on. The
+// gateway lists that file as not scanned (redact_failed), never sends it.
+// Eight files each at the overflow share still fill the overflow list and end
+// the run (TestOverflowListLimitIsPinned).
 package redact

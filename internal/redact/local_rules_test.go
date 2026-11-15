@@ -79,7 +79,7 @@ func TestLocalRulesIgnoreOrdinaryCode(t *testing.T) {
 
 func TestCompileRulesRejectsSharedID(t *testing.T) {
 	file := []byte("[[rules]]\nid = \"a\"\nregex = '''x'''\n")
-	_, err := compileRules(file, file)
+	_, err := compileRules(ruleFile{"a.toml", file}, ruleFile{"b.toml", file})
 	if err == nil || !strings.Contains(err.Error(), "duplicate id") {
 		t.Fatalf("compileRules error = %v, want duplicate id", err)
 	}

@@ -64,7 +64,7 @@ A package may import only packages in **lower** layers and only those listed in 
 | `exitcode` | Process exit codes | 0 ok · 1 gate · 2 config/consent · 3 model/sandbox · 4 incomplete (ADR 0007) | ✅ |
 | `buildinfo` | Version and provenance strings | none | ✅ |
 | `config` | Five config layers, org policy, CI detection | Project file never loosens CI gates or grants consent (#61, #82) | ✅ (#62, #63 open) |
-| `redact` | Secret and PII redaction with stable markers | Whole file redacted before fragmenting; linear time; `ErrRunFull` fails closed | ✅ (follow-ups open) |
+| `redact` | Secret and PII redaction with stable markers | Whole file redacted before fragmenting; linear time; `ErrRunFull` fails closed; one call adds at most its share of the run cap (`ErrTooManyValues`: file not scanned, run goes on) | ✅ (follow-ups open) |
 | `gateway` | **Only** network path | Allowlist before DNS, TLS, pinning, no redirects, consent, run and endpoint token budget, AIMD concurrency, write-ahead `egress.log`, opaque client | ✅ |
 | `models` | HTTP and command contracts, tool canary | No provider SDK; model output decoded into closed structs, never executed; key only from `CREEP_API_KEY` | ✅ HTTP (#5); ⬜ command #6 |
 | `state` | JSONL run state, `--record`, `--replay`, resume | Append-only; replay is deterministic | ⬜ #8 |
@@ -151,10 +151,10 @@ Automated checks that guard an architectural property. A new property needs a ch
 | Small files | Go file cap of 400 lines, build-tagged files included (`lineProblems`) | `make budget` |
 | Agent loop cannot erode | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md, PR template (`policy.go`) | `make budget` |
 | Workflows are pinned and safe | Immutable action/image pins, no `pull_request_target`; actionlint, zizmor | `make budget`, CI |
-| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`), gateway fragment scan test, reader slice tests: a slice masks a secret that only whole-file redaction finds (`reader/slice_test.go`) | `make check` |
+| Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`, escaped and percent-encoded webhook URLs in `encoded_test.go`), gateway fragment scan test, reader slice tests: a slice masks a secret that only whole-file redaction finds (`reader/slice_test.go`) | `make check` |
 | Reader slices fail closed and keep repository text as data | Unreadable and redact-rejected files are listed as not scanned; `ErrRunFull` stops the run as incomplete; lines out of range are refused, and a file whose lines redaction shifted is listed as not scanned; every repository line sits behind its number with control, format and separator runes escaped, so none can fake a code line or header; the slice budget holds after escaping (`reader/slice_test.go`, `render_test.go`, `flow_test.go`) | `make check` |
 | Model spend is bounded | Over-budget and concurrent-overspend tests, AIMD table test (`gateway/budget_test.go`, `aimd_test.go`; race on Linux CI) | `make check` |
-| Redaction stays linear | `TestRedactLargeInputIsBounded`; `Benchmark*` in `internal/redact` | `make check`; benchmarks at the per-version review |
+| Redaction stays linear | `TestRedactLargeInputIsBounded`, `TestDenseKeysKeepCodeVisible`, `TestFindTotalMasksRest`; `Benchmark*` in `internal/redact` | `make check`; benchmarks at the per-version review |
 | No known-vulnerable code or leaked secret | govulncheck, gitleaks over full history, CodeQL | CI |
 | Vulnerable fixtures stay data and stay accurate | `internal/tools/testapps`: every `testdata/apps` app has a safe twin, holds only source files (no manifests, lockfiles or scripts), stays under 200 lines, and its `expected.json` matches the real lines; no Makefile, workflow, script or program-starting Go code names the apps | `make check` |
 | Run-state JSONL stays additive (contract `v`) | Committed v1 fixtures decode with unknown fields disallowed (`TestV1FixtureDecodes`, `internal/state/testdata/v1`) | `make check` |
