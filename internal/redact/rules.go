@@ -183,7 +183,7 @@ func (r secretRule) find(text string) []span {
 			break
 		}
 		start, end := r.secretBounds(m)
-		if start < end {
+		if start < end && !r.comparedWord(text[pos:], start, end) {
 			out = append(out, span{start: pos + start, end: pos + end, label: r.label})
 		}
 		budget -= m[1] - m[0]
