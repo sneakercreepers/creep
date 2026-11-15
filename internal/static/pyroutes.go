@@ -36,8 +36,7 @@ type pyExtraction struct {
 	helpers   map[*Node][]foundSink
 	scans     map[*Node]bodyScan
 	prefixes  map[string]mountPrefix
-	// constMemo and constBudget bound DynamicArg analysis (pyhandler.go).
-	constMemo   map[*Node]bool
+	// constBudget bounds DynamicArg analysis (pybind.go).
 	constBudget int // nodes DynamicArg analysis may still visit
 }
 
@@ -64,7 +63,6 @@ func extractPython(root *Node, src []byte, lim extractLimits) (routes []pyRoute,
 		helpers:     map[*Node][]foundSink{},
 		scans:       map[*Node]bodyScan{},
 		prefixes:    map[string]mountPrefix{},
-		constMemo:   map[*Node]bool{},
 		constBudget: lim.constVisits,
 	}
 	x.collectReceivers(root)
