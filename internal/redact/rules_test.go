@@ -109,12 +109,13 @@ func TestCompileRulesErrors(t *testing.T) {
 	tests := []struct {
 		name, toml, want string
 	}{
-		{"bad regex", "[[rules]]\nid = \"a\"\nregex = '''(?<x'''\n", "compile gitleaks rule a"},
+		{"bad regex", "[[rules]]\nid = \"a\"\nregex = '''(?<x'''\n", "t.toml: rule a: compile"},
+		{"parse error names the file", "[[rules]]\nid = \"a\"\nbogus\n", "t.toml: line 3"},
 		{"group out of range", "[[rules]]\nid = \"a\"\nregex = '''(x)'''\nsecretGroup = 2\n", "out of range"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := compileRules([]byte(tc.toml))
+			_, err := compileRules(ruleFile{"t.toml", []byte(tc.toml)})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("compileRules error = %v, want %q", err, tc.want)
 			}

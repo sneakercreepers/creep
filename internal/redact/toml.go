@@ -13,6 +13,7 @@ type ruleSpec struct {
 	Regex       string
 	SecretGroup int
 	Keywords    []string // lowercase; the rule only runs when one occurs
+	file        string   // the rules file it came from, for error messages
 }
 
 // section says where the reader is; only [[rules]] keys count.
@@ -40,7 +41,7 @@ func parseRules(data []byte) ([]ruleSpec, error) {
 	for i, line := range strings.Split(string(data), "\n") {
 		next, err := parseLine(strings.TrimSuffix(line, "\r"), sec, &rules)
 		if err != nil {
-			return nil, fmt.Errorf("gitleaks rules line %d: %w", i+1, err)
+			return nil, fmt.Errorf("line %d: %w", i+1, err)
 		}
 		sec = next
 	}
@@ -154,14 +155,14 @@ func validateSpecs(rules []ruleSpec) error {
 	seen := make(map[string]bool, len(rules))
 	for i, r := range rules {
 		if !ruleIDRe.MatchString(r.ID) || len(r.ID) > maxRuleID {
-			return fmt.Errorf("gitleaks rule %d: invalid id %q", i+1, r.ID)
+			return fmt.Errorf("rule %d: invalid id %q", i+1, r.ID)
 		}
 		if seen[r.ID] {
-			return fmt.Errorf("gitleaks rule %s: duplicate id", r.ID)
+			return fmt.Errorf("rule %s: duplicate id", r.ID)
 		}
 		seen[r.ID] = true
 		if r.SecretGroup < 0 {
-			return fmt.Errorf("gitleaks rule %s: negative secretGroup", r.ID)
+			return fmt.Errorf("rule %s: negative secretGroup", r.ID)
 		}
 	}
 	return nil

@@ -21,13 +21,21 @@ var gitleaksTOML []byte
 //go:embed rules/local.toml
 var localTOML []byte
 
-// secretRule is a compiled gitleaks rule.
+// secretRule is a compiled rule from gitleaks.toml or local.toml.
 type secretRule struct {
 	label       string // marker label, e.g. SECRET_AWS_ACCESS_TOKEN
 	re          *regexp.Regexp
 	secretGroup int
 	wholeMatch  bool // the groups label or repeat parts; they do not bound the secret
+	urlShaped   bool // the regex has a literal "/": it also runs on decoded separators
+	crossesLine bool // the regex can match a newline: a match may go on to the next line
 	keywords    []string
+}
+
+// ruleFile is one embedded rules file and the name its errors carry.
+type ruleFile struct {
+	name string
+	data []byte
 }
 
 var (
@@ -36,22 +44,28 @@ var (
 	loadErr     error
 )
 
-// defaultRules compiles the vendored rules once per process.
+// defaultRules compiles the vendored and the local rules once per process.
 func defaultRules() ([]secretRule, error) {
 	loadOnce.Do(func() {
-		loadedRules, loadErr = compileRules(gitleaksTOML, localTOML)
+		loadedRules, loadErr = compileRules(
+			ruleFile{"rules/gitleaks.toml", gitleaksTOML},
+			ruleFile{"rules/local.toml", localTOML},
+		)
 	})
 	return loadedRules, loadErr
 }
 
 // parseRuleFiles parses each rules file and rejects an id that two files
 // share, so a local rule cannot shadow a vendored one.
-func parseRuleFiles(files [][]byte) ([]ruleSpec, error) {
+func parseRuleFiles(files []ruleFile) ([]ruleSpec, error) {
 	var specs []ruleSpec
-	for _, data := range files {
-		s, err := parseRules(data)
+	for _, f := range files {
+		s, err := parseRules(f.data)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", f.name, err)
+		}
+		for i := range s {
+			s[i].file = f.name
 		}
 		specs = append(specs, s...)
 	}
@@ -62,7 +76,7 @@ func parseRuleFiles(files [][]byte) ([]ruleSpec, error) {
 // one (path-only rules such as pkcs12-file) do not apply to text and are
 // skipped. A regex that fails to compile is an error: dropping a rule silently
 // would let that secret type through.
-func compileRules(files ...[]byte) ([]secretRule, error) {
+func compileRules(files ...ruleFile) ([]secretRule, error) {
 	specs, err := parseRuleFiles(files)
 	if err != nil {
 		return nil, err
@@ -72,26 +86,38 @@ func compileRules(files ...[]byte) ([]secretRule, error) {
 		if s.Regex == "" {
 			continue
 		}
-		re, err := regexp.Compile(s.Regex)
+		rule, err := compileRule(s)
 		if err != nil {
-			return nil, fmt.Errorf("compile gitleaks rule %s: %w", s.ID, err)
+			return nil, fmt.Errorf("%s: rule %s: %w", s.file, s.ID, err)
 		}
-		if s.SecretGroup > re.NumSubexp() {
-			return nil, fmt.Errorf("gitleaks rule %s: secretGroup %d out of range", s.ID, s.SecretGroup)
-		}
-		parsed, err := syntax.Parse(s.Regex, syntax.Perl)
-		if err != nil {
-			return nil, fmt.Errorf("parse gitleaks rule %s: %w", s.ID, err)
-		}
-		rules = append(rules, secretRule{
-			label:       "SECRET_" + markerLabel(s.ID),
-			re:          re,
-			secretGroup: s.SecretGroup,
-			wholeMatch:  structuralGroups(parsed, false),
-			keywords:    s.Keywords,
-		})
+		rules = append(rules, rule)
 	}
 	return rules, nil
+}
+
+// compileRule compiles one rule and reads the facts find needs from its
+// syntax tree.
+func compileRule(s ruleSpec) (secretRule, error) {
+	re, err := regexp.Compile(s.Regex)
+	if err != nil {
+		return secretRule{}, fmt.Errorf("compile: %w", err)
+	}
+	if s.SecretGroup > re.NumSubexp() {
+		return secretRule{}, fmt.Errorf("secretGroup %d out of range", s.SecretGroup)
+	}
+	parsed, err := syntax.Parse(s.Regex, syntax.Perl)
+	if err != nil {
+		return secretRule{}, fmt.Errorf("parse: %w", err)
+	}
+	return secretRule{
+		label:       "SECRET_" + markerLabel(s.ID),
+		re:          re,
+		secretGroup: s.SecretGroup,
+		wholeMatch:  structuralGroups(parsed, false),
+		urlShaped:   hasLiteralSlash(parsed),
+		crossesLine: matchesNewline(parsed),
+		keywords:    s.Keywords,
+	}, nil
 }
 
 // structuralGroups reports whether some capture group cannot bound the
@@ -149,6 +175,8 @@ func (r secretRule) applies(lower string) bool {
 // restartBudget bounds the bytes find scans again, as a multiple of the text
 // (or of minRestartBudgetBase for short text). Ordinary code scans about 2%
 // again and crafted dense keys about 5 times (BenchmarkRedact, "hex kw").
+// A line given up when the budget runs out earns back its own length, within
+// a hard total of one text length more, so the lines after it are searched.
 const (
 	restartBudget        = 8
 	minRestartBudgetBase = 4 << 10
@@ -168,15 +196,26 @@ const (
 // Each restart scans the previous match again, so dense overlapping matches
 // cost a multiple of the text: about 40 times for a .env file of long
 // variable names, through the generic rule's 50-byte lazy prefix. Once the
-// bytes scanned again pass restartBudget, the rest of the text from the next
-// restart is masked as one span: every later match starts there, so this only
-// masks more, and the cost stays within a fixed multiple of the text.
+// bytes scanned again pass the budget, the rest of the current line from the
+// next restart is masked (giveUpLine) and the search goes on at the next
+// line, so a dense block hides only its own lines, not the code after it
+// (issue #107). Every later match on the given-up line starts in its masked
+// part. When one may run on past the newline (the rule can match a newline
+// and the line ends in an assignment, or the next one starts with one), the
+// next line that holds text is masked too (danglingAssignment). Once the
+// total is spent, the rest of the text is masked as one span, so the cost
+// stays within a fixed multiple of the text.
 func (r secretRule) find(text string) []span {
 	var out []span
-	budget := restartBudget * max(len(text), minRestartBudgetBase)
+	lim := newRestartLimits(text)
 	for pos := 0; pos < len(text); {
-		if budget < 0 {
-			return append(out, span{start: pos, end: len(text), label: r.label})
+		if lim.line < 0 {
+			var sp span
+			sp, pos = lim.giveUpLine(text, pos, r)
+			if sp.start < sp.end {
+				out = append(out, sp)
+			}
+			continue
 		}
 		m := r.re.FindStringSubmatchIndex(text[pos:])
 		if m == nil {
@@ -186,7 +225,7 @@ func (r secretRule) find(text string) []span {
 		if start < end && !r.comparedWord(text[pos:], start, end) {
 			out = append(out, span{start: pos + start, end: pos + end, label: r.label})
 		}
-		budget -= m[1] - m[0]
+		lim.charge(m[1] - m[0])
 		pos += m[0] + 1
 	}
 	return out

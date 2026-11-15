@@ -45,7 +45,10 @@ func indexOf(t *testing.T, values []string) sweepIndex {
 	t.Helper()
 	x := newSweepIndex()
 	for _, v := range values {
-		if len(v) >= minSweepLen && !x.add(v) {
+		if len(v) < minSweepLen {
+			continue
+		}
+		if _, ok := x.add(v, true); !ok {
 			t.Fatalf("add(%q) refused", v)
 		}
 	}
@@ -96,7 +99,7 @@ func TestSweepIndexRandomized(t *testing.T) {
 		x := newSweepIndex()
 		var kept []string
 		for _, v := range values {
-			if x.add(v) {
+			if _, ok := x.add(v, true); ok {
 				kept = append(kept, v)
 			}
 		}
@@ -177,7 +180,7 @@ func TestRedactRunFull(t *testing.T) {
 		// indexed.
 		{"window and overflow", func(s *runState) {
 			for n := range maxWindowValues + maxOverflowValues + 1 {
-				s.marker(strings.Repeat("@", minSweepLen+n), "SECRET_TEST")
+				storeOutsideCall(s, strings.Repeat("@", minSweepLen+n))
 			}
 		}},
 	}
@@ -226,7 +229,7 @@ func TestFileUnterminatedKeysStayWithinCap(t *testing.T) {
 func TestWindowLeastCrowded(t *testing.T) {
 	x := newSweepIndex()
 	for _, v := range []string{"-----BEGIN RSA", "-----BEGIN EC K"} {
-		if !x.add(v) {
+		if _, ok := x.add(v, true); !ok {
 			t.Fatalf("add(%q) refused", v)
 		}
 	}
@@ -257,7 +260,7 @@ func TestFindRestartBudgetMasksRest(t *testing.T) {
 func TestFindWithinBudgetUnchanged(t *testing.T) {
 	text := "  k=" + strings.Repeat("w", 100) + " x"
 	got := overlapRule().find(text)
-	want := []span{{4, 104, "SECRET_TEST"}, {4, 104, "SECRET_TEST"}}
+	want := []span{{start: 4, end: 104, label: "SECRET_TEST"}, {start: 4, end: 104, label: "SECRET_TEST"}}
 	if !slices.Equal(got, want) {
 		t.Fatalf("find = %v, want %v", got, want)
 	}

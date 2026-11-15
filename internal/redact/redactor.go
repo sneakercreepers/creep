@@ -46,15 +46,19 @@ type runState struct {
 	index    sweepIndex        // the values of at least minSweepLen bytes
 	bytes    int               // total length of the keys of byValue
 	full     bool              // a value could not be stored: the run is over
+	call     callShare         // what the current call has stored
 }
 
 // span is a byte range of the input to replace; label names the marker kind.
+// A guess masks text a rule gave up searching (secretRule.find): it is not a
+// found value, so it is not remembered on its own.
 type span struct {
 	start, end int
 	label      string
+	guess      bool
 }
 
-// New returns a Redactor loaded with the vendored gitleaks rules.
+// New returns a Redactor loaded with the vendored and the local rules.
 func New() (*Redactor, error) {
 	rules, err := defaultRules()
 	if err != nil {
@@ -86,31 +90,77 @@ func (r *Redactor) Redact(text string) (string, error) {
 
 // finish adds the values known from earlier calls to the spans found in
 // text, renders the markers and remembers every masked value for later calls.
-// If some value cannot be stored, the output is dropped and the run ends.
+// If some value cannot be stored, the output is dropped: when the run is full
+// it ends, and when only this call's share is used up the call's values are
+// forgotten and the run goes on.
 func (r *Redactor) finish(text string, found []span) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.state.full {
 		return "", ErrRunFull
 	}
+	r.state.call = callShare{}
 	found = append(found, r.state.index.find(text)...)
 	out := r.state.render(text, mergeSpans(found))
 	r.state.rememberParts(text, found)
-	if r.state.full {
+	switch {
+	case r.state.full:
 		return "", ErrRunFull
+	case r.state.call.over:
+		r.state.rollback()
+		return "", ErrTooManyValues
 	}
+	r.state.call = callShare{}
 	return out, nil
 }
 
 // rememberParts gives a marker to each value that was masked only as part of
 // a merged span (a URL password run into an email), so the sweep still masks
 // it when it shows up alone in a later fragment.
+//
+// A private key's body inside the same key with its header is not stored
+// again: it would double the bytes an unterminated key costs the run (#105),
+// and the key-body detector masks a bare body wherever it shows up.
 func (s *runState) rememberParts(text string, found []span) {
+	nested := nestedKeys(found)
 	for _, sp := range found {
-		if sp.label != "" && sp.end-sp.start >= minSweepLen {
-			s.marker(text[sp.start:sp.end], sp.label)
+		if sp.label == "" || sp.guess || sp.end-sp.start < minSweepLen {
+			continue
+		}
+		if sp.label == privateKeyLabel && nested[[2]int{sp.start, sp.end}] {
+			continue
+		}
+		s.marker(text[sp.start:sp.end], sp.label)
+	}
+}
+
+// nestedKeys returns the bounds of each private-key span that lies inside a
+// longer one, in one pass over the key spans sorted by start.
+func nestedKeys(found []span) map[[2]int]bool {
+	var keys []span
+	for _, sp := range found {
+		if sp.label == privateKeyLabel {
+			keys = append(keys, sp)
 		}
 	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].start != keys[j].start {
+			return keys[i].start < keys[j].start
+		}
+		return keys[i].end > keys[j].end
+	})
+	nested := map[[2]int]bool{}
+	outer := span{start: -1, end: -1}
+	for _, k := range keys {
+		if k.end <= outer.end && k.end-k.start < outer.end-outer.start {
+			nested[[2]int{k.start, k.end}] = true
+			continue
+		}
+		if k.end > outer.end {
+			outer = k
+		}
+	}
+	return nested
 }
 
 // detect runs every secret rule and PII detector over text.
@@ -124,6 +174,7 @@ func (r *Redactor) detect(text string) []span {
 type detectorSet struct {
 	rules    []secretRule
 	patterns []patternDetector
+	encoded  []secretRule // URL-shaped rules to run again on decoded separators
 }
 
 // gated returns the detectors that apply to text. File gates on the whole
@@ -136,6 +187,7 @@ func (r *Redactor) gated(text string) detectorSet {
 			set.rules = append(set.rules, rule)
 		}
 	}
+	set.encoded = r.encodedRules(text)
 	for _, list := range [][]patternDetector{credentialDetectors, piiDetectors} {
 		for _, d := range list {
 			if d.applies(text) {
@@ -155,7 +207,7 @@ func (s detectorSet) find(text string) []span {
 	for _, d := range s.patterns {
 		found = append(found, d.scan(text)...)
 	}
-	return found
+	return append(found, s.findEncoded(text)...)
 }
 
 // mergeSpans sorts spans and joins overlapping ones, so every secret byte is
@@ -200,13 +252,13 @@ func (s *runState) render(text string, spans []span) string {
 
 // marker returns the value's marker, assigning the next number for its label
 // the first time the value is seen in this run. When the value cannot be
-// stored it marks the run full and returns "": the caller drops the output.
+// stored it returns "" and store has marked the run full or the call over:
+// the caller drops the output.
 func (s *runState) marker(value, label string) string {
 	if m, ok := s.byValue[value]; ok {
 		return m
 	}
 	if !s.store(value) {
-		s.full = true
 		return ""
 	}
 	if label == "" {
@@ -219,17 +271,23 @@ func (s *runState) marker(value, label string) string {
 	return m
 }
 
-// store admits a new value within the run's caps and indexes it for the
-// sweep, which re-masks it in later fragments even where no rule matches it
-// any more (a key reused without its variable name).
+// store admits a new value within the call's share and the run's caps and
+// indexes it for the sweep, which re-masks it in later fragments even where
+// no rule matches it any more (a key reused without its variable name).
 func (s *runState) store(value string) bool {
-	if s.full || len(s.byValue) >= maxRunValues || s.bytes+len(value) > maxRunBytes {
+	if s.full || !s.call.admits(value) {
 		return false
 	}
-	if len(value) >= minSweepLen && !s.index.add(value) {
+	if len(s.byValue) >= maxRunValues || s.bytes+len(value) > maxRunBytes {
+		s.full = true
+		return false
+	}
+	if len(value) >= minSweepLen && !s.indexValue(value) {
 		return false
 	}
 	s.bytes += len(value)
+	s.call.bytes += len(value)
+	s.call.added = append(s.call.added, value)
 	return true
 }
 

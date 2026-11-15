@@ -31,6 +31,10 @@ var secretMakers = []func(*rand.Rand) string{
 		return strings.Join(fakeBody(rng, 200, 64), "\n") + "\n" + pemEdge("END", "EC")
 	},
 	func(rng *rand.Rand) string { return strings.Join(fakeBody(rng, 128, 64), "\n") },
+	// Webhook URLs with JSON-escaped or percent-encoded separators (#151).
+	func(rng *rand.Rand) string { return separatorEncodings[0].encoding(fakeDiscordURL(rng).url) },
+	func(rng *rand.Rand) string { return separatorEncodings[1].encoding(fakeSlackURL(rng).url) },
+	func(rng *rand.Rand) string { return separatorEncodings[2].encoding(fakeTeamsURL(rng).url) },
 	// The complete key stays last: TestRedactLazyMatchCannotHideSecret uses it.
 	func(rng *rand.Rand) string {
 		body := fakeToken(rng, alnum+"+/", 64) + "\n" + fakeToken(rng, alnum+"+/", 64)

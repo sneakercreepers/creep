@@ -27,7 +27,10 @@ func largeInputs() map[string]string {
 		"url creds": fill("a://b:c@"),
 		"aws 40":    "AKIA" + strings.Repeat("A", 16) + fill("Ab3/+")[20:],
 		"key body":  fill(strings.Repeat("Ab3/+9x", 10)[:64] + "\n"),
-		"pem edges": fill("-----BEGIN PRIV" + "ATE KEY-----\n-----END EC PRIV" + "ATE KEY-----\n"),
+		// Encoded separators run the URL-shaped rules a second time (#151).
+		"json slashes": fill("discord" + ".com\\/api\\/webhooks\\/" + strings.Repeat("1", 18) + "\\/" + strings.Repeat("Ab3x", 11) + "\\/"),
+		"percent":      fill("hooks.slack" + ".com%2Fservices%2F" + strings.Repeat("Ab3x", 12) + "%3a%2f"),
+		"pem edges":    fill("-----BEGIN PRIV" + "ATE KEY-----\n-----END EC PRIV" + "ATE KEY-----\n"),
 		// Long variable names give the generic rule's lazy 50-byte prefix a
 		// match at every byte, each scanning the whole line again.
 		"env keys": fill("SERVICE_ACCOUNT_PRIMARY_REGION_DEFAULT_SECONDARY_TOKEN=" + strings.Repeat("Ab3x", 30) + "\n"),

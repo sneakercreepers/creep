@@ -52,10 +52,12 @@ type sweepIndex struct {
 }
 
 // sweepValue is a known value: its length, where its window starts, its hash
-// and base^length, which lifts a prefix hash past it.
+// and base^length, which lifts a prefix hash past it. overflowed says it is
+// in the overflow list instead of under a window.
 type sweepValue struct {
 	length, offset int
 	hash, scale    uint64
+	overflowed     bool
 }
 
 // newSweepIndex picks a random hash base, so input cannot be crafted to
@@ -75,9 +77,10 @@ func randomBase() uint64 {
 }
 
 // add indexes value under its least crowded window, or in the overflow list
-// when every window already holds maxWindowValues values. It reports false
-// only when the overflow list is full too.
-func (x *sweepIndex) add(value string) bool {
+// when every window already holds maxWindowValues values and overflowRoom is
+// set. It reports whether the value went to the overflow list, and false for
+// ok when it was not indexed: the list is full or overflowRoom is unset.
+func (x *sweepIndex) add(value string, overflowRoom bool) (overflowed, ok bool) {
 	offset, crowd := 0, maxWindowValues
 	for i := 0; i+minSweepLen <= len(value) && crowd > 0; i++ {
 		if n := len(x.windows[window(value, i)]); n < crowd {
@@ -89,16 +92,34 @@ func (x *sweepIndex) add(value string) bool {
 	case crowd < maxWindowValues:
 		w := window(value, offset)
 		x.windows[w] = append(x.windows[w], id)
-	case x.overflowCount < maxOverflowValues:
-		offset = 0
+	case overflowRoom && x.overflowCount < maxOverflowValues:
+		offset, overflowed = 0, true
 		x.overflow[value[0]] = append(x.overflow[value[0]], id)
 		x.overflowCount++
 	default:
-		return false
+		return false, false
 	}
 	hash, scale := x.hashOf(value)
-	x.values = append(x.values, sweepValue{length: len(value), offset: offset, hash: hash, scale: scale})
-	return true
+	x.values = append(x.values, sweepValue{length: len(value), offset: offset, hash: hash, scale: scale, overflowed: overflowed})
+	return overflowed, true
+}
+
+// removeLast drops the value added last, which must be value, from the index.
+func (x *sweepIndex) removeLast(value string) {
+	id := len(x.values) - 1
+	v := x.values[id]
+	x.values = x.values[:id]
+	if v.overflowed {
+		x.overflow[value[0]] = x.overflow[value[0]][:len(x.overflow[value[0]])-1]
+		x.overflowCount--
+		return
+	}
+	w := window(value, v.offset)
+	if ids := x.windows[w][:len(x.windows[w])-1]; len(ids) > 0 {
+		x.windows[w] = ids
+		return
+	}
+	delete(x.windows, w)
 }
 
 // sweepScan is the state of one find: the text's prefix hashes and where

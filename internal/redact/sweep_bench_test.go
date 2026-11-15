@@ -69,7 +69,7 @@ func BenchmarkSweepOverflow(b *testing.B) {
 		b.Run(fmt.Sprintf("overflow=%d/crafted=%t", n, chunk != code), func(b *testing.B) {
 			r := newRedactor(b)
 			for i := range maxWindowValues + n {
-				r.state.marker(strings.Repeat("e", minSweepLen+i), "SECRET_TEST")
+				storeOutsideCall(r.state, strings.Repeat("e", minSweepLen+i))
 			}
 			b.SetBytes(int64(len(chunk)))
 			for b.Loop() {

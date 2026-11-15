@@ -185,6 +185,8 @@ func TestScanSkipsFilesRedactRejects(t *testing.T) {
 		{"binary with NUL", "CANARY" + strings.Repeat("\x00\x01", redact.MaxLineBytes/2), false, SkipLineTooLong},
 		{"CR-only line ends", strings.Repeat("CANARY x\r", redact.MaxLineBytes/9+1), false, SkipLineTooLong},
 		{"unreadable", "", true, SkipReadFailed},
+		// #105: one crafted file cannot fill the run; it alone is skipped.
+		{"too many values", placeholderFile('@', 300), false, SkipRedactFailed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -204,15 +206,26 @@ func TestScanSkipsFilesRedactRejects(t *testing.T) {
 	}
 }
 
-// fillingFile holds more distinct values than one run can remember: values
-// made of one repeated byte share every window, so they fill the sweep
-// index's window and overflow lists after a few hundred.
-func fillingFile() string {
+// placeholderFile holds n values made of one repeated byte, each a
+// different length: they share every window, so past 16 they need the sweep
+// index's overflow list, of which one call may take 32 (redact, #105).
+func placeholderFile(c byte, n int) string {
 	var b strings.Builder
-	for n := range 300 {
-		b.WriteString("CANARY password = \"" + strings.Repeat("@", 8+n) + "\"\n")
+	for i := range n {
+		b.WriteString("CANARY password = " + strings.Repeat(string(c), 8+i) + "\n")
 	}
 	return b.String()
+}
+
+// fillOverflow redacts eight files that each take a call's share of the
+// overflow list, so the list is full and the next such value ends the run.
+func fillOverflow(t *testing.T, r *redact.Redactor) {
+	t.Helper()
+	for c := byte('a'); c < 'a'+8; c++ {
+		if _, err := r.File([]byte(placeholderFile(c, 48))); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // Acceptance (#83): ErrRunFull, from redact.File or from a Redact the caller
@@ -225,14 +238,16 @@ func TestScanStopsWhenRunFull(t *testing.T) {
 		fail func(int) error
 		want SkipReason
 	}{
-		{"redact.File", fillingFile(), nil, SkipRunFull},
+		{"redact.File", placeholderFile('@', 20), nil, SkipRunFull},
 		{"Redact in Send", goodFile, failSecond(fmt.Errorf("redact prompt: %w", redact.ErrRunFull)), SkipRunFull},
 		{"other Send error", goodFile, failSecond(errors.New("model endpoint unreachable")), SkipSendFailed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := &recorder{files: map[string]string{"a.go": goodFile, "b.go": tt.b, "c.go": goodFile, "d.go": goodFile}, fail: tt.fail}
-			rep, err := rec.scan(t).Run([]string{"a.go", "b.go", "c.go", "d.go"})
+			scan := rec.scan(t)
+			fillOverflow(t, scan.Redactor)
+			rep, err := scan.Run([]string{"a.go", "b.go", "c.go", "d.go"})
 			want := ScanReport{Fragments: 1, Incomplete: true,
 				NotScanned: []NotScanned{{"b.go", tt.want}, {"c.go", tt.want}, {"d.go", tt.want}}}
 			if err == nil || errors.Is(err, redact.ErrRunFull) != (tt.want == SkipRunFull) || !reflect.DeepEqual(rep, want) {
