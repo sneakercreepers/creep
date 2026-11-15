@@ -7,32 +7,69 @@ import (
 
 // URL-shaped secrets (webhook URLs) are matched by rules written around a
 // literal "/". Serializers that escape slashes (PHP json_encode, some Java and
-// .NET ones) write "\/", and a URL embedded in a query string has "%2F" and
-// "%3A". Rather than a second regex per rule and encoding, the URL-shaped
-// rules run again on a copy of the text with those separators decoded, and
-// each match maps back onto the original bytes, escapes included, so the
-// vendored rules stay byte for byte upstream (issue #151).
+// .NET ones) write "\/", JSON nested in JSON "\\/" or "\\\/", JSON "\u002F",
+// HTML "&#x2F;", "&#47;" or "&sol;", and a URL embedded in a query string has
+// "%2F" and "%3A", or "%252F" when encoded twice. Rather than a second regex
+// per rule and encoding, the URL-shaped rules run again on a copy of the text
+// with those separators decoded, and each match maps back onto the original
+// bytes, escapes included, so the vendored rules stay byte for byte upstream
+// (issue #151).
+
+// maxBackslashes bounds the backslashes before an escaped separator (JSON
+// nested three deep), so each position looks at a fixed number of bytes and
+// the scan stays linear.
+const maxBackslashes = 7
+
+// entitySeparators are the encodings that start with "%" or "&", matched
+// without regard to case.
+var entitySeparators = []struct {
+	enc string
+	sep byte
+}{
+	{"%2f", '/'}, {"%3a", ':'}, {"%252f", '/'}, {"%253a", ':'},
+	{"&#x2f;", '/'}, {"&#47;", '/'}, {"&sol;", '/'},
+	{"&#x3a;", ':'}, {"&#58;", ':'}, {"&colon;", ':'},
+}
 
 // separatorAt returns the separator encoded at text[i] and the width of its
 // encoding, or width 0 when none starts there.
 func separatorAt(text string, i int) (byte, int) {
-	if text[i] == '\\' && i+1 < len(text) && text[i+1] == '/' {
-		return '/', 2
-	}
-	if text[i] != '%' || i+2 >= len(text) {
-		return 0, 0
-	}
-	switch text[i+1 : i+3] {
-	case "2F", "2f":
-		return '/', 3
-	case "3A", "3a":
-		return ':', 3
+	switch text[i] {
+	case '\\':
+		return escapedSeparatorAt(text, i)
+	case '%', '&':
+		for _, e := range entitySeparators {
+			if end := i + len(e.enc); end <= len(text) && strings.EqualFold(text[i:end], e.enc) {
+				return e.sep, len(e.enc)
+			}
+		}
 	}
 	return 0, 0
 }
 
-// hasEncodedSeparator reports whether text holds "\/", "%2F" or "%3A" in
-// either case.
+// escapedSeparatorAt decodes one to maxBackslashes backslashes followed by
+// "/", "u002F" or "u003A" (either case).
+func escapedSeparatorAt(text string, i int) (byte, int) {
+	j := i
+	for j < len(text) && j-i < maxBackslashes && text[j] == '\\' {
+		j++
+	}
+	if j < len(text) && text[j] == '/' {
+		return '/', j + 1 - i
+	}
+	if j+5 > len(text) {
+		return 0, 0
+	}
+	switch u := text[j : j+5]; {
+	case strings.EqualFold(u, "u002f"):
+		return '/', j + 5 - i
+	case strings.EqualFold(u, "u003a"):
+		return ':', j + 5 - i
+	}
+	return 0, 0
+}
+
+// hasEncodedSeparator reports whether text holds any encoded separator.
 func hasEncodedSeparator(text string) bool {
 	for i := 0; i < len(text); i++ {
 		if _, w := separatorAt(text, i); w > 0 {

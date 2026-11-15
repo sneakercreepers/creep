@@ -46,6 +46,13 @@ var separatorEncodings = []struct {
 	{"percent upper", strings.NewReplacer("/", "%2F", ":", "%3A").Replace},
 	{"percent lower", strings.NewReplacer("/", "%2f", ":", "%3a").Replace},
 	{"percent mixed", strings.NewReplacer("/", "%2f", ":", "%3A").Replace},
+	{"json in json", func(u string) string { return strings.ReplaceAll(u, "/", `\\/`) }},
+	{"json three deep", func(u string) string { return strings.ReplaceAll(u, "/", `\\\/`) }},
+	{"unicode escape", strings.NewReplacer("/", `\u002F`, ":", `\u003a`).Replace},
+	{"double percent", strings.NewReplacer("/", "%252F", ":", "%253A").Replace},
+	{"hex entity", strings.NewReplacer("/", "&#x2F;", ":", "&#x3A;").Replace},
+	{"decimal entity", strings.NewReplacer("/", "&#47;", ":", "&#58;").Replace},
+	{"named entity", strings.NewReplacer("/", "&sol;", ":", "&colon;").Replace},
 	{"plain", func(u string) string { return u }},
 }
 
@@ -109,6 +116,9 @@ func TestEncodedURLsWithoutSecretUnchanged(t *testing.T) {
 		"https%3a%2f%2fhooks.slack" + ".com%2fservices%2fshort",
 		`path := "a\/b" + "%2Fc" + "%3"`,
 		`%2`, `\`, `%`, `%2G%3B\x`,
+		`<a href="https&#x3A;&#x2F;&#x2F;example.com&#47;docs&sol;x">`,
+		`{"u":"https:\\\/\\\/example.com\\\/a"}`, `"\u002Fusr\u002Fbin"`, "q=%252Fhome%252F",
+		`&#x2F`, `&#4`, `&sol`, `\u002`, `%25`, `%252`, strings.Repeat(`\`, 20),
 	}
 	for _, text := range tests {
 		if out := mustRedact(t, newRedactor(t), text); out != text {
@@ -128,10 +138,18 @@ func TestDecodeSeparators(t *testing.T) {
 		{"ab", "ab", []int{0, 1, 2}},
 		{`a\/b`, "a/b", []int{0, 1, 3, 4}},
 		{"%2f%3A", "/:", []int{0, 3, 6}},
-		{`\\/`, `\/`, []int{0, 1, 3}},
+		{`\\/`, "/", []int{0, 3}},
 		{"%2", "%2", []int{0, 1, 2}},
 		{`x\`, `x\`, []int{0, 1, 2}},
 		{"%%2F", "%/", []int{0, 1, 4}},
+		{`a\\\/`, "a/", []int{0, 1, 5}},
+		{`\\\\\\\\/`, `\/`, []int{0, 1, 9}}, // 8 backslashes: only 7 belong to the escape
+		{`\u002Fx\U003A`, "/x:", []int{0, 6, 7, 13}},
+		{`\\u002f`, "/", []int{0, 7}},
+		{"%252f%253A", "/:", []int{0, 5, 10}},
+		{"&#x2F;&#47;&SOL;&#58;&colon;", "///::", []int{0, 6, 11, 16, 21, 28}},
+		{"&#x2F&#4", "&#x2F&#4", []int{0, 1, 2, 3, 4, 5, 6, 7, 8}},
+		{`\u002`, `\u002`, []int{0, 1, 2, 3, 4, 5}},
 	}
 	for _, tt := range tests {
 		got, starts := decodeSeparators(tt.in)

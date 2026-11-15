@@ -177,24 +177,37 @@ func TestBuildSkipsFilesRedactRejects(t *testing.T) {
 	}
 }
 
-// fillingFile holds more distinct values than one run can remember: values
-// made of one repeated byte share every window, so they fill the sweep
-// index's window and overflow lists after a few hundred.
-func fillingFile() string {
+// placeholderFile holds n values made of one repeated byte, each a
+// different length: they share every window, so past 16 they need the sweep
+// index's overflow list, of which one redact call may take 32 (#105).
+func placeholderFile(c byte, n int) string {
 	var b strings.Builder
-	for n := range 300 {
-		b.WriteString("CANARY password = \"" + strings.Repeat("@", 8+n) + "\"\n")
+	for i := range n {
+		b.WriteString("CANARY password = " + strings.Repeat(string(c), 8+i) + "\n")
 	}
 	return b.String()
+}
+
+// fillOverflow redacts eight files that each take a call's share of the
+// overflow list, so the list is full and the next such value ends the run.
+func fillOverflow(t *testing.T, r *redact.Redactor) {
+	t.Helper()
+	for c := byte('a'); c < 'a'+8; c++ {
+		if _, err := r.File([]byte(placeholderFile(c, 48))); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // Acceptance (#94): ErrRunFull stops the run. That file and every later one
 // are listed as not scanned and never read, their hypotheses are not
 // evaluated, and the report is incomplete, never clean.
 func TestBuildStopsWhenRunFull(t *testing.T) {
-	f := &files{content: map[string]string{"a.py": app, "b.py": fillingFile(), "c.py": app, "d.py": app}}
+	f := &files{content: map[string]string{"a.py": app, "b.py": placeholderFile('@', 20), "c.py": app, "d.py": app}}
 	targets := []Target{sqlTarget(1, "a.py"), sqlTarget(2, "b.py"), sqlTarget(3, "c.py"), sqlTarget(4, "d.py"), sqlTarget(5, "c.py")}
-	rep, err := f.slicer(t, TierM).Build(targets)
+	slicer := f.slicer(t, TierM)
+	fillOverflow(t, slicer.Redactor)
+	rep, err := slicer.Build(targets)
 	if !errors.Is(err, redact.ErrRunFull) || !rep.Incomplete {
 		t.Fatalf("Build = %+v, %v; want ErrRunFull and an incomplete report", rep, err)
 	}

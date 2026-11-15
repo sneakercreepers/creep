@@ -106,19 +106,26 @@
 // long names) stops searching again after a fixed multiple of the input,
 // masks the rest of the current line and searches the next lines with a
 // budget of the bytes it masked, so the dense block hides only its own lines
-// and the code after it stays visible. A match that starts in the masked part
-// of that line and continues past its newline is not followed onto the next
-// line (a known limit). After a hard total of one more input length, the rest
-// of the input is masked instead. The masked guesses are not remembered as
-// values.
+// and the code after it stays visible. When that rule can match a newline
+// and the masked line ends in an assignment ("db_password =") or the next line
+// starts with one, the next line that holds text is masked too, since a match
+// starting in the masked part could carry its value there. A value split from
+// its key some other way, such as by a line of text in between, is not
+// followed (a known limit). After a hard total of one more input length, the
+// rest of the input is masked instead. The masked guesses are not remembered
+// as values.
 //
 // Encoded separators: URL-shaped rules (a literal "/" in the regex, such as
 // the Discord, Slack and Teams webhook rules) run again on a copy of the text
-// with "\/", "%2F" and "%3A" (either case) decoded, and each match is mapped
-// back onto the original bytes, so every byte of an escaped or
-// percent-encoded webhook URL's secret is masked, escapes included, and the
-// vendored rules stay byte for byte upstream. Other encodings (/,
-// double percent-encoding) are not decoded.
+// with these separators decoded, in either case: "\/" after one to seven
+// backslashes (JSON, and JSON nested in JSON), the JSON escapes \u002F and
+// \u003A, "%2F", "%3A" and their double encodings "%252F" and "%253A", and
+// the HTML entities "&#x2F;", "&#47;", "&sol;", "&#x3A;", "&#58;" and
+// "&colon;". Each match maps back onto the original bytes, so every byte of
+// an encoded webhook URL's secret is masked, escapes included, and the
+// vendored rules stay byte for byte upstream. Each position looks at a fixed
+// number of bytes, so decoding stays linear. Other encodings (HTML entities
+// without the final ";", triple percent-encoding, base64) are not decoded.
 //
 // Run limits: one run remembers at most about 128k values or 32 MiB of them
 // (a private key without an END line is one value up to the end of its file,

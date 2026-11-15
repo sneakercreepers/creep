@@ -28,6 +28,7 @@ type secretRule struct {
 	secretGroup int
 	wholeMatch  bool // the groups label or repeat parts; they do not bound the secret
 	urlShaped   bool // the regex has a literal "/": it also runs on decoded separators
+	crossesLine bool // the regex can match a newline: a match may go on to the next line
 	keywords    []string
 }
 
@@ -114,6 +115,7 @@ func compileRule(s ruleSpec) (secretRule, error) {
 		secretGroup: s.SecretGroup,
 		wholeMatch:  structuralGroups(parsed, false),
 		urlShaped:   hasLiteralSlash(parsed),
+		crossesLine: matchesNewline(parsed),
 		keywords:    s.Keywords,
 	}, nil
 }
@@ -180,21 +182,6 @@ const (
 	minRestartBudgetBase = 4 << 10
 )
 
-// restartLimits is what one find may still scan again: line until the
-// current line is given up, total until the rest of the text is.
-type restartLimits struct{ line, total int }
-
-func newRestartLimits(text string) restartLimits {
-	base := max(len(text), minRestartBudgetBase)
-	return restartLimits{line: restartBudget * base, total: (restartBudget + 1) * base}
-}
-
-// charge counts n bytes scanned again.
-func (l *restartLimits) charge(n int) {
-	l.line -= n
-	l.total -= n
-}
-
 // find returns the byte spans of the secrets this rule matches in text.
 // The secret is the configured group, else the union of the groups that took
 // part, else the whole match; that keeps names and quotes around it visible.
@@ -213,17 +200,18 @@ func (l *restartLimits) charge(n int) {
 // next restart is masked (giveUpLine) and the search goes on at the next
 // line, so a dense block hides only its own lines, not the code after it
 // (issue #107). Every later match on the given-up line starts in its masked
-// part. One that runs on past the newline (a key, a line break, then its
-// value) is not followed onto the next line; the line itself always is
-// masked. Once the total is spent too, the rest of the text is masked as one
-// span, so the cost stays within a fixed multiple of the text.
+// part. When one may run on past the newline (the rule can match a newline
+// and the line ends in an assignment, or the next one starts with one), the
+// next line that holds text is masked too (danglingAssignment). Once the
+// total is spent, the rest of the text is masked as one span, so the cost
+// stays within a fixed multiple of the text.
 func (r secretRule) find(text string) []span {
 	var out []span
 	lim := newRestartLimits(text)
 	for pos := 0; pos < len(text); {
 		if lim.line < 0 {
 			var sp span
-			sp, pos = lim.giveUpLine(text, pos, r.label)
+			sp, pos = lim.giveUpLine(text, pos, r)
 			if sp.start < sp.end {
 				out = append(out, sp)
 			}
@@ -241,19 +229,6 @@ func (r secretRule) find(text string) []span {
 		pos += m[0] + 1
 	}
 	return out
-}
-
-// giveUpLine masks text from pos to the end of its line, gives the next
-// line as many bytes as it masked and returns where to search next. With the
-// total spent it masks the rest of the text instead. The span is a guess,
-// not a found value, so it is never remembered on its own.
-func (l *restartLimits) giveUpLine(text string, pos int, label string) (span, int) {
-	end := len(text)
-	if i := strings.IndexByte(text[pos:], '\n'); i >= 0 && l.total > 0 {
-		end = pos + i
-	}
-	l.line = min(end+1-pos, l.total)
-	return span{start: pos, end: end, label: label, guess: true}, end + 1
 }
 
 // secretBounds picks the span to mask from a submatch index. gitleaks

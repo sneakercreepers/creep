@@ -131,3 +131,66 @@ func TestFindTotalMasksRest(t *testing.T) {
 		t.Fatalf("limits %+v, want the total one text length above the line budget", lim)
 	}
 }
+
+// Regression (tester on #193): a crafted line that runs the generic rule out
+// of budget and ends in an open assignment must not leak the value written
+// on the next line, as main never did; the code after it stays visible.
+func TestGivenUpLineMasksDanglingValue(t *testing.T) {
+	rng := rand.New(rand.NewPCG(193, 1))
+	keys, _ := denseKeyBlock(rng, 16<<10)
+	tests := []struct{ name, open, close string }{
+		{"assignment", " db_password =", "\n  %s\n"},
+		{"colon and blank line", " api_token:", "\n\n\t%s\n"},
+		{"quote", ` client_secret = "`, "\n%s\"\n"},
+		{"operator on next line", " db_password", "\n  = %s\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for range 4 {
+				value := fakeToken(rng, alnum, 24)
+				code := codeBlock(8 << 10)
+				text := strings.TrimSuffix(keys, "\n") + tt.open + fmt.Sprintf(tt.close, value) + code
+				assertValueMasked(t, text, value, code)
+			}
+		})
+	}
+}
+
+func assertValueMasked(t *testing.T, text, value, code string) {
+	t.Helper()
+	viaFile, err := newRedactor(t).File([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, out := range []string{mustRedact(t, newRedactor(t), text), viaFile} {
+		if strings.Contains(out, value[:8]) || strings.Contains(out, value[16:]) {
+			t.Fatalf("value after a given-up line leaked: %q", value)
+		}
+		if !strings.HasSuffix(out, code) {
+			t.Fatal("a span crossed into the code after the value")
+		}
+	}
+}
+
+// Lines that close their assignment keep the next line visible.
+func TestDanglingAssignment(t *testing.T) {
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{"k = v\nnext", false},
+		{"k =\nnext", true},
+		{"k:  \r\nnext", true},
+		{"k = \"\nnext", true},
+		{"k\n\n  => v", true},
+		{"k\nfunc f() {}", false},
+		{"k\n", false},
+		{"\nnext", false},
+	}
+	for _, tt := range tests {
+		nl := strings.IndexByte(tt.text, '\n')
+		if got := danglingAssignment(tt.text, 0, nl); got != tt.want {
+			t.Errorf("danglingAssignment(%q) = %t, want %t", tt.text, got, tt.want)
+		}
+	}
+}
