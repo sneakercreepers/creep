@@ -162,23 +162,31 @@ func (x *pyExtraction) constant(n *Node, s bodyScan, fresh bool) bool {
 // side is evaluated once per function and a chain such as
 // z = "a" + ...; y = z + z; x = y + y costs linear time.
 func (x *pyExtraction) constantName(name string, s bodyScan) bool {
+	return s.constantName(name, x.file.nonlocals[name], &x.constBudget,
+		func(r *Node) bool { return x.constant(r, s, false) })
+}
+
+// constantName is the memoized, language-neutral part of the verdict:
+// rebound forces dynamic, and constant judges one right-hand side while
+// spending *budget.
+func (s bodyScan) constantName(name string, rebound bool, budget *int, constant func(*Node) bool) bool {
 	if v, ok := s.names[name]; ok {
 		return v == nameConst
 	}
 	rhs := s.assigns[name]
-	if len(rhs) == 0 || s.dynamic[name] || x.file.nonlocals[name] {
+	if len(rhs) == 0 || s.dynamic[name] || rebound {
 		s.names[name] = nameDynamic
 		return false
 	}
 	s.names[name] = nameBusy
 	v := nameConst
 	for _, r := range rhs {
-		if !x.constant(r, s, false) {
+		if !constant(r) {
 			v = nameDynamic
 			break
 		}
 	}
-	if x.constBudget < 0 {
+	if *budget < 0 {
 		delete(s.names, name) // the verdict is a budget guess, not a fact
 		return false
 	}

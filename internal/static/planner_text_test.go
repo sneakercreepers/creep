@@ -167,7 +167,8 @@ func assertLocationsMarked(t *testing.T, l Locations) {
 		}
 	}
 	for _, r := range l.Routes {
-		if !strings.Contains(r.Handler, markerPrefix) || (r.Path != "" && !strings.Contains(r.Path, markerPrefix)) {
+		// An anonymous Express handler has no name to mark.
+		if (r.Handler != "" && !strings.Contains(r.Handler, markerPrefix)) || (r.Path != "" && !strings.Contains(r.Path, markerPrefix)) {
 			t.Errorf("route location not marked: %+v", r)
 		}
 	}

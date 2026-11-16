@@ -2,26 +2,37 @@ package static
 
 // SinkAPI identifies the matched call in creep's own sink table, for example
 // "subprocess.run" or ".execute". Its names come from creep, never from the
-// scanned repository, so the planner may see them.
+// scanned repository, so the planner may see them. Python APIs index
+// pySinkSpecs; JavaScript APIs start at jsSinkBase and index jsSinkSpecs.
 type SinkAPI uint8
 
 // String returns the table name of the API.
 func (a SinkAPI) String() string {
-	if int(a) < len(pySinkSpecs) {
-		return pySinkSpecs[a].name
+	if s, ok := a.spec(); ok {
+		return s.name
 	}
 	return "unknown"
 }
 
 // Kind returns the sink class of the API.
 func (a SinkAPI) Kind() SinkKind {
-	if int(a) < len(pySinkSpecs) {
-		return pySinkSpecs[a].kind
+	if s, ok := a.spec(); ok {
+		return s.kind
 	}
 	return 0
 }
 
-// sinkSpec is one Python sink. A name starting with "." matches a method call
+func (a SinkAPI) spec() (sinkSpec, bool) {
+	switch {
+	case a >= jsSinkBase && int(a-jsSinkBase) < len(jsSinkSpecs):
+		return jsSinkSpecs[a-jsSinkBase], true
+	case a > 0 && int(a) < len(pySinkSpecs):
+		return pySinkSpecs[a], true
+	}
+	return sinkSpec{}, false
+}
+
+// sinkSpec is one sink. A name starting with "." matches a method call
 // on any receiver that is not an imported module; other names match the
 // callee's import-resolved dotted name exactly.
 type sinkSpec struct {

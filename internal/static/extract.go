@@ -17,7 +17,24 @@ var ErrGraphFull = errors.New("route graph full")
 type extractLimits struct {
 	routes      int // routes kept per file
 	constVisits int // node visits for DynamicArg analysis per file
+	scanVisits  int // node visits for JavaScript handler scans per file
 }
+
+// foundRoute is a route before it gets IDs.
+type foundRoute struct {
+	framework Framework
+	methods   Methods
+	path      string
+	dynamic   bool
+	auth      AuthVia
+	handler   string
+	line      int
+	facts     handlerFacts
+}
+
+// extractFunc returns the routes of one file, at most lim.routes; truncated
+// is set when more were declared.
+type extractFunc func(root *Node, src []byte, lim extractLimits) (routes []foundRoute, truncated bool)
 
 // Extractor builds one Graph from many parsed files. IDs are assigned in the
 // order files and routes are added, so the same input gives the same graph.
@@ -30,20 +47,35 @@ type Extractor struct {
 
 // NewExtractor returns an empty Extractor.
 func NewExtractor() *Extractor {
-	return &Extractor{lim: extractLimits{routes: maxFileRoutes, constVisits: maxConstVisits}}
+	return &Extractor{lim: extractLimits{routes: maxFileRoutes, constVisits: maxConstVisits, scanVisits: maxScanVisits}}
 }
 
 // AddPython extracts Flask and FastAPI routes, their sinks and auth from a
 // Python tree that Parser.Parse built from src. path is relative to the
-// repository root (see IgnoreReason) and kept only in Locations. Each file is parsed once by the caller and passed here. A file
-// that IgnoreReason rejects is listed as ignored instead of extracted, so a
-// caller that skips the check still never reads vendor or generated code.
+// repository root (see IgnoreReason) and kept only in Locations. Each file is
+// parsed once by the caller and passed here. A file that IgnoreReason rejects
+// is listed as ignored instead of extracted, so a caller that skips the check
+// still never reads vendor or generated code.
 func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
+	if tree != nil && tree.Language != Python {
+		return fmt.Errorf("extract %s: %s tree is not python", path, tree.Language)
+	}
+	return e.addSource(path, tree, src, extractPython)
+}
+
+// AddJavaScript extracts Express routes, their sinks and middleware auth from
+// a JavaScript, TypeScript or TSX tree, under the same rules as AddPython.
+func (e *Extractor) AddJavaScript(path string, tree *Tree, src []byte) error {
+	if tree != nil && tree.Language != JavaScript && tree.Language != TypeScript && tree.Language != TSX {
+		return fmt.Errorf("extract %s: %s tree is not javascript or typescript", path, tree.Language)
+	}
+	return e.addSource(path, tree, src, extractJavaScript)
+}
+
+func (e *Extractor) addSource(path string, tree *Tree, src []byte, extract extractFunc) error {
 	switch {
 	case tree == nil || tree.Root == nil:
 		return fmt.Errorf("extract %s: no tree", path)
-	case tree.Language != Python:
-		return fmt.Errorf("extract %s: %s tree is not python", path, tree.Language)
 	case int(tree.Root.EndByte) > len(src):
 		return fmt.Errorf("extract %s: tree does not match source", path)
 	}
@@ -54,7 +86,7 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 	if why != 0 {
 		return e.AddIgnored(path, why)
 	}
-	routes, truncated := extractPython(tree.Root, src, e.lim)
+	routes, truncated := extract(tree.Root, src, e.lim)
 	sinks := 0
 	for _, r := range routes {
 		sinks += len(r.facts.sinks)
@@ -64,7 +96,7 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 		return fmt.Errorf("extract %s: %w", path, ErrGraphFull)
 	}
 	file := FileID(len(e.graph.Files)) //nolint:gosec // G115: fits checked above
-	e.graph.Files = append(e.graph.Files, File{ID: file, Language: Python, SyntaxError: tree.HasError, Truncated: truncated})
+	e.graph.Files = append(e.graph.Files, File{ID: file, Language: tree.Language, SyntaxError: tree.HasError, Truncated: truncated})
 	e.locs.Files = append(e.locs.Files, path)
 	for _, r := range routes {
 		e.addRoute(file, r)
@@ -72,8 +104,8 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 	return nil
 }
 
-func (e *Extractor) addRoute(file FileID, r pyRoute) {
-	id := RouteID(len(e.graph.Routes)) //nolint:gosec // G115: fits checked by AddPython
+func (e *Extractor) addRoute(file FileID, r foundRoute) {
+	id := RouteID(len(e.graph.Routes)) //nolint:gosec // G115: fits checked by addSource
 	e.graph.Routes = append(e.graph.Routes, Route{
 		ID: id, File: file, Framework: r.framework, Methods: r.methods,
 		PathParams: pathParams(r.framework, r.path), DynamicPath: r.dynamic, Auth: r.auth,
@@ -82,7 +114,7 @@ func (e *Extractor) addRoute(file FileID, r pyRoute) {
 	e.locs.Routes = append(e.locs.Routes, RouteLocation{Path: r.path, Handler: r.handler, Line: r.line})
 	for _, s := range r.facts.sinks {
 		e.graph.Sinks = append(e.graph.Sinks, Sink{
-			ID: SinkID(len(e.graph.Sinks)), Route: id, Kind: s.api.Kind(), API: s.api, //nolint:gosec // G115: fits checked by AddPython
+			ID: SinkID(len(e.graph.Sinks)), Route: id, Kind: s.api.Kind(), API: s.api, //nolint:gosec // G115: fits checked by addSource
 			DynamicArg: s.dynamic, Parameterized: s.parameterized, Indirect: s.ind,
 		})
 		e.locs.Sinks = append(e.locs.Sinks, SinkLocation{Line: s.line})
@@ -96,10 +128,14 @@ func (e *Extractor) Graph() Graph { return e.graph }
 // Locations returns the report-only text for each ID.
 func (e *Extractor) Locations() Locations { return e.locs }
 
-// pathParams counts <converter:name> (Flask) or {name} (FastAPI) segments.
+// pathParams counts <converter:name> (Flask), {name} (FastAPI) or :name and
+// * (Express) segments.
 func pathParams(fw Framework, path string) int {
-	if fw == Flask {
+	switch fw {
+	case Flask:
 		return strings.Count(path, "<")
+	case Express:
+		return strings.Count(path, ":") + strings.Count(path, "*")
 	}
 	return strings.Count(path, "{")
 }

@@ -40,21 +40,9 @@ type pyExtraction struct {
 	constBudget int // nodes DynamicArg analysis may still visit
 }
 
-// pyRoute is a route before it gets IDs.
-type pyRoute struct {
-	framework Framework
-	methods   Methods
-	path      string
-	dynamic   bool
-	auth      AuthVia
-	handler   string
-	line      int
-	facts     handlerFacts
-}
-
 // extractPython returns the routes in one file, at most lim.routes; truncated
 // is set when more were declared.
-func extractPython(root *Node, src []byte, lim extractLimits) (routes []pyRoute, truncated bool) {
+func extractPython(root *Node, src []byte, lim extractLimits) (routes []foundRoute, truncated bool) {
 	x := &pyExtraction{
 		file:        newPyFile(root, src),
 		receivers:   map[string]*receiver{},
@@ -80,12 +68,12 @@ func extractPython(root *Node, src []byte, lim extractLimits) (routes []pyRoute,
 }
 
 // decorated returns one route per route decorator on a function.
-func (x *pyExtraction) decorated(n *Node) []pyRoute {
+func (x *pyExtraction) decorated(n *Node) []foundRoute {
 	def := field(n, "definition")
 	if def == nil || def.Type != "function_definition" {
 		return nil
 	}
-	var routes []pyRoute
+	var routes []foundRoute
 	var auth AuthVia
 	for _, d := range n.Children {
 		if d.Type != "decorator" || len(namedChildren(d)) == 0 {
@@ -121,10 +109,10 @@ func (x *pyExtraction) decorated(n *Node) []pyRoute {
 }
 
 // routeDecorator matches `@recv.route(...)`, `@recv.get(...)` and the like.
-func (x *pyExtraction) routeDecorator(expr *Node) (pyRoute, bool) {
+func (x *pyExtraction) routeDecorator(expr *Node) (foundRoute, bool) {
 	fn := field(expr, "function")
 	if expr.Type != "call" || fn == nil || fn.Type != "attribute" {
-		return pyRoute{}, false
+		return foundRoute{}, false
 	}
 	verb := x.file.text(field(fn, "attribute"))
 	obj := field(fn, "object")
@@ -139,14 +127,14 @@ func (x *pyExtraction) routeDecorator(expr *Node) (pyRoute, bool) {
 	}
 	methods, ok := x.routeMethods(fw, verb, expr)
 	if !ok {
-		return pyRoute{}, false
+		return foundRoute{}, false
 	}
 	pos, kw := callArgs(expr)
 	pathNode := firstOf(pos, keyword(x.file, kw, "rule", "path"))
 	if pathNode == nil {
-		return pyRoute{}, false
+		return foundRoute{}, false
 	}
-	r := pyRoute{framework: fw, methods: methods}
+	r := foundRoute{framework: fw, methods: methods}
 	if x.depsAuth(keyword(x.file, kw, "dependencies")) {
 		r.auth |= AuthDependency
 	}

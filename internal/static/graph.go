@@ -27,8 +27,8 @@ type File struct {
 	// SyntaxError is set when the tree has ERROR or MISSING nodes, so routes
 	// inside the broken region may be missing.
 	SyntaxError bool
-	// Truncated is set when the file hit a route or sink cap; the scan of
-	// that file is incomplete.
+	// Truncated is set when the file hit a route or sink cap or has a
+	// Partial route; the scan of that file is incomplete.
 	Truncated bool
 	// Ignored is set when the file is vendor, generated or minified code
 	// that was listed but not parsed; it has no routes.
@@ -47,8 +47,11 @@ type Route struct {
 	// literal, so the full path is unknown.
 	DynamicPath bool
 	Auth        AuthVia
-	// Partial is set when the route's sinks were cut at a cap or their
-	// analysis ran out of budget; File.Truncated is set too.
+	// Partial is set when the route's sinks were cut at a cap, their
+	// analysis ran out of budget, or (Express) part of the route's
+	// middleware, handler or their calls is code outside the file, or the
+	// route may be reachable through mounts the file does not show;
+	// File.Truncated is set too.
 	Partial bool
 }
 
@@ -59,7 +62,8 @@ type Sink struct {
 	Kind  SinkKind
 	API   SinkAPI
 	// DynamicArg is set when the first argument is not built only from
-	// string literals (an f-string, concatenation, call or unknown name).
+	// string literals (an f-string or template literal with substitutions,
+	// concatenation, call or unknown name).
 	DynamicArg bool
 	// Parameterized is set when a SQL call passes bound parameters.
 	Parameterized bool
@@ -71,7 +75,7 @@ type Sink struct {
 // Locations maps graph IDs back to repository text for the report. It must
 // never reach the planner.
 type Locations struct {
-	Files  []string // slash-separated path as given to AddPython
+	Files  []string // slash-separated path as given to AddPython or AddJavaScript
 	Routes []RouteLocation
 	Sinks  []SinkLocation
 }
@@ -80,9 +84,13 @@ type Locations struct {
 type RouteLocation struct {
 	// Path is the full route path with known prefixes, or "" when the path
 	// is dynamic.
-	Path    string
+	Path string
+	// Handler is the handler's name, or "" for an anonymous Express
+	// handler.
 	Handler string
-	Line    int // 1-based line of the handler's def
+	// Line is the 1-based line of the handler's def, or of the route call
+	// when an Express handler is not defined in the file.
+	Line int
 }
 
 // SinkLocation is where a sink call is.
@@ -97,6 +105,7 @@ type Framework uint8
 const (
 	Flask Framework = iota + 1
 	FastAPI
+	Express
 )
 
 // String returns the framework name.
@@ -106,6 +115,8 @@ func (f Framework) String() string {
 		return "flask"
 	case FastAPI:
 		return "fastapi"
+	case Express:
+		return "express"
 	}
 	return "unknown"
 }
@@ -152,7 +163,8 @@ func (m Methods) String() string {
 
 // AuthVia is the set of ways a route was seen to require authentication.
 // Detection is by name (login_required, Depends(require_admin), a
-// current_user() call), so it is a hint for the planner, not proof.
+// current_user() call, a requireUser middleware), so it is a hint for the
+// planner, not proof.
 type AuthVia uint8
 
 // Ways a route can require authentication.
@@ -164,12 +176,15 @@ const (
 	AuthDependency
 	// AuthCall: the handler body calls an auth-named function.
 	AuthCall
+	// AuthMiddleware: an Express middleware on the route, or one used
+	// before it on its router or app, or on the mount of its router.
+	AuthMiddleware
 )
 
 // String joins the set with "|", or returns "none".
 func (a AuthVia) String() string {
 	var names []string
-	for i, name := range []string{"decorator", "dependency", "call"} {
+	for i, name := range []string{"decorator", "dependency", "call", "middleware"} {
 		if a&(1<<i) != 0 {
 			names = append(names, name)
 		}
@@ -190,6 +205,8 @@ const (
 	SinkFile
 	SinkHTTPClient
 	SinkTemplate
+	// SinkNoSQL is a document-store query such as MongoDB's findOne.
+	SinkNoSQL
 )
 
 // String returns the kind name.
@@ -205,6 +222,8 @@ func (k SinkKind) String() string {
 		return "http_client"
 	case SinkTemplate:
 		return "template"
+	case SinkNoSQL:
+		return "nosql"
 	}
 	return "unknown"
 }

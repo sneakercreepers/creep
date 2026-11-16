@@ -311,6 +311,12 @@ func TestEnumStrings(t *testing.T) {
 		{SinkAPI(0).String(), "unknown"},
 		{SinkAPI(255).String(), "unknown"},
 		{SinkAPI(255).Kind().String(), "unknown"},
+		{Express.String(), "express"},
+		{(AuthCall | AuthMiddleware).String(), "call|middleware"},
+		{SinkNoSQL.String(), "nosql"},
+		{jsSinkBase.String(), ".query"},
+		{(jsSinkBase - 1).String(), "unknown"},
+		{SinkAPI(len(pySinkSpecs)).String(), "unknown"}, //nolint:gosec // G115: the table has far fewer than 256 entries
 	}
 	for _, c := range cases {
 		if c.got != c.want {
