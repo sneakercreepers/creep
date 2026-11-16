@@ -88,7 +88,7 @@
       "properties": {
         "contract": {
           "default": "openai",
-          "description": "How creep talks to the model: an HTTP API (openai, anthropic) or a local command.",
+          "description": "How creep talks to the model: an HTTP API (openai, anthropic) or a local command. Cannot be set in the project file.",
           "enum": [
             "openai",
             "anthropic",
@@ -119,6 +119,11 @@
         "name": {
           "default": "",
           "description": "Model name sent to the endpoint.",
+          "type": "string"
+        },
+        "preset": {
+          "default": "",
+          "description": "Name of a model CLI preset built into creep (claude-code, codex, gemini, ollama): sets model.run and contract command. Cannot be set in the project file.",
           "type": "string"
         },
         "run": {

@@ -36,6 +36,8 @@ func validateKey(c *Config, key string) error {
 		return checkPositive(field(c, key).Int())
 	case "calibration.cache_days":
 		return checkRange(c.Calibration.CacheDays, minCacheDays, maxCacheDays)
+	case "model.preset":
+		return checkPreset(c.Model.Preset)
 	case "model.run":
 		return checkCommandLine(c.Model.Run)
 	case "model.env":

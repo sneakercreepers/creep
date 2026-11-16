@@ -1,0 +1,26 @@
+# Codex CLI non-interactive mode (codex exec): "-" reads the prompt from
+# stdin; only the final message goes to stdout, progress to stderr.
+#   --sandbox read-only     commands Codex runs cannot write files or reach
+#                           the network (also the exec default; pinned so
+#                           user config cannot loosen it).
+#   --skip-git-repo-check   creep runs the CLI in an empty temp directory,
+#                           which is not a Git repository.
+#   --ephemeral             keeps no session files on disk.
+#   --color never           no escape sequences in the reply.
+# host_reads: unbounded. A read-only sandbox still lets Codex run commands that only
+# read (cat a file under HOME) and send the result to its model; the canary
+# catches writes, not reads. MCP servers from ~/.codex/config.toml still
+# load. Credentials: codex's own login under HOME (CODEX_HOME), or
+# OPENAI_API_KEY declared in model.env.
+version: 1
+name: codex
+description: OpenAI Codex CLI exec mode in a read-only sandbox, prompt on stdin.
+docs: https://developers.openai.com/codex/noninteractive
+program: codex
+args: [exec, --sandbox, read-only, --skip-git-repo-check, --ephemeral, --color, never, "-"]
+tools_off:
+  - [--sandbox, read-only]
+no_tools: false
+host_reads: unbounded
+host_reads_detail: codex runs shell commands without approval; --sandbox read-only blocks writes and network, not reads of files such as ~/.ssh or ~/.aws
+verified: false

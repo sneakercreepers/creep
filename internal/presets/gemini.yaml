@@ -1,0 +1,27 @@
+# Gemini CLI in headless mode: with stdin not a terminal it reads the prompt
+# from stdin, prints the reply and exits (no -p needed).
+#   --approval-mode default  pins the documented default even when the user's
+#                            settings choose yolo or auto_edit; in headless
+#                            mode, tools that need approval (file writes,
+#                            shell) are not run.
+#   --extensions none        loads no extensions (they can add tools and MCP
+#                            servers).
+#   --output-format text     the bare reply; json wraps it in an envelope.
+# host_reads: unbounded. Read-only tools (read_file, glob, web fetch, and
+# google_web_search, which reaches the web outside creep's gateway) may stay
+# available in headless mode, and MCP servers from ~/.gemini/settings.json are not switched off by a
+# flag; the canary catches writes and commands, not reads. Credentials:
+# gemini's own login under HOME, or GEMINI_API_KEY declared in model.env.
+version: 1
+name: gemini
+description: Gemini CLI in headless mode with approvals pinned to default and no extensions.
+docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md
+program: gemini
+args: [--approval-mode, default, --extensions, none, --output-format, text]
+tools_off:
+  - [--approval-mode, default]
+  - [--extensions, none]
+no_tools: false
+host_reads: unbounded
+host_reads_detail: read-only built-in tools (read_file, glob, web fetch and google_web_search) and MCP servers from ~/.gemini/settings.json may stay enabled
+verified: false

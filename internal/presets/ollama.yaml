@@ -1,0 +1,21 @@
+# ollama run <model>: with stdin not a terminal it reads the prompt from
+# stdin, prints the reply and exits. It talks to the local Ollama server
+# (127.0.0.1:11434 unless OLLAMA_HOST is declared in model.env).
+#   {model}        model.name, e.g. llama3.1:8b; required. Never from the
+#                  project file: ollama run pulls a missing model, and a
+#                  model name can name another registry.
+#   --format json  constrains the reply to JSON.
+# ollama run has no tools, so there is nothing to switch off; the tool
+# canary still runs. Uncertain: thinking models may print their reasoning
+# before the JSON; pick a model without it, or add --hidethinking via
+# model.run on Ollama versions that support it.
+version: 1
+name: ollama
+description: Ollama local model through ollama run, JSON output, no tools.
+docs: https://github.com/ollama/ollama/blob/main/docs/cli.md
+program: ollama
+args: [run, "{model}", --format, json]
+tools_off: []
+no_tools: true
+host_reads: none
+verified: false

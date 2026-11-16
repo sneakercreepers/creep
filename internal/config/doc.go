@@ -27,7 +27,10 @@
 //     Operator layers (user file, --config, flags, policy) may still loosen.
 //   - The project file comes from the repository being scanned, which is
 //     untrusted, so it cannot set where code is sent (model.endpoint,
-//     egress.allow).
+//     egress.allow) or which program receives it (model.run, model.env,
+//     model.preset, and model.name for a preset that passes it to the CLI).
+//     A preset (internal/presets) resolves into model.run and contract
+//     command after every layer has applied (preset.go).
 //   - Consent to send code to an endpoint is not a config key: only the
 //     policy's consent list grants it (PolicyConsent), plus, outside CI,
 //     the user's own answers that the gateway stores. InCI is the single

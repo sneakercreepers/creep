@@ -5,7 +5,7 @@ Thanks for helping. The most valuable contributions are often not code:
 - **False negative**: a vulnerability `creep` missed. Use the *False negative* issue form with a minimal vulnerable example. It becomes a test case.
 - **False positive**: a finding that is wrong. Use the *False positive* issue form.
 - **Model results**: calibration or benchmark results with your model. Post them in [Discussions → Show and tell](https://github.com/sneakercreepers/creep/discussions/categories/show-and-tell).
-- **Recipes and model presets**: data, not code. See the issue forms.
+- **Recipes and model presets**: data, not code. See the issue forms and [Model presets](#model-presets).
 
 ## Before you start
 
@@ -35,6 +35,67 @@ go test ./internal/reader -run TestAppsReplay -update   # regenerate reader fixt
 ```
 
 `creep scan --record` records a live run under `.creep/`, and `creep scan --replay` serves it back with no network.
+
+## Model presets
+
+A preset is one YAML file in [`internal/presets/`](internal/presets/), embedded in the binary and selected with `model: { preset: <name> }` in the user file, `--config` or the policy (never the repository's `creep.yaml`). To add or fix one, open the [**Model preset** issue form](https://github.com/sneakercreepers/creep/issues/new?template=6-model_preset.yml) first, with the CLI version, the proposed file and the canary output below.
+
+```yaml
+version: 1                     # schema version
+name: claude-code              # equals the file name; lowercase letters, digits, dashes
+description: One line.
+docs: https://...              # the CLI's flag reference
+program: claude                # bare program name, found on PATH; never a path or a command line
+args: [-p, --tools, "", --strict-mcp-config, --output-format, text]   # a list, never a shell string
+tools_off:                     # every argument run that switches tools off; each must be in args
+  - [--tools, ""]
+  - [--strict-mcp-config]
+no_tools: false                # true (with tools_off: []) only for a CLI that has no tools
+host_reads: none               # none: nothing can read outside the empty working directory
+                               # unbounded: some tool can still read HOME or the web; then also
+# host_reads_detail: one line naming what can still read (printed as a warning at doctor and scan)
+verified: false                # true only after the manual canary check below passed with the real CLI
+```
+
+The canary only sees writes, so `host_reads` is declared, not tested: say `unbounded` whenever a read-only tool, a shell under a read-only sandbox, web search or user MCP servers can remain.
+
+`{model}` as a whole argument is replaced by `model.name`. Unknown or duplicate keys fail `TestEmbeddedPresets`, which `make check` and CI run. The CLI must read the prompt on stdin and print only the reply on stdout; comment each flag in the file and say what you could not verify.
+
+### Manual canary check and `verified`
+
+CI cannot run real model CLIs. A preset ships with `verified: false` until someone runs this check with the real CLI (installed and logged in); until then `creep doctor` and every scan print a one-line warning that it is unverified. The automatic tool canary runs on every scan either way.
+
+To verify a preset:
+
+1. Run the check below and record the CLI version.
+2. Open the [**Model preset** issue form](https://github.com/sneakercreepers/creep/issues/new?template=6-model_preset.yml) with the preset file, the CLI version and the full `creep doctor` output of both commands (the passing check and the tools-on control).
+3. A maintainer reviews the output, then a PR sets `verified: true` in that preset (a later change to its `program` or `args` must set it back to `false` until checked again; reviewers check this).
+
+Run it from a new empty directory, with no `creep.yaml`, and the config file outside it:
+
+```sh
+cd "$(mktemp -d)"
+printf 'model:\n  preset: <name>\n' > ../preset-check.yaml           # ollama: add "  name: <model>"
+creep --config ../preset-check.yaml config explain | grep model.run   # the command line from the preset
+creep --config ../preset-check.yaml doctor
+```
+
+Expected: `doctor` asks for consent to the `command://<program>-<hash>` endpoint, then prints `tool canary passed (no file was created and no command ran)` and exits 0. A preset is rejected if `doctor` prints `has tools enabled` (exit 3), or if the canary cannot run (exit 3: fix the flags, the login or the timeout). Then check the opposite, to prove the canary reaches the CLI: run the same command line with its tools on, without the preset, and confirm `doctor` fails with exit 3 and names the flag:
+
+```sh
+printf 'model:\n  contract: command\n' > ../tools-on.yaml
+creep --config ../tools-on.yaml --model-run 'claude -p --dangerously-skip-permissions --output-format text' doctor
+# gemini: 'gemini --approval-mode yolo'   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
+```
+
+Delete the temporary directory and the two config files afterwards.
+
+| Preset | `verified` | Help wanted |
+|---|---|---|
+| `claude-code` | `true` | |
+| `gemini` | `false` | run the check with Gemini CLI |
+| `codex` | `false` | run the check with Codex CLI |
+| `ollama` | `false` | run the check with Ollama and a local model |
 
 ## Pull requests
 
