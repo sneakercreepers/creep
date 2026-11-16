@@ -153,10 +153,12 @@ type NotEvaluated struct {
 	Reason SkipReason `json:"reason"`
 }
 
-// Coverage is what was and was not evaluated.
+// Coverage is what was and was not evaluated. Scanners lists the optional
+// external scanners and the classes they would cover (ADR 0010).
 type Coverage struct {
-	Classes      []ClassCoverage `json:"classes"`
-	NotEvaluated []NotEvaluated  `json:"not_evaluated"`
+	Classes      []ClassCoverage   `json:"classes"`
+	NotEvaluated []NotEvaluated    `json:"not_evaluated"`
+	Scanners     []ScannerCoverage `json:"scanners,omitempty"`
 }
 
 // Report is the JSON contract (schema_version 1) and the input of every
@@ -179,6 +181,7 @@ type Input struct {
 	Findings       []Finding
 	Classes        []ClassCoverage
 	NotEvaluated   []NotEvaluated
+	Scanners       []ScannerCoverage // in the caller's fixed order
 	DataHandling   DataHandling
 }
 
@@ -198,13 +201,17 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	scanners, err := checkScanners(in.Scanners)
+	if err != nil {
+		return nil, err
+	}
 	info := buildinfo.Get()
 	return &Report{
 		SchemaVersion: SchemaVersion,
 		Tool:          Tool{Name: "creep", Version: info.Version, Commit: info.Commit},
 		Run:           run,
 		Findings:      findings,
-		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped},
+		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners},
 		DataHandling:  in.DataHandling.normalized(),
 	}, nil
 }

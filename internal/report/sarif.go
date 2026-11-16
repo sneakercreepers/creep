@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 )
 
 const (
@@ -186,7 +187,22 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 			Locations:  []sarifLocation{fileLocation(n.Path, 0)},
 		})
 	}
+	inv.Notifications = append(inv.Notifications, scannerNotifications(r.Coverage.Scanners)...)
 	return inv
+}
+
+// scannerNotifications notes each optional scanner that evaluated nothing
+// and the classes it would cover; names and classes are IDs (checkScanner).
+func scannerNotifications(scanners []ScannerCoverage) []sarifNotification {
+	out := make([]sarifNotification, len(scanners))
+	for i, s := range scanners {
+		out[i] = sarifNotification{
+			Descriptor: sarifDescriptor{ID: "creep/scanner/" + string(s.Status)},
+			Level:      "note",
+			Message:    sarifMessage{Text: fmt.Sprintf("optional scanner %s %s; not evaluated: %s", s.Name, s.Status, strings.Join(s.Classes, ", "))},
+		}
+	}
+	return out
 }
 
 func fileLocation(path string, line int) sarifLocation {

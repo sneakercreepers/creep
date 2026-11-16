@@ -68,6 +68,11 @@ func sampleInput(t *testing.T, incomplete bool) Input {
 		in.NotEvaluated = append(in.NotEvaluated,
 			NotEvaluated{Path: "lib/after.py", Reason: SkipRunFull},
 			NotEvaluated{Path: "lib/later.py", Reason: SkipRunFull})
+		in.Scanners = []ScannerCoverage{
+			{Name: "gitleaks", Status: ScannerNotEnabled, Classes: []string{"hardcoded_secret"}},
+			{Name: "osv-scanner", Status: ScannerMissing, Classes: []string{"vulnerable_dependency"}},
+			{Name: "semgrep", Status: ScannerRefused, Classes: []string{"xss", "insecure_deserialization"}},
+		}
 	}
 	return in
 }

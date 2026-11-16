@@ -34,6 +34,13 @@ func TestNewRejectsInvalidInput(t *testing.T) {
 		{"negative tasks", Input{Classes: []ClassCoverage{{Class: "sqli", Status: ClassCovered, Tasks: -1}}}},
 		{"unknown skip reason", Input{NotEvaluated: []NotEvaluated{{Path: "a", Reason: "timeout"}}}},
 		{"empty skip reason", Input{NotEvaluated: []NotEvaluated{{Path: "a"}}}},
+		{"scanner name with markup", Input{Scanners: []ScannerCoverage{{Name: "<b>semgrep", Status: ScannerMissing, Classes: []string{"xss"}}}}},
+		{"duplicate scanner", Input{Scanners: []ScannerCoverage{
+			{Name: "semgrep", Status: ScannerMissing, Classes: []string{"xss"}}, {Name: "semgrep", Status: ScannerNotRun, Classes: []string{"xss"}},
+		}}},
+		{"unknown scanner status", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: "ran", Classes: []string{"xss"}}}}},
+		{"scanner without classes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing}}}},
+		{"scanner class with escapes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing, Classes: []string{"x\x1b[2J"}}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

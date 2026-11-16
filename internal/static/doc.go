@@ -104,6 +104,11 @@
 // with the reason, so the report shows them as not evaluated; they are
 // never silently dropped.
 //
+// DetectScanners looks the optional external scanners (gitleaks,
+// osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The
+// first match decides, and one in the repository, the current directory or
+// a relative PATH entry is refused.
+//
 // Known limits: a blueprint or router mounted from another file
 // (register_blueprint, include_router or app.use across modules) keeps only
 // the prefix, dependencies and middleware visible in its own file;
