@@ -84,6 +84,9 @@ func TestDetectScanners(t *testing.T) {
 			if s := got[2]; s.Scanner != ScannerSemgrep || s.State != tc.want {
 				t.Errorf("semgrep = %+v, want state %d", s, tc.want)
 			}
+			if s := got[2]; (s.State == ScannerFound) != filepath.IsAbs(s.Path) {
+				t.Errorf("semgrep path %q with state %d: only a found binary has a final path", s.Path, s.State)
+			}
 		})
 	}
 }
@@ -121,21 +124,86 @@ func TestDetectScannersFailsClosedWithoutRepo(t *testing.T) {
 	}
 }
 
-func TestWithin(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "repo")
+// TestOutsideRepo covers the final-path refusal every runner relies on:
+// the binary and each directory above it are compared with the repository
+// by file identity, so look-alike names never pass and a sibling does.
+func TestOutsideRepo(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo")
+	fakeBinary(t, filepath.Join(repo, "a", "b"), "tool", 0o755)
+	fakeBinary(t, filepath.Join(base, "repo2"), "tool", 0o755)
+	fakeBinary(t, filepath.Join(repo, "..dots"), "tool", 0o755)
+	exe := func(dir string) string {
+		if runtime.GOOS == "windows" {
+			return filepath.Join(dir, "tool.exe")
+		}
+		return filepath.Join(dir, "tool")
+	}
 	tests := []struct {
-		path string
-		want bool
+		name, bin, repo string
+		want            bool
 	}{
-		{root, true},
-		{filepath.Join(root, "a", "b"), true},
-		{filepath.Join(root, "..dots", "x"), true},
-		{filepath.Join(root, "..", "repo2", "x"), false},
-		{filepath.Dir(root), false},
+		{"deep inside", exe(filepath.Join(repo, "a", "b")), repo, false},
+		{"dotted directory inside", exe(filepath.Join(repo, "..dots")), repo, false},
+		{"through .. back into the repository", exe(filepath.Join(base, "repo2", "..", "repo", "a", "b")), repo, false},
+		{"sibling with a shared prefix", exe(filepath.Join(base, "repo2")), repo, true},
+		// The same directory where names fold case; a missing one fails closed elsewhere.
+		{"upper-case repository path", exe(filepath.Join(repo, "a", "b")), strings.ToUpper(repo), false},
+		{"missing binary fails closed", exe(filepath.Join(base, "none")), repo, false},
+		{"relative binary fails closed", "tool", repo, false},
+		{"relative repository fails closed", exe(filepath.Join(base, "repo2")), "repo", false},
+		{"empty repository fails closed", exe(filepath.Join(base, "repo2")), "", false},
 	}
 	for _, tc := range tests {
-		if got := within(tc.path, root); got != tc.want {
-			t.Errorf("within(%q) = %v, want %v", tc.path, got, tc.want)
+		t.Run(tc.name, func(t *testing.T) {
+			final, ok := OutsideRepo(tc.bin, tc.repo)
+			if ok != tc.want {
+				t.Fatalf("OutsideRepo(%q, %q) = %q, %v; want %v", tc.bin, tc.repo, final, ok, tc.want)
+			}
+			if ok && !filepath.IsAbs(final) {
+				t.Errorf("final path %q is not absolute", final)
+			}
+		})
+	}
+}
+
+// TestOutsideRepoLinks covers links on every OS that allows unprivileged
+// ones: a link from outside into the repository, a link to a link, a
+// relative link and a cycle are resolved or refused.
+func TestOutsideRepoLinks(t *testing.T) {
+	base := t.TempDir()
+	repo, out := filepath.Join(base, "repo"), filepath.Join(base, "out")
+	fakeBinary(t, filepath.Join(repo, "bin"), "tool", 0o755)
+	fakeBinary(t, out, "real", 0o755)
+	name := "tool"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	symlink(t, filepath.Join(repo, "bin"), filepath.Join(out, "dirlink"))
+	symlink(t, filepath.Join(out, "dirlink"), filepath.Join(out, "linklink"))
+	symlink(t, filepath.Join("..", "repo", "bin"), filepath.Join(out, "rel"))
+	symlink(t, filepath.Join(out, "loop1"), filepath.Join(out, "loop2"))
+	symlink(t, filepath.Join(out, "loop2"), filepath.Join(out, "loop1"))
+	for _, bin := range []string{
+		filepath.Join(out, "dirlink", name),
+		filepath.Join(out, "linklink", name),
+		filepath.Join(out, "rel", name),
+		filepath.Join(out, "loop1", name),
+	} {
+		if final, ok := OutsideRepo(bin, repo); ok {
+			t.Errorf("OutsideRepo(%q) = %q, true; want refused", bin, final)
 		}
+	}
+}
+
+// symlink makes a link or skips the test where the OS refuses it (Windows
+// without developer mode).
+func symlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		t.Fatal(err)
 	}
 }

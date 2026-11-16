@@ -48,6 +48,7 @@ type scanResult struct {
 	gaps     []report.NotEvaluated
 	stop     string // why the run stopped early, or ""
 	planned  bool   // false when the planner refused the input
+	scanners scannerRun
 }
 
 // runScan scans the current directory: calibrate, static graph, plan,
@@ -87,6 +88,7 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), e.stderr)
 	return s.finish(e, cal, res)
 }
 

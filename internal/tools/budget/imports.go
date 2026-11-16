@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -32,6 +33,12 @@ var execAllowed = []string{
 	"internal/tools", // dev tooling run by make; the layers table keeps it out of the binary
 }
 
+// execAllowedExact lists single packages (not their subpackages) whose
+// shipped code and tests may run programs.
+var execAllowedExact = []string{
+	"internal/scanrun", // gitleaks and osv-scanner only: fixed offline arguments, no shell, final path outside the repo (ADR 0013)
+}
+
 // execAllowedInTests lists packages whose tests may run programs.
 var execAllowedInTests = []string{
 	"cmd/creep", // end-to-end tests build and run the creep binary
@@ -40,6 +47,7 @@ var execAllowedInTests = []string{
 // syscallAllowed lists module-relative files that may import syscall, each
 // with its reason. Files, not packages, so new socket code needs a review here.
 var syscallAllowed = map[string]string{
+	"internal/scanrun/proc_unix.go":    "puts a scanner in its own process group so a timeout kills its whole tree (ADR 0013)",
 	"internal/cli/open_unix.go":        "O_NONBLOCK open so a FIFO argument cannot hang the CLI",
 	"internal/cli/fifo_unix_test.go":   "creates a FIFO with syscall.Mkfifo",
 	"internal/state/open_unix.go":      "O_NONBLOCK open so a FIFO swapped in for a state file cannot hang creep",
@@ -137,6 +145,9 @@ func execPermitted(modPath string, f sourceFile) bool {
 		if underPath(f.Pkg, path.Join(modPath, dir)) {
 			return true
 		}
+	}
+	if slices.Contains(execAllowedExact, strings.TrimPrefix(f.Pkg, modPath+"/")) {
+		return true
 	}
 	if !f.Test {
 		return false

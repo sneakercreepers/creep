@@ -115,14 +115,14 @@
     "scanners": [
       {
         "name": "gitleaks",
-        "status": "not_enabled",
+        "status": "evaluated",
         "classes": [
           "hardcoded_secret"
         ]
       },
       {
         "name": "osv-scanner",
-        "status": "missing",
+        "status": "failed",
         "classes": [
           "vulnerable_dependency"
         ]

@@ -106,8 +106,11 @@
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The
-// first match decides, and one in the repository, the current directory or
-// a relative PATH entry is refused.
+// first match decides, and one in a relative PATH entry is refused. A
+// match is resolved to its final path (links and junctions followed, \\?\
+// removed), and OutsideRepo refuses it when that path or a directory above
+// it is the repository or the current directory, compared by file identity
+// (ADR 0013). internal/scanrun runs only that final path.
 //
 // Known limits: a blueprint or router mounted from another file
 // (register_blueprint, include_router or app.use across modules) keeps only

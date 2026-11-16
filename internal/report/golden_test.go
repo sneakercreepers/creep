@@ -69,8 +69,8 @@ func sampleInput(t *testing.T, incomplete bool) Input {
 			NotEvaluated{Path: "lib/after.py", Reason: SkipRunFull},
 			NotEvaluated{Path: "lib/later.py", Reason: SkipRunFull})
 		in.Scanners = []ScannerCoverage{
-			{Name: "gitleaks", Status: ScannerNotEnabled, Classes: []string{"hardcoded_secret"}},
-			{Name: "osv-scanner", Status: ScannerMissing, Classes: []string{"vulnerable_dependency"}},
+			{Name: "gitleaks", Status: ScannerEvaluated, Classes: []string{"hardcoded_secret"}},
+			{Name: "osv-scanner", Status: ScannerFailed, Classes: []string{"vulnerable_dependency"}},
 			{Name: "semgrep", Status: ScannerRefused, Classes: []string{"xss", "insecure_deserialization"}},
 		}
 	}

@@ -46,7 +46,7 @@ type Report struct {
 }
 
 type Scanners struct {
-	Enabled []string `yaml:"enabled" desc:"Optional external scanners to run when installed."`
+	Enabled []string `yaml:"enabled" desc:"Optional external scanners to run offline when installed (gitleaks, osv-scanner; semgrep is only detected). The project file may only remove them."`
 }
 
 type Sandbox struct {

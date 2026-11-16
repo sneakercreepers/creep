@@ -191,15 +191,23 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 	return inv
 }
 
-// scannerNotifications notes each optional scanner that evaluated nothing
-// and the classes it would cover; names and classes are IDs (checkScanner).
+// scannerNotifications notes each optional scanner and its classes: a note
+// when it evaluated them or was not run, a warning when it failed. Names
+// and classes are IDs (checkScanner).
 func scannerNotifications(scanners []ScannerCoverage) []sarifNotification {
 	out := make([]sarifNotification, len(scanners))
 	for i, s := range scanners {
+		level, verb := "note", "not evaluated"
+		switch s.Status {
+		case ScannerEvaluated:
+			verb = "evaluated"
+		case ScannerFailed:
+			level = "warning"
+		}
 		out[i] = sarifNotification{
 			Descriptor: sarifDescriptor{ID: "creep/scanner/" + string(s.Status)},
-			Level:      "note",
-			Message:    sarifMessage{Text: fmt.Sprintf("optional scanner %s %s; not evaluated: %s", s.Name, s.Status, strings.Join(s.Classes, ", "))},
+			Level:      level,
+			Message:    sarifMessage{Text: fmt.Sprintf("optional scanner %s %s; %s: %s", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))},
 		}
 	}
 	return out
