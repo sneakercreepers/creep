@@ -33,6 +33,23 @@ func TestRedactSubscriptAssignments(t *testing.T) {
 		{"bearer header", "headers['Authorization'] = 'Bearer {v}'\n"},
 		{"harmless key then credential", "cfg['api_url']['token'] = '{v}'\n"},
 		{"author token", "row['author_token'] = '{v}'\n"},
+		// Auditor A1 on #231: a secret word beats every harmless suffix,
+		// under each assignment operator.
+		{"secret key base =", "ENV['SECRET_KEY_BASE'] = '{v}'\n"},
+		{"secret key base ||=", "ENV['SECRET_KEY_BASE'] ||= '{v}'\n"},
+		{"secret key base ??=", "process.env['SECRET_KEY_BASE'] ??= '{v}';\n"},
+		{"secret key base :=", "m[\"SECRET_KEY_BASE\"] := \"{v}\"\n"},
+		{"secret key base +=", "s['SECRET_KEY_BASE'] += '{v}'\n"},
+		{"password id ??=", "opts['password_id'] ??= '{v}'\n"},
+		{"token +=", "s['api_token'] += '{v}'\n"},
+		{"token ??= bare", "opts['token'] ??= {v};\n"},
+		// Auditor A2 on #231: the value after a concatenated prefix.
+		{"bearer concat", "headers['X-Api-Key'] = \"Bearer \" + '{v}'\n"},
+		{"bearer concat template", "headers['Authorization'] = 'Bearer ' + `{v}`;\n"},
+		{"bearer concat f-string", "headers['Authorization'] = 'Bearer ' + f'{v}'\n"},
+		{"bearer f-string", "headers['Authorization'] = f'Bearer {v}'\n"},
+		{"bearer template", "headers['Authorization'] = `Bearer {v}`;\n"},
+		{"secret concat", "cfg['client_secret'] = 'prefix-' + '{v}'\n"},
 		{"python dict literal", "cfg = {'api_key': '{v}'}\n"},
 		{"js object literal", "const cfg = { apiKey: '{v}' };\n"},
 		{"ruby hash", "cfg = { 'api_key' => '{v}' }\n"},
@@ -76,6 +93,11 @@ func TestRedactSubscriptKeepsCode(t *testing.T) {
 		"cfg['sort_key'] = 'created_at_2024'\n",
 		// The generic value shape: a short word under a generic key.
 		"headers['X-Api-Key'] = 'changeme'\n",
+		// A concatenation that ends in a reference keeps the code.
+		"headers['Authorization'] = 'Bearer ' + token\n",
+		"headers['Authorization'] = `Bearer ${token}`;\n",
+		"headers['Authorization'] = f'Bearer {token}'\n",
+		"cfg['api_version'] += '-preview-2024'\n",
 	}
 	for _, text := range tests {
 		if out := mustRedact(t, newRedactor(t), text); out != text {

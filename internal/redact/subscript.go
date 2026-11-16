@@ -15,17 +15,24 @@ const (
 // subscriptKey matches a subscript whose key holds one of words, up to the
 // assignment operator: app.config['SECRET_KEY'] =, headers["X-Api-Key"] =,
 // os.environ['API_TOKEN'] =, $cfg['api_key'] =, m["apiKey"] =,
-// config[:api_key] =, ENV['TOKEN'] ||=. Further subscripts on the same
-// line may follow the key (cfg['api_key']['prod'] =). "==" and "===" are
-// comparisons: the operator is then followed by "=", which no value accepts.
+// config[:api_key] =, ENV['TOKEN'] ||=, opts['token'] ??=,
+// s['token'] +=. Further subscripts on the same line may follow the key
+// (cfg['api_key']['prod'] =). "==" and "===" are comparisons: the operator
+// is then followed by "=", which no value accepts.
 func subscriptKey(words string) string {
 	return `(?i)\[[ \t]*[:"'` + "`" + `]?[A-Za-z0-9_.-]*` + words +
 		`[A-Za-z0-9_.-]*["'` + "`" + `]?[ \t]*\]` +
-		`(?:[ \t]*\[[^\]\r\n]*\])*[ \t]*(?:=|:=|\|\|=|\?\?=)[ \t]*`
+		`(?:[ \t]*\[[^\]\r\n]*\])*[ \t]*(?:=|:=|\+=|\|\|=|\?\?=)[ \t]*`
 }
 
-// quotedValue is a quoted literal with an optional b, f, r or u prefix.
-const quotedValue = "[bfru]{0,2}(?:\"([^\"\\r\\n]*)\"|'([^'\\r\\n]*)'|`([^`\\r\\n]*)`)"
+// quotedLiteral is a quoted literal with an optional b, f, r or u prefix.
+const quotedLiteral = "[bfru]{0,2}(?:\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|`[^`\\r\\n]*`)"
+
+// quotedValue captures the last literal of a concatenation, so the secret
+// in "Bearer " + '<value>' is the value, not its prefix (auditor A2 on
+// #231).
+const quotedValue = "(?:" + quotedLiteral + "[ \\t]*\\+[ \\t]*)*" +
+	"[bfru]{0,2}(?:\"([^\"\\r\\n]*)\"|'([^'\\r\\n]*)'|`([^`\\r\\n]*)`)"
 
 // subscriptGate opens the subscript detectors: a credential key word right
 // after a subscript's opening bracket.
@@ -61,16 +68,25 @@ var subscriptDetectors = []patternDetector{
 
 // genericShape is the generic-api-key value shape: 10 characters or more
 // and not a plain word (letters, "_", "." and "-" only, the gitleaks
-// allowlist), and not a reference to a value.
+// allowlist), and not a reference to a value. Interpolations
+// (`Bearer ${token}`, f'Bearer {token}') are references, so only the text
+// around them must have the shape.
 func genericShape(v string) bool {
+	v = strings.TrimSpace(interpolationRe.ReplaceAllString(v, ""))
 	return len(v) >= 10 && notPlaceholder(v) && !wordValueRe.MatchString(v)
 }
+
+var interpolationRe = regexp.MustCompile(`\$?\{[A-Za-z_][A-Za-z0-9_.]*\}|\$\{[^}\r\n]*\}`)
 
 // harmlessWordRe matches key names that contain a credential word without
 // naming a credential, after the gitleaks generic-api-key allowlist.
 var harmlessWordRe = regexp.MustCompile(`(?i)(?:^|[_.-])authors?(?:[_.-]?(?:name|email|id|url))?$|keyboard|monkey|donkey|turkey|keystroke|keyword|keyframe|keypress|keycode|keying|tokeni[sz]|accessib|accessor|csrf[_.-]?token|` +
 	`(?:api|auth|token|access|key|credentials?|creds)[_.-]?(?:version|url|uri|endpoint|base|host|path|name|id|type|method|mode|provider|scheme|file|alias|length|size|count|level|prefix|field|ttl|expiry|expires|timeout|enabled)s?$|` +
 	`^(?:public|pub|primary|foreign|sort|partition|row|cache|hot|idx|index|natural|schema|sequence|bucket|lookup|hash|unique|composite)[_.-]?key$`)
+
+// secretWordRe: a key with a password or secret word is never harmless
+// (SECRET_KEY_BASE ends like key_base, auditor A1 on #231).
+var secretWordRe = regexp.MustCompile(`(?i)` + anyValueWords)
 
 var credentialWordRe = regexp.MustCompile(`(?i)` + anyValueWords + `|` + shapedValueWords)
 
@@ -82,6 +98,9 @@ func harmlessKey(prefix string) bool {
 	for _, part := range strings.Split(prefix, "[")[1:] {
 		key, _, _ := strings.Cut(part, "]")
 		key = strings.Trim(key, " \t:\"'`")
+		if secretWordRe.MatchString(key) {
+			return false
+		}
 		if credentialWordRe.MatchString(key) && !harmlessWordRe.MatchString(key) {
 			return false
 		}
