@@ -8,12 +8,15 @@ import "regexp"
 // valid, when set, rejects candidates whose checksum or structure is wrong,
 // which keeps ordinary numbers and code in the input unmasked. when, when set,
 // must match somewhere in the input before re runs: it is a cheap gate for
-// detectors that only make sense in some context.
+// detectors that only make sense in some context. skip, when set, rejects a
+// match by the text before its value (a key that only looks like a
+// credential).
 type patternDetector struct {
 	label string
 	re    *regexp.Regexp
 	valid func(string) bool
 	when  *regexp.Regexp
+	skip  func(match string) bool
 }
 
 // applies reports whether the context gate, if any, matches text.
@@ -38,8 +41,9 @@ func (d patternDetector) scan(text string) []span {
 		}
 		start, end := firstGroup(m)
 		next := pos + max(end, m[0]+1)
+		key := padded[pos+m[0] : pos+start]
 		start, end, pos = pos+start, pos+end, next
-		if start == end || (d.valid != nil && !d.valid(padded[start:end])) {
+		if start == end || (d.skip != nil && d.skip(key)) || (d.valid != nil && !d.valid(padded[start:end])) {
 			continue
 		}
 		out = append(out, span{start: start - 1, end: end - 1, label: d.label})

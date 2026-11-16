@@ -143,9 +143,9 @@ To try the release build without releasing, run the workflow by hand (Actions â†
 
 Tags are immutable (ruleset) and so are published releases (immutable releases are enabled). A mistake means a new version, never a moved tag.
 
-Rulesets cannot enforce "a `v*` tag points to a commit on `main`". The release workflow ([#19](https://github.com/sneakercreepers/creep/issues/19)) checks ancestry before building and refuses a tag whose commit is on neither `main` nor a `release/*` branch.
+Rulesets cannot enforce "a `v*` tag points to a commit on `main`". The release workflow ([#19](https://github.com/sneakercreepers/creep/issues/19)) checks ancestry before building and refuses a tag whose commit is not on `main`, the only branch a ruleset protects. A `release/*` branch would need its own ruleset first.
 
-**Hotfix** (patch without shipping unreleased work from `main`):
+**Hotfix** (patch without shipping unreleased work from `main`). Not available yet: the ancestry guard accepts only `main` until a ruleset in `.github/rulesets/` protects `release/*` like `main` (PR-only, required checks, no force push or deletion), the maintainer applies it with `make rulesets`, and the guard is extended to it. Until then a patch is tagged on `main`. Once it is enabled:
 
 1. Fix on `main` first, through a normal PR.
 2. Branch from the release tag: `git switch -c release/v0.1 v0.1.0` (reuse the branch if it exists) and push it.

@@ -1,6 +1,7 @@
 package static
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -249,18 +250,38 @@ func TestAddJavaScriptRejectsBadInput(t *testing.T) {
 	}
 }
 
-// TestAddJavaScriptIgnoresVendorAndMinified: node_modules and minified
-// bundles are listed as ignored, never extracted.
+// TestAddJavaScriptIgnoresVendorAndMinified: node_modules code and minified
+// bundles with no route are listed as ignored, never extracted. A route in
+// one, a .min.js name on hand-written code, or one padding line is
+// extracted (pentest P4, #213).
 func TestAddJavaScriptIgnoresVendorAndMinified(t *testing.T) {
 	src := []byte("const app = require('express')();\napp.get('/x', (req, res) => { require('child_process').exec(req.query.c); });\n")
-	for _, name := range []string{"node_modules/pkg/index.js", "public/app.min.js"} {
+	lib := []byte("module.exports = function add(a, b) { return a + b; };\n")
+	dense := func(code []byte) []byte {
+		return []byte(strings.Repeat("/*"+strings.Repeat("x", 600)+"*/", 4) + string(code))
+	}
+	padded := []byte(strings.Repeat("x", 4000) + "\n" + strings.Repeat(string(src), 4))
+	tests := []struct {
+		name    string
+		src     []byte
+		ignored bool
+	}{
+		{"node_modules/pkg/index.js", lib, true},
+		{"public/bundle.js", dense(lib), true},
+		{"node_modules/pkg/server.js", src, false},
+		{"public/app.js", dense(src), false},
+		{"public/padded.js", padded, false},
+		{"public/app.min.js", src, false},
+	}
+	for _, tt := range tests {
 		e := NewExtractor()
-		if err := addFile(t, e, name, src); err != nil {
+		if err := addFile(t, e, tt.name, tt.src); err != nil {
 			t.Fatal(err)
 		}
 		g := e.Graph()
-		if len(g.Files) != 1 || g.Files[0].Ignored == 0 || len(g.Routes) != 0 {
-			t.Errorf("%s: files %+v routes %d", name, g.Files, len(g.Routes))
+		hasRoute := bytes.Contains(tt.src, []byte("app.get"))
+		if len(g.Files) != 1 || (g.Files[0].Ignored != 0) != tt.ignored || (len(g.Routes) != 0) != hasRoute {
+			t.Errorf("%s: files %+v routes %d", tt.name, g.Files, len(g.Routes))
 		}
 	}
 }

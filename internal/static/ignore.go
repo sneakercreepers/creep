@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -19,8 +20,9 @@ const (
 	IgnoredVendor Ignored = iota + 1
 	// IgnoredGenerated: a comment near the top marks the file as generated.
 	IgnoredGenerated
-	// IgnoredMinified: a JavaScript or TypeScript file named *.min.js or
-	// whose average line is longer than minifiedLineBytes.
+	// IgnoredMinified: a JavaScript or TypeScript file with nine tenths of
+	// its bytes on lines longer than minifiedLineBytes. A .min.js name
+	// alone does not count: the name is the author's say-so (pentest P4).
 	IgnoredMinified
 )
 
@@ -52,8 +54,8 @@ const (
 	// costs the same on any file and a marker deep in a file (a string in
 	// code) does not count.
 	generatedHeadBytes = 1024
-	// minifiedLineBytes is the average line length past which a script is
-	// treated as minified; hand-written code stays far below it.
+	// minifiedLineBytes is the line length past which a line counts as
+	// minified; hand-written code stays far below it.
 	minifiedLineBytes = 500
 	minifiedMinBytes  = 1024
 )
@@ -98,15 +100,11 @@ func repoRelative(name string) (string, error) {
 }
 
 func inVendorDir(name string) bool {
-	dirs := strings.Split(path.Dir(name), "/")
-	for _, d := range dirs {
-		for _, v := range vendorDirs {
-			if strings.EqualFold(d, v) {
-				return true
-			}
-		}
-	}
-	return false
+	return slices.ContainsFunc(strings.Split(path.Dir(name), "/"), isVendorName)
+}
+
+func isVendorName(dir string) bool {
+	return slices.ContainsFunc(vendorDirs, func(v string) bool { return strings.EqualFold(dir, v) })
 }
 
 // goGenerated is Go's convention (go help generate), which many generators
@@ -171,19 +169,21 @@ func leadingComments(lang Language, src []byte) []string {
 }
 
 // minified applies only to scripts: Python is never minified in practice,
-// so a long Python line is parsed, not skipped.
+// so a long Python line is parsed, not skipped. The whole file must be
+// dense: nine tenths of its bytes on lines longer than minifiedLineBytes, so
+// one long line padding readable code is not enough (pentest P4).
 func minified(name string, src []byte) bool {
 	lang, ok := LanguageForPath(name)
-	if !ok || lang == Python {
+	if !ok || lang == Python || len(src) < minifiedMinBytes {
 		return false
 	}
-	base := strings.ToLower(path.Base(name))
-	stem := strings.TrimSuffix(base, path.Ext(base))
-	if strings.HasSuffix(stem, ".min") || strings.HasSuffix(stem, "-min") {
-		return true
+	long := 0
+	for line := range bytes.Lines(src) {
+		if len(line) > minifiedLineBytes {
+			long += len(line)
+		}
 	}
-	lines := bytes.Count(src, []byte("\n")) + 1
-	return len(src) >= minifiedMinBytes && len(src)/lines > minifiedLineBytes
+	return long*10 >= len(src)*9
 }
 
 // AddIgnored lists a file that was not evaluated, with the reason, so the

@@ -17,7 +17,7 @@ const valueStop = "\\s\"'`,;"
 
 // credentialDetectors cover credentials the gitleaks rules miss because they
 // have no fixed format: they are recognized by where they sit, not by shape.
-var credentialDetectors = []patternDetector{
+var credentialDetectors = append([]patternDetector{
 	{
 		// scheme://[user]:password@host. The password runs to the last "@"
 		// before a space or quote, so a raw "@" or "/" inside it cannot end
@@ -30,9 +30,10 @@ var credentialDetectors = []patternDetector{
 	{
 		// key = value, key: value, key := value, key => value, with the value
 		// in double, single or back quotes, or bare (.env, YAML, properties,
-		// JSON, code). Only the value is masked; the key stays readable.
+		// JSON, code). The key may close a subscript (x['secret'] = v).
+		// Only the value is masked; the key stays readable.
 		label: passwordLabel,
-		re: regexp.MustCompile(`(?i)[A-Za-z0-9_.-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.-]*["']?[ \t]*(?::=|=>|=|:)[ \t]*` +
+		re: regexp.MustCompile(`(?i)[A-Za-z0-9_.-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.-]*["']?\]?[ \t]*(?::=|=>|=|:)[ \t]*` +
 			"(?:\"([^\"\\r\\n]*)\"|'([^'\\r\\n]*)'|`([^`\\r\\n]*)`|([^=" + valueStop + "][^" + valueStop + "]*))"),
 		valid: notPlaceholder,
 		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
@@ -45,7 +46,7 @@ var credentialDetectors = []patternDetector{
 		valid: mixedCase,
 		when:  regexp.MustCompile(`(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}`),
 	},
-}
+}, subscriptDetectors...)
 
 // callRe matches a value that is a function call in code, not a literal
 // password: getPassword() or os.Getenv( (the bare value stops at the quote

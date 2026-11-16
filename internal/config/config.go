@@ -19,13 +19,13 @@ type Config struct {
 type Model struct {
 	Contract       string   `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command. Cannot be set in the project file."`
 	Endpoint       string   `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
-	Name           string   `yaml:"name" desc:"Model name sent to the endpoint."`
+	Name           string   `yaml:"name" desc:"Model name sent to the endpoint. Cannot be set in the project file."`
 	Tier           string   `yaml:"tier" desc:"Model tier; selects the prompt variant."`
 	Preset         string   `yaml:"preset" desc:"Name of a model CLI preset built into creep (claude-code, codex, gemini, ollama): sets model.run and contract command. Cannot be set in the project file."`
 	Run            string   `yaml:"run" desc:"Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file."`
 	Env            []string `yaml:"env" desc:"Names of extra environment variables passed to the model command (the rest of the environment is not). Cannot be set in the project file."`
-	TimeoutSeconds int      `yaml:"timeout_seconds" desc:"Seconds one model command call may run before it is killed."`
-	MaxOutputBytes int      `yaml:"max_output_bytes" desc:"Largest stdout a model command call may print."`
+	TimeoutSeconds int      `yaml:"timeout_seconds" desc:"Seconds one model command call may run before it is killed. The project file may only lower it."`
+	MaxOutputBytes int      `yaml:"max_output_bytes" desc:"Largest stdout a model command call may print. The project file may only lower it."`
 }
 
 type Egress struct {
@@ -38,8 +38,8 @@ type Gates struct {
 }
 
 type Budget struct {
-	MaxTokens int `yaml:"max_tokens" desc:"Maximum model tokens per scan."`
-	MaxCalls  int `yaml:"max_calls" desc:"Maximum model calls per scan."`
+	MaxTokens int `yaml:"max_tokens" desc:"Maximum model tokens per scan. The project file may only lower it."`
+	MaxCalls  int `yaml:"max_calls" desc:"Maximum model calls per scan. The project file may only lower it."`
 }
 
 type Report struct {
@@ -51,12 +51,12 @@ type Scanners struct {
 }
 
 type Sandbox struct {
-	Enabled bool   `yaml:"enabled" desc:"Run proofs of concept in a container (v0.2). The sandbox never has internet access."`
-	Runtime string `yaml:"runtime" desc:"Container runtime for the sandbox."`
+	Enabled bool   `yaml:"enabled" desc:"Run proofs of concept in a container (v0.2). The sandbox never has internet access. Cannot be set in the project file."`
+	Runtime string `yaml:"runtime" desc:"Container runtime for the sandbox. Cannot be set in the project file."`
 }
 
 type Calibration struct {
-	CacheDays int `yaml:"cache_days" desc:"Days a model calibration stays valid."`
+	CacheDays int `yaml:"cache_days" desc:"Days a model calibration stays valid. The project file may only lower it."`
 }
 
 type Output struct {
@@ -93,14 +93,32 @@ var enums = map[string][]string{
 // could otherwise point them at itself through its creep.yaml.
 // model.run and model.env pick the program that receives the code and the
 // secrets it gets; model.preset picks a command line, and model.contract
-// switches between an HTTP API and that command.
+// switches between an HTTP API and that command. model.name picks what the
+// operator pays for and, on an aggregator endpoint, which provider reads the
+// code (pentest P2). sandbox.* would opt the operator into building and
+// running the repository's code (#62).
 var projectForbidden = map[string]bool{
-	"model.contract": true,
-	"model.endpoint": true,
-	"model.run":      true,
-	"model.env":      true,
-	"model.preset":   true,
-	"egress.allow":   true,
+	"model.contract":  true,
+	"model.endpoint":  true,
+	"model.name":      true,
+	"model.run":       true,
+	"model.env":       true,
+	"model.preset":    true,
+	"egress.allow":    true,
+	"sandbox.enabled": true,
+	"sandbox.runtime": true,
+}
+
+// projectLowerOnly keys are the operator's limits on spend and time. The
+// project file may lower them (a smaller budget makes skipped work, and so
+// the run, incomplete) but never raise them above what the layers before it
+// set (pentest P2, #62).
+var projectLowerOnly = []string{
+	"budget.max_tokens",
+	"budget.max_calls",
+	"model.timeout_seconds",
+	"model.max_output_bytes",
+	"calibration.cache_days",
 }
 
 // Enum returns the allowed values of key, or nil when it is not enumerated.

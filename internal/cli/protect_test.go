@@ -32,12 +32,18 @@ func plantedApp(rng *rand.Rand) (string, []string) {
 		pick(alnum, 24),
 		"jane." + pick("abcdefghij", 8) + "@example.com",
 		"gh" + "p_" + pick(alnum, 36),
+		pick(alnum, 32),
+		pick(alnum, 36), // not 40: the AWS secret-key detector would mask it anyway
 	}
-	app := "from flask import Flask, request\nimport sqlite3\n\napp = Flask(__name__)\n\n\n" +
+	// Subscript assignments (pentest P1): the Flask config idiom and a header.
+	app := "from flask import Flask, request\nimport sqlite3\n\napp = Flask(__name__)\n" +
+		fmt.Sprintf("app.config['SECRET_KEY'] = '%s'\n\n", secrets[4]) +
 		"@app.get(\"/q\")\ndef q():\n" +
 		fmt.Sprintf("    aws_key = %q\n    password = %q\n    owner = %q\n", secrets[0], secrets[1], secrets[2]) +
-		"    name = request.args.get(\"name\", \"\")\n" +
-		"    return str(sqlite3.connect(\"x.db\").execute(\"SELECT * FROM t WHERE k = '" + secrets[3] +
+		"    headers = {}\n    name = request.args.get(\"name\", \"\")\n" +
+		// Shares the sink line, so the reader's slice holds it.
+		fmt.Sprintf("    headers['X-Api-Key'] = '%s'; return str(", secrets[5]) +
+		"sqlite3.connect(\"x.db\").execute(\"SELECT * FROM t WHERE k = '" + secrets[3] +
 		"' AND n = '\" + name + \"'\").fetchall())\n"
 	return app, secrets
 }
@@ -128,7 +134,7 @@ func TestHolisticReplayProtections(t *testing.T) {
 			}
 			conns, bodies := run.endpoint.Conns(), run.endpoint.Bodies()
 			if conns == 0 || !sentMaskedSink(bodies) {
-				t.Fatalf("record reached the endpoint over %d connections without the masked sink line; the check would be vacuous", conns)
+				t.Fatalf("record reached the endpoint over %d connections without the masked sink line; the check would be vacuous\n%s", conns, bodies)
 			}
 			code, replayed, errOut := runScanWith(productionTransport(), "scan", "--replay", "--config", run.cfg)
 			if code != tt.wantCode || replayed != recorded {
@@ -145,10 +151,12 @@ func TestHolisticReplayProtections(t *testing.T) {
 }
 
 // sentMaskedSink is true when a reader request carried the sink line with
-// its secret masked, so the leak checks look at real slices.
+// its secret masked, and the subscript-assigned header (pentest P1), so the
+// leak checks look at real slices.
 func sentMaskedSink(bodies [][]byte) bool {
 	for _, b := range bodies {
-		if bytes.Contains(b, []byte("SELECT * FROM t WHERE k = ")) && bytes.Contains(b, []byte("SECRET_")) {
+		if bytes.Contains(b, []byte("SELECT * FROM t WHERE k = ")) && bytes.Contains(b, []byte("SECRET_")) &&
+			bytes.Contains(b, []byte("headers['X-Api-Key'] = '")) {
 			return true
 		}
 	}

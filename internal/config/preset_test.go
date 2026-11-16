@@ -48,7 +48,7 @@ func TestProjectCannotChoosePreset(t *testing.T) {
 	}{
 		{"project preset", Inputs{Project: file("creep.yaml", "model:\n  preset: claude-code\n")}, "cannot be set in the project file"},
 		{"project preset over user", Inputs{User: file("u", "model:\n  preset: ollama\n  name: llama3\n"), Project: file("creep.yaml", "model:\n  preset: codex\n")}, "cannot be set in the project file"},
-		{"project model for ollama", Inputs{User: file("u", "model:\n  preset: ollama\n"), Project: file("creep.yaml", "model:\n  name: evil.example/x/y\n")}, "cannot come from the project file"},
+		{"project model for ollama", Inputs{User: file("u", "model:\n  preset: ollama\n"), Project: file("creep.yaml", "model:\n  name: evil.example/x/y\n")}, `key "model.name" cannot be set in the project file`},
 		{"project contract over user preset", Inputs{User: file("u", "model:\n  preset: claude-code\n"), Project: file("creep.yaml", "model:\n  contract: openai\n")}, "cannot be set in the project file"},
 		{"project contract command", Inputs{Project: file("creep.yaml", "model:\n  contract: command\n")}, "cannot be set in the project file"},
 		{"project run", Inputs{Project: file("creep.yaml", "model:\n  run: claude -p\n")}, "cannot be set in the project file"},
@@ -57,11 +57,6 @@ func TestProjectCannotChoosePreset(t *testing.T) {
 		if _, err := Load(tt.in); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s: err = %v", tt.name, err)
 		}
-	}
-	// A project model name is fine for a preset that does not pass it on.
-	r, err := Load(Inputs{User: file("u", "model:\n  preset: claude-code\n"), Project: file("creep.yaml", "model:\n  name: x\n")})
-	if err != nil || strings.Contains(r.Config.Model.Run, " x") {
-		t.Errorf("claude-code with project name: %v %q", err, r.Config.Model.Run)
 	}
 }
 

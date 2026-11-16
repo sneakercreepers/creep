@@ -44,6 +44,7 @@ func secretFile(rng *rand.Rand) (string, []string) {
 		"ghp_" + randomFrom(rng, alnum, 36),
 		randomFrom(rng, alnum, 24),
 		"jane." + randomFrom(rng, "abcdefghij", 8) + "@example.com",
+		randomFrom(rng, alnum, 32),
 	}
 	var key []string
 	for range 24 {
@@ -51,7 +52,8 @@ func secretFile(rng *rand.Rand) (string, []string) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "package cfg\n\nconst awsID = %q\nconst token = %q\n", secrets[0], secrets[1])
-	fmt.Fprintf(&b, "var password = %q\n// owner: %s\n\nconst key = `", secrets[2], secrets[3])
+	// A subscript assignment (pentest P1) hides its key from the generic rule.
+	fmt.Fprintf(&b, "var password = %q\n// owner: %s\n\nfunc init() { cfg[\"apiKey\"] = %q }\n\nconst key = `", secrets[2], secrets[3], secrets[4])
 	b.WriteString("-----BEGIN RSA PRIV" + "ATE KEY-----\n" + strings.Join(key, "\n"))
 	b.WriteString("\n-----END RSA PRIV" + "ATE KEY-----`\n\nfunc main() {}\n")
 	return b.String(), append(secrets, key...)
@@ -91,7 +93,7 @@ func TestScanSendsOnlyRedactedFragments(t *testing.T) {
 	if got := string(joinBodies(bodies)); got != want || rep.Fragments != len(bodies) || len(bodies) < 2 {
 		t.Fatalf("%d fragments sent (report %d), joined %q; want redact.File output %q", len(bodies), rep.Fragments, got, want)
 	}
-	assertLoggedRedactions(t, readLines(t, dir), 5)
+	assertLoggedRedactions(t, readLines(t, dir), 6)
 }
 
 func assertNoSecrets(t *testing.T, bodies [][]byte, secrets []string) {

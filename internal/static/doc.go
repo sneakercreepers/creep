@@ -92,17 +92,21 @@
 // scan covers nested functions; a cut scan marks its sinks dynamic and its
 // route and file partial.
 //
-// IgnoreReason decides, before parsing, which files are not evaluated:
-// vendor directories (vendor, node_modules, site-packages, virtualenvs and
-// the like, matched on directory segments of a repo-relative path; absolute
-// or escaping paths are an error), files whose leading comment block
-// carries an exact generator marker ("Code generated ... DO NOT EDIT.",
+// IgnoreReason names files that may not need evaluating: vendor
+// directories (vendor, node_modules, site-packages, virtualenvs and the
+// like, matched on directory segments of a repo-relative path; absolute or
+// escaping paths are an error), files whose leading comment block carries
+// an exact generator marker ("Code generated ... DO NOT EDIT.",
 // "@generated" as the first word, or protoc's header; strings, docstrings
-// and loose wording never count), and minified scripts (*.min.js, or an
-// average line over 500 bytes; never Python). Callers list them with
-// AddIgnored (AddPython and AddJavaScript do so themselves) as File.Ignored
-// with the reason, so the report shows them as not evaluated; they are
-// never silently dropped.
+// and loose wording never count), and minified scripts (nine tenths of the
+// bytes on lines over 500 bytes; never Python; a .min.js name never
+// counts). These marks are the author's say-so (pentest P4, #213), so
+// AddPython and AddJavaScript believe one only for a file that parsed
+// without errors and holds no route, and list it as File.Ignored with the
+// reason; a file with a route is extracted as usual. Callers may list a
+// vendor file with AddIgnored without reading it only when VendorEvidence
+// names a package-manager mark that exists. Ignored files are never
+// silently dropped.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

@@ -153,6 +153,9 @@ func (s *session) openState() error {
 	if s.store, err = state.Open(stateDir, secret); err != nil {
 		return err
 	}
+	if err := removeReports(); err != nil {
+		return err
+	}
 	s.run, err = s.store.NewRun(s.mode())
 	return err
 }

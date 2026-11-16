@@ -129,7 +129,9 @@ func TestConfigExplainFailures(t *testing.T) {
 		want    []string
 	}{
 		{"locked key in project", "locked: [gates.pr]\n", "", "gates:\n  pr: none\n", nil, []string{`project "creep.yaml": key "gates.pr" is locked by policy "policy.yaml" and cannot be overridden`}},
-		{"project chooses egress", goldenPolicy, "", "model:\n  name: x\negress:\n  allow: [a]\n", nil, []string{`key "egress.allow" cannot be set in the project file`}},
+		{"project raises budget", "", "", "budget:\n  max_tokens: 2147483647\n", nil, []string{`project "creep.yaml": key "budget.max_tokens" cannot raise 2000000 to 2147483647 in the project file`, "(set by default)"}},
+		{"project picks model", "", "", "model:\n  name: o1-pro\n", nil, []string{`project "creep.yaml": key "model.name" cannot be set in the project file`}},
+		{"project chooses egress", goldenPolicy, "", "log:\n  level: warn\negress:\n  allow: [a]\n", nil, []string{`key "egress.allow" cannot be set in the project file`}},
 		{"locked key in user", goldenPolicy, "model:\n  endpoint: https://evil.example\n", "", nil, []string{`user "~/.creep/config.yaml": key "model.endpoint" is locked by policy "policy.yaml"`}},
 		{"locked key by flag", "locked: [log.level]\n", "", "", []string{"--log-level", "warn"}, []string{`flag --log-level: key "log.level" is locked`}},
 		{"gate looser than limit", goldenPolicy, "", "gates:\n  pr: verified:critical\n", nil, []string{`gates.pr "verified:critical" is looser than the limit "probable:high"`}},

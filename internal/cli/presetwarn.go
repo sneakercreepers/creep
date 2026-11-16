@@ -29,7 +29,7 @@ func warnPreset(w io.Writer, m config.Model) {
 	}
 	if p.HostReads == presets.HostReadsUnbounded {
 		parts = append(parts, "can read files outside its empty working directory: "+p.HostReadsDetail+
-			"; scanned code could steer it to read host secrets and send them to the model provider unredacted")
+			"; scanned code could steer it to read host secrets and send them unredacted to the model provider, or to any address its web tools reach, outside creep's redaction and egress.log (accepted risk, ADR 0015)")
 	}
 	if len(parts) == 0 {
 		return

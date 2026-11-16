@@ -125,7 +125,7 @@ model: { preset: claude-code }   # also: gemini, codex, ollama (needs name: <mod
 | `ollama` | `ollama run <model.name> --format json` | no | no |
 
 > [!WARNING]
-> The tool canary catches writes and commands, not reads. With `gemini` or `codex`, code being scanned could steer the CLI to read host secrets (`~/.ssh`, `~/.aws`) and send them to its provider unredacted; creep prints a warning at `creep doctor` and every scan, as it does for a preset not yet verified with the real CLI (the tool canary runs on every scan either way). For untrusted code, prefer `claude-code`.
+> The tool canary catches writes and commands, not reads. With `gemini` or `codex`, code being scanned could steer the CLI to read host secrets (`~/.ssh`, `~/.aws`, cloud credentials) and send them to its provider unredacted, outside creep's redaction and `egress.log`; `gemini`'s web tools may also reach addresses that are not in `egress.allow`. This is an accepted residual risk ([ADR 0015](docs/adr/0015-model-presets.md), threat model C6), not a bug creep will catch: creep only prints a warning at `creep doctor` and every scan, as it does for a preset not yet verified with the real CLI (the tool canary runs on every scan either way). Do not use `gemini` or `codex` on untrusted code, such as pull requests from outside contributors in CI, or on a machine whose home directory holds secrets; prefer `claude-code` or `ollama`.
 
 `creep config explain` shows the resolved `model.run`. Presets are embedded in the binary ([ADR 0015](docs/adr/0015-model-presets.md)); add or fix one with the *Model preset* issue form ([CONTRIBUTING.md](CONTRIBUTING.md#model-presets)).
 

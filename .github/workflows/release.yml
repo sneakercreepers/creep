@@ -40,12 +40,17 @@ jobs:
         run: bash .github/scripts/release-tools.sh
       - name: goreleaser check
         run: goreleaser check
-      - name: Ancestry guard accepts main and refuses a stray commit
+      - name: Ancestry guard accepts main and refuses a stray or release/* commit
         run: |
           bash .github/scripts/tag-ancestry.sh "$(git rev-parse refs/remotes/origin/main)"
           stray="$(git -c user.name=ci -c user.email=ci@invalid commit-tree -m stray 'HEAD^{tree}')"
           if bash .github/scripts/tag-ancestry.sh "$stray"; then
             echo "::error::the ancestry guard accepted a commit that is not on main"
+            exit 1
+          fi
+          git update-ref refs/remotes/origin/release/stray "$stray"
+          if bash .github/scripts/tag-ancestry.sh "$stray"; then
+            echo "::error::the ancestry guard accepted a commit on an unprotected release/* branch"
             exit 1
           fi
       - name: Snapshot build (no signature, nothing published)
@@ -66,7 +71,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Tagged commit is on main or a release/* branch
+      - name: Tagged commit is on main
         run: bash .github/scripts/tag-ancestry.sh "$GITHUB_SHA"
 
   release:

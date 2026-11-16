@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Refuses to release a commit that is on neither main nor a release/* branch.
+# Refuses to release a commit that is not on main.
 # Rulesets cannot tie a v* tag to a branch, so this is the only check (#19).
-# Needs a full fetch (actions/checkout fetch-depth: 0) for the origin/* refs.
+# Only main is accepted: it is the one branch a ruleset protects (PR-only,
+# required checks). Accept a release/* branch only once a ruleset in
+# .github/rulesets protects it the same way (v0.1 release pentest P6).
+# Needs a full fetch (actions/checkout fetch-depth: 0) for origin/main.
 set -euo pipefail
 
 commit="${1:?usage: tag-ancestry.sh <commit>}"
-branches="refs/remotes/origin/main $(git for-each-ref --format='%(refname)' 'refs/remotes/origin/release/*')"
 
-for branch in $branches; do
-  # An unknown commit makes merge-base fail, which counts as not an ancestor.
-  if git merge-base --is-ancestor "$commit" "$branch" 2>/dev/null; then
-    echo "$commit is on ${branch#refs/remotes/origin/}"
-    exit 0
-  fi
-done
+# An unknown commit makes merge-base fail, which counts as not an ancestor.
+if git merge-base --is-ancestor "$commit" refs/remotes/origin/main 2>/dev/null; then
+  echo "$commit is on main"
+  exit 0
+fi
 
-echo "::error::$commit is on neither main nor a release/* branch; refusing to release" >&2
+echo "::error::$commit is not on main; refusing to release" >&2
 exit 1

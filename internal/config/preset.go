@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sneakercreepers/creep/internal/presets"
 )
@@ -64,9 +63,9 @@ func (s *state) checkPresetLocks(p presets.Preset, src string) error {
 	return nil
 }
 
-// checkPresetConflicts refuses a preset next to another model command, a
-// non-command contract, or a model name from the scanned repository when
-// that name becomes an argument of the CLI.
+// checkPresetConflicts refuses a preset next to another model command or a
+// non-command contract. model.name cannot come from the project file at all
+// (projectForbidden), so the name a preset passes on is the operator's.
 func (s *state) checkPresetConflicts(p presets.Preset, src string) error {
 	if err := s.checkPresetLocks(p, src); err != nil {
 		return err
@@ -76,9 +75,6 @@ func (s *state) checkPresetConflicts(p presets.Preset, src string) error {
 	}
 	if c := s.Config.Model.Contract; c != "command" && s.sources["model.contract"] != "default" {
 		return fmt.Errorf("%s: model.preset %q needs contract command, but model.contract is %q (set by %s)", src, p.Name, c, s.sources["model.contract"])
-	}
-	if p.NeedsModel() && strings.HasPrefix(s.sources["model.name"], "project ") {
-		return fmt.Errorf("%s: model.name: preset %q passes it to the CLI, so it cannot come from the project file (the scanned repository must not choose what the CLI runs or downloads); set it in the user file, --config or policy", s.sources["model.name"], p.Name)
 	}
 	return nil
 }

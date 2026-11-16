@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"reflect"
-	"slices"
 )
 
 // File is the raw content of one config file. Name is how messages and
@@ -151,14 +150,9 @@ func (s *state) applyFile(l layer) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", src, err)
 	}
-	for _, k := range keys {
-		if l.project && projectForbidden[k] {
-			return fmt.Errorf("%s: key %q cannot be set in the project file, because the scanned repository must not choose where its code is sent; set it in the user file, --config or policy", src, k)
-		}
-		if l.project && k == "scanners.enabled" {
-			if err := s.checkProjectScanners(c.Scanners.Enabled, src); err != nil {
-				return err
-			}
+	if l.project {
+		if err := s.checkProjectKeys(&c, keys, src); err != nil {
+			return err
 		}
 	}
 	if err := s.merge(&c, keys, src); err != nil {
@@ -199,19 +193,6 @@ func (s *state) merge(c *Config, keys []string, src string) error {
 	for _, k := range keys {
 		copyKey(&s.Config, c, k)
 		s.sources[k] = src
-	}
-	return nil
-}
-
-// checkProjectScanners rejects a project file that enables a scanner the
-// layers before it did not: enabling one runs a program on the host
-// (ADR 0013), which the scanned repository must not choose. It may only
-// remove scanners.
-func (s *state) checkProjectScanners(project []string, src string) error {
-	for _, name := range project {
-		if !slices.Contains(s.Config.Scanners.Enabled, name) {
-			return fmt.Errorf("%s: key \"scanners.enabled\" cannot enable %q in the project file, because the scanned repository must not choose which programs run on this machine; the project file may only remove scanners, enable it in the user file, --config or policy", src, name)
-		}
 	}
 	return nil
 }
