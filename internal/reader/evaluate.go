@@ -15,7 +15,8 @@ const purpose = "reader"
 // only, and the call goes through h, whose SendFunc is the gateway in
 // production, so redaction counts reach egress.log. tier must be the tier s
 // was built for. An answer that fails the schema, Validate or Project is an
-// error, never a verdict.
+// error, never a verdict. The Signal carries s.Partial, so a verdict from a
+// cut slice is never read as one from the whole flow.
 func Evaluate(ctx context.Context, h *models.HTTP, tier Tier, s Slice) (Signal, error) {
 	system, err := System(tier)
 	if err != nil {
@@ -32,5 +33,10 @@ func Evaluate(ctx context.Context, h *models.HTTP, tier Tier, s Slice) (Signal, 
 	if err != nil {
 		return Signal{}, fmt.Errorf("reader: hypothesis %d: %w", s.Hypothesis, err)
 	}
-	return Project(s.Hypothesis, a, s.Shown)
+	sig, err := Project(s.Hypothesis, a, s.Shown)
+	if err != nil {
+		return Signal{}, err
+	}
+	sig.Partial = s.Partial
+	return sig, nil
 }

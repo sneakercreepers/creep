@@ -13,7 +13,7 @@ import (
 
 func run(args ...string) (code int, stdout, stderr string) {
 	var out, errOut bytes.Buffer
-	code = Run(args, &out, &errOut)
+	code = runWith(args, &out, &errOut, noModelDeps)
 	return code, out.String(), errOut.String()
 }
 
@@ -51,7 +51,7 @@ func TestRun(t *testing.T) {
 		{"unknown command flag", []string{"doctor", "--bogus"}, exitcode.ConfigError, nil, []string{"bogus", "creep doctor"}},
 		{"init stub", []string{"init"}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
 		{"doctor stub", []string{"doctor"}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
-		{"scan stub", []string{"scan", "."}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
+		{"scan without a model fails closed", []string{"scan", "."}, exitcode.ConfigError, nil, []string{"creep scan: "}},
 		{"config without subcommand", []string{"config"}, exitcode.ConfigError, nil, []string{"missing subcommand"}},
 		{"config unknown subcommand", []string{"config", "show"}, exitcode.ConfigError, nil, []string{`unknown subcommand "show"`}},
 		{"config explain extra args", []string{"config", "explain", "x"}, exitcode.ConfigError, nil, []string{`unexpected arguments: ["x"]`}},
@@ -112,14 +112,14 @@ func TestFlagPositions(t *testing.T) {
 		wantStderr    []string
 		notWantStderr []string
 	}{
-		{"valid flag after positional", []string{"scan", ".", "--format", "sarif"}, exitcode.ConfigError, []string{"not implemented yet"}, []string{"invalid"}},
+		{"valid flag after positional", []string{"scan", ".", "--format", "sarif"}, exitcode.ConfigError, []string{"creep scan: "}, []string{"invalid"}},
 		{"invalid flag after positional", []string{"scan", ".", "--format", "xml"}, exitcode.ConfigError, []string{`invalid --format "xml"`}, []string{"not implemented yet (see"}},
 		{"invalid flag with equals after positional", []string{"scan", ".", "--format=bogus"}, exitcode.ConfigError, []string{`invalid --format "bogus"`}, nil},
 		{"invalid flag before positional", []string{"scan", "--format=bogus", "."}, exitcode.ConfigError, []string{`invalid --format "bogus"`}, nil},
 		{"invalid log level between positionals", []string{"scan", "a", "--log-level", "loud", "b"}, exitcode.ConfigError, []string{"invalid --log-level"}, nil},
 		{"unknown flag after positional", []string{"scan", ".", "--bogus"}, exitcode.ConfigError, []string{"bogus", "Usage:"}, []string{"not implemented yet (see"}},
-		{"double dash ends flags", []string{"scan", "--", "--format=bogus"}, exitcode.ConfigError, []string{"not implemented yet"}, []string{"invalid"}},
-		{"double dash after positional", []string{"scan", ".", "--", "--bogus"}, exitcode.ConfigError, []string{"not implemented yet"}, []string{"bogus"}},
+		{"double dash ends flags", []string{"scan", "--", "--format=bogus"}, exitcode.ConfigError, []string{"current directory"}, []string{"invalid"}},
+		{"double dash after positional", []string{"scan", ".", "--", "--bogus"}, exitcode.ConfigError, []string{"current directory"}, []string{"bogus"}},
 		{"flag after double dash is positional", []string{"version", "--", "--format=json"}, exitcode.ConfigError, []string{`unexpected arguments: ["--format=json"]`}, nil},
 		{"flag value may be double dash", []string{"version", "--format", "--"}, exitcode.ConfigError, []string{`invalid --format "--"`}, nil},
 		{"missing value after positional", []string{"scan", ".", "--format"}, exitcode.ConfigError, []string{"needs an argument"}, nil},
@@ -152,6 +152,9 @@ func TestStubsFailClosed(t *testing.T) {
 		if c.name == "resume" { // checks its run first; TestResumeFailsClosed covers it
 			continue
 		}
+		if c.name == "scan" || c.name == "why" { // built; scan_test.go and why_test.go cover their failures
+			continue
+		}
 		t.Run(c.name, func(t *testing.T) {
 			code, _, stderr := run(c.name)
 			if code != exitcode.ConfigError {
@@ -164,7 +167,7 @@ func TestStubsFailClosed(t *testing.T) {
 
 func TestHelpMarksUnimplementedCommands(t *testing.T) {
 	_, stdout, _ := run("--help")
-	for _, name := range []string{"init", "doctor", "scan", "why"} {
+	for _, name := range []string{"init", "doctor"} {
 		c, _ := findCommand(name)
 		assertContains(t, "usage", stdout, []string{c.name + " ", c.summary, "(not implemented yet)"})
 	}

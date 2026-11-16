@@ -10,6 +10,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
 )
@@ -41,8 +42,10 @@ func declaredSkipReasons(t *testing.T) []gateway.SkipReason {
 	return reasons
 }
 
+// The reader adds lines_shifted (#192) to the gateway's file reasons; the
+// report must accept it and list the file, never drop it or fail.
 func TestEveryGatewayReasonReachesTheReport(t *testing.T) {
-	gatewayReasons := declaredSkipReasons(t)
+	gatewayReasons := append(declaredSkipReasons(t), reader.FileLinesShifted)
 	var scan gateway.ScanReport
 	for i, r := range gatewayReasons {
 		scan.NotScanned = append(scan.NotScanned, gateway.NotScanned{Path: string(rune('a'+i)) + "\x1b.py", Reason: r})

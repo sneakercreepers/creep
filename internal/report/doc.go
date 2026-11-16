@@ -9,8 +9,9 @@
 // What it guarantees:
 //   - Every finding has one of four statuses: verified, probable, discarded
 //     or not evaluated. Every class is covered, partial or not evaluated.
-//   - Every file the gateway did not scan is listed as not evaluated with its
-//     closed-enum reason. An unknown reason is an error, never dropped.
+//   - Every file the gateway, the reader or static analysis did not evaluate
+//     in full is listed as not evaluated with its closed-enum reason. An
+//     unknown reason is an error, never dropped.
 //   - An incomplete run (the scan stopped, or the run state did not end
 //     complete) is marked incomplete in all three formats, and no class of
 //     it reads as covered: covered becomes partial. Callers map it to
@@ -23,6 +24,9 @@
 //     encoding/json's.
 //   - Output is deterministic (no clock, sorted findings), so a replayed run
 //     renders byte-identical reports.
+//   - ReadJSON reads a report back for `creep why` as strictly as New
+//     builds one, so a planted or edited file fails instead of passing
+//     unchecked values on.
 //
 // SARIF carries only verified (level error) and probable (level warning)
 // findings as results; discarded and not evaluated ones would read as open

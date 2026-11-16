@@ -37,6 +37,26 @@ func parseGate(s string) (gate, error) {
 	return gate{status: st, severity: sv}, nil
 }
 
+// GateTrips reports whether a finding with status and severity fails gate
+// (a gates.* value). Statuses other than verified and probable (discarded,
+// not evaluated) never trip a gate; an invalid gate or severity is an error.
+func GateTrips(gateValue, status, severity string) (bool, error) {
+	g, err := parseGate(gateValue)
+	if err != nil {
+		return false, err
+	}
+	sv := slices.Index(gateSeverities, severity)
+	if sv < 0 {
+		return false, fmt.Errorf("invalid severity %q: want one of %s", severity, strings.Join(gateSeverities, ", "))
+	}
+	st := slices.Index(gateStatuses, status)
+	if g.none || st < 0 {
+		return false, nil
+	}
+	// Lower indexes are stronger statuses and higher severities.
+	return st <= g.status && sv <= g.severity, nil
+}
+
 // atLeastAsStrict reports whether g fails on every finding limit fails on.
 func (g gate) atLeastAsStrict(limit gate) bool {
 	if limit.none {

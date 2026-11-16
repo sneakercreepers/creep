@@ -41,13 +41,13 @@ func writeFindings(w io.Writer, findings []Finding) {
 		fmt.Fprint(w, "No findings. This says nothing about what was not evaluated; read the coverage below.\n\n")
 		return
 	}
-	fmt.Fprint(w, "| ID | Class | Status | Location |\n|---|---|---|---|\n")
+	fmt.Fprint(w, "| ID | Class | Status | Location | Notes |\n|---|---|---|---|---|\n")
 	for _, f := range findings {
 		loc := f.Path
 		if f.Line > 0 {
 			loc = fmt.Sprintf("%s:%d", f.Path, f.Line)
 		}
-		fmt.Fprintf(w, "| %s | %s | %s | %s |\n", codeSpan(f.ID), codeSpan(f.Class), statusText(string(f.Status)), codeSpan(loc))
+		fmt.Fprintf(w, "| %s | %s | %s | %s | %s |\n", codeSpan(f.ID), codeSpan(f.Class), statusText(string(f.Status)), codeSpan(loc), findingNotes(f))
 	}
 	fmt.Fprintf(w, "\nRun `creep why <id>` for the evidence behind a finding.\n\n")
 }
@@ -72,7 +72,7 @@ func writeNotEvaluated(w io.Writer, files []NotEvaluated) {
 		fmt.Fprint(w, "Every file was evaluated.\n\n")
 		return
 	}
-	fmt.Fprintf(w, "%d files were not evaluated; nothing in them is covered by this report.\n\n| File | Reason |\n|---|---|\n", len(files))
+	fmt.Fprintf(w, "%d files were not evaluated in full; do not read this report as covering them.\n\n| File | Reason |\n|---|---|\n", len(files))
 	for _, n := range files {
 		fmt.Fprintf(w, "| %s | %s |\n", codeSpan(n.Path), statusText(string(n.Reason)))
 	}
@@ -93,6 +93,19 @@ func writeDataHandling(w io.Writer, d DataHandling) {
 			ep.Requests, ep.Bytes, ep.InputTokens, ep.OutputTokens, countList(ep.Outcomes))
 	}
 	fmt.Fprintf(w, "\nRedacted before sending: %s.\n", countList(d.Redactions))
+}
+
+// findingNotes says why a finding was not decided, or that its verdict came
+// from a cut slice; both are IDs, never repository text.
+func findingNotes(f Finding) string {
+	var notes []string
+	if f.Reason != "" {
+		notes = append(notes, statusText(f.Reason))
+	}
+	if f.Partial {
+		notes = append(notes, "`partial slice`")
+	}
+	return strings.Join(notes, ", ")
 }
 
 // statusText prints a closed-enum value; underscores read as spaces.

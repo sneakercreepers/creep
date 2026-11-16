@@ -107,9 +107,9 @@ func TestRecordReplayFlags(t *testing.T) {
 		{"record", []string{"--record", "version"}, exitcode.OK, ""},
 		{"replay after command", []string{"version", "--replay"}, exitcode.OK, ""},
 		{"both", []string{"--record", "version", "--replay"}, exitcode.ConfigError, "cannot be used together"},
-		{"scan still fails closed", []string{"scan", "--replay", "."}, exitcode.ConfigError, "not implemented yet"},
+		{"scan without a model fails closed", []string{"scan", "--replay", "."}, exitcode.ConfigError, "creep scan: "},
 		{"recalibrate", []string{"--recalibrate", "version"}, exitcode.OK, ""},
-		{"recalibrate scan still fails closed", []string{"scan", "--recalibrate", "."}, exitcode.ConfigError, "not implemented yet"},
+		{"recalibrate scan without a model fails closed", []string{"scan", "--recalibrate", "."}, exitcode.ConfigError, "creep scan: "},
 		{"recalibrate takes no value", []string{"--recalibrate=maybe", "version"}, exitcode.ConfigError, "recalibrate"},
 	}
 	for _, tt := range tests {

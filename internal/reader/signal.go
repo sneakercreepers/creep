@@ -34,6 +34,9 @@ type Signal struct {
 	Verdict    Verdict
 	Confidence uint8 // 0-100
 	Evidence   []LineRange
+	// Partial is Slice.Partial: the verdict was reached on a slice that
+	// left lines out, so it is partial coverage, never a clean result.
+	Partial bool
 }
 
 // ErrEvidence means an answer cites a line the model was not shown.

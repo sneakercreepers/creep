@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"testing"
 )
@@ -88,5 +89,9 @@ func TestContractFixtureUsesEveryField(t *testing.T) {
 		t.Error("fixture needs endpoints and redactions")
 	case len(r.DataHandling.Endpoints[0].Models) == 0 || len(r.DataHandling.Endpoints[0].Outcomes) == 0:
 		t.Error("fixture endpoint needs models and outcomes")
+	case !slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Reason != "" }) ||
+		!slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Partial }) ||
+		!slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Confidence > 0 && len(f.Evidence) > 0 }):
+		t.Error("fixture findings need a reason, a partial verdict, a confidence and evidence")
 	}
 }

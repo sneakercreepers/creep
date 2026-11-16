@@ -15,7 +15,14 @@
       "class": "sqli",
       "status": "verified",
       "path": "app/db.py",
-      "line": 12
+      "line": 12,
+      "confidence": 90,
+      "evidence": [
+        {
+          "start": 10,
+          "end": 12
+        }
+      ]
     },
     {
       "id": "f2",
@@ -36,14 +43,16 @@
       "class": "sqli",
       "status": "discarded",
       "path": "app/db.py",
-      "line": 40
+      "line": 40,
+      "partial": true
     },
     {
       "id": "f4",
       "class": "ssrf",
       "status": "not_evaluated",
       "path": "svc/fetch.js",
-      "line": 9
+      "line": 9,
+      "reason": "step_cap"
     }
   ],
   "coverage": {

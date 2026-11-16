@@ -9,6 +9,20 @@ import (
 
 var tiers = []Tier{TierS, TierM, TierL}
 
+// CallTokens bounds what the scan reserves per hypothesis: it must cover the
+// prompt and slice budgets of each tier and refuse an unknown tier.
+func TestCallTokens(t *testing.T) {
+	for _, tier := range tiers {
+		got, err := CallTokens(tier)
+		if err != nil || got != promptBudget[tier]+sliceBudget[tier] {
+			t.Errorf("CallTokens(%s) = %d, %v", tier, got, err)
+		}
+	}
+	if _, err := CallTokens(Tier("XL")); !errors.Is(err, ErrTier) {
+		t.Errorf("CallTokens(XL) err = %v, want ErrTier", err)
+	}
+}
+
 // TestPromptTokenBudget fails when a tier's system prompt plus the schema
 // sent with it grows past its budget. Bytes bound tokens from above for
 // every tokenizer creep supports, as in models' per-call reservation.

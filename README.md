@@ -65,7 +65,10 @@ make build   # binary in ./bin/creep
 creep init     # detects your stack and an available model, writes creep.yaml
 creep doctor   # checks model, config and (optional) Docker before anything fails
 creep scan .   # static analysis + model triage + coverage report
+creep why sink-3   # the evidence behind one finding of the last scan
 ```
+
+`creep scan` scans the current directory and writes `.creep/report.json`, `.creep/report.md` and `.creep/report.sarif` (per `report.formats`). It needs `model.contract`, `model.endpoint` and `model.name` in your user config, `--config` or the organization policy. A run that could not evaluate everything exits `4` and says why ([ADR 0009](docs/adr/0009-scan-and-why-contract.md)).
 
 Only what changed, for pre-commit or PRs:
 

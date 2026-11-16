@@ -13,6 +13,7 @@ type env struct {
 	stdout io.Writer
 	stderr io.Writer
 	opts   globalOptions
+	deps   scanDeps
 }
 
 type command struct {
@@ -24,8 +25,8 @@ type command struct {
 var commands = []command{
 	{"init", "create a creep.yaml for this project (not implemented yet)", stub("init", "#2")},
 	{"doctor", "check models, sandbox runtime and environment (not implemented yet)", stub("doctor", "#6, #21")},
-	{"scan", "scan a local repository for vulnerabilities (not implemented yet)", stub("scan", "the v0.1 milestone")},
-	{"why", "why <id>: show the evidence behind a finding (not implemented yet)", stub("why", "the v0.1 milestone; it needs scan findings")},
+	{"scan", "scan the repository in the current directory; reports go to .creep/", runScan},
+	{"why", "why <id>: show the evidence behind a finding of the last scan", runWhy},
 	{"resume", "resume <run>: continue an interrupted run (checks the run; continuing needs scan)", runResume},
 	{"version", "print version, commit and Go version", runVersion},
 	{"config", "explain: show each effective config value and the layer it came from", runConfig},

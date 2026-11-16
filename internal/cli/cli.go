@@ -12,6 +12,12 @@ import (
 // Run executes creep with args (without the program name) and returns the
 // process exit code.
 func Run(args []string, stdout, stderr io.Writer) int {
+	return runWith(args, stdout, stderr, productionDeps())
+}
+
+// runWith is Run with the scan's outside dependencies passed in, so tests
+// drive every command through the same path with fakes.
+func runWith(args []string, stdout, stderr io.Writer, deps scanDeps) int {
 	opts := defaultOptions()
 	fs := newFlagSet("creep", &opts)
 	wantHelp, err := parseFlags(fs, args)
@@ -37,10 +43,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return usageError("creep", fmt.Errorf("unknown command %q", rest[0]), stderr)
 	}
-	return runCommand(cmd, rest[1:], opts, stdout, stderr)
+	return runCommand(cmd, rest[1:], opts, env{stdout: stdout, stderr: stderr, deps: deps})
 }
 
-func runCommand(cmd command, args []string, opts globalOptions, stdout, stderr io.Writer) int {
+func runCommand(cmd command, args []string, opts globalOptions, e env) int {
+	stdout, stderr := e.stdout, e.stderr
 	positional, wantHelp, err := parseArgs("creep "+cmd.name, args, &opts)
 	if err != nil {
 		printError(stderr, "creep "+cmd.name, err)
@@ -55,7 +62,8 @@ func runCommand(cmd command, args []string, opts globalOptions, stdout, stderr i
 		printCommandUsage(stdout, cmd)
 		return exitcode.OK
 	}
-	return cmd.run(env{stdout: stdout, stderr: stderr, opts: opts}, positional)
+	e.opts = opts
+	return cmd.run(e, positional)
 }
 
 // runHelp handles "creep help [command]" with the same flag rules as any
