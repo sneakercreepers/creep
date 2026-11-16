@@ -30,6 +30,9 @@ func TestRedactSubscriptAssignments(t *testing.T) {
 		{"php", "$config['api_key'] = '{v}';\n"},
 		{"go map", "\tm[\"apiKey\"] = \"{v}\"\n"},
 		{"bare value", "settings['token'] = {v};\n"},
+		{"bearer header", "headers['Authorization'] = 'Bearer {v}'\n"},
+		{"harmless key then credential", "cfg['api_url']['token'] = '{v}'\n"},
+		{"author token", "row['author_token'] = '{v}'\n"},
 		{"python dict literal", "cfg = {'api_key': '{v}'}\n"},
 		{"js object literal", "const cfg = { apiKey: '{v}' };\n"},
 		{"ruby hash", "cfg = { 'api_key' => '{v}' }\n"},
@@ -61,6 +64,18 @@ func TestRedactSubscriptKeepsCode(t *testing.T) {
 		"cfg['token'] = ''\n",
 		"items['name'] = 'widget-a1'\n",
 		"x = data['api_key']\n",
+		// Keys that contain a credential word without naming one (tester
+		// on #231).
+		"d['keyboard_layout'] = 'us'\n",
+		"row['author'] = 'Jane Doe, 2nd edition'\n",
+		"m['monkey'] = 'banana-split-2000'\n",
+		"data['tokenizer'] = 'bert-base-uncased-v2'\n",
+		"opts['api_version'] = '2023-05-01-preview'\n",
+		"cfg['api_url'] = 'https://api.example.com/v1'\n",
+		"cfg['token_type'] = 'Bearer'\n",
+		"cfg['sort_key'] = 'created_at_2024'\n",
+		// The generic value shape: a short word under a generic key.
+		"headers['X-Api-Key'] = 'changeme'\n",
 	}
 	for _, text := range tests {
 		if out := mustRedact(t, newRedactor(t), text); out != text {
