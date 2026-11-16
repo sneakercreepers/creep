@@ -111,6 +111,30 @@
         "path": "lib/later.py",
         "reason": "run_full"
       }
+    ],
+    "scanners": [
+      {
+        "name": "gitleaks",
+        "status": "not_enabled",
+        "classes": [
+          "hardcoded_secret"
+        ]
+      },
+      {
+        "name": "osv-scanner",
+        "status": "missing",
+        "classes": [
+          "vulnerable_dependency"
+        ]
+      },
+      {
+        "name": "semgrep",
+        "status": "refused",
+        "classes": [
+          "xss",
+          "insecure_deserialization"
+        ]
+      }
     ]
   },
   "data_handling": {

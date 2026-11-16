@@ -63,7 +63,7 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			cal: cal.Result, findings: res.findings, planned: res.planned,
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
-		NotEvaluated: res.gaps, DataHandling: data,
+		NotEvaluated: res.gaps, Scanners: scannerCoverage(s.cfg.Scanners.Enabled), DataHandling: data,
 	})
 }
 
@@ -152,6 +152,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	printFindings(w, rep.Findings)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
+	printScanners(w, rep.Coverage.Scanners)
 	if rep.Run.Incomplete {
 		fmt.Fprintln(w, incompleteMark(rep))
 	}
@@ -204,6 +205,14 @@ func printClasses(w io.Writer, classes []report.ClassCoverage) {
 		parts[i] = fmt.Sprintf("%s %s", c.Class, c.Status)
 	}
 	fmt.Fprintf(w, "coverage: %s\n", strings.Join(parts, ", "))
+}
+
+// printScanners lists each optional scanner and the classes it leaves not
+// evaluated. Names, statuses and classes are IDs report.New checked.
+func printScanners(w io.Writer, scanners []report.ScannerCoverage) {
+	for _, s := range scanners {
+		fmt.Fprintf(w, "scanner %s: %s; not evaluated: %s\n", s.Name, s.Status, strings.Join(s.Classes, ", "))
+	}
 }
 
 func location(f report.Finding) string {

@@ -170,6 +170,9 @@ func TestRunIDCanonicalOnly(t *testing.T) {
 	_ = r.Close()
 	id := r.ID()
 	for _, alias := range []string{id + ".", id + " ", id + "..", strings.ToUpper(id), strings.Replace(id, "T", "t", 1), id + "::$DATA", "x"} {
+		if alias == id {
+			continue // ToUpper is a no-op when the random hex suffix has no letter
+		}
 		if _, err := s.Load(alias); !errors.Is(err, ErrInvalidID) {
 			t.Errorf("Load(%q) err = %v; want ErrInvalidID", alias, err)
 		}

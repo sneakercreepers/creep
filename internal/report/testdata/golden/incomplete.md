@@ -38,6 +38,16 @@ Run `creep why <id>` for the evidence behind a finding.
 | `lib/after.py` | `run full` |
 | `lib/later.py` | `run full` |
 
+## Optional scanners
+
+creep does not run external scanners yet; the classes they would cover were not evaluated through them.
+
+| Scanner | Status | Classes not evaluated |
+|---|---|---|
+| `gitleaks` | `not enabled` | `hardcoded_secret` |
+| `osv-scanner` | `missing` | `vulnerable_dependency` |
+| `semgrep` | `refused` | `xss`, `insecure_deserialization` |
+
 ## Data handling
 
 3 requests, 2050 bytes after redaction, sent to 2 endpoints (from `egress.log`; each payload is in `payloads/`).

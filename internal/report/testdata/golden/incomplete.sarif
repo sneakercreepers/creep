@@ -175,6 +175,33 @@
                   }
                 }
               ]
+            },
+            {
+              "descriptor": {
+                "id": "creep/scanner/not_enabled"
+              },
+              "level": "note",
+              "message": {
+                "text": "optional scanner gitleaks not_enabled; not evaluated: hardcoded_secret"
+              }
+            },
+            {
+              "descriptor": {
+                "id": "creep/scanner/missing"
+              },
+              "level": "note",
+              "message": {
+                "text": "optional scanner osv-scanner missing; not evaluated: vulnerable_dependency"
+              }
+            },
+            {
+              "descriptor": {
+                "id": "creep/scanner/refused"
+              },
+              "level": "note",
+              "message": {
+                "text": "optional scanner semgrep refused; not evaluated: xss, insecure_deserialization"
+              }
             }
           ]
         }
@@ -314,6 +341,30 @@
             {
               "path": "lib/later.py",
               "reason": "run_full"
+            }
+          ],
+          "scanners": [
+            {
+              "name": "gitleaks",
+              "status": "not_enabled",
+              "classes": [
+                "hardcoded_secret"
+              ]
+            },
+            {
+              "name": "osv-scanner",
+              "status": "missing",
+              "classes": [
+                "vulnerable_dependency"
+              ]
+            },
+            {
+              "name": "semgrep",
+              "status": "refused",
+              "classes": [
+                "xss",
+                "insecure_deserialization"
+              ]
             }
           ]
         },

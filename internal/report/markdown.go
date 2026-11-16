@@ -19,6 +19,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
+	writeScanners(bw, r.Coverage.Scanners)
 	writeDataHandling(bw, r.DataHandling)
 	if err := bw.Flush(); err != nil {
 		return fmt.Errorf("write Markdown report: %w", err)
@@ -75,6 +76,18 @@ func writeNotEvaluated(w io.Writer, files []NotEvaluated) {
 	fmt.Fprintf(w, "%d files were not evaluated in full; do not read this report as covering them.\n\n| File | Reason |\n|---|---|\n", len(files))
 	for _, n := range files {
 		fmt.Fprintf(w, "| %s | %s |\n", codeSpan(n.Path), statusText(string(n.Reason)))
+	}
+	fmt.Fprint(w, "\n")
+}
+
+func writeScanners(w io.Writer, scanners []ScannerCoverage) {
+	if len(scanners) == 0 {
+		return
+	}
+	fmt.Fprint(w, "## Optional scanners\n\ncreep does not run external scanners yet; the classes they would cover were not evaluated through them.\n\n")
+	fmt.Fprint(w, "| Scanner | Status | Classes not evaluated |\n|---|---|---|\n")
+	for _, s := range scanners {
+		fmt.Fprintf(w, "| %s | %s | %s |\n", codeSpan(s.Name), statusText(string(s.Status)), codeList(s.Classes))
 	}
 	fmt.Fprint(w, "\n")
 }
