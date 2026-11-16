@@ -27,7 +27,7 @@
 
 `creep scan` runs, in order: **calibration** (measures your model per vulnerability class and picks a tier), **static analysis** (tree-sitter routes, sinks and auth), the **planner** (deterministic ranking, no model call), the **reader** (the model reads redacted code slices and answers in a closed schema) and the **report**.
 
-**Guarantees** (fixed; no config key can turn them off):
+**Guarantees** (fixed; no config key can turn them off — except that the `codex` and `gemini` presets can read host files outside redaction, `egress.log` and `egress.allow`; see Limits):
 
 - **Redaction through the gateway.** Every model call goes through one package that redacts secrets from the whole file before fragmenting it, checks consent and the token budget, and only then sends.
 - **`egress.log`.** Every request is written and fsynced before a byte is sent, then its result, with a payload file (mode `0600`).
