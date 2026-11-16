@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,18 +108,14 @@ func fakeDeps(m *fakeModel, tier calibrate.Tier) scanDeps {
 
 // scanRepo makes a repository in a temporary directory, changes into it,
 // and returns the path of a model config outside it. files maps names to
-// contents; "@flask" copies the vulnerable Flask test app.
+// contents; "@flask" or "@express" copies that vulnerable test app.
 func scanRepo(t *testing.T, files map[string]string, extraConfig string) string {
 	t.Helper()
 	isolateUserConfig(t)
 	repo := t.TempDir()
 	for name, content := range files {
-		if content == "@flask" {
-			data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "apps", "flask", "vulnerable", "app.py"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			content = string(data)
+		if app, ok := strings.CutPrefix(content, "@"); ok {
+			content = testApp(t, app)
 		}
 		path := filepath.Join(repo, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -136,6 +133,22 @@ func scanRepo(t *testing.T, files map[string]string, extraConfig string) string 
 	}
 	t.Chdir(repo)
 	return cfg
+}
+
+// testApp reads the vulnerable variant of a testdata app ("flask",
+// "express"); each holds one source file.
+func testApp(t *testing.T, app string) string {
+	t.Helper()
+	dir := filepath.Join("..", "..", "testdata", "apps", app, "vulnerable")
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("testdata app %s: %v, %d files", app, err, len(entries))
+	}
+	data, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 // runScanWith runs the CLI with deps and returns its result.

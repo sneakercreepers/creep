@@ -71,7 +71,7 @@ func TestScanExitCodes(t *testing.T) {
 		{"inconclusive answer", flask, "", calibrate.TierM, map[string]string{"ssrf": "inconclusive"}, nil, exitcode.Incomplete, "inconclusive"},
 		{"invalid answer", flask, "", calibrate.TierM, map[string]string{"ssrf": "invalid"}, nil, exitcode.Incomplete, "invalid_output"},
 		{"partial slice not vulnerable", map[string]string{"app.py": longHandler()}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "partial_slice"},
-		{"unsupported language", map[string]string{"app.py": "@flask", "web/app.js": "x()\n"}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "unsupported_language"},
+		{"unsupported language", map[string]string{"app.py": "@flask", "legacy/main.go": "package main\n"}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "unsupported_language"},
 		{"syntax error", map[string]string{"app.py": "@flask", "broken.py": "def f(:\n"}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "syntax_error"},
 		{"vendor listed by design", map[string]string{"app.py": "@flask", "vendor/lib.py": "import os\n"}, "", calibrate.TierM, nil, nil, exitcode.OK, ""},
 	}
@@ -210,10 +210,47 @@ func TestScanListsUngrammaredSource(t *testing.T) {
 	}
 }
 
+// #201 put Express in static: JavaScript is scanned, not listed as
+// unsupported. Its NoSQL sinks wait for planner and reader support (#212),
+// so they are listed as not evaluated (unmapped_kind) and the run exits 4,
+// even with the shell finding over the gate.
+func TestScanExpressApp(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.js": "@express"}, "")
+	m := &fakeModel{verdict: map[string]string{"command_injection": "vulnerable"}}
+	code, out, errOut := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--config", cfg)
+	if code != exitcode.Incomplete || !strings.Contains(out, "INCOMPLETE RUN (reason unmapped_kind)") {
+		t.Fatalf("exit %d\n%s\n%s", code, out, errOut)
+	}
+	if strings.Contains(out, "unsupported_language") || !strings.Contains(out, "probable  command_injection  app.js:52") {
+		t.Fatalf("Express app not scanned:\n%s", out)
+	}
+	rep, err := readLastReport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	nosql := 0
+	for _, f := range rep.Findings {
+		if f.Class == "nosql_injection" {
+			nosql++
+			if f.Status != "not_evaluated" || f.Reason != reasonUnmappedKind {
+				t.Errorf("NoSQL finding %+v, want not evaluated (unmapped_kind)", f)
+			}
+		}
+	}
+	if nosql != 2 || m.calls == 0 {
+		t.Fatalf("%d NoSQL findings, %d model calls", nosql, m.calls)
+	}
+	for _, c := range rep.Coverage.Classes {
+		if c.Class == "nosql_injection" && c.Status != "not_evaluated" {
+			t.Errorf("nosql_injection coverage %s, want not_evaluated", c.Status)
+		}
+	}
+}
+
 // With --format json the report itself goes to stdout and the incomplete
 // mark to stderr, so a redirected report never hides it.
 func TestScanFormatJSONMarksStderr(t *testing.T) {
-	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "web/app.js": "x()\n"}, "")
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "legacy/main.go": "package main\n"}, "")
 	code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--format", "json", "--config", cfg)
 	if code != exitcode.Incomplete || !strings.Contains(errOut, "INCOMPLETE RUN (reason unsupported_language)") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)

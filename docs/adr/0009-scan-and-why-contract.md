@@ -1,6 +1,6 @@
 # ADR 0009: `creep scan` and `creep why` contract, report v1 additions
 
-- **Status:** Accepted
+- **Status:** Accepted (maintainer approval on #205)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
@@ -33,9 +33,9 @@ Option B, and the CLI contract below. What decided it: nothing has been released
 **Exit codes** follow ADR 0007. Before a report exists: 2 for usage, configuration, consent and local errors; 3 for a failed calibration call. After it: `exitcode.ForReport`. The run is **incomplete** (exit 4) when anything that could hold a finding was not evaluated in full:
 
 - an early stop: `run_full`, `budget`, `send_failed`, or `planner_rejected` (`planner.ErrInput`; then every class is not evaluated);
-- a sink the planner skipped for `step_cap` or `budget` (the decoy-flooding mitigation from the #199 audit), or a hypothesis the reader could not answer (`file_not_scanned`, `line_out_of_range`, `lines_shifted`, `run_full`, `invalid_output`, `inconclusive`, an unmapped kind or class);
+- a sink the planner skipped for `step_cap` or `budget` (the decoy-flooding mitigation from the #199 audit), a sink of a kind the planner cannot take yet (`unmapped_kind`: Express's `nosql` sinks until #212), or a hypothesis the reader could not answer (`file_not_scanned`, `line_out_of_range`, `lines_shifted`, `run_full`, `invalid_output`, `inconclusive`, an unmapped kind or class);
 - a verdict from a partial slice (`partial_slice`);
-- a file not evaluated in full: `read_failed`, `too_large`, `not_regular`, `invalid_path` (a name static refuses, such as `a:b.py`), `parse_failed`, `syntax_error`, `truncated`, `unsupported_language` (JavaScript and TypeScript until #87, and every file whose extension is in the closed list of source languages with no grammar in `internal/cli/sourceext.go`: Go, PHP, Java, Kotlin, Scala, Ruby, C#, Rust, Elixir, C/C++ and others), and the gateway and reader reasons. Files with any other extension (markup, config, data, shell) are not source and are not listed.
+- a file not evaluated in full: `read_failed`, `too_large`, `not_regular`, `invalid_path` (a name static refuses, such as `a:b.py`), `parse_failed`, `syntax_error`, `truncated`, `unsupported_language` (every file whose extension is in the closed list of source languages with no grammar in `internal/cli/sourceext.go`: Go, PHP, Java, Kotlin, Scala, Ruby, C#, Rust, Elixir, C/C++ and others), and the gateway and reader reasons. Files with any other extension (markup, config, data, shell) are not source and are not listed.
 
 Vendor, generated and minified files (a source file of any listed language under a vendor directory is `vendor`) and tier S's `low_risk` skips are left out by design: they are listed, but do not make the run incomplete. The run's reason is the first of these in that order.
 
@@ -47,7 +47,7 @@ Vendor, generated and minified files (a source file of any listed language under
 
 ## Consequences
 
-- `internal/cli` holds the static→planner and planner→reader mappings as explicit switches; `plannermap_test.go` fails when either side gains a value (#201 adds `static.SinkNoSQL`: whichever PR merges second adds the mapping). An unmapped kind is listed as not evaluated, never planned.
+- `internal/cli` holds the static→planner and planner→reader mappings as explicit switches; `plannermap_test.go` fails when either side gains a value. A static kind with no planner support yet is named in `pendingKinds` with its issue (`static.SinkNoSQL`, #212); its sinks are listed as not evaluated (`unmapped_kind`) and never planned. The scan extracts Python with Flask and FastAPI and JavaScript, TypeScript and TSX with Express (#87).
 - `reader.Signal` gains `Partial`; `reader.CallTokens` gives the planner its per-step cost.
 - From the first release on, report fields change only with a `schema_version` bump, as the schema says.
 - `resume` still fails closed; continuing a run needs per-step resume, a follow-up.

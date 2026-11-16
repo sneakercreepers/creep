@@ -19,6 +19,14 @@ import (
 // errUnmapped means a value has no mapping here; the scan fails closed.
 var errUnmapped = errors.New("no planner mapping")
 
+// pendingKinds are static sink kinds the planner and reader cannot take yet,
+// with the issue that adds them. Their sinks are listed as not evaluated
+// (unmapped_kind) and the run is incomplete. plannermap_test.go fails if one
+// gets a mapping without leaving this list, or if any other kind is unmapped.
+var pendingKinds = map[static.SinkKind]string{
+	static.SinkNoSQL: "#212",
+}
+
 // plannerKind maps a static sink kind. An unmapped kind (a new static kind
 // before the planner learns it) is listed as not evaluated, never planned.
 func plannerKind(k static.SinkKind) (planner.SinkKind, error) {

@@ -25,6 +25,8 @@ func kindClass(k static.SinkKind) string {
 		return string(calibrate.ClassSSRF)
 	case static.SinkTemplate:
 		return classTemplateInjection
+	case static.SinkNoSQL:
+		return string(calibrate.ClassNoSQLInjection)
 	}
 	return k.String()
 }

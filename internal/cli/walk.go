@@ -89,7 +89,8 @@ func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel st
 	if why != 0 {
 		return addIgnored(ex, rel, why)
 	}
-	if lang != static.Python {
+	add, ok := extractorFor(ex, lang)
+	if !ok {
 		return report.SkipUnsupported, true
 	}
 	tree, err := p.Parse(ctx, lang, src)
@@ -99,7 +100,7 @@ func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel st
 	case err != nil:
 		return report.SkipParseFailed, true
 	}
-	err = ex.AddPython(rel, tree, src)
+	err = add(rel, tree, src)
 	switch {
 	case errors.Is(err, static.ErrGraphFull):
 		return report.SkipTruncated, true
@@ -107,6 +108,19 @@ func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel st
 		return report.SkipInvalidPath, true
 	}
 	return partialFile(ex.Graph())
+}
+
+// extractorFor picks the extractor for a grammar: Flask and FastAPI for
+// Python, Express for JavaScript, TypeScript and TSX. A grammar with no
+// extractor is unsupported, never parsed and dropped.
+func extractorFor(ex *static.Extractor, lang static.Language) (func(string, *static.Tree, []byte) error, bool) {
+	switch lang {
+	case static.Python:
+		return ex.AddPython, true
+	case static.JavaScript, static.TypeScript, static.TSX:
+		return ex.AddJavaScript, true
+	}
+	return nil, false
 }
 
 // partialFile reports why the file just added was only partly extracted.
