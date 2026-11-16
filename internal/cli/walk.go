@@ -29,7 +29,7 @@ type repoScan struct {
 // A file static cannot take is listed with its reason and the walk goes on;
 // only a walk or context error stops it.
 func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, error) {
-	ex := static.NewExtractor()
+	ex, proofs := static.NewExtractor(), newVendorProofs(root)
 	var gaps []report.NotEvaluated
 	err := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -43,12 +43,12 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 		}
 		lang, ok := static.LanguageForPath(rel)
 		if !ok {
-			if reason, gap := ungrammaredSource(rel, d); gap {
+			if reason, gap := ungrammaredSource(rel, d, proofs); gap {
 				gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 			}
 			return nil
 		}
-		if reason, gap := addRepoFile(ctx, ex, p, root, rel, lang, d); gap {
+		if reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d); gap {
 			gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 		}
 		return ctx.Err()
@@ -59,16 +59,17 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 	return repoScan{graph: ex.Graph(), locs: ex.Locations(), gaps: gaps}, nil
 }
 
-// addRepoFile reads one source file and hands it to addFile. Vendor files
-// are listed from their path alone, without reading them.
-func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, root *os.Root, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
+// addRepoFile reads one source file and hands it to addFile. A vendor file
+// whose package manager left its mark (vendorProofs) is listed from its
+// path alone, without reading it; any other is read like first-party code.
+func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
 	}
-	if why, err := static.IgnoreReason(rel, nil); err == nil && why == static.IgnoredVendor {
+	if why, err := static.IgnoreReason(rel, nil); err == nil && why == static.IgnoredVendor && proofs.proven(rel) {
 		return addIgnored(ex, rel, why)
 	}
-	src, err := readInRoot(root, rel, static.MaxFileBytes)
+	src, err := readInRoot(proofs.root, rel, static.MaxFileBytes)
 	switch {
 	case errors.Is(err, errFileTooLarge):
 		return report.SkipTooLarge, true
@@ -82,12 +83,8 @@ func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, ro
 // not evaluated in full. A name static refuses (such as a:b.py, which it
 // reads as a drive letter) is listed, never dropped and never fatal.
 func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel string, lang static.Language, src []byte) (report.SkipReason, bool) {
-	why, err := static.IgnoreReason(rel, src)
-	if err != nil {
+	if _, err := static.IgnoreReason(rel, src); err != nil {
 		return report.SkipInvalidPath, true
-	}
-	if why != 0 {
-		return addIgnored(ex, rel, why)
 	}
 	add, ok := extractorFor(ex, lang)
 	if !ok {
@@ -107,7 +104,7 @@ func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel st
 	case err != nil:
 		return report.SkipInvalidPath, true
 	}
-	return partialFile(ex.Graph())
+	return fileOutcome(ex.Graph())
 }
 
 // extractorFor picks the extractor for a grammar: Flask and FastAPI for
@@ -123,10 +120,14 @@ func extractorFor(ex *static.Extractor, lang static.Language) (func(string, *sta
 	return nil, false
 }
 
-// partialFile reports why the file just added was only partly extracted.
-func partialFile(g static.Graph) (report.SkipReason, bool) {
+// fileOutcome reports why the file just added was not evaluated in full:
+// left out (static believed its vendor, generated or minified mark because
+// it holds no route) or only partly extracted.
+func fileOutcome(g static.Graph) (report.SkipReason, bool) {
 	f := g.Files[len(g.Files)-1]
 	switch {
+	case f.Ignored != 0:
+		return ignoredReason(f.Ignored), true
 	case f.Truncated:
 		return report.SkipTruncated, true
 	case f.SyntaxError:
@@ -139,28 +140,29 @@ func addIgnored(ex *static.Extractor, rel string, why static.Ignored) (report.Sk
 	if err := ex.AddIgnored(rel, why); err != nil {
 		return report.SkipInvalidPath, true
 	}
+	return ignoredReason(why), true
+}
+
+func ignoredReason(why static.Ignored) report.SkipReason {
 	switch why {
 	case static.IgnoredVendor:
-		return report.SkipVendor, true
+		return report.SkipVendor
 	case static.IgnoredGenerated:
-		return report.SkipGenerated, true
+		return report.SkipGenerated
 	case static.IgnoredMinified:
-		return report.SkipMinified, true
+		return report.SkipMinified
 	}
-	return report.SkipInvalidPath, true
+	return report.SkipInvalidPath
 }
 
 // byDesign reports a file left out on purpose: listed, but not a gap that
-// makes the run partial. Only what the repository's author cannot simply
-// declare counts (pentest P4, #213): a dependency tree at the root or in
-// node_modules (static.VendorByDesign) and a script whose lines really are
-// minified. A vendor-named directory inside first-party code and a
-// generator header are the author's say-so, so they are gaps.
+// makes the run partial. A vendor, generated or minified mark is believed
+// only with evidence (pentest P4, #213): a vendor file is listed unread only
+// when its package manager's mark exists (vendorProofs); any other is read,
+// and static lists it only when it parsed cleanly and holds no route.
 func byDesign(g report.NotEvaluated) bool {
 	switch g.Reason {
-	case report.SkipVendor:
-		return static.VendorByDesign(g.Path)
-	case report.SkipMinified:
+	case report.SkipVendor, report.SkipGenerated, report.SkipMinified:
 		return true
 	}
 	return false

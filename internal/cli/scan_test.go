@@ -182,7 +182,9 @@ func TestScanListsUngrammaredSource(t *testing.T) {
 			exitcode.Incomplete, []string{"main.go  unsupported_language", "internal/db/q.GO  unsupported_language", "files not evaluated in full: 2"}, 0},
 		{"flask plus php", map[string]string{"app.py": "@flask", "legacy/login.php": "<?php echo 1;\n"},
 			exitcode.Incomplete, []string{"legacy/login.php  unsupported_language", "files not evaluated in full: 1"}, 4},
-		{"vendored go by design", map[string]string{"app.py": "@flask", "vendor/x/y.go": "package y\n", "notes.txt": "x\n"},
+		{"vendor go without modules.txt", map[string]string{"app.py": "@flask", "vendor/x/y.go": "package y\n"},
+			exitcode.Incomplete, []string{"vendor/x/y.go  unsupported_language", "files not evaluated in full: 1"}, 4},
+		{"vendored go by design", map[string]string{"app.py": "@flask", "vendor/modules.txt": "# x\n", "vendor/x/y.go": "package y\n", "notes.txt": "x\n"},
 			exitcode.OK, []string{"vendor/x/y.go  vendor", "files not evaluated in full: 1"}, 4},
 	}
 	for _, tt := range tests {

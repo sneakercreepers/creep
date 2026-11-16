@@ -83,14 +83,17 @@ func (e *Extractor) addSource(path string, tree *Tree, src []byte, extract extra
 	if err != nil {
 		return fmt.Errorf("extract: %w", err)
 	}
-	if why != 0 {
-		return e.AddIgnored(path, why)
-	}
 	routes, truncated := extract(tree.Root, src, e.lim)
 	sinks := 0
 	for _, r := range routes {
 		sinks += len(r.facts.sinks)
 		truncated = truncated || r.facts.truncated || r.facts.partial
+	}
+	// A vendor path, generator header or minified shape is the author's
+	// say-so: it is believed only for a file that parsed cleanly and holds
+	// no route (pentest P4, #213). Anything else is extracted as usual.
+	if why != 0 && len(routes) == 0 && !truncated && !tree.HasError {
+		return e.AddIgnored(path, why)
 	}
 	if !fits(len(e.graph.Files)+1) || !fits(len(e.graph.Routes)+len(routes)) || !fits(len(e.graph.Sinks)+sinks) {
 		return fmt.Errorf("extract %s: %w", path, ErrGraphFull)

@@ -20,9 +20,9 @@ const (
 	IgnoredVendor Ignored = iota + 1
 	// IgnoredGenerated: a comment near the top marks the file as generated.
 	IgnoredGenerated
-	// IgnoredMinified: a JavaScript or TypeScript file whose average line
-	// is longer than minifiedLineBytes. A .min.js name alone does not count:
-	// the name is the author's say-so (pentest P4).
+	// IgnoredMinified: a JavaScript or TypeScript file with nine tenths of
+	// its bytes on lines longer than minifiedLineBytes. A .min.js name
+	// alone does not count: the name is the author's say-so (pentest P4).
 	IgnoredMinified
 )
 
@@ -54,8 +54,8 @@ const (
 	// costs the same on any file and a marker deep in a file (a string in
 	// code) does not count.
 	generatedHeadBytes = 1024
-	// minifiedLineBytes is the average line length past which a script is
-	// treated as minified; hand-written code stays far below it.
+	// minifiedLineBytes is the line length past which a line counts as
+	// minified; hand-written code stays far below it.
 	minifiedLineBytes = 500
 	minifiedMinBytes  = 1024
 )
@@ -101,26 +101,6 @@ func repoRelative(name string) (string, error) {
 
 func inVendorDir(name string) bool {
 	return slices.ContainsFunc(strings.Split(path.Dir(name), "/"), isVendorName)
-}
-
-// VendorByDesign reports whether a vendor file (IgnoredVendor) sits in a
-// real dependency tree that a scan may leave out without a gap: a vendor
-// directory at the repository root (vendor/, .venv/, node_modules/), or
-// node_modules at any depth, which package managers create per package.
-// A vendor-named directory inside first-party code (app/vendor/,
-// src/third_party/) is the author's say-so, not a dependency tree, so the
-// caller counts it as a gap (pentest P4, #213). name is repo-relative; an
-// invalid name is never by design.
-func VendorByDesign(name string) bool {
-	rel, err := repoRelative(name)
-	if err != nil {
-		return false
-	}
-	dirs := strings.Split(path.Dir(rel), "/")
-	if isVendorName(dirs[0]) {
-		return true
-	}
-	return slices.ContainsFunc(dirs, func(d string) bool { return strings.EqualFold(d, "node_modules") })
 }
 
 func isVendorName(dir string) bool {
@@ -189,14 +169,21 @@ func leadingComments(lang Language, src []byte) []string {
 }
 
 // minified applies only to scripts: Python is never minified in practice,
-// so a long Python line is parsed, not skipped.
+// so a long Python line is parsed, not skipped. The whole file must be
+// dense: nine tenths of its bytes on lines longer than minifiedLineBytes, so
+// one long line padding readable code is not enough (pentest P4).
 func minified(name string, src []byte) bool {
 	lang, ok := LanguageForPath(name)
-	if !ok || lang == Python {
+	if !ok || lang == Python || len(src) < minifiedMinBytes {
 		return false
 	}
-	lines := bytes.Count(src, []byte("\n")) + 1
-	return len(src) >= minifiedMinBytes && len(src)/lines > minifiedLineBytes
+	long := 0
+	for line := range bytes.Lines(src) {
+		if len(line) > minifiedLineBytes {
+			long += len(line)
+		}
+	}
+	return long*10 >= len(src)*9
 }
 
 // AddIgnored lists a file that was not evaluated, with the reason, so the
