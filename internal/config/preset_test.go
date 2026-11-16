@@ -79,12 +79,57 @@ func TestPresetRejects(t *testing.T) {
 		{"http contract", Inputs{User: file("u", "model:\n  preset: codex\n  contract: openai\n")}, "needs contract command"},
 		{"ollama without model", Inputs{User: file("u", "model:\n  preset: ollama\n")}, "needs model.name"},
 		{"ollama flag model", Inputs{User: file("u", "model:\n  preset: ollama\n  name: \"--insecure\"\n")}, "needs model.name"},
-		{"policy run lock", Inputs{Policy: file("p", "locked: [model.run]\ndefaults:\n  model:\n    run: llm\n"), User: file("u", "model:\n  preset: codex\n")}, "both choose"},
+		{"policy run lock", Inputs{Policy: file("p", "locked: [model.run]\ndefaults:\n  model:\n    run: llm\n"), User: file("u", "model:\n  preset: codex\n")}, "locked by policy"},
 		{"policy preset lock", Inputs{Policy: file("p", "locked: [model.preset]\ndefaults:\n  model:\n    preset: codex\n"), User: file("u", "model:\n  preset: gemini\n")}, "locked"},
 	}
 	for _, tt := range tests {
 		if _, err := Load(tt.in); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s: err = %v, want %q", tt.name, err, tt.want)
+		}
+	}
+}
+
+// Protection (#7 A1): a policy lock binds even when it pins the default; a
+// user or --config preset that would change a locked key is a config error.
+func TestPresetRespectsPolicyLocks(t *testing.T) {
+	user := file("u", "model:\n  preset: claude-code\n")
+	tests := []struct {
+		name, policy string
+		in           Inputs
+		want         string
+	}{
+		{"locked default run", "locked: [model.run]\n", Inputs{User: user}, "locked by policy"},
+		{"locked run with value", "locked: [model.run]\ndefaults:\n  model:\n    run: llm\n", Inputs{User: user}, "locked by policy"},
+		{"locked default contract", "locked: [model.contract]\n", Inputs{User: user}, `locked to "openai" by policy`},
+		{"locked anthropic contract", "locked: [model.contract]\ndefaults:\n  model:\n    contract: anthropic\n", Inputs{User: user}, `locked to "anthropic"`},
+		{"locked preset", "locked: [model.preset]\n", Inputs{User: user}, "locked by policy"},
+		{"locked run via --config", "locked: [model.run]\n", Inputs{Explicit: file("c", "model:\n  preset: codex\n")}, "locked by policy"},
+		{"locked contract via flag-free policy preset", "locked: [model.contract]\ndefaults:\n  model:\n    preset: codex\n", Inputs{}, "locked to \"openai\""},
+	}
+	for _, tt := range tests {
+		tt.in.Policy = file("org.yaml", tt.policy)
+		if _, err := Load(tt.in); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s: err = %v, want %q", tt.name, err, tt.want)
+		}
+	}
+}
+
+// A contract locked to command allows a preset, and explain keeps showing
+// the policy as the source of the locked key.
+func TestPresetUnderCommandContractLock(t *testing.T) {
+	r, err := Load(Inputs{
+		Policy: file("org.yaml", "locked: [model.contract]\ndefaults:\n  model:\n    contract: command\n"),
+		User:   file("u", "model:\n  preset: claude-code\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range r.Explain() {
+		if e.Key == "model.contract" && e.Source != `policy "org.yaml"` {
+			t.Errorf("model.contract source = %q", e.Source)
+		}
+		if e.Key == "model.run" && !strings.HasPrefix(e.Source, `preset "claude-code"`) {
+			t.Errorf("model.run source = %q", e.Source)
 		}
 	}
 }

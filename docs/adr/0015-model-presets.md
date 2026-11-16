@@ -1,6 +1,6 @@
 # ADR 0015: Model CLI presets as embedded data
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer approval on PR #227, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 
@@ -20,7 +20,7 @@
 
 A. Presets are embedded data in `internal/presets` (layer 0, no internal imports), resolved by `internal/config` after every layer has applied: the preset fills `model.run` (quoted for the gateway's shell-free splitter) and `contract: command`, and `config explain` names the preset as their source. The deciding reason: a preset picks the program that reads scanned code, so it must not come from anywhere the repository can write.
 
-Rules: the schema is closed (unknown or duplicate keys, a second document, a program that is a path, args as a shell string, control characters are errors); `tools_off` lists every argument run that switches tools off and each must appear in `args` (empty only with `no_tools: true`); `model.preset` and `model.contract` cannot be set in the project file; `model.name` cannot come from the project file when the preset passes it to the CLI (`{model}`), and never starts with `-`; a preset next to `model.run` or a non-command contract is an error, never a silent choice. The tool canary still runs on every preset at `creep doctor` and every scan start.
+Rules: the schema is closed (unknown or duplicate keys, a second document, a program that is a path, args as a shell string, control characters are errors); `tools_off` lists every argument run that switches tools off and each must appear in `args` (empty only with `no_tools: true`); `model.preset` and `model.contract` cannot be set in the project file; `model.name` cannot come from the project file when the preset passes it to the CLI (`{model}`), and never starts with `-`; a preset next to `model.run` or a non-command contract is an error, never a silent choice; a policy lock on `model.run`, `model.contract` (unless locked to `command`) or `model.preset` binds even when it pins the default, so a preset that would change the locked key is a config error (exit 2). The tool canary still runs on every preset at `creep doctor` and every scan start.
 
 **Host reads.** The canary sees files written and commands that leave files, never reads. So every preset declares `host_reads: none` (no tool can read outside the empty working directory: `claude-code` with `--tools ""` and no MCP, `ollama run`) or `host_reads: unbounded` with a one-line `host_reads_detail`. `codex` is unbounded: `codex exec` runs shell commands without approval, and `--sandbox read-only` blocks writes and network but not reads, so injected code can make it read `~/.ssh` or `~/.aws` and put the content in a prompt to its provider, past creep's redaction. No codex flag that confines reads to the working directory is documented, so none is set. `gemini` is unbounded: read-only built-in tools (read_file, glob, web fetch, `google_web_search`, which also reaches the web outside creep's gateway) and MCP servers from `~/.gemini/settings.json` may stay enabled in headless mode. `creep doctor` and every scan print an escaped warning for an unbounded preset before the canary runs. This qualifies ADR 0014's "Reading is bounded: the working directory is empty", which holds only for CLIs with no read tools.
 

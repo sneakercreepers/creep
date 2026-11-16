@@ -44,7 +44,23 @@ func (s *state) applyPreset() error {
 	}
 	s.Config.Model.Run, s.Config.Model.Contract = run, "command"
 	from := fmt.Sprintf("preset %q via %s", name, src)
-	s.sources["model.run"], s.sources["model.contract"] = from, from
+	s.sources["model.run"] = from
+	if _, locked := s.locked["model.contract"]; !locked {
+		s.sources["model.contract"] = from
+	}
+	return nil
+}
+
+// checkPresetLocks keeps a policy lock binding when a preset would write the
+// locked key: a lock pins the value even when it is the default, so a preset
+// may not set model.run under any lock, nor change a locked contract.
+func (s *state) checkPresetLocks(p presets.Preset, src string) error {
+	if pol, ok := s.locked["model.run"]; ok {
+		return fmt.Errorf("%s: model.preset %q would set model.run, which is locked by %s", src, p.Name, pol)
+	}
+	if pol, ok := s.locked["model.contract"]; ok && s.Config.Model.Contract != "command" {
+		return fmt.Errorf("%s: model.preset %q would set model.contract to command, but it is locked to %q by %s", src, p.Name, s.Config.Model.Contract, pol)
+	}
 	return nil
 }
 
@@ -52,6 +68,9 @@ func (s *state) applyPreset() error {
 // non-command contract, or a model name from the scanned repository when
 // that name becomes an argument of the CLI.
 func (s *state) checkPresetConflicts(p presets.Preset, src string) error {
+	if err := s.checkPresetLocks(p, src); err != nil {
+		return err
+	}
 	if runSrc := s.sources["model.run"]; runSrc != "default" {
 		return fmt.Errorf("%s: model.preset %q and model.run (set by %s) both choose the model command; keep one", src, p.Name, runSrc)
 	}

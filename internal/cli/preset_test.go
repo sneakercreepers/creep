@@ -129,6 +129,21 @@ func TestScanWarnsWhenPresetReadsHost(t *testing.T) {
 	}
 }
 
+// Protection (#7 A1): a preset under a policy lock on model.run is a config
+// error (exit 2) before any program starts.
+func TestPolicyLockStopsPreset(t *testing.T) {
+	cfg := presetDoctor(t, "claude", "claude-code", "answer")
+	policy := filepath.Join(t.TempDir(), "org.yaml")
+	if err := os.WriteFile(policy, []byte("locked: [model.run]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(policyEnv, policy)
+	code, _, stderr := runScanWith(commandDeps(), "--config", cfg, "doctor")
+	if code != exitcode.ConfigError || !strings.Contains(stderr, "which is locked by policy") {
+		t.Errorf("exit %d, stderr %s", code, stderr)
+	}
+}
+
 // Protection (#7, #62-style): a scanned repository's creep.yaml cannot pick
 // a preset, even one that exists.
 func TestProjectFileCannotSelectPreset(t *testing.T) {
