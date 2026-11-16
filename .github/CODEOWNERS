@@ -17,7 +17,6 @@ prompts/                 @Ludocius
 /.github/rulesets/       @Ludocius
 /.github/settings/       @Ludocius
 /.goreleaser.yaml        @Ludocius
-/.github/actions/        @Ludocius
 /.github/scripts/        @Ludocius
 /.github/release.yml     @Ludocius
 
