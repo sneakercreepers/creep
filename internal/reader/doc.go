@@ -68,6 +68,25 @@
 // its first body line; and it over-approximates, since an assignment never
 // stops a name from being tracked.
 //
-// Calling the model per hypothesis (#13) is not here yet; it must send
-// Slice.Text through the gateway with Slice.Redactions.
+// Evaluate (evaluate.go) asks the model about one slice: the tier's system
+// prompt, Slice.Text as the user turn and Slice.Redactions for egress.log,
+// sent with models.Complete through the caller's client (the gateway in
+// production), then Project. Any answer that fails the schema, Validate or
+// Project is an error, never a verdict.
+//
+// Replay fixtures (#95): testdata/replay/<app>/cache holds one recorded
+// reply per hypothesis on each testdata/apps app, in the internal/state
+// cache format, keyed by the SHA-256 of the exact request body. replay_test.go
+// runs every app's vulnerable and safe variants through Slicer.Build and
+// Evaluate from those recordings, with no network and no key, and checks
+// the verdicts expected.json implies: vulnerable citing the sink line on the
+// vulnerable variant, not_vulnerable on the safe twin. The replies are
+// synthesized from expected.json, not recorded from a live model, so they
+// pin the reader path (slicing, prompt, request, decoding, projection), not
+// a model's judgement. They are signed with a fixed public test secret, so a
+// real run, which uses the user's own secret, never serves them. A missing,
+// torn, edited, foreign or stale recording fails the test (replay_fail_test.go).
+// After changing a prompt, the schema, slicing or an app, regenerate them:
+//
+//	go test ./internal/reader -run TestAppsReplay -update
 package reader
