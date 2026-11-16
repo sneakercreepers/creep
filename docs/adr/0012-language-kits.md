@@ -1,6 +1,6 @@
 # ADR 0012: Language kits as data
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer approval on #220, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** `internal/static` internals (engine plus kits), the language-kit contract (architecture §4, §5), a new `creep kit test` command
@@ -138,5 +138,4 @@ Recipes add source, sink and hint records to an existing kit. They may append `s
 - No new dependency: YAML uses ADR 0001's parser, RE2 is `regexp`, and embedding uses `embed`.
 - `docs/threat-model.md` gains kit entries with the implementation: a kit planted in the scanned repository (TB1) and a tampered embedded kit (S3).
 - New fitness functions, added to architecture §9 with the implementation: a hostile kit cannot put text into the `Graph`; a kit with `semantics: none` and hostile `auth.scm` captures never sets `Route.Auth`; a planted `kits/` directory in the scan root is ignored; kit and per-file limits hold, with benchmarks; unresolved captures fail closed; every embedded kit passes `creep kit test`; kit IDs are append-only.
-- On approval, the implementation follows as sub-issues of #217: engine and matcher, Flask, FastAPI, Express, `creep kit test` plus the demo kit, and docs (a "write a kit" guide, architecture §3, §5 and §9). Each goes through the full agent loop.
-- If the maintainer rejects this, #217 falls back to option A and the design's "Costly" rating stands.
+- The implementation follows as sub-issues of #217: engine and matcher, Flask, FastAPI, Express, `creep kit test` plus the demo kit, and docs (a "write a kit" guide, architecture §3, §5 and §9). Each goes through the full agent loop.
