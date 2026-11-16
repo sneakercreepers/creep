@@ -42,9 +42,10 @@ func (d scanDeps) scannerRunner() func(context.Context, scanrun.Job) scanrun.Res
 
 // modelLink is the model transport of one run.
 type modelLink struct {
-	send   models.SendFunc
-	egress string // egress.log path for the data-handling section; "" if none
-	close  func() error
+	send    models.SendFunc
+	command *gateway.Command // the model CLI for contract command; nil for HTTP
+	egress  string           // egress.log path for the data-handling section; "" if none
+	close   func() error
 }
 
 func productionDeps() scanDeps {
@@ -53,8 +54,16 @@ func productionDeps() scanDeps {
 
 // connectGateway is the only production transport: consent, budget,
 // write-ahead egress.log and the allowlisted client, in the run directory.
+// A command model runs through the same log with gateway.EgressLog.Exec.
 func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error) {
 	cfg := r.Config
+	var cmd *gateway.Command
+	if cfg.Model.Contract == "command" {
+		var err error
+		if cmd, err = newModelCommand(cfg.Model, os.Getenv); err != nil {
+			return modelLink{}, err
+		}
+	}
 	consent, err := gateway.NewConsent(gateway.ConsentOptions{
 		CI: config.InCI(os.Getenv), Policy: r.PolicyConsent(),
 		StorePath: userFile("consent.json"), Prompt: gateway.TerminalPrompt(os.Stdin, stderr),
@@ -70,13 +79,17 @@ func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelL
 	if err != nil {
 		return modelLink{}, err
 	}
+	egress := filepath.Join(runDir, "egress.log")
+	if cmd != nil {
+		return modelLink{send: models.ThroughCommand(log, cmd), command: cmd, egress: egress, close: log.Close}, nil
+	}
 	client, err := gateway.NewClient(gateway.Options{Allow: cfg.Egress.Allow})
 	if err != nil {
 		_ = log.Close()
 		return modelLink{}, err
 	}
 	closeAll := func() error { client.CloseIdleConnections(); return log.Close() }
-	return modelLink{send: models.Through(log, client), egress: filepath.Join(runDir, "egress.log"), close: closeAll}, nil
+	return modelLink{send: models.Through(log, client), egress: egress, close: closeAll}, nil
 }
 
 // userFile is a file in the user's creep config directory, or "" (keep

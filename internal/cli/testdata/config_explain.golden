@@ -3,6 +3,10 @@ model.contract          "openai"                          default
 model.endpoint          "https://models.corp.example/v1"  policy "policy.yaml"
 model.name              "local-model"                     user "~/.creep/config.yaml"
 model.tier              "large"                           user "~/.creep/config.yaml"
+model.run               ""                                default
+model.env               []                                default
+model.timeout_seconds   300                               default
+model.max_output_bytes  1048576                           default
 egress.allow            []                                default
 gates.pr                "probable:medium"                 project "creep.yaml"
 gates.nightly           "verified:high"                   default

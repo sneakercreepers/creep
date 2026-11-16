@@ -22,8 +22,9 @@ type globalOptions struct {
 	logLevel   string
 	format     string
 	configPath string
-	record     bool // state.ModeRecord: call every model and overwrite recordings
-	replay     bool // state.ModeReplay: serve recordings only, never the network
+	modelRun   string // --model-run: model.run, the CLI of contract command
+	record     bool   // state.ModeRecord: call every model and overwrite recordings
+	replay     bool   // state.ModeReplay: serve recordings only, never the network
 	// recalibrate is calibrate.CacheOptions.Recalibrate: ignore a cached
 	// calibration and measure the model again (used by scan, #14).
 	recalibrate bool
@@ -50,6 +51,9 @@ func configFlags(opts globalOptions) []config.Flag {
 	if opts.explicit["format"] {
 		flags = append(flags, config.Flag{Name: "--format", Key: "output.format", Value: opts.format})
 	}
+	if opts.explicit["model-run"] {
+		flags = append(flags, config.Flag{Name: "--model-run", Key: "model.run", Value: opts.modelRun})
+	}
 	if opts.explicit["log-level"] {
 		flags = append(flags, config.Flag{Name: "--log-level", Key: "log.level", Value: opts.logLevel})
 	}
@@ -65,6 +69,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.logLevel, "log-level", opts.logLevel, "")
 	fs.StringVar(&opts.format, "format", opts.format, "")
 	fs.StringVar(&opts.configPath, "config", opts.configPath, "")
+	fs.StringVar(&opts.modelRun, "model-run", opts.modelRun, "")
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
 	fs.BoolVar(&opts.recalibrate, "recalibrate", opts.recalibrate, "")

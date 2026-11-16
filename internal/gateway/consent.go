@@ -69,7 +69,8 @@ type Consent struct {
 
 // NewConsent validates the policy entries. Each is an origin URL such as
 // "https://api.example.com" or "https://10.0.0.5:8443", with no path,
-// userinfo, query or fragment.
+// userinfo, query or fragment, or a command endpoint such as
+// "command://claude-0123456789abcdef" (creep doctor prints it).
 func NewConsent(opts ConsentOptions) (*Consent, error) {
 	c := &Consent{
 		ci:      opts.CI,
@@ -96,6 +97,11 @@ func (c *Consent) check(endpoint *url.URL) error {
 	if err != nil {
 		return &ConsentError{Endpoint: "(invalid endpoint)", CI: c.ci, Err: err}
 	}
+	return c.checkKey(key)
+}
+
+// checkKey is check for a normalized origin or a command endpoint.
+func (c *Consent) checkKey(key string) error {
 	if c.policy[key] {
 		return nil
 	}
@@ -158,8 +164,11 @@ func (c *Consent) ask(key string) bool {
 
 // parseOrigin accepts scheme://host[:port] with an optional trailing "/"
 // and returns it normalized like the allowlist: lowercase host, canonical
-// IP, explicit port.
+// IP, explicit port. A command endpoint (Command.Endpoint) is kept as is.
 func parseOrigin(s string) (string, error) {
+	if isCommandKey(s) {
+		return s, nil
+	}
 	u, err := url.Parse(s)
 	if err != nil {
 		return "", fmt.Errorf("%w: not a URL", ErrInvalidHost)

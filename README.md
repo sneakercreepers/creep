@@ -72,7 +72,7 @@ make build   # binary in ./bin/creep
 
 ```sh
 creep init     # detects your stack and an available model, writes creep.yaml
-creep doctor   # checks model, config and (optional) Docker before anything fails
+creep doctor   # checks the model (tool canary for a CLI) before anything is sent
 creep estimate .   # calls, tokens, time and cost of a scan, with no model call
 creep scan .   # static analysis + model triage + coverage report
 creep why sink-3   # the evidence behind one finding of the last scan
@@ -99,17 +99,21 @@ creep scan --diff origin/main --sarif out.sarif
 model: ollama/qwen3:8b
 ```
 
-**Command contract** — any CLI that reads a prompt on stdin and prints JSON. Uses your own subscription quota:
+**Command contract** — any CLI that reads a prompt on stdin and prints only the JSON object on stdout. Uses your own subscription quota:
 
 ```yaml
-# creep.yaml
+# ~/.creep/config.yaml (or --config, CREEP_POLICY, --model-run); never the repository's creep.yaml
 model:
-  type: command
-  run: claude -p --tools "" --strict-mcp-config --output-format json
+  contract: command
+  run: claude -p --tools "" --strict-mcp-config --output-format text
+  env: [ANTHROPIC_API_KEY]   # the only variables passed on, besides PATH, HOME and locale
+  timeout_seconds: 300
 ```
 
+The command line is split without a shell, the CLI runs in an empty temp directory, and every prompt still goes through redaction, consent and `egress.log` ([ADR 0014](docs/adr/0014-command-model-through-gateway.md)).
+
 > [!IMPORTANT]
-> The model reads untrusted code, so it must not have tools. `creep` sends a **tool canary** (a trap prompt) before every scan and refuses to run if the CLI can execute commands or write files.
+> The model reads untrusted code, so it must not have tools. `creep doctor` and every scan send a **tool canary** (a trap prompt) first and refuse to run (exit 3) if the CLI writes a file or runs a command, naming the flag to fix.
 
 ## Privacy
 

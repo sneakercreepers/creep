@@ -82,8 +82,13 @@ func leafSchema(f reflect.StructField, def any, key string) map[string]any {
 	if key == "gates.pr" || key == "gates.nightly" {
 		s["pattern"] = gatePattern()
 	}
-	if key == "calibration.cache_days" {
+	switch key {
+	case "calibration.cache_days":
 		s["minimum"], s["maximum"] = minCacheDays, maxCacheDays
+	case "model.timeout_seconds":
+		s["minimum"], s["maximum"] = minTimeoutSeconds, maxTimeoutSeconds
+	case "model.max_output_bytes":
+		s["minimum"], s["maximum"] = minOutputBytes, maxOutputBytes
 	}
 	return s
 }

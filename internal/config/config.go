@@ -17,10 +17,14 @@ type Config struct {
 }
 
 type Model struct {
-	Contract string `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command."`
-	Endpoint string `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
-	Name     string `yaml:"name" desc:"Model name sent to the endpoint."`
-	Tier     string `yaml:"tier" desc:"Model tier; selects the prompt variant."`
+	Contract       string   `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command."`
+	Endpoint       string   `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
+	Name           string   `yaml:"name" desc:"Model name sent to the endpoint."`
+	Tier           string   `yaml:"tier" desc:"Model tier; selects the prompt variant."`
+	Run            string   `yaml:"run" desc:"Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file."`
+	Env            []string `yaml:"env" desc:"Names of extra environment variables passed to the model command (the rest of the environment is not). Cannot be set in the project file."`
+	TimeoutSeconds int      `yaml:"timeout_seconds" desc:"Seconds one model command call may run before it is killed."`
+	MaxOutputBytes int      `yaml:"max_output_bytes" desc:"Largest stdout a model command call may print."`
 }
 
 type Egress struct {
@@ -64,8 +68,12 @@ type Log struct {
 
 // Value ranges for integer keys.
 const (
-	minCacheDays = 1
-	maxCacheDays = 365
+	minCacheDays      = 1
+	maxCacheDays      = 365
+	minTimeoutSeconds = 1
+	maxTimeoutSeconds = 3600
+	minOutputBytes    = 1 << 10
+	maxOutputBytes    = 8 << 20
 )
 
 // enums lists the allowed values of each enumerated key; for list keys it
@@ -82,8 +90,12 @@ var enums = map[string][]string{
 
 // projectForbidden keys decide where scanned code is sent; a hostile repo
 // could otherwise point them at itself through its creep.yaml.
+// model.run and model.env pick the program that receives the code and the
+// secrets it gets.
 var projectForbidden = map[string]bool{
 	"model.endpoint": true,
+	"model.run":      true,
+	"model.env":      true,
 	"egress.allow":   true,
 }
 
@@ -96,7 +108,7 @@ func Enum(key string) []string {
 // calibration cache, sandbox off until v0.2).
 func Defaults() Config {
 	return Config{
-		Model:       Model{Contract: "openai", Tier: "medium"},
+		Model:       Model{Contract: "openai", Tier: "medium", Env: []string{}, TimeoutSeconds: 300, MaxOutputBytes: 1 << 20},
 		Gates:       Gates{PR: "probable:critical", Nightly: "verified:high"},
 		Budget:      Budget{MaxTokens: 2_000_000, MaxCalls: 500},
 		Report:      Report{Formats: []string{"json", "markdown", "sarif"}},

@@ -55,12 +55,13 @@ func Through(log *gateway.EgressLog, client *gateway.Client) SendFunc {
 // Options configures NewHTTP. Contract, Endpoint and Model come from the
 // resolved config (model.contract, model.endpoint, model.name).
 type Options struct {
-	Contract string // "openai" or "anthropic"
+	Contract string // "openai", "anthropic" or "command"
 	// Endpoint is the API base URL as the providers' SDKs take it:
 	// "https://api.openai.com/v1" or "http://localhost:11434/v1" for
 	// OpenAI-compatible APIs (/chat/completions is appended),
 	// "https://api.anthropic.com" for Anthropic (/v1/messages is appended).
-	// It may not carry userinfo, a query or a fragment.
+	// It may not carry userinfo, a query or a fragment. For "command" it is
+	// gateway.Command.Endpoint and Send is ThroughCommand.
 	Endpoint        string
 	Model           string
 	Key             Key        // KeyFromEnv; zero sends no credentials
@@ -90,7 +91,7 @@ func NewHTTP(opts Options) (*HTTP, error) {
 	if err != nil {
 		return nil, err
 	}
-	url, err := endpointURL(opts.Endpoint, w.path())
+	url, err := modelURL(opts, w.path())
 	if err != nil {
 		return nil, err
 	}
@@ -124,13 +125,31 @@ func wireFor(contract string, s Structured) (wire, error) {
 		w = openAI{}
 	case "anthropic":
 		w = anthropic{}
+	case "command":
+		w = commandWire{}
 	default:
-		return nil, fmt.Errorf("%w: contract must be openai or anthropic", ErrOptions)
+		return nil, fmt.Errorf("%w: contract must be openai, anthropic or command", ErrOptions)
 	}
 	if !w.supports(s) {
 		return nil, fmt.Errorf("%w: contract %s does not support structured output %q", ErrOptions, contract, s)
 	}
 	return w, nil
+}
+
+// modelURL is the URL calls are sent to. For the command contract it is
+// the gateway.Command's endpoint, which takes no API key: a CLI gets its
+// credentials only through declared env names.
+func modelURL(opts Options, path string) (string, error) {
+	if opts.Contract != "command" {
+		return endpointURL(opts.Endpoint, path)
+	}
+	if !strings.HasPrefix(opts.Endpoint, "command://") || hasControlOrSpace(opts.Endpoint) {
+		return "", fmt.Errorf("%w: command contract needs the gateway command's endpoint", ErrOptions)
+	}
+	if !opts.Key.IsZero() {
+		return "", fmt.Errorf("%w: command contract takes no API key; pass one to the CLI with model.env", ErrOptions)
+	}
+	return opts.Endpoint, nil
 }
 
 // endpointURL appends path to an http(s) base URL. The gateway parses and

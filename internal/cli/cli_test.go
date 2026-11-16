@@ -50,7 +50,7 @@ func TestRun(t *testing.T) {
 		{"config is dir", []string{"--config", dir, "version"}, exitcode.ConfigError, nil, []string{"is a directory"}},
 		{"unknown command flag", []string{"doctor", "--bogus"}, exitcode.ConfigError, nil, []string{"bogus", "creep doctor"}},
 		{"init stub", []string{"init"}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
-		{"doctor stub", []string{"doctor"}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
+		{"doctor without a model fails closed", []string{"doctor"}, exitcode.ConfigError, nil, []string{"creep doctor: ", "model.endpoint"}},
 		{"scan without a model fails closed", []string{"scan", "."}, exitcode.ConfigError, nil, []string{"creep scan: "}},
 		{"config without subcommand", []string{"config"}, exitcode.ConfigError, nil, []string{"missing subcommand"}},
 		{"config unknown subcommand", []string{"config", "show"}, exitcode.ConfigError, nil, []string{`unknown subcommand "show"`}},
@@ -152,7 +152,7 @@ func TestStubsFailClosed(t *testing.T) {
 		if c.name == "resume" { // checks its run first; TestResumeFailsClosed covers it
 			continue
 		}
-		if c.name == "scan" || c.name == "why" || c.name == "estimate" { // built; their own tests cover their failures
+		if c.name == "scan" || c.name == "why" || c.name == "estimate" || c.name == "doctor" { // built; their own tests cover their failures
 			continue
 		}
 		t.Run(c.name, func(t *testing.T) {
@@ -167,7 +167,7 @@ func TestStubsFailClosed(t *testing.T) {
 
 func TestHelpMarksUnimplementedCommands(t *testing.T) {
 	_, stdout, _ := run("--help")
-	for _, name := range []string{"init", "doctor"} {
+	for _, name := range []string{"init"} {
 		c, _ := findCommand(name)
 		assertContains(t, "usage", stdout, []string{c.name + " ", c.summary, "(not implemented yet)"})
 	}

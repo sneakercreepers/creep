@@ -101,9 +101,29 @@
           "description": "Base URL of the model API (http:// or https://). Cannot be set in the project file.",
           "type": "string"
         },
+        "env": {
+          "default": [],
+          "description": "Names of extra environment variables passed to the model command (the rest of the environment is not). Cannot be set in the project file.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_output_bytes": {
+          "default": 1048576,
+          "description": "Largest stdout a model command call may print.",
+          "maximum": 8388608,
+          "minimum": 1024,
+          "type": "integer"
+        },
         "name": {
           "default": "",
           "description": "Model name sent to the endpoint.",
+          "type": "string"
+        },
+        "run": {
+          "default": "",
+          "description": "Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file.",
           "type": "string"
         },
         "tier": {
@@ -115,6 +135,13 @@
             "large"
           ],
           "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 300,
+          "description": "Seconds one model command call may run before it is killed.",
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "type": "object"

@@ -1,4 +1,4 @@
-// Package gateway is the only code in creep that may touch the network.
+// Package gateway is the only code in creep that may touch the network or start a model CLI.
 //
 // It exists so that every byte leaving the machine passes one reviewable
 // choke point (AGENTS.md invariants 1, 2 and 5):
@@ -121,4 +121,23 @@
 //     on 429 or 5xx. Waiting for a slot ends with ctx and returns the
 //     reservation. The limit only bounds callers; the gateway starts no
 //     goroutines of its own.
+//
+// A command model (a CLI such as claude -p, prompt on stdin, JSON on stdout)
+// is the other egress path, and it lives here for the same reason
+// (ADR 0014). NewCommand returns an opaque *Command; the only way to run it
+// is EgressLog.Exec, with Send's order: consent and budget keyed on
+// Command.Endpoint ("command://<program>-<hash>"), payload file and request
+// line written and synced, then the run, then the result line (outcomes
+// add tool_use, timeout and command_failed). The command line is split
+// without a shell and refuses shell syntax; the program comes from an
+// absolute PATH entry or an absolute path whose final path (links,
+// junctions and \\?\ resolved) is outside the repository and the current
+// directory by file identity; device and UNC paths are refused. Each run
+// gets only the base and declared environment variables, an empty temp
+// working directory and its own TMPDIR, a timeout and a stdout cap; stderr
+// is discarded. On Unix the CLI's whole process group is killed after it
+// exits or times out, before the working directory is checked; Windows
+// kills only the CLI (no job object without x/sys or unsafe). Anything
+// left in the working directory means the CLI used a tool: the reply is
+// dropped with a *ToolUseError.
 package gateway
