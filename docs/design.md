@@ -38,7 +38,7 @@ No provider-specific code in the core. Presets are embedded data in `internal/pr
 - Model output never runs on the host.
 - Sandbox has no internet access (v0.2; there is no sandbox yet).
 - Only targets built from local source; no `--url`.
-- Secrets always redacted; `egress.log` always on.
+- Secrets always redacted before the gateway sends code; `egress.log` always on. Exception: the `codex` and `gemini` presets can read host files the model asks for, outside redaction (`host_reads`, ADR 0015, #229); creep warns at `doctor` and scan start.
 - The planner never reads code.
 - The project file (`./creep.yaml`) never loosens a CI gate, grants consent, chooses the model command (`model.contract`, `model.run`, `model.env`, `model.preset`) or enables a scanner.
 
@@ -79,4 +79,4 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Recorded model replies for tests | Reader fixtures are synthesized from `expected.json`; no real-model recording or public bench yet (#204, #35) | Moved (bench in v0.3) | Unproven: quality with a real small model is not measured yet |
 | ~3 dependencies (YAML, wazero, JSON Schema) | 2; no schema validator in the binary | Changed (smaller) | Kept |
 | Privacy modes, `creep clean`, `init` | Not built; redacted mode always on | Moved to v0.2 or later | Kept |
-| Security follow-ups from reviews | 53 follow-ups moved to v0.2, including redaction and config fixes (#62, #63, #70, #102) | Moved by maintainer decision (2026-11-16) | Kept for v0.1; #70 narrows redaction |
+| Security follow-ups from reviews | Review follow-ups moved to v0.2, including redaction and config fixes (#62, #63, #70, #102) | Moved by maintainer decision (2026-11-16) | Kept for v0.1; #70 narrows redaction |
