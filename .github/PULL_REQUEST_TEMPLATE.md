@@ -21,7 +21,7 @@ Closes #
 
 ## Security-sensitive changes
 
-<!-- Required if this PR touches internal/gateway, redact, egress, sandbox, planner, prompts/ or .github/workflows. Delete otherwise. -->
+<!-- Required if this PR touches internal/gateway (egress.log included), redact, models, reader, static, planner, sandbox, prompts/ or .github/workflows. Delete otherwise. -->
 
 - [ ] Secrets and PII still never reach the gateway unredacted
 - [ ] The planner still receives only IDs, enums and booleans

@@ -31,6 +31,10 @@ We publish a GitHub Security Advisory and request a CVE for confirmed vulnerabil
 
 Before v1.0, only the latest minor release is supported.
 
+## Threat model
+
+[docs/threat-model.md](docs/threat-model.md) lists what creep protects, its trust boundaries, the attackers it expects (malicious repository, malicious model, network attacker, malicious recipe, local user, malicious contributor) and the control and test behind each mitigation. A report that breaks one of those mitigations is in scope.
+
 ## In scope
 
 - Secrets or code leaving the machine despite redaction or `local-only` mode
