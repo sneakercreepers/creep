@@ -17,7 +17,7 @@ EXE := .exe
 endif
 BIN := bin/creep$(EXE)
 
-.PHONY: build test check fmt-check tidy vet budget rulesets clean
+.PHONY: build test check fmt-check tidy vet budget map map-check rulesets clean
 
 # VERSION and COMMIT reach the recipe through the environment, never as shell
 # text, and are filtered to SAFE_CHARS before use.
@@ -31,7 +31,7 @@ build:
 test:
 	go test -timeout $(TEST_TIMEOUT) $(PKG)
 
-check: fmt-check tidy vet budget
+check: fmt-check tidy vet budget map-check
 	@# -race needs cgo; Go disables cgo when no C compiler is found (common on Windows).
 	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
 		echo "go test -race -timeout $(TEST_TIMEOUT) ./..."; go test -race -timeout $(TEST_TIMEOUT) ./...; \
@@ -55,6 +55,14 @@ vet:
 # workflow pinning, agent-loop policy phrases.
 budget:
 	go run ./internal/tools/budget
+
+# docs/map.md: every package with its doc.go first sentence and its layer.
+map:
+	go run ./internal/tools/pkgmap
+
+# Fails when docs/map.md differs from what make map would write.
+map-check:
+	go run ./internal/tools/pkgmap -check
 
 # Creates or updates each ruleset in .github/rulesets (file name = ruleset name),
 # then applies .github/settings, so re-running after a reviewed change is safe.

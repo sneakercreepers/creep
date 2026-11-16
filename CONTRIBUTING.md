@@ -11,25 +11,30 @@ Thanks for helping. The most valuable contributions are often not code:
 
 1. Look for an existing issue. If none exists, open one before writing code that is larger than a typo fix.
 2. Changes that add a dependency, change a public contract (CLI flags, exit codes, JSON/SARIF output, config keys) or touch security-sensitive areas need an [ADR](docs/adr/0000-template.md) first.
-3. Security-sensitive areas: `internal/gateway`, `internal/redact`, `internal/egress`, `internal/sandbox`, `internal/planner`. PRs touching them get the `security-sensitive` label and require the threat-model checklist.
+3. Security-sensitive areas: `internal/gateway` (including `egress.log`), `internal/redact`, `internal/models`, `internal/reader`, `internal/static`, `internal/planner`, `internal/sandbox` (v0.2), every `prompts/` directory and `.github/workflows`. PRs touching them get the `security-sensitive` label and require the threat-model checklist in the PR template: check the change against [docs/threat-model.md](docs/threat-model.md) and update it when a trust boundary, threat or mitigation changes.
+4. Read [docs/map.md](docs/map.md) (one line per package, with its layer) and [docs/architecture.md](docs/architecture.md) before exploring the tree.
 
 ## Development setup
 
-You need Go, make and git. Nothing else: dev tools are pinned in `go.mod` and run with `go tool`.
+You need Go, make and git. Nothing else: the dev tools are Go programs under `internal/tools`, run by make with `go run`.
 
 ```sh
-make check                          # fmt, vet, budget and tests (CI also runs golangci-lint, govulncheck, gitleaks)
+make check                          # fmt, tidy, vet, budget, map freshness and tests (CI also runs golangci-lint, govulncheck, gitleaks)
 make budget                         # dependency allowlist, import and layer rules, module/binary caps, file length, workflow pinning
 make test PKG=./internal/redact     # one package
-make map                            # regenerate docs/map.md
+make map                            # regenerate docs/map.md after adding, removing or renaming a package or changing the first sentence of a doc.go
 ```
 
-Tests never call a real model. They replay recorded responses from `testdata/replay`:
+Every package needs a `doc.go` whose first sentence says why it exists: `make map` copies that sentence into the map and fails without it, and `make check` fails when the committed map is stale.
+
+Tests never call a real model, so they need no key and no network. Reader tests replay recorded replies from `internal/reader/testdata/replay`; CLI tests use fakes and recorded runs:
 
 ```sh
-creep scan testdata/apps/flask/vulnerable --record   # record with a local model (Ollama)
-go test ./...                                         # replays deterministically, no keys needed
+go test ./...                                           # replays deterministically, no keys needed
+go test ./internal/reader -run TestAppsReplay -update   # regenerate reader fixtures after changing a prompt, the schema, slicing or an app
 ```
+
+`creep scan --record` records a live run under `.creep/`, and `creep scan --replay` serves it back with no network.
 
 ## Pull requests
 

@@ -1,6 +1,6 @@
 # Architecture
 
-This is the source of truth for what each part of `creep` does, which way dependencies may point, and which contracts are stable. Decisions that change it go through an ADR ([index](#adr-index)). The package-by-package list is generated in [map.md](map.md).
+This is the source of truth for what each part of `creep` does, which way dependencies may point, and which contracts are stable. Decisions that change it go through an ADR ([index](#adr-index)). The package-by-package list is generated in [map.md](map.md) (`make map`), and the trust boundaries, attackers and mitigations are in [threat-model.md](threat-model.md).
 
 ## 1. Context
 
@@ -161,6 +161,7 @@ Automated checks that guard an architectural property. A new property needs a ch
 | JSON report contract holds (`schema_version`) | A committed fixture per released version (`internal/report/testdata/contract/vN.json`) validates against `docs/schemas/report-vN.json`; the current one decodes with unknown fields disallowed; fresh output validates too (`contract_test.go`, `golden_test.go`) | `make check` |
 | SARIF stays valid for code scanning | Output validates against the committed official SARIF 2.1.0 schema, no network (`TestSARIFValidatesAgainstOfficialSchema`) | `make check` |
 | State shipped in a scanned repo is never trusted | Planted cache entries and run logs are never served or read as complete (`internal/state/trust_test.go`) | `make check` |
+| Package map stays current | `internal/tools/pkgmap -check`: `docs/map.md` lists every package from `go list ./...` with its `doc.go` first sentence and layer; a package without `doc.go`, a package comment or a layers row fails, and so does a map that differs from a fresh one (`internal/tools/pkgmap/main_test.go`, `render_test.go`) | `make check`, CI `test` |
 | Layer table holds | `layers` block in §3: every module package has a row and imports only lower layers its row lists (`layers.go`) | `make budget`, CI `budget` |
 | Calibration is reproducible and labels hold | Golden hashes per seed; every task keeps its twin marker, sink line and label; templates refuse aliasing renames (`calibrate/generate_test.go`, `templates_test.go`) | `make check` |
 | Reader replays every testdata app to its expected verdicts | `reader/testdata/replay/<app>` holds one `state` cache recording per hypothesis; every app's vulnerable and safe variants replay through `Slicer.Build` and `Evaluate` with no network or key to the verdicts `expected.json` implies; every reader-class finding has a hypothesis and a safe twin; missing, torn, edited, foreign-signed or stale recordings and wrong answers fail (`replay_test.go`, `replay_fail_test.go`); regenerate with `go test ./internal/reader -run TestAppsReplay -update` | `make check` |
