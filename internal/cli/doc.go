@@ -14,4 +14,9 @@
 // listed as not evaluated, and a run that left out more than vendor code and
 // tier S's low-risk sinks exits 4, never 0. `creep why` reads the last JSON
 // report back strictly and prints a finding's evidence escaped.
+//
+// `creep estimate` (ADR 0011) runs the same static, planner and slicer code
+// and hands each request to a send function with no transport, which
+// measures it and refuses it, so an estimate never reaches a model or the
+// network. `--stats` counts a scan's requests on both sides of the cache.
 package cli

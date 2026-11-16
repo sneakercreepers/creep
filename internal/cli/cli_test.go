@@ -152,7 +152,7 @@ func TestStubsFailClosed(t *testing.T) {
 		if c.name == "resume" { // checks its run first; TestResumeFailsClosed covers it
 			continue
 		}
-		if c.name == "scan" || c.name == "why" { // built; scan_test.go and why_test.go cover their failures
+		if c.name == "scan" || c.name == "why" || c.name == "estimate" { // built; their own tests cover their failures
 			continue
 		}
 		t.Run(c.name, func(t *testing.T) {

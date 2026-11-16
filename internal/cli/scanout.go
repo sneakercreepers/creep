@@ -22,12 +22,14 @@ var reportNames = map[string]string{"json": "report.json", "markdown": "report.m
 // finish ends the run state, builds and writes the report, prints the
 // result and maps it to the exit code.
 func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
+	done := s.stats.start(phaseReport)
 	rep, err := s.buildReport(cal, res)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
 	written, err := writeReports(s.cfg.Report.Formats, rep)
+	done()
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
@@ -41,6 +43,7 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	s.printStats(e)
 	return exitcode.ForReport(rep.Run.Incomplete, gate)
 }
 
@@ -160,6 +163,19 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 		fmt.Fprintf(w, "reports: %s\n", strings.Join(written, " "))
 	}
 	return nil
+}
+
+// printStats prints --stats after the result: on stdout with the text
+// summary, on stderr when stdout carries a report, so it never corrupts one.
+func (s *session) printStats(e env) {
+	if !s.opts.stats {
+		return
+	}
+	w := e.stdout
+	if s.cfg.Output.Format != "text" {
+		w = e.stderr
+	}
+	s.stats.print(w, pricingFor(s.opts, s.cfg.Model.Contract))
 }
 
 // incompleteMark states the reason and how much was not evaluated.

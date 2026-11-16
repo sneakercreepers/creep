@@ -35,6 +35,9 @@ func globalFlagsHelp() string {
 		"  --log-level <level> log level: %s (default %q)\n"+
 		"  --record            call every model and record the responses for replay\n"+
 		"  --replay            serve recorded responses only; never use the network\n"+
-		"  --recalibrate       calibrate the model again even if a calibration is cached\n",
+		"  --recalibrate       calibrate the model again even if a calibration is cached\n"+
+		"  --stats             scan: print phase times, model calls, cache hits and tokens\n"+
+		"  --price-in <n>      estimate, --stats: price per 1M input tokens, for a cost\n"+
+		"  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost\n",
 		strings.Join(formats, ", "), d.format, strings.Join(logLevels, ", "), d.logLevel)
 }

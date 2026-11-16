@@ -39,6 +39,7 @@ type session struct {
 	model *models.HTTP
 	red   *redact.Redactor
 	repo  *os.Root
+	stats *runStats
 }
 
 // scanResult is what the pipeline decided, for the report.
@@ -70,7 +71,9 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
+	done := s.stats.start(phaseCalibrate)
 	cal, err := s.calibrate(ctx)
+	done()
 	if err != nil {
 		printError(e.stderr, "creep scan: calibration", err)
 		return failureCode(err)
@@ -99,7 +102,7 @@ func openSession(e env, r *config.Resolved) (*session, error) {
 	if err := checkModelConfig(r.Config.Model); err != nil {
 		return nil, err
 	}
-	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps}
+	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps, stats: newRunStats(e.deps.now)}
 	if err := s.openState(); err != nil {
 		s.close()
 		return nil, err
@@ -158,20 +161,27 @@ func (s *session) openModel() error {
 	if err != nil {
 		return err
 	}
-	structured := models.StructuredSchema
-	if s.cfg.Model.Contract == "anthropic" {
-		structured = models.StructuredTools
-	}
-	s.model, err = models.NewHTTP(models.Options{
-		Contract: s.cfg.Model.Contract, Endpoint: s.cfg.Model.Endpoint, Model: s.cfg.Model.Name, Key: key,
-		Structured: structured, MaxOutputTokens: replyTokens, Retries: 1,
-		Send: recordedSend(s.store, s.mode(), s.link.send),
-	})
+	send := s.stats.countRequests(recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send)))
+	s.model, err = models.NewHTTP(modelOptions(s.cfg.Model, key, send))
 	if err != nil {
 		return err
 	}
 	s.red, err = redact.New()
 	return err
+}
+
+// modelOptions are the scan's model settings. estimate measures requests
+// with the same options, so its request bodies and cache keys are the ones
+// the scan would send.
+func modelOptions(m config.Model, key models.Key, send models.SendFunc) models.Options {
+	structured := models.StructuredSchema
+	if m.Contract == "anthropic" {
+		structured = models.StructuredTools
+	}
+	return models.Options{
+		Contract: m.Contract, Endpoint: m.Endpoint, Model: m.Name, Key: key,
+		Structured: structured, MaxOutputTokens: replyTokens, Retries: 1, Send: send,
+	}
 }
 
 func (s *session) close() {
@@ -207,12 +217,16 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	if err != nil {
 		return scanResult{}, err
 	}
+	done := s.stats.start(phaseStatic)
 	rs, err := s.walk(ctx)
+	done()
 	if err != nil {
 		return scanResult{}, err
 	}
 	findings := baseFindings(rs)
+	done = s.stats.start(phasePlan)
 	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings)
+	done()
 	if errors.Is(err, planner.ErrInput) {
 		return rejectedScan(findings, rs.gaps), nil
 	}
@@ -220,7 +234,9 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 		return scanResult{}, err
 	}
 	stage := readStage{model: s.model, tier: rtier, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: s.readRepo}}
+	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
+	done()
 	if err != nil {
 		return scanResult{}, err
 	}

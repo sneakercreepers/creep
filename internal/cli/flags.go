@@ -27,6 +27,9 @@ type globalOptions struct {
 	// recalibrate is calibrate.CacheOptions.Recalibrate: ignore a cached
 	// calibration and measure the model again (used by scan, #14).
 	recalibrate bool
+	stats       bool    // scan: print phase times, model calls, cache hits and tokens
+	priceIn     float64 // estimate and --stats: currency per 1M input tokens; 0 is unset
+	priceOut    float64 // estimate and --stats: currency per 1M output tokens; 0 is unset
 	// explicit holds the names of flags the user passed, so only those
 	// become the flags config layer; defaults must not override files.
 	explicit map[string]bool
@@ -65,6 +68,9 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
 	fs.BoolVar(&opts.recalibrate, "recalibrate", opts.recalibrate, "")
+	fs.BoolVar(&opts.stats, "stats", opts.stats, "")
+	fs.Float64Var(&opts.priceIn, "price-in", opts.priceIn, "")
+	fs.Float64Var(&opts.priceOut, "price-out", opts.priceOut, "")
 	return fs
 }
 
@@ -77,6 +83,9 @@ func (o globalOptions) validate() error {
 	}
 	if o.record && o.replay {
 		return errors.New("--record and --replay cannot be used together")
+	}
+	if !validPrice(o.priceIn) || !validPrice(o.priceOut) {
+		return fmt.Errorf("--price-in and --price-out must be numbers from 0 to %g (currency per 1M tokens)", maxPrice)
 	}
 	return validateConfigPath(o.configPath)
 }
@@ -129,4 +138,13 @@ func validateConfigPath(path string) error {
 		return err
 	}
 	return f.Close()
+}
+
+// maxPrice bounds a price per 1M tokens far above any real one, so a typo
+// (or Inf) cannot print a meaningless cost.
+const maxPrice = 1e6
+
+// validPrice rejects NaN, Inf and negative prices; 0 means not set.
+func validPrice(p float64) bool {
+	return p >= 0 && p <= maxPrice
 }
