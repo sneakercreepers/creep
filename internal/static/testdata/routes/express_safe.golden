@@ -1,0 +1,7 @@
+POST /login express auth=none params=0 dynamic=false handler=:52
+  nosql .findOne line=57 dynamic=true parameterized=false indirect=false
+GET /diagnostics/ping express auth=middleware params=0 dynamic=false handler=:64
+  shell child_process.execFile line=69 dynamic=false parameterized=false indirect=false
+GET /orders/:id express auth=middleware params=1 dynamic=false handler=:74
+  nosql .findOne line=78 dynamic=true parameterized=false indirect=false
+PATCH /settings express auth=middleware params=0 dynamic=false handler=:85

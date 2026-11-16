@@ -144,12 +144,14 @@ func (f *pyFile) dotted(n *Node) string {
 	return strings.Join(parts, ".")
 }
 
-// text returns the source of n, or "" when n is nil or out of range.
-func (f *pyFile) text(n *Node) string {
-	if n == nil || n.StartByte > n.EndByte || int(n.EndByte) > len(f.src) {
+func (f *pyFile) text(n *Node) string { return nodeText(f.src, n) }
+
+// nodeText returns the source of n, or "" when n is nil or out of range.
+func nodeText(src []byte, n *Node) string {
+	if n == nil || n.StartByte > n.EndByte || int(n.EndByte) > len(src) {
 		return ""
 	}
-	return string(f.src[n.StartByte:n.EndByte])
+	return string(src[n.StartByte:n.EndByte])
 }
 
 // functionDef returns the function a module-level statement defines, if any.
