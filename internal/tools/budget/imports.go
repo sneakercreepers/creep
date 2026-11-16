@@ -125,6 +125,8 @@ func forbiddenImport(modPath string, f sourceFile, imp string) string {
 	case imp == "net/netip":
 		// Pure IP address value types: parsing and comparison, no I/O.
 		return ""
+	case imp == path.Join(modPath, gatewayDir, "gatewaytest") && !f.Test:
+		return "a loopback test server; only _test.go files may import it"
 	case underPath(imp, "net"), imp == "crypto/tls", imp == "log/syslog",
 		underPath(imp, "golang.org/x/net"):
 		return "network access lives only in " + gatewayDir

@@ -56,6 +56,9 @@ func fakeCLI(mode string) int {
 			_ = os.WriteFile(m[1]+m[2], []byte("ready"), 0o600)
 		}
 		fmt.Print(`{"done":true}`)
+	case "run", "stray", "mkdir":
+		fakeToolUse(mode, string(in))
+		fmt.Print(`{"done":true}`)
 	case "fail":
 		return 2
 	}

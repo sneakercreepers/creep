@@ -28,6 +28,8 @@ func TestNetImportFailsBudget(t *testing.T) {
 		{"crypto/tls", "internal/probe/p.go", "package probe\nimport _ \"crypto/tls\"\n", "network access"},
 		{"gateway may use net/http", "internal/gateway/g.go", "package gateway\nimport _ \"net/http\"\n", ""},
 		{"gateway tests may use httptest", "internal/gateway/g_test.go", "package gateway\nimport _ \"net/http/httptest\"\n", ""},
+		{"gatewaytest in shipped code", "internal/cli/c.go", "package cli\nimport _ \"example.com/m/internal/gateway/gatewaytest\"\n", "only _test.go files may import it"},
+		{"gatewaytest in a test", "internal/cli/c_test.go", "package cli\nimport _ \"example.com/m/internal/gateway/gatewaytest\"\n", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

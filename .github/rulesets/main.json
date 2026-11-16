@@ -40,6 +40,7 @@
           { "context": "dependency-review", "integration_id": 15368 },
           { "context": "workflows", "integration_id": 15368 },
           { "context": "budget", "integration_id": 15368 },
+          { "context": "protections", "integration_id": 15368 },
           { "context": "analyze (go)", "integration_id": 15368 }
         ]
       }

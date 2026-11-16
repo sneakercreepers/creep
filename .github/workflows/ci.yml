@@ -153,3 +153,21 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: make budget
+
+  # Fixed protections (#17): a required status check of its own, so a broken
+  # protection is named in the PR checks. make protections runs each
+  # protection test with its broken fixture, the holistic --replay run and a
+  # bounded fuzz of the gateway's redaction path.
+  protections:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: make protections
