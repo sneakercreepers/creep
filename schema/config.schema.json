@@ -121,6 +121,11 @@
           "description": "Model name sent to the endpoint.",
           "type": "string"
         },
+        "preset": {
+          "default": "",
+          "description": "Name of a model CLI preset built into creep (claude-code, codex, gemini, ollama): sets model.run and contract command. Cannot be set in the project file.",
+          "type": "string"
+        },
         "run": {
           "default": "",
           "description": "Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file.",

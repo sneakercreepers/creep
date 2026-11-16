@@ -71,6 +71,9 @@ func Load(in Inputs) (*Resolved, error) {
 	if err := s.applyFlags(in.Flags); err != nil {
 		return nil, err
 	}
+	if err := s.applyPreset(); err != nil {
+		return nil, err
+	}
 	if err := s.checkLimits(); err != nil {
 		return nil, err
 	}

@@ -1,0 +1,23 @@
+# Claude Code in print mode (claude -p): reads the prompt on stdin, prints
+# the reply on stdout and exits.
+#   --tools ""            no built-in tools at all (Bash, Edit, Write, Read,
+#                         WebFetch...). An empty list is the documented way
+#                         to switch every tool off.
+#   --strict-mcp-config   load MCP servers only from --mcp-config, which is not
+#                         given, so no user or project MCP server loads.
+#   --output-format text  the bare reply; json would wrap it in an envelope
+#                         the command contract does not unwrap.
+# Credentials: claude's own login under HOME, or ANTHROPIC_API_KEY declared
+# in model.env. Hooks in ~/.claude settings still run; the tool canary is
+# the check. Verified against the CLI reference; re-check on each preset
+# change with the manual canary procedure in CONTRIBUTING.md.
+version: 1
+name: claude-code
+description: Claude Code in print mode with every built-in tool and MCP server off.
+docs: https://docs.anthropic.com/en/docs/claude-code/cli-reference
+program: claude
+args: [-p, --tools, "", --strict-mcp-config, --output-format, text]
+tools_off:
+  - [--tools, ""]
+  - [--strict-mcp-config]
+no_tools: false

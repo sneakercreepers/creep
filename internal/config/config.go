@@ -21,6 +21,7 @@ type Model struct {
 	Endpoint       string   `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
 	Name           string   `yaml:"name" desc:"Model name sent to the endpoint."`
 	Tier           string   `yaml:"tier" desc:"Model tier; selects the prompt variant."`
+	Preset         string   `yaml:"preset" desc:"Name of a model CLI preset built into creep (claude-code, codex, gemini, ollama): sets model.run and contract command. Cannot be set in the project file."`
 	Run            string   `yaml:"run" desc:"Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file."`
 	Env            []string `yaml:"env" desc:"Names of extra environment variables passed to the model command (the rest of the environment is not). Cannot be set in the project file."`
 	TimeoutSeconds int      `yaml:"timeout_seconds" desc:"Seconds one model command call may run before it is killed."`
@@ -96,6 +97,7 @@ var projectForbidden = map[string]bool{
 	"model.endpoint": true,
 	"model.run":      true,
 	"model.env":      true,
+	"model.preset":   true,
 	"egress.allow":   true,
 }
 

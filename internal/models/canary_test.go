@@ -83,6 +83,8 @@ func TestCanaryFix(t *testing.T) {
 		{"gemini", []string{"-p", "x", "--yolo"}, "remove --yolo"},
 		{"gemini", []string{"--approval-mode=yolo", "-y"}, "remove --approval-mode and -y"},
 		{"gemini", []string{"-p", "x"}, "no tool flag"},
+		{"gemini", []string{"--approval-mode", "default", "--extensions", "none"}, "it already has --approval-mode default"},
+		{"gemini", []string{"--approval-mode=default", "--yolo"}, "remove --approval-mode and --yolo"},
 		{"codex", []string{"exec"}, "add --sandbox read-only"},
 		{"codex", []string{"exec", "-s", "read-only"}, "it already has"},
 		{"llm", []string{"-m", "x", "-T", "shell"}, "remove -T"},

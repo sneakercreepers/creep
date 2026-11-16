@@ -13,7 +13,7 @@ func canaryFix(program string, args []string) string {
 	case "claude":
 		return claudeFix(args)
 	case "gemini":
-		return removeFix(args, "--yolo", "-y", "--approval-mode")
+		return geminiFix(args)
 	case "codex":
 		if hasValue(args, "read-only", "--sandbox", "-s") {
 			return "it already has --sandbox read-only; check ~/.codex/config.toml for tools or MCP servers"
@@ -40,6 +40,16 @@ func claudeFix(args []string) string {
 		return `it already has --tools "" and --strict-mcp-config; check ~/.claude settings and hooks`
 	}
 	return "add " + strings.Join(missing, " and ") + " to the claude command"
+}
+
+// geminiFix: --approval-mode default is what the gemini preset (#7) sets to
+// pin approvals, so only other values are named for removal.
+func geminiFix(args []string) string {
+	yolo := slices.ContainsFunc(args, func(a string) bool { return a == "--yolo" || a == "-y" || strings.HasPrefix(a, "--yolo=") })
+	if hasValue(args, "default", "--approval-mode") && !yolo {
+		return "it already has --approval-mode default; check ~/.gemini/settings.json for tools, extensions and MCP servers"
+	}
+	return removeFix(args, "--yolo", "-y", "--approval-mode")
 }
 
 // removeFix names the tool-enabling flags present in args.

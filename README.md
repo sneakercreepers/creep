@@ -110,6 +110,22 @@ model:
   timeout_seconds: 300
 ```
 
+Or pick a built-in **preset**, which sets `contract: command` and a reviewed command line with the CLI's tools switched off:
+
+```yaml
+# ~/.creep/config.yaml (never the repository's creep.yaml)
+model: { preset: claude-code }   # also: gemini, codex, ollama (needs name: <model>)
+```
+
+| Preset | Command line |
+|---|---|
+| `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` |
+| `gemini` | `gemini --approval-mode default --extensions none --output-format text` |
+| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -` |
+| `ollama` | `ollama run <model.name> --format json` |
+
+`creep config explain` shows the resolved `model.run`. Presets are embedded in the binary; add or fix one with the *Model preset* issue form ([CONTRIBUTING.md](CONTRIBUTING.md#model-presets)).
+
 The command line is split without a shell, the CLI runs in an empty temp directory, and every prompt still goes through redaction, consent and `egress.log` ([ADR 0014](docs/adr/0014-command-model-through-gateway.md)).
 
 > [!IMPORTANT]

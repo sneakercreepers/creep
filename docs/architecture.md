@@ -41,7 +41,8 @@ A package may import only packages in **lower** layers and only those listed in 
 # layer  package                 may import (internal only)
 0        internal/exitcode       -
 0        internal/buildinfo      -
-1        internal/config         exitcode
+0        internal/presets        -
+1        internal/config         exitcode presets
 1        internal/redact         -
 2        internal/gateway        config redact exitcode
 2        internal/gateway/gatewaytest -
@@ -65,7 +66,8 @@ A package may import only packages in **lower** layers and only those listed in 
 |---|---|---|---|
 | `exitcode` | Process exit codes | 0 ok · 1 gate · 2 config/consent · 3 model/sandbox · 4 incomplete (ADR 0007) | ✅ |
 | `buildinfo` | Version and provenance strings | none | ✅ |
-| `config` | Five config layers, org policy, CI detection | Project file never loosens CI gates or grants consent (#61, #82), and may only remove optional scanners, never enable one (#221, ADR 0013) | ✅ (#62, #63 open) |
+| `presets` | Model CLI presets: embedded `*.yaml` data turned into a `model.run` command line | Closed schema; argv is a list; tools-off flags listed and present in args; embedded only, never read from disk; `model.name` never becomes a flag | ✅ (#7) |
+| `config` | Five config layers, org policy, CI detection | Project file never loosens CI gates or grants consent (#61, #82); never chooses the model command (`model.run`, `model.env`, `model.preset`, nor `model.name` for a preset that passes it on); may only remove optional scanners, never enable one (#221, ADR 0013) | ✅ (#62, #63 open) |
 | `redact` | Secret and PII redaction with stable markers | Whole file redacted before fragmenting; linear time; `ErrRunFull` fails closed; one call adds at most its share of the run cap (`ErrTooManyValues`: file not scanned, run goes on) | ✅ (follow-ups open) |
 | `gateway` | **Only** network path and the only place a model CLI starts | Allowlist before DNS, TLS, pinning, no redirects, consent, run and endpoint token budget, AIMD concurrency, write-ahead `egress.log`, opaque client; opaque `Command` run only by `EgressLog.Exec` (argv without a shell, program never from the repository, minimal env, empty temp cwd, timeout, stdout cap, files left in the cwd refuse the reply; ADR 0014) | ✅ |
 | `models` | HTTP and command contracts, tool canary | No provider SDK; model output decoded into closed structs, never executed; key only from `CREEP_API_KEY` (HTTP); a CLI gets keys only from `model.env`; the tool canary runs once per command per run and fails closed | ✅ HTTP (#5), command and tool canary (#6, ADR 0014) |
@@ -96,14 +98,14 @@ These follow semver once v1.0 ships. Before then, any change needs a note in the
 | `egress.log` line | `gateway` | additive fields only |
 | HTTP model contract | `models` | OpenAI-compatible + Anthropic |
 | Command model contract | `models`, `gateway` | stdin prompt, stdout JSON; `model.run` split without a shell (ADR 0014) |
-| Recipes, presets, language kits | `recipes/`, `presets/`, kits | own `version:`; data, not code |
+| Recipes, presets, language kits | `recipes/`, `internal/presets/*.yaml`, kits | own `version:`; data, not code; the preset schema is closed and checked by `TestEmbeddedPresets` |
 | Prompts | `prompts/` in the package that sends them: `internal/reader/prompts/` (one variant per tier S/M/L), `internal/calibrate/prompts/` (one variant, since calibration runs before a tier is known); the reader user turn (`HYPOTHESIS` line, numbered `CODE` lines, truncation notes) is built by `internal/reader/render.go` within `sliceBudget` per tier | `PromptVersion` per package; token-budget test (`prompts_test.go`) |
 
 ## 5. Extension points
 
 Contributors add **data**, not core code:
 
-- **Presets** (`presets/*.yaml`): command lines for model CLIs. They are community-owned because they track third-party flags.
+- **Presets** (`internal/presets/*.yaml`, embedded in the binary): command lines for model CLIs, selected with `model: { preset: <name> }`. They are community-owned because they track third-party flags; propose one with the *Model preset* issue form and the manual canary check in [CONTRIBUTING.md](../CONTRIBUTING.md#model-presets).
 - **Recipes** (v0.3): source, sink and hint records with fixtures, pinned by commit in `creep.lock`.
 - **Language kits**: grammar WASM + sources/sinks + PoC templates + vulnerable/safe fixtures. A kit enters only if its conformance test passes. v0.1 ships Python and JS/TS only.
 

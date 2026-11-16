@@ -5,7 +5,7 @@ Thanks for helping. The most valuable contributions are often not code:
 - **False negative**: a vulnerability `creep` missed. Use the *False negative* issue form with a minimal vulnerable example. It becomes a test case.
 - **False positive**: a finding that is wrong. Use the *False positive* issue form.
 - **Model results**: calibration or benchmark results with your model. Post them in [Discussions → Show and tell](https://github.com/sneakercreepers/creep/discussions/categories/show-and-tell).
-- **Recipes and model presets**: data, not code. See the issue forms.
+- **Recipes and model presets**: data, not code. See the issue forms and [Model presets](#model-presets).
 
 ## Before you start
 
@@ -35,6 +35,53 @@ go test ./internal/reader -run TestAppsReplay -update   # regenerate reader fixt
 ```
 
 `creep scan --record` records a live run under `.creep/`, and `creep scan --replay` serves it back with no network.
+
+## Model presets
+
+A preset is one YAML file in [`internal/presets/`](internal/presets/), embedded in the binary and selected with `model: { preset: <name> }` in the user file, `--config` or the policy (never the repository's `creep.yaml`). To add or fix one, open the [**Model preset** issue form](https://github.com/sneakercreepers/creep/issues/new?template=6-model_preset.yml) first, with the CLI version, the proposed file and the canary output below.
+
+```yaml
+version: 1                     # schema version
+name: claude-code              # equals the file name; lowercase letters, digits, dashes
+description: One line.
+docs: https://...              # the CLI's flag reference
+program: claude                # bare program name, found on PATH; never a path or a command line
+args: [-p, --tools, "", --strict-mcp-config, --output-format, text]   # a list, never a shell string
+tools_off:                     # every argument run that switches tools off; each must be in args
+  - [--tools, ""]
+  - [--strict-mcp-config]
+no_tools: false                # true (with tools_off: []) only for a CLI that has no tools
+```
+
+`{model}` as a whole argument is replaced by `model.name`. Unknown or duplicate keys fail `TestEmbeddedPresets`, which `make check` and CI run. The CLI must read the prompt on stdin and print only the reply on stdout; comment each flag in the file and say what you could not verify.
+
+### Manual canary check
+
+CI cannot run real model CLIs, so every new or changed preset needs this check on a machine where the CLI is installed and logged in. Run it from an empty directory, with no `creep.yaml`:
+
+```sh
+mkdir /tmp/preset-check && cd /tmp/preset-check
+printf 'model:\n  preset: <name>\n' > /tmp/preset-check.yaml        # ollama: add "  name: <model>"
+creep --config /tmp/preset-check.yaml config explain | grep model.run  # the command line from the preset
+creep --config /tmp/preset-check.yaml doctor
+```
+
+Expected: `doctor` asks for consent to the `command://<program>-<hash>` endpoint, then prints `tool canary passed (no file was created and no command ran)` and exits 0. Paste that output into the issue form. A preset is rejected if `doctor` prints `has tools enabled` (exit 3), or if the canary cannot run (exit 3: fix the flags, the login or the timeout). Then check the opposite, to prove the canary reaches the CLI: run the same command line with its tools on, without the preset, and confirm `doctor` fails with exit 3 and names the flag:
+
+```sh
+printf 'model:\n  contract: command\n' > /tmp/tools-on.yaml
+creep --config /tmp/tools-on.yaml --model-run 'claude -p --dangerously-skip-permissions --output-format text' doctor
+# gemini: 'gemini --approval-mode yolo'   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
+```
+
+Delete `/tmp/preset-check` afterwards. Record the CLI version.
+
+| Preset | Command line | Expected `creep doctor` |
+|---|---|---|
+| `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` | canary passed, exit 0 |
+| `gemini` | `gemini --approval-mode default --extensions none --output-format text` | canary passed, exit 0 |
+| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -` | canary passed, exit 0 |
+| `ollama` | `ollama run <model> --format json` | canary passed, exit 0 |
 
 ## Pull requests
 
