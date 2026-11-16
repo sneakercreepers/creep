@@ -146,7 +146,7 @@ func TestGivenUpLineMasksDanglingValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for range 4 {
+			for range underRace(4, 1) {
 				value := fakeToken(rng, alnum, 24)
 				code := codeBlock(8 << 10)
 				text := strings.TrimSuffix(keys, "\n") + tt.open + fmt.Sprintf(tt.close, value) + code

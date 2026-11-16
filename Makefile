@@ -1,6 +1,9 @@
 # Works with GNU make on Linux, macOS and Windows (Git Bash sh).
 
 PKG     ?= ./...
+# Per-package test timeout, set so a slow package fails with a clear message.
+# Each package should finish in under half of it, -race included (#203).
+TEST_TIMEOUT ?= 10m
 MODULE  := github.com/sneakercreepers/creep
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -26,14 +29,14 @@ build:
 	set -x; go build -trimpath -ldflags "-s -w -X $(BUILDINFO).version=$${v:-dev} -X $(BUILDINFO).commit=$${c:-unknown}" -o $(BIN) ./cmd/creep
 
 test:
-	go test $(PKG)
+	go test -timeout $(TEST_TIMEOUT) $(PKG)
 
 check: fmt-check tidy vet budget
 	@# -race needs cgo; Go disables cgo when no C compiler is found (common on Windows).
 	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
-		echo "go test -race ./..."; go test -race ./...; \
+		echo "go test -race -timeout $(TEST_TIMEOUT) ./..."; go test -race -timeout $(TEST_TIMEOUT) ./...; \
 	else \
-		echo "cgo disabled: running go test ./... without -race"; go test ./...; \
+		echo "cgo disabled: running go test ./... without -race"; go test -timeout $(TEST_TIMEOUT) ./...; \
 	fi
 
 fmt-check:
