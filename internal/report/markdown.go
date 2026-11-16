@@ -84,8 +84,8 @@ func writeScanners(w io.Writer, scanners []ScannerCoverage) {
 	if len(scanners) == 0 {
 		return
 	}
-	fmt.Fprint(w, "## Optional scanners\n\ncreep does not run external scanners yet; the classes they would cover were not evaluated through them.\n\n")
-	fmt.Fprint(w, "| Scanner | Status | Classes not evaluated |\n|---|---|---|\n")
+	fmt.Fprint(w, "## Optional scanners\n\nOnly a scanner marked evaluated ran offline and evaluated its classes; for every other status they were not evaluated through it.\n\n")
+	fmt.Fprint(w, "| Scanner | Status | Classes |\n|---|---|---|\n")
 	for _, s := range scanners {
 		fmt.Fprintf(w, "| %s | %s | %s |\n", codeSpan(s.Name), statusText(string(s.Status)), codeList(s.Classes))
 	}

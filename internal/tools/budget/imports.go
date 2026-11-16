@@ -29,7 +29,8 @@ const gatewayDir = "internal/gateway"
 // execAllowed lists module-relative package trees whose shipped code may run
 // other programs. Running curl or a shell is a way around the network ban.
 var execAllowed = []string{
-	"internal/tools", // dev tooling run by make; the layers table keeps it out of the binary
+	"internal/tools",   // dev tooling run by make; the layers table keeps it out of the binary
+	"internal/scanrun", // gitleaks and osv-scanner only: fixed offline arguments, no shell, final path outside the repo (ADR 0013)
 }
 
 // execAllowedInTests lists packages whose tests may run programs.

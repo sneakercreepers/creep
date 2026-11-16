@@ -35,10 +35,13 @@ const (
 	ScannerFound                          // enabled and on PATH outside the repository
 )
 
-// ScannerCheck is one scanner's detection result.
+// ScannerCheck is one scanner's detection result. Path is the binary's
+// final path (links and junctions resolved) when State is ScannerFound:
+// the file a runner executes, never the name looked up again.
 type ScannerCheck struct {
 	Scanner Scanner
 	State   ScannerState
+	Path    string
 }
 
 // ScannerEnv is what detection reads: the PATH and PATHEXT values and the
@@ -62,30 +65,35 @@ func DetectScanners(enabled []string, env ScannerEnv) []ScannerCheck {
 	}
 	out := make([]ScannerCheck, 0, len(Scanners()))
 	for _, s := range Scanners() {
-		state := ScannerNotEnabled
+		check := ScannerCheck{Scanner: s, State: ScannerNotEnabled}
 		if on[string(s)] {
-			state = lookScanner(string(s), env)
+			check.State, check.Path = lookScanner(string(s), env)
 		}
-		out = append(out, ScannerCheck{Scanner: s, State: state})
+		out = append(out, check)
 	}
 	return out
 }
 
-// lookScanner finds the first PATH match of name and classifies it.
-func lookScanner(name string, env ScannerEnv) ScannerState {
+// lookScanner finds the first PATH match of name and classifies it; a
+// found binary comes with its final path.
+func lookScanner(name string, env ScannerEnv) (ScannerState, string) {
 	for _, dir := range pathDirs(env.Path) {
 		for _, file := range candidateNames(name, env.PathExt) {
 			bin := filepath.Join(dir, file)
 			if !isExecutable(bin) {
 				continue
 			}
-			if !filepath.IsAbs(dir) || insideRepo(bin, env.Repo) {
-				return ScannerRefused
+			if !filepath.IsAbs(dir) {
+				return ScannerRefused, ""
 			}
-			return ScannerFound
+			final, ok := OutsideRepo(bin, env.Repo)
+			if !ok {
+				return ScannerRefused, ""
+			}
+			return ScannerFound, final
 		}
 	}
-	return ScannerMissing
+	return ScannerMissing, ""
 }
 
 // pathDirs lists the directories searched, in order. An empty entry means
@@ -130,38 +138,4 @@ func isExecutable(bin string) bool {
 		return false
 	}
 	return runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0
-}
-
-// insideRepo reports whether bin, or the file its links resolve to, lies
-// in repo. An empty or relative repo fails closed: everything is inside.
-func insideRepo(bin, repo string) bool {
-	if repo == "" || !filepath.IsAbs(repo) {
-		return true
-	}
-	roots := []string{repo}
-	if real, err := filepath.EvalSymlinks(repo); err == nil {
-		roots = append(roots, real)
-	}
-	bins := []string{bin}
-	if real, err := filepath.EvalSymlinks(bin); err == nil {
-		bins = append(bins, real)
-	}
-	for _, r := range roots {
-		for _, b := range bins {
-			if within(b, r) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// within reports whether path is root or below it; filepath.Rel compares
-// case-insensitively on Windows.
-func within(path, root string) bool {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }

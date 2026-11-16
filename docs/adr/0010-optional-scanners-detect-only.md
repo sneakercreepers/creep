@@ -35,6 +35,6 @@ Option B. What decided it: the acceptance criteria need only honest reporting, a
 
 ## Consequences
 
-- Running a scanner later needs its own ADR: an `execAllowed` entry for one package, fixed argument lists, no shell, a timeout and an output cap, offline modes only, and redaction and escaping of the tool's output. The refusal rules above already decide which binary may run.
+- Running a scanner later needs its own ADR: an `execAllowed` entry for one package, fixed argument lists, no shell, a timeout and an output cap, offline modes only, and redaction and escaping of the tool's output. The refusal rules above already decide which binary may run. *Qualified by [ADR 0013](0013-scanner-runner.md): string comparison missed Windows junctions and `\\?\` paths, so a runner relies only on the final-path, file-identity rule there.*
 - `creep doctor` (#6) can reuse `DetectScanners` to show the same states.
 - Tests: `internal/static/scanners_test.go` (absent, present, inside the repository, first match wins, relative and empty `PATH` entries, no repository, execute bit and links on Unix) and `internal/cli/scanners_test.go` (every state through `creep scan` exits 0 with a complete run and lists the scanner and its classes).
