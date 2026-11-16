@@ -26,7 +26,10 @@
 //     in scheme://user:password@host, the value of password, passwd, pwd,
 //     passphrase and secret keys (quoted or bare, references such as ${VAR}
 //     left alone), and a bare 40-character AWS secret key when an AWS access
-//     key id is in the same input (credentials.go).
+//     key id is in the same input (credentials.go). A value assigned through
+//     a subscript whose key names a credential (x['SECRET_KEY'] = '…',
+//     headers["X-Api-Key"] = "…", config[:api_key] = '…'), which the
+//     vendored generic rule misses at the closing "]" (subscript.go).
 //   - Private keys cut by a fragment boundary, which the gitleaks rule misses
 //     because it needs BEGIN and END in the same text (pem.go). After a BEGIN
 //     ... PRIVATE KEY line (any variant, PGP BLOCK included) everything is

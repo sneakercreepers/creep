@@ -24,6 +24,7 @@ func largeInputs() map[string]string {
 		"markers":   fill("<SECRET_"),
 		"hex kw":    fill("api_key=" + strings.Repeat("0123456789abcdef", 2) + " "),
 		"passwords": fill("password=x "),
+		"subscripts": fill("x['api_key']['a'] = 'v' ['token"),
 		"url creds": fill("a://b:c@"),
 		"aws 40":    "AKIA" + strings.Repeat("A", 16) + fill("Ab3/+")[20:],
 		"key body":  fill(strings.Repeat("Ab3/+9x", 10)[:64] + "\n"),
