@@ -68,6 +68,10 @@ func Open(dir string, secret []byte) (*Store, error) {
 		_ = root.Close()
 		return nil, fmt.Errorf("state dir %q changed while opening: %w", abs, ErrUnsafePath)
 	}
+	if err := ignoreAll(root); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
 	return &Store{dir: abs, root: root, secret: bytes.Clone(secret)}, nil
 }
 
@@ -171,6 +175,25 @@ func (s *Store) writeAtomic(name string, data []byte) error {
 		return fmt.Errorf("write %s: %w", name, err)
 	}
 	return syncDir(s.root, path.Dir(name))
+}
+
+// ignoreAll writes a .gitignore that ignores the whole state directory when
+// none is there, so git add -A does not commit egress.log, payloads (code
+// the model saw) or run state (pentest P7). O_EXCL never opens an existing
+// entry: a .gitignore, link or FIFO already there is left alone.
+func ignoreAll(root *os.Root) error {
+	f, err := root.OpenFile(".gitignore", os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
+	if errors.Is(err, fs.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("state dir: .gitignore: %w", err)
+	}
+	if _, err := f.WriteString("# Written by creep: run state, egress.log and reports stay local.\n*\n"); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("state dir: .gitignore: %w", err)
+	}
+	return f.Close()
 }
 
 // abs turns a slash-separated store name into a host path.
