@@ -10,20 +10,33 @@ const maxScopedUses = 64
 // noUse marks a receiver with no auth middleware used without a path.
 const noUse = ^uint32(0)
 
-// jsReceiver is an Express app or router bound to a variable.
+// jsReceiver is an Express app or router bound by one declaration.
 type jsReceiver struct {
-	// mounted is set by the first parent.use(path, ..., router) call; later
-	// mounts of the same router are ignored.
-	mounted bool
-	parent  string
-	// at is the mount path; at.auth is set when middleware before the
-	// router in the mount call looks like auth.
-	at    mountPrefix
-	atPos uint32
+	// ambiguous is set when the binding is reassigned or shares its scope
+	// with another binding of the name; it then claims no auth.
+	ambiguous bool
+	// mounts lists every parent.use(path, ..., router) of this router, up
+	// to maxMountPaths; mountOverflow marks the rest.
+	mounts        []jsMount
+	mountOverflow bool
 	// openAuth is where the first auth middleware used without a path
 	// starts, or noUse.
 	openAuth uint32
 	scoped   []authUse
+	// chains memoizes chainsOf.
+	chains                          []mountChain
+	chainsPartial, chainsDone, busy bool
+}
+
+func newReceiver() *jsReceiver { return &jsReceiver{openAuth: noUse} }
+
+// jsMount is one mount of a router: its parent, the mount path, whether
+// auth middleware sits before the router in the mount call, and where the
+// call starts.
+type jsMount struct {
+	parent *jsReceiver
+	at     mountPrefix
+	pos    uint32
 }
 
 // authUse is auth middleware used on a path prefix: use("/admin", auth).
@@ -32,60 +45,36 @@ type authUse struct {
 	prefix string
 }
 
-// collectReceivers finds express() apps and Router() routers anywhere in the
-// file (app factories assign inside functions), then reads their use and
+// collectReceivers resolves receivers by scope, then reads their use and
 // all calls in source order.
 func (x *jsExtraction) collectReceivers(root *Node) {
-	var uses []*Node
+	x.collectBindings(root)
+	if len(x.bind) == 0 {
+		return
+	}
 	walk(root, func(n *Node) bool {
-		switch n.Type {
-		case "variable_declarator":
-			x.addReceiver(field(n, "name"), field(n, "value"))
-		case "assignment_expression":
-			x.addReceiver(field(n, "left"), field(n, "right"))
-		case "call_expression":
-			uses = append(uses, n)
+		if n.Type == "call_expression" {
+			x.use(n)
 		}
 		return true
 	})
-	for _, call := range uses {
-		x.use(call)
-	}
 }
 
-// addReceiver records `app = express()` and `router = express.Router()`,
-// also through a chain such as `app = module.exports = express()`.
-func (x *jsExtraction) addReceiver(name, value *Node) {
-	for value != nil && value.Type == "assignment_expression" {
-		value = field(value, "right")
-	}
-	if name == nil || name.Type != "identifier" || value == nil || value.Type != "call_expression" {
-		return
-	}
-	callee, method := x.file.resolve(field(value, "function"))
-	if method || (callee != "express" && callee != "express.Router") {
-		return
-	}
-	x.receivers[x.file.text(name)] = &jsReceiver{openAuth: noUse}
-}
-
-// use reads `recv.use([path,] ...middleware)`, which either mounts a router
-// or adds middleware, and `recv.all(path, ...auth)`, which guards a path.
+// use reads `recv.use([path,] ...middleware)`, which mounts routers and adds
+// middleware, and `recv.all(path, ...auth)`, which guards a path.
 func (x *jsExtraction) use(call *Node) {
 	fn := field(call, "function")
-	obj := field(fn, "object")
-	if fn == nil || fn.Type != "member_expression" || obj == nil || obj.Type != "identifier" {
+	if fn == nil || fn.Type != "member_expression" {
 		return
 	}
-	parent := x.file.text(obj)
-	r := x.receivers[parent]
+	r := x.receiverRef(field(fn, "object"))
 	args := jsArgs(call)
 	if r == nil || len(args) == 0 {
 		return
 	}
 	switch x.file.text(field(fn, "property")) {
 	case "use":
-		x.useCall(r, parent, call.StartByte, args)
+		x.useCall(r, call.StartByte, args)
 	case "all":
 		if len(args) > 1 && x.allAuth(flattenArgs(args[1:])) {
 			r.addAuth(x.usePath(args[0]), call.StartByte)
@@ -93,24 +82,22 @@ func (x *jsExtraction) use(call *Node) {
 	}
 }
 
-func (x *jsExtraction) useCall(r *jsReceiver, parent string, pos uint32, args []*Node) {
+// useCall mounts each router in the call with the auth middleware seen
+// before it, and records auth middleware for routes declared later.
+func (x *jsExtraction) useCall(r *jsReceiver, pos uint32, args []*Node) {
 	var at mountPrefix
-	hasPath := isPathArg(args[0])
-	if hasPath {
-		at = x.usePath(args[0])
-		args = args[1:]
+	switch {
+	case isPathArg(args[0]):
+		at, args = x.usePath(args[0]), args[1:]
+	case len(args) > 1 && x.possiblePath(args[0]):
+		at, args = mountPrefix{dynamic: true}, args[1:] // use(PREFIX, ...): unknown path
 	}
-	stack := flattenArgs(args)
-	for i, m := range stack {
-		if m.Type != "identifier" || x.receivers[x.file.text(m)] == nil {
-			at.auth = at.auth || x.authMiddleware(m)
+	for _, m := range flattenArgs(args) {
+		if child := x.receiverRef(m); child != nil {
+			x.mount(r, child, at, pos)
 			continue
 		}
-		if i > 0 && !hasPath && x.maybePrefix(stack[0]) {
-			at.path, at.dynamic = "", true // use(PREFIX, router): unknown path, not middleware
-		}
-		x.mount(parent, x.file.text(m), at, pos)
-		return
+		at.auth = at.auth || x.authMiddleware(m)
 	}
 	if at.auth {
 		r.addAuth(at, pos)
@@ -120,7 +107,7 @@ func (x *jsExtraction) useCall(r *jsReceiver, parent string, pos uint32, args []
 // isPathArg reports whether a first use() argument is a path, not
 // middleware: Express treats any non-function there as a path.
 func isPathArg(n *Node) bool {
-	switch n.Type {
+	switch unwrapCast(n).Type {
 	case "string", "template_string", "regex", "array", "binary_expression":
 		return true
 	}
@@ -130,7 +117,7 @@ func isPathArg(n *Node) bool {
 // usePath reads a use() or all() path, capped at maxPathBytes; a trailing
 // "*" or "/*" is the same prefix, any other pattern makes it dynamic.
 func (x *jsExtraction) usePath(n *Node) mountPrefix {
-	s, ok := x.file.literalString(n)
+	s, ok := x.file.literalString(unwrapCast(n))
 	s = strings.TrimSuffix(strings.TrimSuffix(s, "*"), "/")
 	if !ok || strings.ContainsAny(s, "*?+()[]") {
 		return mountPrefix{dynamic: true}
@@ -138,15 +125,24 @@ func (x *jsExtraction) usePath(n *Node) mountPrefix {
 	return mountPrefix{path: s}
 }
 
-// maybePrefix: a name in front of a router that is not a function, import
-// or auth middleware of this file is probably a path constant.
-func (x *jsExtraction) maybePrefix(n *Node) bool {
-	if n.Type != "identifier" && n.Type != "member_expression" {
+// possiblePath: a first use() argument that may hold a path rather than
+// middleware: a name or call that is not a router, a function or import of
+// this file, or auth middleware. Library factories such as express.json()
+// resolve to an import and stay middleware.
+func (x *jsExtraction) possiblePath(n *Node) bool {
+	n = unwrapCast(n)
+	if x.receiverRef(n) != nil || x.authMiddleware(n) {
 		return false
 	}
-	name := x.file.text(n)
-	_, imported := x.file.imports[name]
-	return x.file.funcs[name] == nil && !imported && !x.authMiddleware(n)
+	switch n.Type {
+	case "call_expression":
+		return !x.file.imported(field(n, "function"))
+	case "identifier", "member_expression":
+		name := x.file.text(n)
+		_, imported := x.file.imports[name]
+		return x.file.funcs[name] == nil && !imported
+	}
+	return false
 }
 
 // allAuth reports whether every handler of an all() call is auth.
@@ -172,65 +168,20 @@ func (r *jsReceiver) addAuth(at mountPrefix, pos uint32) {
 	}
 }
 
-// mount records the first mount of child on parent.
-func (x *jsExtraction) mount(parent, child string, at mountPrefix, pos uint32) {
-	c := x.receivers[child]
-	if c == nil || c.mounted || parent == child {
+// mount records one mount of child on parent; every mount is kept.
+func (x *jsExtraction) mount(parent, child *jsReceiver, at mountPrefix, pos uint32) {
+	if child == parent {
+		return
+	}
+	if len(child.mounts) == maxMountPaths {
+		child.mountOverflow = true
 		return
 	}
 	at.path = capText(at.path, maxPathBytes)
-	c.mounted, c.parent, c.at, c.atPos = true, parent, at, pos
+	child.mounts = append(child.mounts, jsMount{parent: parent, at: at, pos: pos})
 }
 
-// prefix composes a receiver's mount paths, memoized per receiver.
-func (x *jsExtraction) prefix(name string) mountPrefix {
-	if p, ok := x.prefixes[name]; ok {
-		return p
-	}
-	var p mountPrefix
-	for depth, cur := 0, name; ; depth++ {
-		r := x.receivers[cur]
-		if r == nil || !r.mounted {
-			break
-		}
-		if depth >= maxMountDepth {
-			p.dynamic = true
-			break
-		}
-		p.path = joinPath(r.at.path, p.path)
-		p.dynamic = p.dynamic || r.at.dynamic
-		cur = r.parent
-	}
-	x.prefixes[name] = p
-	return p
-}
-
-// receiverAuth reports whether auth middleware guards a route declared at
-// pos with the given router-local path: used before it on its receiver
-// (on all paths, or on a prefix of a known path), on the mount of its
-// router, or before that mount on the parent, up the mount chain.
-func (x *jsExtraction) receiverAuth(recv, path string, known bool, pos uint32) bool {
-	for range maxMountDepth + 1 {
-		r := x.receivers[recv]
-		if r == nil {
-			return false
-		}
-		known = known && len(path) < maxPathBytes
-		if r.covers(path, known, pos) {
-			return true
-		}
-		if !r.mounted {
-			return false
-		}
-		if r.at.auth {
-			return true
-		}
-		path, known = joinPath(r.at.path, path), known && !r.at.dynamic
-		recv, pos = r.parent, r.atPos
-	}
-	return false
-}
-
+// covers reports whether auth middleware used on r before pos guards path.
 func (r *jsReceiver) covers(path string, known bool, pos uint32) bool {
 	if r.openAuth < pos {
 		return true

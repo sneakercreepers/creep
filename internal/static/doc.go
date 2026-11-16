@@ -25,17 +25,33 @@
 // name-based hint.
 //
 // Express auth is middleware, read in source order as Express runs it:
-// per-route middleware (also in arrays and on app.route() chains after an
-// auth .all()), auth used on the app or router before the route
-// (app.use(auth), or app.use("/admin", auth) and app.all("/admin/*", auth)
-// for routes under that path segment), and auth placed before a router in
-// its mount call (app.use("/api", auth, router)) or used on the parent
-// before the mount. A use() after a route, a dynamic guard path or a mount
-// chain past the depth cap never claims auth. A handler is a function
-// literal, a top-level function of the file, or either inside wrapper calls
-// such as asyncHandler(fn); its scan covers nested callbacks. Calls on an
-// unknown receiver count as routes only when the file imports express, the
-// receiver is a local name and the handler is a function of the file.
+// per-route middleware before the handler (also in arrays and on
+// app.route() chains after an auth .all()), auth used on the app or router
+// before the route (app.use(auth), or app.use("/admin", auth) and
+// app.all("/admin/*", auth) for routes under that path segment), and auth
+// placed before a router in its mount call (app.use("/api", auth, router))
+// or used on the parent before the mount. A use() after a route, auth after
+// the handler, a dynamic or possibly dynamic guard path (use(PREFIX, auth),
+// use(prefix(), auth)) or a mount chain past the depth cap never claims
+// auth. Auth is syntactic: a use() under a condition still counts.
+//
+// Receivers resolve by declaration: a name refers to the express() or
+// Router() bound in its innermost enclosing function, a parameter or other
+// value of that name shadows it, and a reassigned name or one bound twice in
+// a function claims no auth. A router mounted several times yields one
+// route per mount chain (up to maxMountPaths, past it the route is
+// partial), so a public mount stays public.
+//
+// Every entry of a route's argument list is analyzed: inline and same-file
+// middleware, same-file factories and wrappers such as asyncHandler(fn), and
+// the handler (the last entry that is not auth middleware); sinks of all of
+// them belong to the route, and each scan covers nested callbacks. An entry
+// that is neither a function of the file nor recognized auth middleware (an
+// imported controller, upload.single()) is code the scan cannot see, so the
+// route and file are marked partial. Calls on an unknown receiver count as
+// routes only when the file imports express, the path is a literal starting
+// with "/" or "*", the receiver is a local name and the handler is a
+// function of the file.
 //
 // DynamicArg fails closed (#185): a name counts as constant only when every
 // binding of it in the function is a simple assignment of a string, number
@@ -81,7 +97,9 @@
 // the prefix, dependencies and middleware visible in its own file;
 // add_url_rule, add_api_route and class-based views are not read; sinks are
 // followed one helper deep within the file, and an Express handler imported
-// from another file has no sinks. Prototype pollution (a computed-key write)
+// from another file has no sinks (its route is partial). Function scope is
+// the unit for receivers, so block-scoped twins in one function are
+// ambiguous. Prototype pollution (a computed-key write)
 // is not a sink kind: the planner sees its route only. Array.find shares
 // MongoDB's name, so .find counts only with an object literal filter.
 package static

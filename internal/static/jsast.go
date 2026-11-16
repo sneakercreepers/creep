@@ -189,6 +189,22 @@ func (f *jsFile) resolve(n *Node) (name string, method bool) {
 	return q, false
 }
 
+// imported reports whether an expression is an import or a member of one,
+// such as express.json or require("cors").
+func (f *jsFile) imported(n *Node) bool {
+	for n != nil && n.Type == "member_expression" {
+		n = field(n, "object")
+	}
+	if _, ok := f.requireCall(n); ok {
+		return true
+	}
+	if n == nil || n.Type != "identifier" {
+		return false
+	}
+	_, ok := f.imports[f.text(n)]
+	return ok
+}
+
 // literalString returns the value of a string, a template without
 // substitutions, or a + of them, capped at maxPathBytes. Escapes stay as
 // written; the value is for the report and prefix matching only. It walks

@@ -14,21 +14,25 @@ const methodsAll = MethodGet | MethodPost | MethodPut | MethodPatch | MethodDele
 
 // jsExtraction is the state of extracting Express routes from one file.
 type jsExtraction struct {
-	file      *jsFile
-	receivers map[string]*jsReceiver
-	chains    map[*Node]routeBase
-	handlers  map[*Node]handlerFacts
-	helpers   map[*Node][]foundSink
-	scans     map[*Node]*jsScan
-	prefixes  map[string]mountPrefix
+	file *jsFile
+	// bind holds the bindings of each receiver name (jsscope.go);
+	// overloaded names passed maxNameBindings and resolve to nothing.
+	bind       map[string][]binding
+	overloaded map[string]bool
+	chains     map[*Node]routeBase
+	handlers   map[*Node]handlerFacts
+	helpers    map[*Node][]foundSink
+	scans      map[*Node]*jsScan
 	// constBudget bounds DynamicArg analysis and scanBudget bounds handler
 	// scans (jsbind.go).
 	constBudget, scanBudget int
 }
 
-// routeBase is the receiver and path of an app.route(path) chain.
+// routeBase is the receiver and path of a route call or app.route(path)
+// chain.
 type routeBase struct {
-	recv    string
+	name    string      // receiver variable, "" when not a plain name
+	recv    *jsReceiver // nil when not a known app or router
 	path    *Node
 	allAuth bool // an earlier .all(...) link in the chain holds auth middleware
 	ok      bool
@@ -37,12 +41,12 @@ type routeBase struct {
 func extractJavaScript(root *Node, src []byte, lim extractLimits) (routes []foundRoute, truncated bool) {
 	x := &jsExtraction{
 		file:        newJSFile(root, src),
-		receivers:   map[string]*jsReceiver{},
+		bind:        map[string][]binding{},
+		overloaded:  map[string]bool{},
 		chains:      map[*Node]routeBase{},
 		handlers:    map[*Node]handlerFacts{},
 		helpers:     map[*Node][]foundSink{},
 		scans:       map[*Node]*jsScan{},
-		prefixes:    map[string]mountPrefix{},
 		constBudget: lim.constVisits,
 		scanBudget:  lim.scanVisits,
 	}
@@ -51,9 +55,7 @@ func extractJavaScript(root *Node, src []byte, lim extractLimits) (routes []foun
 		if truncated || n.Type != "call_expression" {
 			return !truncated
 		}
-		if r, ok := x.routeCall(n); ok {
-			routes = append(routes, r)
-		}
+		routes = append(routes, x.routeCall(n)...)
 		if len(routes) > lim.routes {
 			routes, truncated = routes[:lim.routes], true
 		}
@@ -63,33 +65,54 @@ func extractJavaScript(root *Node, src []byte, lim extractLimits) (routes []foun
 }
 
 // routeCall matches `recv.verb(path, ...middleware, handler)` and
-// `recv.route(path).verb(...middleware, handler)`.
-func (x *jsExtraction) routeCall(call *Node) (foundRoute, bool) {
+// `recv.route(path).verb(...middleware, handler)`, one route per mount
+// chain of the receiver.
+func (x *jsExtraction) routeCall(call *Node) []foundRoute {
 	fn := field(call, "function")
 	if fn == nil || fn.Type != "member_expression" {
-		return foundRoute{}, false
+		return nil
 	}
 	methods, ok := x.verbMethods(fn)
 	args := jsArgs(call)
 	if !ok || len(args) == 0 {
-		return foundRoute{}, false
+		return nil
 	}
 	base, stack := x.routeTarget(field(fn, "object"), args)
-	if !base.ok || len(stack) == 0 || !x.acceptReceiver(field(fn, "object"), base, stack) {
-		return foundRoute{}, false
+	if !base.ok || len(stack) == 0 {
+		return nil
+	}
+	hi := x.handlerIndex(stack)
+	if !x.acceptReceiver(field(fn, "object"), base, stack[hi]) {
+		return nil
 	}
 	r := foundRoute{framework: Express, methods: methods}
-	p, literal := x.file.literalString(base.path)
-	prefix := x.prefix(base.recv)
-	r.dynamic = prefix.dynamic || !literal
-	if !r.dynamic {
-		r.path = joinPath(prefix.path, p)
-	}
-	if base.allAuth || x.anyAuth(stack[:len(stack)-1]) || x.receiverAuth(base.recv, p, literal, call.StartByte) {
+	if base.allAuth || x.anyAuth(stack[:hi]) {
 		r.auth |= AuthMiddleware
 	}
-	x.addHandler(&r, stack[len(stack)-1], call)
-	return r, true
+	x.addHandler(&r, stack, hi, call)
+	return x.expandMounts(r, base, call.StartByte)
+}
+
+// expandMounts emits r once per mount chain of its receiver, each with its
+// own path and auth.
+func (x *jsExtraction) expandMounts(r foundRoute, base routeBase, pos uint32) []foundRoute {
+	local, literal := x.file.literalString(base.path)
+	chains, partial := x.chainsOf(base.recv, 0)
+	out := make([]foundRoute, 0, len(chains))
+	for _, c := range chains {
+		route := r
+		prefix := chainPrefix(c)
+		route.dynamic = prefix.dynamic || !literal
+		if !route.dynamic {
+			route.path = joinPath(prefix.path, local)
+		}
+		if chainAuth(base.recv, c, local, literal, pos) {
+			route.auth |= AuthMiddleware
+		}
+		route.facts.partial = route.facts.partial || partial
+		out = append(out, route)
+	}
+	return out
 }
 
 func (x *jsExtraction) verbMethods(fn *Node) (Methods, bool) {
@@ -107,14 +130,19 @@ func (x *jsExtraction) routeTarget(obj *Node, args []*Node) (routeBase, []*Node)
 	if obj != nil && obj.Type == "call_expression" {
 		return x.chainBase(obj), flattenArgs(args)
 	}
-	if isFunction(args[0]) {
+	if isFunction(unwrapCast(args[0])) {
 		return routeBase{}, nil
 	}
 	base := routeBase{path: args[0], ok: true}
-	if obj != nil && obj.Type == "identifier" {
-		base.recv = x.file.text(obj)
-	}
+	x.setReceiver(&base, obj)
 	return base, flattenArgs(args[1:])
+}
+
+func (x *jsExtraction) setReceiver(base *routeBase, obj *Node) {
+	if obj != nil && obj.Type == "identifier" {
+		base.name = x.file.text(obj)
+		base.recv = x.receiverAt(base.name, obj.StartByte)
+	}
 }
 
 // chainBase finds the app.route(path) call under a chain of verb calls,
@@ -161,9 +189,7 @@ func (x *jsExtraction) routeOf(call, fn *Node) routeBase {
 		return routeBase{}
 	}
 	base := routeBase{path: args[0], ok: true}
-	if obj := field(fn, "object"); obj != nil && obj.Type == "identifier" {
-		base.recv = x.file.text(obj)
-	}
+	x.setReceiver(&base, field(fn, "object"))
 	return base
 }
 
@@ -172,8 +198,8 @@ func (x *jsExtraction) routeOf(call, fn *Node) routeBase {
 // file must import express, the path must be a literal starting with "/" or
 // "*", the receiver must be a local name, not an imported client such as
 // axios, and the handler must be a function.
-func (x *jsExtraction) acceptReceiver(obj *Node, base routeBase, stack []*Node) bool {
-	if x.receivers[base.recv] != nil {
+func (x *jsExtraction) acceptReceiver(obj *Node, base routeBase, handler *Node) bool {
+	if base.recv != nil {
 		return true
 	}
 	p, literal := x.file.literalString(base.path)
@@ -183,48 +209,9 @@ func (x *jsExtraction) acceptReceiver(obj *Node, base routeBase, stack []*Node) 
 	if obj != nil && obj.Type == "call_expression" {
 		return true // an app.route(path) chain
 	}
-	recv := base.recv
-	_, imported := x.file.imports[recv]
-	def, _ := x.handlerDef(stack[len(stack)-1])
-	return recv != "" && !imported && def != nil
-}
-
-// addHandler sets the route's handler name, line and facts.
-func (x *jsExtraction) addHandler(r *foundRoute, handler, call *Node) {
-	def, name := x.handlerDef(handler)
-	r.handler, r.line = capText(name, maxHandlerBytes), line(call)
-	if def == nil {
-		return
-	}
-	r.line, r.facts = line(def), x.facts(def)
-	if r.facts.authCall {
-		r.auth |= AuthCall
-	}
-}
-
-// handlerDef resolves a handler expression to a function in the file:
-// a function literal, a top-level function name, or either wrapped in calls
-// such as asyncHandler(fn). name is "" for an anonymous function.
-func (x *jsExtraction) handlerDef(n *Node) (def *Node, name string) {
-	for range maxHandlerWraps {
-		switch {
-		case n == nil:
-			return nil, ""
-		case isFunction(n):
-			return n, x.file.text(field(n, "name"))
-		case n.Type == "identifier":
-			return x.file.funcs[x.file.text(n)], x.file.text(n)
-		case n.Type == "call_expression":
-			args := jsArgs(n)
-			if len(args) == 0 {
-				return nil, ""
-			}
-			n = args[len(args)-1]
-		default:
-			return nil, x.file.text(n)
-		}
-	}
-	return nil, ""
+	_, imported := x.file.imports[base.name]
+	def, _ := x.handlerDef(handler)
+	return base.name != "" && !imported && def != nil
 }
 
 // anyAuth reports whether any middleware looks like an auth check.
@@ -238,9 +225,10 @@ func (x *jsExtraction) anyAuth(stack []*Node) bool {
 }
 
 // authMiddleware matches requireUser, auth.required, requireRole("admin"),
-// passport.authenticate("jwt") and require("./auth") by name.
+// passport.authenticate("jwt"), require("./auth") and casts of them by name.
 func (x *jsExtraction) authMiddleware(n *Node) bool {
 	for range maxHandlerWraps {
+		n = unwrapCast(n)
 		if n == nil {
 			return false
 		}

@@ -27,8 +27,8 @@ type File struct {
 	// SyntaxError is set when the tree has ERROR or MISSING nodes, so routes
 	// inside the broken region may be missing.
 	SyntaxError bool
-	// Truncated is set when the file hit a route or sink cap; the scan of
-	// that file is incomplete.
+	// Truncated is set when the file hit a route or sink cap or has a
+	// Partial route; the scan of that file is incomplete.
 	Truncated bool
 	// Ignored is set when the file is vendor, generated or minified code
 	// that was listed but not parsed; it has no routes.
@@ -47,8 +47,10 @@ type Route struct {
 	// literal, so the full path is unknown.
 	DynamicPath bool
 	Auth        AuthVia
-	// Partial is set when the route's sinks were cut at a cap or their
-	// analysis ran out of budget; File.Truncated is set too.
+	// Partial is set when the route's sinks were cut at a cap, their
+	// analysis ran out of budget, or (Express) part of the route's
+	// middleware or handler is code outside the file or past a mount cap;
+	// File.Truncated is set too.
 	Partial bool
 }
 

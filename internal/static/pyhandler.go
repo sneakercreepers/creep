@@ -30,7 +30,7 @@ const maxRouteSinks = 256
 const maxConstVisits = 1 << 16
 
 // authWords mark a function, decorator or dependency as an auth check.
-var authWords = []string{"auth", "login", "jwt", "token", "permission", "admin", "require", "current_user", "role", "oauth", "api_key", "apikey", "credential", "signed_in", "logged_in", "protected"}
+var authWords = []string{"auth", "login", "jwt", "token", "permission", "admin", "require", "current_user", "role", "oauth", "api_key", "apikey", "credential", "signed_in", "logged_in", "signedin", "loggedin", "protected"}
 
 // authName reports whether the last segment of a dotted name looks like an
 // auth check.

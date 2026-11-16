@@ -124,11 +124,12 @@ function helper(id) {
 app.get("/list", list);
 app.get("/show/:id", catchAsync(show));
 app.get("/ctrl", ctrl.index);
-`, `GET /list express auth=none params=0 dynamic=false handler=list:5
+`, `file 0 syntax_error=false truncated=true
+GET /list express auth=none params=0 dynamic=false handler=list:5
   sql .query line=7 dynamic=false parameterized=false indirect=false
-GET /show/:id express auth=none params=1 dynamic=false handler=show:9
+GET /show/:id express auth=none params=1 dynamic=false handler=show:9 partial=true
   shell child_process.spawn line=11 dynamic=true parameterized=false indirect=true
-GET /ctrl express auth=none params=0 dynamic=false handler=ctrl.index:15
+GET /ctrl express auth=none params=0 dynamic=false handler=ctrl.index:15 partial=true
 `},
 	{"tagged templates and Array.find are not sinks", "app.js", `const express = require("express");
 const app = express();

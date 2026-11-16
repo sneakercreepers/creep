@@ -132,6 +132,11 @@ func (x *jsExtraction) constant(n *Node, s *jsScan, fresh bool) bool {
 		return fresh && x.objectConstant(n, s)
 	case "identifier":
 		return x.constantName(x.file.text(n), s)
+	case "as_expression", "satisfies_expression", "non_null_expression", "type_assertion":
+		// A TypeScript cast does not change the value.
+		if inner := unwrapCast(n); inner != n {
+			return x.constant(inner, s, fresh)
+		}
 	}
 	return false
 }
