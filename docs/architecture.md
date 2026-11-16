@@ -75,7 +75,7 @@ A package may import only packages in **lower** layers and only those listed in 
 | `report` | SARIF, JSON (`schema_version`), Markdown, coverage, data handling from `egress.log` | Every class is covered, partial or not evaluated; every optional scanner is listed with the classes it would cover; every not-scanned file is listed; an incomplete run is never clean; repository strings escaped | ✅ (#14, #175) |
 | `sandbox`, `verify` | Container runtime, internal network, PoC runs | No internet; never on the host | ⬜ v0.2 |
 | `mcp` | Read-only MCP server | No sandbox, no writes | ⬜ v0.3 |
-| `cli` | Commands and flags (`flag`, no framework); `scan` wires calibrate → static → planner → reader → report, `why` reads the last JSON report | Unimplemented commands fail closed; the only place static, calibrate and reader values are mapped to planner values, by explicit switch; an incomplete or partial scan never exits 0 (ADR 0007, ADR 0009); tests never reach a real model | ✅ `scan`, `why` (#175); ⬜ `init`, `doctor`, `resume` continuation |
+| `cli` | Commands and flags (`flag`, no framework); `scan` wires calibrate → static → planner → reader → report, `why` reads the last JSON report; `estimate` measures the requests a scan would send; `--stats` counts what it spent | Unimplemented commands fail closed; the only place static, calibrate and reader values are mapped to planner values, by explicit switch; an incomplete or partial scan never exits 0 (ADR 0007, ADR 0009); `estimate` has no transport (its send function measures and refuses every request; ADR 0010); tests never reach a real model | ✅ `scan`, `why` (#175), `estimate`, `--stats` (#15); ⬜ `init`, `doctor`, `resume` continuation |
 
 `planner` and `reader` must never import each other. This prompt-injection boundary is the one with the highest stakes in the layering.
 
@@ -210,3 +210,4 @@ Skipped on purpose: architectural quanta per service, cross-service schema evolu
 | [0008](adr/0008-wazero-tree-sitter.md) | wazero runs tree-sitter grammars built to WebAssembly; pinned artifacts and sandbox limits |
 | [0009](adr/0009-scan-and-why-contract.md) | `creep scan` and `creep why` contract: report location, incompleteness rules, gate severities, report v1 additions |
 | [0010](adr/0010-optional-scanners-detect-only.md) | Optional scanners are detected on `PATH`, not run; `coverage.scanners` lists each with its classes |
+| [0010](adr/0010-estimate-and-stats.md) | `creep estimate` (no model or network call), `--stats`, `--price-in`/`--price-out` |

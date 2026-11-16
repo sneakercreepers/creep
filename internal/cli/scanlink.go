@@ -25,6 +25,7 @@ import (
 type scanDeps struct {
 	connect   func(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error)
 	calibrate func(ctx context.Context, opts calibrate.CacheOptions) (calibrate.Calibration, error)
+	now       func() time.Time // --stats clock; nil is time.Now
 }
 
 // modelLink is the model transport of one run.
@@ -35,7 +36,7 @@ type modelLink struct {
 }
 
 func productionDeps() scanDeps {
-	return scanDeps{connect: connectGateway, calibrate: calibrateWithUserCache}
+	return scanDeps{connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now}
 }
 
 // connectGateway is the only production transport: consent, budget,
