@@ -40,12 +40,12 @@ Run `creep why <id>` for the evidence behind a finding.
 
 ## Optional scanners
 
-creep does not run external scanners yet; the classes they would cover were not evaluated through them.
+Only a scanner marked evaluated ran offline and evaluated its classes; for every other status they were not evaluated through it.
 
-| Scanner | Status | Classes not evaluated |
+| Scanner | Status | Classes |
 |---|---|---|
-| `gitleaks` | `not enabled` | `hardcoded_secret` |
-| `osv-scanner` | `missing` | `vulnerable_dependency` |
+| `gitleaks` | `evaluated` | `hardcoded_secret` |
+| `osv-scanner` | `failed` | `vulnerable_dependency` |
 | `semgrep` | `refused` | `xss`, `insecure_deserialization` |
 
 ## Data handling

@@ -121,6 +121,16 @@ model:
 
 Always on, not configurable: secret redaction, `egress.log`, no telemetry. An organization policy can lock these settings for every repo.
 
+### Optional scanners
+
+Enable them in your user config, `--config` or the organization policy (`scanners.enabled: [gitleaks, osv-scanner]`); a repository's `creep.yaml` can only turn them off. creep runs an installed scanner only from outside the repository, offline, with fixed arguments and no shell ([ADR 0013](docs/adr/0013-scanner-runner.md)):
+
+- **gitleaks** scans files (not git history) with its built-in rules and `--redact`. A `.gitleaksignore` at the repository root would hide findings, and gitleaks always reads it, so creep does not run gitleaks there and the run is incomplete.
+- **osv-scanner** runs with `--offline --no-ignore` against your local database; set `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` to it (download it once with `osv-scanner --download-offline-databases`). Without a database there, osv-scanner is not run.
+- **semgrep** is only detected for now: creep ships no local rules.
+
+Their findings are reported as `probable`. A scanner that fails or times out leaves its classes not evaluated and the run incomplete (exit `4`).
+
 ## Output
 
 - **SARIF** for GitHub code scanning, GitLab, DefectDojo, SonarQube

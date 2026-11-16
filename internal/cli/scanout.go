@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
@@ -49,6 +50,9 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 
 func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*report.Report, error) {
 	reason := incompleteReason(res.stop, res.findings, res.gaps)
+	if reason == "" && res.scanners.failed {
+		reason = reasonScannerFailed
+	}
 	outcome := state.OutcomeComplete
 	if reason != "" {
 		outcome = state.OutcomeIncomplete
@@ -61,12 +65,13 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 		return nil, err
 	}
 	return report.New(report.Input{
-		Run: s.run.Summary(), ScanIncomplete: res.stop != "", Findings: res.findings,
+		Run: s.run.Summary(), ScanIncomplete: res.stop != "",
+		Findings: append(slices.Clip(res.findings), res.scanners.findings...),
 		Classes: classCoverage(coverageInput{
 			cal: cal.Result, findings: res.findings, planned: res.planned,
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
-		NotEvaluated: res.gaps, Scanners: scannerCoverage(s.cfg.Scanners.Enabled), DataHandling: data,
+		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
 	})
 }
 
@@ -223,11 +228,15 @@ func printClasses(w io.Writer, classes []report.ClassCoverage) {
 	fmt.Fprintf(w, "coverage: %s\n", strings.Join(parts, ", "))
 }
 
-// printScanners lists each optional scanner and the classes it leaves not
-// evaluated. Names, statuses and classes are IDs report.New checked.
+// printScanners lists each optional scanner, its status and its classes.
+// Names, statuses and classes are IDs report.New checked.
 func printScanners(w io.Writer, scanners []report.ScannerCoverage) {
 	for _, s := range scanners {
-		fmt.Fprintf(w, "scanner %s: %s; not evaluated: %s\n", s.Name, s.Status, strings.Join(s.Classes, ", "))
+		verb := "not evaluated"
+		if s.Status == report.ScannerEvaluated {
+			verb = "evaluated"
+		}
+		fmt.Fprintf(w, "scanner %s: %s; %s: %s\n", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))
 	}
 }
 

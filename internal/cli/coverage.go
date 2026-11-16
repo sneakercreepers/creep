@@ -46,6 +46,9 @@ var classSeverity = map[string]string{
 	string(calibrate.ClassPathTraversal):    "high",
 	string(calibrate.ClassSSRF):             "high",
 	classTemplateInjection:                  "high",
+	// Optional scanner classes (ADR 0013): probable until a person checks.
+	"hardcoded_secret":      "high",
+	"vulnerable_dependency": "high",
 }
 
 // coverageInput is what decides each class's coverage.

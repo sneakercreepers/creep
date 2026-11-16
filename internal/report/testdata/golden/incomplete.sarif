@@ -178,20 +178,20 @@
             },
             {
               "descriptor": {
-                "id": "creep/scanner/not_enabled"
+                "id": "creep/scanner/evaluated"
               },
               "level": "note",
               "message": {
-                "text": "optional scanner gitleaks not_enabled; not evaluated: hardcoded_secret"
+                "text": "optional scanner gitleaks evaluated; evaluated: hardcoded_secret"
               }
             },
             {
               "descriptor": {
-                "id": "creep/scanner/missing"
+                "id": "creep/scanner/failed"
               },
-              "level": "note",
+              "level": "warning",
               "message": {
-                "text": "optional scanner osv-scanner missing; not evaluated: vulnerable_dependency"
+                "text": "optional scanner osv-scanner failed; not evaluated: vulnerable_dependency"
               }
             },
             {
@@ -346,14 +346,14 @@
           "scanners": [
             {
               "name": "gitleaks",
-              "status": "not_enabled",
+              "status": "evaluated",
               "classes": [
                 "hardcoded_secret"
               ]
             },
             {
               "name": "osv-scanner",
-              "status": "missing",
+              "status": "failed",
               "classes": [
                 "vulnerable_dependency"
               ]

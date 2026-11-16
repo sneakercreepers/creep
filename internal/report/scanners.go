@@ -2,25 +2,29 @@ package report
 
 import "fmt"
 
-// ScannerStatus is why an optional external scanner did not evaluate its
-// classes. creep runs none yet (ADR 0010), so every status means not
-// evaluated; none makes the run incomplete.
+// ScannerStatus is whether an optional external scanner evaluated its
+// classes. Only evaluated means it did (ADR 0013); failed means it was run
+// and evaluated nothing, which the caller reports as an incomplete run.
 type ScannerStatus string
 
 // Scanner statuses, a closed set.
 const (
 	ScannerNotEnabled ScannerStatus = "not_enabled" // not in scanners.enabled
 	ScannerMissing    ScannerStatus = "missing"     // enabled, not on PATH
-	ScannerRefused    ScannerStatus = "refused"     // the PATH match is in the repository or the current directory
-	ScannerNotRun     ScannerStatus = "not_run"     // installed, but this version does not run it
+	ScannerRefused    ScannerStatus = "refused"     // its final path is in the repository or the current directory
+	ScannerNotRun     ScannerStatus = "not_run"     // installed, but has no offline mode creep can run
+	ScannerEvaluated  ScannerStatus = "evaluated"   // ran offline; its findings are in the report
+	ScannerFailed     ScannerStatus = "failed"      // ran but evaluated nothing (exit status, timeout, bad output)
 )
 
 var scannerStatuses = map[ScannerStatus]bool{
 	ScannerNotEnabled: true, ScannerMissing: true, ScannerRefused: true, ScannerNotRun: true,
+	ScannerEvaluated: true, ScannerFailed: true,
 }
 
 // ScannerCoverage is one optional external scanner and the classes it
-// would cover, which this run did not evaluate through it.
+// covers; unless Status is evaluated, this run did not evaluate them
+// through it.
 type ScannerCoverage struct {
 	Name    string        `json:"name"`
 	Status  ScannerStatus `json:"status"`

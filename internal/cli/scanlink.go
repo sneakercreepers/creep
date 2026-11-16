@@ -16,6 +16,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/reader"
+	"github.com/sneakercreepers/creep/internal/scanrun"
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
@@ -26,6 +27,17 @@ type scanDeps struct {
 	connect   func(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error)
 	calibrate func(ctx context.Context, opts calibrate.CacheOptions) (calibrate.Calibration, error)
 	now       func() time.Time // --stats clock; nil is time.Now
+	// runScanner runs one optional scanner; nil is scanrun.Run, the only
+	// code that starts a program (ADR 0013).
+	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result
+}
+
+// scannerRunner is runScanner, or scanrun.Run when none is set.
+func (d scanDeps) scannerRunner() func(context.Context, scanrun.Job) scanrun.Result {
+	if d.runScanner != nil {
+		return d.runScanner
+	}
+	return scanrun.Run
 }
 
 // modelLink is the model transport of one run.
