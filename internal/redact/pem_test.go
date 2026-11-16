@@ -10,6 +10,16 @@ import (
 
 const base64Chars = alnum + "+/"
 
+// raceStride thins the every-offset tests under -race (issue #203): they try
+// every 11th offset, and as 11 shares no factor with the 64, 70 and 76-byte
+// line widths, over 11 lines or more those offsets still fall at every
+// position within a line. The job without -race (windows-latest) still tries
+// every offset.
+const raceStride = 11
+
+// offsetStep is the step between the offsets an every-offset test tries.
+func offsetStep() int { return underRace(1, raceStride) }
+
 // Header and footer are split so this file holds no literal key pattern.
 func pemLine(edge, kind string) string {
 	return "-----" + edge + " " + kind + " PRIV" + "ATE KEY-----"
@@ -144,7 +154,7 @@ func TestRedactSplitPrivateKey(t *testing.T) {
 		for shard := range shards {
 			t.Run(fmt.Sprint(k.kind, "/", shard), func(t *testing.T) {
 				t.Parallel()
-				for i := shard; i <= len(key); i += shards {
+				for i := shard; i <= len(key); i += shards * offsetStep() {
 					assertSplitHidden(t, set, key, i)
 				}
 			})
@@ -231,7 +241,7 @@ func TestRedactKeyBodyWindows(t *testing.T) {
 
 func assertWindowsHidden(t *testing.T, set map[string]bool, text string, size int) {
 	t.Helper()
-	for i := 0; i+size <= len(text); i++ {
+	for i := 0; i+size <= len(text); i += offsetStep() {
 		window := text[i : i+size]
 		if w := leakedWindow(set, mustRedact(t, newRedactor(t), window)); w != "" {
 			t.Fatalf("window %d+%d leaked %q from %q", i, size, w, window)

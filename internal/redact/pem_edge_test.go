@@ -73,7 +73,7 @@ func TestRedactKeyWindowsInCalls(t *testing.T) {
 		t.Run(fmt.Sprint(shard), func(t *testing.T) {
 			t.Parallel()
 			for size := 40 + 20*shard; size <= 600; size += 20 * shards {
-				for i := 0; i+size <= len(text); i++ {
+				for i := 0; i+size <= len(text); i += offsetStep() {
 					for calls := 1; calls <= 3; calls++ {
 						assertNoFullLine(t, full, text[i:i+size], calls)
 					}

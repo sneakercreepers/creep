@@ -77,11 +77,13 @@ func minFileTime(t *testing.T, r *Redactor, text string) time.Duration {
 
 // A file 16 times larger should take about 16 times longer; quadratic work
 // takes 256 times longer. The slack of 4x keeps slow or noisy runners green.
+// Under -race both sizes are a quarter, keeping the 16 times ratio.
 func TestFileBlankTailIsLinear(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow")
 	}
-	const small, large, maxRatio = 64 << 10, MaxFileBytes, 64
+	const maxRatio = 64
+	small, large := underRace(64<<10, 16<<10), underRace(MaxFileBytes, MaxFileBytes/4)
 	r := newRedactor(t)
 	for name, gen := range blankTails {
 		smallTime := max(minFileTime(t, r, gen(small)), time.Millisecond)

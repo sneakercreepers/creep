@@ -51,6 +51,15 @@ func mustRedact(t testing.TB, r *Redactor, text string) string {
 	return out
 }
 
+// underRace returns race under -race and full otherwise: the heaviest tests
+// scale down there (issue #203) and keep full size in the job without -race.
+func underRace(full, race int) int {
+	if raceEnabled {
+		return race
+	}
+	return full
+}
+
 var markerRe = regexp.MustCompile(`<(?:SECRET|PII)_[A-Z0-9_]+_[0-9]+>`)
 
 func TestRedactMasksSecrets(t *testing.T) {

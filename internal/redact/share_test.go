@@ -63,13 +63,15 @@ func snap(s *runState) snapshot {
 // Acceptance (#105): one crafted file cannot fill the run. It fails alone
 // with ErrTooManyValues and no output, leaves the run as it was, and every
 // later file is still redacted, its values re-masked in later fragments.
+// Under -race the many-lengths file holds 500 values, still several chunks.
 func TestCraftedFileCannotFillRun(t *testing.T) {
+	many := underRace(1000, 500)
 	tests := []struct {
 		name string
 		file string
 	}{
 		{"issue size", placeholderFile('x', 272)},
-		{"1000 lengths", placeholderFile('x', 1000)},
+		{fmt.Sprint(many, " lengths"), placeholderFile('x', many)},
 		{"just over the share", placeholderFile('y', maxWindowValues+maxCallOverflow+1)},
 	}
 	for _, tt := range tests {

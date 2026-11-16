@@ -76,7 +76,7 @@ func TestRedactSplitLiteralKey(t *testing.T) {
 		for shard := range shards {
 			t.Run(fmt.Sprint(name, "/", shard), func(t *testing.T) {
 				t.Parallel()
-				for i := shard; i <= len(text); i += shards {
+				for i := shard; i <= len(text); i += shards * offsetStep() {
 					assertPartsHidden(t, set, text, i)
 					for _, middle := range []int{160, 320} {
 						assertPartsHidden(t, set, text, i, min(i+middle, len(text)))
