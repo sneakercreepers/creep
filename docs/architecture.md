@@ -222,3 +222,4 @@ Skipped on purpose: architectural quanta per service, cross-service schema evolu
 | [0012](adr/0012-language-kits.md) | Language kits as data: `.scm` queries in a Go matcher over the validated tree, closed sink tables, embedded-only loading; semantics and fail-closed rules stay in Go |
 | [0013](adr/0013-scanner-runner.md) | `internal/scanrun` alone may start scanners (model CLIs: ADR 0014): gitleaks and osv-scanner offline, fixed arguments, final path outside the repository; a failed scanner makes the run incomplete; the project file may only remove scanners |
 | [0014](adr/0014-command-model-through-gateway.md) | Command models run only through the gateway (`EgressLog.Exec`); tool canary at `doctor` and scan start |
+| [0015](adr/0015-model-presets.md) | Model CLI presets are embedded data (`internal/presets`) resolved into `model.run`; closed schema with listed tools-off flags; never chosen by the project file |
