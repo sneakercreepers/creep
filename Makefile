@@ -17,7 +17,7 @@ EXE := .exe
 endif
 BIN := bin/creep$(EXE)
 
-.PHONY: build test check fmt-check tidy vet budget map map-check rulesets clean
+.PHONY: build test check fmt-check tidy vet budget map map-check protections rulesets clean
 
 # VERSION and COMMIT reach the recipe through the environment, never as shell
 # text, and are filtered to SAFE_CHARS before use.
@@ -59,6 +59,17 @@ budget:
 # docs/map.md: every package with its doc.go first sentence and its layer.
 map:
 	go run ./internal/tools/pkgmap
+
+# Fixed protections (#17): one test per protection, each with a broken fixture
+# that proves it can fail, and the holistic --replay run (architecture.md §9).
+# make check runs them too; CI runs this target as the required protections job,
+# with a bounded fuzz run on top. internal/tools/budget checks every name exists.
+PROTECTION_TESTS := FuzzScanSendsNoSecret|TestScanProtectionsCatchBrokenPath|TestScanSendsOnlyRedactedFragments|FuzzRedactSecrets|FuzzFile|TestEveryCallLogged|TestToolCanaryProtection|TestInputCarriesNoText|TestTextCapableCatchesText|TestNetImportFailsBudget|TestHolisticReplayProtections|TestHolisticCatchesBrokenRun
+PROTECTION_PKGS  := ./internal/gateway ./internal/redact ./internal/models ./internal/planner ./internal/tools/budget ./internal/cli
+FUZZTIME ?= 30s
+protections:
+	go test -count=1 -run '^($(PROTECTION_TESTS))$$' $(PROTECTION_PKGS)
+	go test -run '^$$' -fuzz '^FuzzScanSendsNoSecret$$' -fuzztime $(FUZZTIME) ./internal/gateway
 
 # Fails when docs/map.md differs from what make map would write.
 map-check:
