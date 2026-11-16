@@ -33,7 +33,7 @@ Before v1.0, only the latest minor release is supported.
 
 ## Verifying a release
 
-Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) from a `v*` tag, only in the `release` environment (maintainer approval) and only when the tagged commit is on `main` or a `release/*` branch. No signing key exists: the workflow signs with its short-lived GitHub OIDC identity (Sigstore keyless).
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) from a `v*` tag, only in the `release` environment (maintainer approval) and only when the tagged commit is on `main` (a `release/*` branch needs its own ruleset first; see CONTRIBUTING.md). No signing key exists: the workflow signs with its short-lived GitHub OIDC identity (Sigstore keyless).
 
 Each release has:
 
