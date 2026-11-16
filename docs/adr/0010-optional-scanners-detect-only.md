@@ -1,6 +1,6 @@
 # ADR 0010: Optional scanners are detected, not run, and listed in the report
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer approval on PR #218, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the JSON report schema v1 (adds `coverage.scanners`), the Markdown and SARIF reports, the `creep scan` text summary

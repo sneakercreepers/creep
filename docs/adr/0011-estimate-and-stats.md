@@ -1,6 +1,6 @@
 # ADR 0011: `creep estimate`, `--stats` and prices
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer approval on PR #219, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract: a new command `estimate` and the global flags `--stats`, `--price-in` and `--price-out`
