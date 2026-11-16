@@ -18,6 +18,9 @@ type jsScan struct {
 	opaque bool
 	// cut is set when the scan ran out of budget.
 	cut bool
+	// foreign is set when the function calls into a module of the
+	// repository with a call that is not a sink (jshandler.go).
+	foreign bool
 }
 
 func (x *jsExtraction) scan(fn *Node) *jsScan {

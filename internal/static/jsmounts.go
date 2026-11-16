@@ -15,6 +15,10 @@ type jsReceiver struct {
 	// ambiguous is set when the binding is reassigned or shares its scope
 	// with another binding of the name; it then claims no auth.
 	ambiguous bool
+	// escaped is set when the receiver is used other than by a method call
+	// or as a use() argument (an alias, a helper argument, an export), so
+	// it may have mounts the file does not show.
+	escaped bool
 	// mounts lists every parent.use(path, ..., router) of this router, up
 	// to maxMountPaths; mountOverflow marks the rest.
 	mounts        []jsMount
@@ -46,23 +50,54 @@ type authUse struct {
 }
 
 // collectReceivers resolves receivers by scope, then reads their use and
-// all calls in source order.
+// all calls in source order and marks receivers that escape.
 func (x *jsExtraction) collectReceivers(root *Node) {
 	x.collectBindings(root)
 	if len(x.bind) == 0 {
 		return
 	}
+	mountArgs := map[*Node]bool{}
 	walk(root, func(n *Node) bool {
 		if n.Type == "call_expression" {
-			x.use(n)
+			x.use(n, mountArgs)
 		}
+		x.markEscapes(n, mountArgs)
 		return true
 	})
 }
 
+// markEscapes flags receivers named by n's children anywhere but as a
+// method-call object, a binding target or a use() argument.
+func (x *jsExtraction) markEscapes(n *Node, mountArgs map[*Node]bool) {
+	for _, c := range n.Children {
+		if c.Type != "identifier" && c.Type != "shorthand_property_identifier" {
+			continue
+		}
+		name := x.file.text(c)
+		if x.bind[name] == nil || mountArgs[c] || bindingSite(n, c) {
+			continue
+		}
+		if r := x.receiverAt(name, c.StartByte); r != nil {
+			r.escaped = true
+		}
+	}
+}
+
+func bindingSite(parent, c *Node) bool {
+	switch parent.Type {
+	case "member_expression":
+		return c.Field == "object"
+	case "variable_declarator":
+		return c.Field == "name"
+	case "assignment_expression":
+		return c.Field == "left"
+	}
+	return false
+}
+
 // use reads `recv.use([path,] ...middleware)`, which mounts routers and adds
 // middleware, and `recv.all(path, ...auth)`, which guards a path.
-func (x *jsExtraction) use(call *Node) {
+func (x *jsExtraction) use(call *Node, mountArgs map[*Node]bool) {
 	fn := field(call, "function")
 	if fn == nil || fn.Type != "member_expression" {
 		return
@@ -74,7 +109,7 @@ func (x *jsExtraction) use(call *Node) {
 	}
 	switch x.file.text(field(fn, "property")) {
 	case "use":
-		x.useCall(r, call.StartByte, args)
+		x.useCall(r, call.StartByte, args, mountArgs)
 	case "all":
 		if len(args) > 1 && x.allAuth(flattenArgs(args[1:])) {
 			r.addAuth(x.usePath(args[0]), call.StartByte)
@@ -84,7 +119,7 @@ func (x *jsExtraction) use(call *Node) {
 
 // useCall mounts each router in the call with the auth middleware seen
 // before it, and records auth middleware for routes declared later.
-func (x *jsExtraction) useCall(r *jsReceiver, pos uint32, args []*Node) {
+func (x *jsExtraction) useCall(r *jsReceiver, pos uint32, args []*Node, mountArgs map[*Node]bool) {
 	var at mountPrefix
 	switch {
 	case isPathArg(args[0]):
@@ -94,6 +129,7 @@ func (x *jsExtraction) useCall(r *jsReceiver, pos uint32, args []*Node) {
 	}
 	for _, m := range flattenArgs(args) {
 		if child := x.receiverRef(m); child != nil {
+			mountArgs[unwrapCast(m)] = true
 			x.mount(r, child, at, pos)
 			continue
 		}

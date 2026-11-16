@@ -109,7 +109,7 @@ func (x *jsExtraction) expandMounts(r foundRoute, base routeBase, pos uint32) []
 		if chainAuth(base.recv, c, local, literal, pos) {
 			route.auth |= AuthMiddleware
 		}
-		route.facts.partial = route.facts.partial || partial
+		route.facts.partial = route.facts.partial || partial || chainHidden(base.recv, c)
 		out = append(out, route)
 	}
 	return out

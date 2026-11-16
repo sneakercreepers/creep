@@ -65,6 +65,21 @@ func chainPrefix(c mountChain) mountPrefix {
 	return p
 }
 
+// chainHidden reports whether a receiver on the chain is mounted in the
+// file and also escapes, so the route may be reachable through a mount the
+// file does not show.
+func chainHidden(r *jsReceiver, c mountChain) bool {
+	if r != nil && r.escaped && len(r.mounts) > 0 {
+		return true
+	}
+	for _, h := range c.hops {
+		if p := h.m.parent; p.escaped && len(p.mounts) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // chainAuth reports whether auth middleware guards a route declared at pos
 // on r with the given router-local path, reached through c: used before it
 // on r, set on a mount of the chain, or used on a parent before that mount.
@@ -83,7 +98,10 @@ func chainAuth(r *jsReceiver, c mountChain, path string, known bool, pos uint32)
 		if cur.covers(path, known && len(path) < maxPathBytes, pos) {
 			return true
 		}
-		if i == len(c.hops) {
+		// An escaped router may also be mounted where the file does not
+		// show, perhaps publicly: auth from its mounts and above it would
+		// not hold there.
+		if i == len(c.hops) || cur.escaped {
 			return false
 		}
 		m := c.hops[i].m

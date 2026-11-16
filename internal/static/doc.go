@@ -40,7 +40,19 @@
 // value of that name shadows it, and a reassigned name or one bound twice in
 // a function claims no auth. A router mounted several times yields one
 // route per mount chain (up to maxMountPaths, past it the route is
-// partial), so a public mount stays public.
+// partial), so a public mount stays public. A router that is mounted in the
+// file and also escapes (an alias, a helper argument, an export) may have
+// mounts the file does not show, so its routes are partial and claim no
+// auth from its mounts or above them; its own use() auth still holds.
+//
+// A receiver imported from a module of the repository (a relative or
+// absolute path, or an @/ or ~/ alias: ./models/User, ../db) is an unknown
+// object from another file, so its method calls match the "." sink specs
+// as a variable's do (User.findOne, db.query; .find takes any filter but a
+// callback there). Any other call into such a module (svc.createUser,
+// getUser) runs code the scan cannot see and makes the route partial.
+// Package imports never fall back to method names, so ReactDOM.render is
+// not a template sink.
 //
 // Every entry of a route's argument list is analyzed: inline and same-file
 // middleware, same-file factories and wrappers such as asyncHandler(fn), and

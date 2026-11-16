@@ -49,7 +49,8 @@ type Route struct {
 	Auth        AuthVia
 	// Partial is set when the route's sinks were cut at a cap, their
 	// analysis ran out of budget, or (Express) part of the route's
-	// middleware or handler is code outside the file or past a mount cap;
+	// middleware, handler or their calls is code outside the file, or the
+	// route may be reachable through mounts the file does not show;
 	// File.Truncated is set too.
 	Partial bool
 }

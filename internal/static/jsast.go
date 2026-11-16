@@ -189,6 +189,46 @@ func (f *jsFile) resolve(n *Node) (name string, method bool) {
 	return q, false
 }
 
+// localCall reports whether a callee is, or is a member of, a module of the
+// repository itself (./db, ../models/User, an @/ or ~/ alias), imported or
+// required; method is the called property, "" for the import itself. Such
+// a receiver is an unknown object from another file, like a variable.
+func (f *jsFile) localCall(n *Node) (method string, ok bool) {
+	var props []string
+	for n != nil && n.Type == "member_expression" {
+		props = append(props, f.text(field(n, "property")))
+		n = field(n, "object")
+	}
+	spec, required := f.requireCall(n)
+	if !required {
+		if n == nil || n.Type != "identifier" {
+			return "", false
+		}
+		if spec, ok = f.imports[f.text(n)]; !ok {
+			return "", false
+		}
+	}
+	if !localModule(spec) {
+		return "", false
+	}
+	if len(props) == 0 {
+		return "", true
+	}
+	return props[0], true
+}
+
+// localModule reports whether a module specifier (or module.member) names a
+// file of the repository rather than a package: npm names never start with
+// "." or "/", and "@/" and "~/" are path aliases, not scopes.
+func localModule(spec string) bool {
+	for _, p := range []string{".", "/", "@/", "~/"} {
+		if strings.HasPrefix(spec, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // imported reports whether an expression is an import or a member of one,
 // such as express.json or require("cors").
 func (f *jsFile) imported(n *Node) bool {
