@@ -1,0 +1,120 @@
+name: Release
+
+# A v* tag builds, signs and publishes a release from the `release`
+# environment (maintainer approval, v* tags only). Pull requests that touch the
+# release files and manual runs only build a snapshot: no secrets, no
+# signature, nothing published.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .goreleaser.yaml
+      - .github/workflows/release.yml
+      - .github/actions/release-tools/**
+      - .github/scripts/tag-ancestry.sh
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: ./.github/actions/release-tools
+      - name: goreleaser check
+        run: goreleaser check
+      - name: Ancestry guard accepts main and refuses a stray commit
+        run: |
+          bash .github/scripts/tag-ancestry.sh "$(git rev-parse refs/remotes/origin/main)"
+          stray="$(git -c user.name=ci -c user.email=ci@invalid commit-tree -m stray 'HEAD^{tree}')"
+          if bash .github/scripts/tag-ancestry.sh "$stray"; then
+            echo "::error::the ancestry guard accepted a commit that is not on main"
+            exit 1
+          fi
+      - name: Snapshot build (no signature, nothing published)
+        run: goreleaser release --snapshot --clean --skip=sign,publish
+      - name: Binaries are reproducible
+        run: |
+          sha256sum dist/creep_*/creep* > "$RUNNER_TEMP/first.sha256"
+          goreleaser release --snapshot --clean --skip=sign,publish,sbom
+          sha256sum dist/creep_*/creep* | diff "$RUNNER_TEMP/first.sha256" -
+
+  ancestry:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tagged commit is on main or a release/* branch
+        run: bash .github/scripts/tag-ancestry.sh "$GITHUB_SHA"
+
+  release:
+    needs: ancestry
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # create the draft release, upload assets, publish it
+      id-token: write # keyless cosign signature and build provenance
+      attestations: write # store the provenance attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: ./.github/actions/release-tools
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Build, sign and upload a draft release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: goreleaser release --clean
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+      # The same commands the README and the release notes give users; the
+      # draft is published only when they pass.
+      - name: Verify like a user
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cosign verify-blob \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --bundle checksums.txt.sigstore.json checksums.txt
+          sha256sum --check --ignore-missing checksums.txt
+          for archive in *.tar.gz *.zip; do
+            gh attestation verify "$archive" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          done
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false

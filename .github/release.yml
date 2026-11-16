@@ -1,7 +1,9 @@
-# GitHub-native release notes, grouped by PR label. goreleaser uses them via changelog.use: github-native.
+# GitHub-native release notes, grouped by PR label. goreleaser uses them via
+# changelog.use: github-native (.goreleaser.yaml). A PR lands in the first
+# category whose label it has.
 changelog:
   exclude:
-    labels: ["skip-changelog", "type/chore"]
+    labels: ["skip-changelog"]
     authors: ["dependabot[bot]"]
   categories:
     - title: "⚠️ Breaking changes"
@@ -16,5 +18,7 @@ changelog:
       labels: ["type/bug", "type/false-positive", "type/false-negative"]
     - title: "📚 Documentation"
       labels: ["type/docs"]
+    - title: "🧰 Maintenance"
+      labels: ["type/chore"]
     - title: "Other changes"
       labels: ["*"]
