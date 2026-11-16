@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -26,6 +27,9 @@ func TestMain(m *testing.M) {
 
 // fakeMain checks what every run must look like, then acts out mode.
 func fakeMain(mode string, args []string) int {
+	if os.Getenv("FAKE_GRANDCHILD") != "" {
+		return grandchild()
+	}
 	marker := filepath.Join(filepath.Dir(os.Args[0]), "ran")
 	_ = os.WriteFile(marker, nil, 0o600) //nolint:gosec // G703: beside the fake, in t.TempDir()
 	if why := checkSandbox(args); why != "" {
@@ -45,6 +49,9 @@ func fakeMain(mode string, args []string) int {
 	case "outside":
 		writeReport(report, gitleaksJSON(filepath.Join(filepath.Dir(repo), "elsewhere", "k.py")))
 	case "slow":
+		time.Sleep(time.Minute)
+	case "tree":
+		startGrandchild(args)
 		time.Sleep(time.Minute)
 	case "exit3":
 		return 3
@@ -70,7 +77,7 @@ func checkSandbox(args []string) string {
 		return "HOME or cwd not in the workspace"
 	case args[0] == "detect" && !hasAll(args, "--no-git", "--redact", "--config", "--gitleaks-ignore-path"):
 		return "gitleaks offline flags missing"
-	case args[0] == "scan" && (!hasAll(args, "--offline", "--config") || os.Getenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY") == ""):
+	case args[0] == "scan" && (!hasAll(args, "--offline", "--no-ignore", "--config") || os.Getenv("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY") == ""):
 		return "osv-scanner offline flags missing"
 	}
 	return ""
@@ -168,6 +175,29 @@ func ran(bin string) bool {
 	_, err := os.Stat(filepath.Join(filepath.Dir(bin), "ran"))
 	return err == nil
 }
+
+// startGrandchild starts a helper the way a tool might, then leaves it
+// running. It marks itself started, and survived if no one killed it.
+func startGrandchild(args []string) {
+	cmd := exec.Command(os.Args[0], args...) //nolint:gosec // G204: the test binary itself
+	cmd.Env = append(os.Environ(), "FAKE_GRANDCHILD=1")
+	_ = cmd.Start()
+	for range 100 { // wait until it runs, so the timeout cannot win the race
+		if _, err := os.Stat(treeMarker("started")); err == nil {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func grandchild() int {
+	writeReport(treeMarker("started"), nil)
+	time.Sleep(2 * time.Second)
+	writeReport(treeMarker("survived"), nil)
+	return 0
+}
+
+func treeMarker(name string) string { return filepath.Join(filepath.Dir(os.Args[0]), name) }
 
 // writeReport writes the fake's report where the runner asked for it.
 func writeReport(path string, data []byte) {

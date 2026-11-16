@@ -10,6 +10,24 @@ import (
 	"github.com/sneakercreepers/creep/internal/static"
 )
 
+// osvDB lays out a local osv-scanner database under dir, as
+// --download-offline-databases would, and returns dir.
+func osvDB(t *testing.T, dir string) string {
+	t.Helper()
+	writeFile(t, filepath.Join(dir, "osv-scanner", "npm", "all.zip"), "PK fake")
+	return dir
+}
+
+func writeFile(t *testing.T, path, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func testLimits() Limits {
 	return Limits{Timeout: 20 * time.Second, MaxOutput: 1024, MaxFindings: 10}
 }
@@ -46,7 +64,7 @@ func TestRun(t *testing.T) {
 			if err := os.Mkdir(repo, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			job := Job{Scanner: tc.scanner, Bin: installFake(t, base, tc.mode, string(tc.scanner)), Repo: repo, OSVDB: t.TempDir(), Limits: testLimits()}
+			job := Job{Scanner: tc.scanner, Bin: installFake(t, base, tc.mode, string(tc.scanner)), Repo: repo, OSVDB: osvDB(t, t.TempDir()), Limits: testLimits()}
 			if tc.limits != nil {
 				tc.limits(&job.Limits)
 			}
@@ -93,8 +111,29 @@ func TestRunRefusesWithoutStarting(t *testing.T) {
 		{"osv-scanner with a relative database path", func(t *testing.T, base, repo string) Job {
 			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: "db"}
 		}, NotRun},
+		{"osv-scanner with an empty database directory", func(t *testing.T, base, repo string) Job {
+			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: t.TempDir()}
+		}, NotRun},
+		{"osv-scanner with only an empty all.zip", func(t *testing.T, base, repo string) Job {
+			db := t.TempDir()
+			writeFile(t, filepath.Join(db, "osv-scanner", "npm", "all.zip"), "")
+			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: db}
+		}, NotRun},
+		{"osv-scanner with a missing database directory", func(t *testing.T, base, repo string) Job {
+			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: filepath.Join(base, "none")}
+		}, NotRun},
+		{"gitleaks with a repository .gitleaksignore", func(t *testing.T, base, repo string) Job {
+			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "app/config.py:generic-api-key:3\n")
+			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
+		}, Failed},
+		{"gitleaks with a .gitleaksignore directory", func(t *testing.T, base, repo string) Job {
+			if err := os.Mkdir(filepath.Join(repo, ".gitleaksignore"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
+		}, Failed},
 		{"osv-scanner database inside the repository", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: repo}
+			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: osvDB(t, repo)}
 		}, Refused},
 		{"binary inside the repository", func(t *testing.T, _, repo string) Job {
 			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, repo, "findings", "gitleaks"), Repo: repo}
@@ -115,8 +154,12 @@ func TestRunRefusesWithoutStarting(t *testing.T) {
 			}
 			job := tc.job(t, base, repo)
 			job.Limits = testLimits()
-			if got := Run(context.Background(), job); got.Outcome != tc.want || len(got.Findings) != 0 {
+			got := Run(context.Background(), job)
+			if got.Outcome != tc.want || len(got.Findings) != 0 {
 				t.Fatalf("Run = %+v, want outcome %d", got, tc.want)
+			}
+			if tc.want == Failed && got.Failure != FailRepoIgnore {
+				t.Errorf("failure %s, want %s", got.Failure, FailRepoIgnore)
 			}
 			if ran(job.Bin) {
 				t.Error("the binary was started")

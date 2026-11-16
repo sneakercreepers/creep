@@ -13,15 +13,20 @@
 //   - Arguments are fixed per scanner; the repository path is the only
 //     variable, passed as one argument. No shell parses anything.
 //   - Only offline modes run: gitleaks on files only (--no-git) with creep's
-//     own config, so a repository's .gitleaks.toml or .gitleaksignore cannot
-//     hide a secret; osv-scanner with --offline against the user's local
-//     database. semgrep needs rules creep does not ship, and osv-scanner
-//     without a local database would go online, so both are not run.
+//     own config, so a repository's .gitleaks.toml cannot hide a secret, and
+//     not at all when the repository root holds a .gitleaksignore, which
+//     gitleaks always reads (failed, so the run is incomplete); osv-scanner
+//     with --offline and --no-ignore against the user's local database.
+//     semgrep needs rules creep does not ship, and osv-scanner without a
+//     usable local database would go online or match nothing, so both are
+//     not run.
 //   - The process gets a minimal environment: an empty PATH, a fresh HOME
 //     and TMP in a temporary directory that is also its working directory,
 //     no tokens or keys, and every proxy variable pointed at a closed
 //     loopback port, so a tool that tries HTTP despite its offline flag
 //     fails instead of reaching the network.
+//   - On timeout, Unix kills the scanner's whole process group; Windows
+//     kills the scanner only (no job object without x/sys or unsafe).
 //   - A timeout, a byte cap on the report and a cap on findings bound each
 //     run. The report is decoded into closed structs; paths must lie inside
 //     the repository, and rule names, advisories and matches are hashed into

@@ -32,17 +32,18 @@ type Failure uint8
 
 // Failures.
 const (
-	FailNone      Failure = iota
-	FailStart             // the program or its temporary directory could not be set up or started
-	FailTimeout           // it ran past Limits.Timeout
-	FailExit              // it exited with a status that is not success
-	FailTooLarge          // its report passed Limits.MaxOutput
-	FailMalformed         // its report is missing or does not decode
-	FailPath              // a finding names a path outside the repository
-	FailTooMany           // more than Limits.MaxFindings findings
+	FailNone       Failure = iota
+	FailStart              // the program or its temporary directory could not be set up or started
+	FailTimeout            // it ran past Limits.Timeout
+	FailExit               // it exited with a status that is not success
+	FailTooLarge           // its report passed Limits.MaxOutput
+	FailMalformed          // its report is missing or does not decode
+	FailPath               // a finding names a path outside the repository
+	FailTooMany            // more than Limits.MaxFindings findings
+	FailRepoIgnore         // the repository holds a suppression file the tool always reads; not started
 )
 
-var failureNames = [...]string{"none", "start_failed", "timeout", "exit_status", "output_too_large", "malformed_output", "path_outside_repo", "too_many_findings"}
+var failureNames = [...]string{"none", "start_failed", "timeout", "exit_status", "output_too_large", "malformed_output", "path_outside_repo", "too_many_findings", "repo_suppression_file"}
 
 // String is the failure as an ID, safe to print.
 func (f Failure) String() string {
@@ -101,24 +102,49 @@ func Run(ctx context.Context, job Job) Result {
 	if !ok || !runnableName(bin) {
 		return Result{Outcome: Refused}
 	}
-	if job.OSVDB != "" {
+	if job.Scanner == static.ScannerOSV {
 		if _, ok := static.OutsideRepo(job.OSVDB, job.Repo); !ok {
 			return Result{Outcome: Refused}
 		}
+	}
+	if tool.repoSuppresses != nil && tool.repoSuppresses(job.Repo) {
+		return failed(FailRepoIgnore)
 	}
 	return execute(ctx, job, tool, bin)
 }
 
 // toolFor picks the scanner's fixed invocation; semgrep, and osv-scanner
-// without a local database, have no offline mode creep can use.
+// without a usable local database, have no offline mode creep can use.
 func toolFor(job Job) (tool, bool) {
 	switch job.Scanner {
 	case static.ScannerGitleaks:
 		return gitleaks, true
 	case static.ScannerOSV:
-		return osvScanner, job.OSVDB != "" && filepath.IsAbs(job.OSVDB)
+		return osvScanner, usableOSVDB(job.OSVDB)
 	}
 	return tool{}, false
+}
+
+// usableOSVDB reports a local database osv-scanner can match against:
+// <db>/osv-scanner/<ecosystem>/all.zip, a non-empty regular file, for at
+// least one ecosystem. With none, osv-scanner logs the miss and reports no
+// advisories, which would read as evaluated.
+func usableOSVDB(db string) bool {
+	if db == "" || !filepath.IsAbs(db) {
+		return false
+	}
+	root := filepath.Join(db, "osv-scanner")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		info, err := os.Stat(filepath.Join(root, e.Name(), "all.zip"))
+		if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // runnableName refuses anything but an .exe on Windows: CreateProcess runs
@@ -141,6 +167,7 @@ func execute(ctx context.Context, job Job, t tool, bin string) Result {
 	cmd := exec.CommandContext(ctx, bin, t.args(tmp, job.Repo)...) //nolint:gosec // G204, see above
 	cmd.Dir, cmd.Env = tmp.work, environment(tmp, job)
 	cmd.WaitDelay = time.Second
+	killTreeOnCancel(cmd)
 	err = cmd.Run()
 	if ctx.Err() != nil {
 		return failed(FailTimeout)

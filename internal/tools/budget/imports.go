@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -29,7 +30,12 @@ const gatewayDir = "internal/gateway"
 // execAllowed lists module-relative package trees whose shipped code may run
 // other programs. Running curl or a shell is a way around the network ban.
 var execAllowed = []string{
-	"internal/tools",   // dev tooling run by make; the layers table keeps it out of the binary
+	"internal/tools", // dev tooling run by make; the layers table keeps it out of the binary
+}
+
+// execAllowedExact lists single packages (not their subpackages) whose
+// shipped code and tests may run programs.
+var execAllowedExact = []string{
 	"internal/scanrun", // gitleaks and osv-scanner only: fixed offline arguments, no shell, final path outside the repo (ADR 0013)
 }
 
@@ -41,6 +47,7 @@ var execAllowedInTests = []string{
 // syscallAllowed lists module-relative files that may import syscall, each
 // with its reason. Files, not packages, so new socket code needs a review here.
 var syscallAllowed = map[string]string{
+	"internal/scanrun/proc_unix.go":    "puts a scanner in its own process group so a timeout kills its whole tree (ADR 0013)",
 	"internal/cli/open_unix.go":        "O_NONBLOCK open so a FIFO argument cannot hang the CLI",
 	"internal/cli/fifo_unix_test.go":   "creates a FIFO with syscall.Mkfifo",
 	"internal/state/open_unix.go":      "O_NONBLOCK open so a FIFO swapped in for a state file cannot hang creep",
@@ -138,6 +145,9 @@ func execPermitted(modPath string, f sourceFile) bool {
 		if underPath(f.Pkg, path.Join(modPath, dir)) {
 			return true
 		}
+	}
+	if slices.Contains(execAllowedExact, strings.TrimPrefix(f.Pkg, modPath+"/")) {
+		return true
 	}
 	if !f.Test {
 		return false
