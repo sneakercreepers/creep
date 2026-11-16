@@ -47,7 +47,7 @@ type estimateRun struct {
 // runEstimate prints what `creep scan` would cost here without calling a
 // model or opening a network connection (invariants 1, 2 and 5): the
 // static graph, the planner's plan and the exact request bodies the scan
-// would build, measured by a send function that never sends (ADR 0010).
+// would build, measured by a send function that never sends (ADR 0011).
 func runEstimate(e env, args []string) int {
 	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
 		printError(e.stderr, "creep estimate", fmt.Errorf("estimates a scan of the current directory; run it from the repository root (got %d arguments)", len(args)))

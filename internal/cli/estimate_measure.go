@@ -14,7 +14,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
-// Assumptions estimate prints with its numbers (ADR 0010).
+// Assumptions estimate prints with its numbers (ADR 0011).
 const (
 	// bytesPerTenTokens converts request bytes to tokens: 4.5 bytes per
 	// token. Prose and code run near 4 in current tokenizers, and a request

@@ -22,7 +22,7 @@ const (
 	phaseReport    = "report"
 )
 
-// runStats counts what one scan spent (--stats, ADR 0010). It holds only
+// runStats counts what one scan spent (--stats, ADR 0011). It holds only
 // phase IDs, numbers and the model's own purpose labels, never repository
 // text, so printing it cannot leak or inject anything from the scan.
 type runStats struct {

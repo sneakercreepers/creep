@@ -1,4 +1,4 @@
-# ADR 0010: `creep estimate`, `--stats` and prices
+# ADR 0011: `creep estimate`, `--stats` and prices
 
 - **Status:** Proposed
 - **Date:** 2026-11-16
