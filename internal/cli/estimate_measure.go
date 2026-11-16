@@ -106,8 +106,8 @@ func (m *meter) readerRequests(ctx context.Context, cfg config.Model, tier reade
 }
 
 // measureModel is the scan's model client with send in place of the
-// gateway and no key. A contract with no HTTP wire yet (command, #6) is
-// measured as openai: the body is the same prompt, schema and slice.
+// gateway and no key. The command contract is measured as openai, so the
+// meter can answer in one envelope: the prompt, schema and slice are the same.
 func measureModel(m config.Model, send models.SendFunc) (*models.HTTP, error) {
 	if m.Contract != "anthropic" {
 		m.Contract = "openai"

@@ -103,24 +103,29 @@ type ticket struct {
 // admit reserves the call's tokens, then waits for a concurrency slot. A
 // wait ended by ctx returns the reservation.
 func (l *EgressLog) admit(ctx context.Context, call Call) (*ticket, error) {
-	if l.budget == nil {
-		return nil, errors.New("gateway call: no budget configured; nothing was sent")
-	}
 	u, _ := url.Parse(call.Endpoint) // checkCall parsed it already
 	key, err := origin(u)
 	if err != nil {
 		return nil, fmt.Errorf("gateway call: %w", err)
 	}
+	return l.admitKey(ctx, key, call.ReserveTokens)
+}
+
+// admitKey is admit for a normalized origin or a command endpoint.
+func (l *EgressLog) admitKey(ctx context.Context, key string, tokens int) (*ticket, error) {
+	if l.budget == nil {
+		return nil, errors.New("gateway call: no budget configured; nothing was sent")
+	}
 	b := l.budget
-	if err := b.reserve(key, call.ReserveTokens); err != nil {
+	if err := b.reserve(key, tokens); err != nil {
 		return nil, fmt.Errorf("gateway call: %w", err)
 	}
 	slot := b.limiter(key)
 	if err := slot.acquire(ctx); err != nil {
-		b.refund(key, call.ReserveTokens)
+		b.refund(key, tokens)
 		return nil, fmt.Errorf("gateway call: wait for a concurrency slot: %w", err)
 	}
-	return &ticket{b: b, key: key, reserved: call.ReserveTokens, slot: slot}, nil
+	return &ticket{b: b, key: key, reserved: tokens, slot: slot}, nil
 }
 
 // reserve charges one call and n tokens, or refuses when any limit would be

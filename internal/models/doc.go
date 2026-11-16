@@ -1,6 +1,7 @@
-// Package models speaks the HTTP model contract: OpenAI-compatible chat
-// completions (OpenAI, Ollama, vLLM, LM Studio, Groq, OpenRouter) and the
-// Anthropic messages API, with no provider SDK.
+// Package models speaks the model contracts: OpenAI-compatible chat
+// completions (OpenAI, Ollama, vLLM, LM Studio, Groq, OpenRouter), the
+// Anthropic messages API and model CLIs (prompt on stdin, JSON on stdout),
+// with no provider SDK.
 //
 // It exists so that the rest of creep asks for "a JSON object of this shape"
 // and gets back a closed Go struct, while every wire detail stays here:
@@ -33,6 +34,15 @@
 //   - Structured output uses what the endpoint supports: JSON schema, a GBNF
 //     grammar (llama.cpp servers), a forced tool call, or the prompt alone.
 //     Anthropic supports tools and prompt.
+//
+// The command contract (Contract "command") runs a model CLI instead:
+// prompt and schema as plain text on stdin, the JSON object alone on
+// stdout, decoded exactly like an HTTP reply. Its SendFunc is
+// ThroughCommand, so the gateway's consent, budget, egress.log and process
+// limits apply (ADR 0014). It takes no API key. Canary sends a trap prompt
+// (create a file, run a command) once per command per run and returns a
+// *ToolsEnabledError, naming the flag to fix for known CLIs, when the CLI
+// acted on it; a CLI that leaves files on any later call fails that call.
 //
 // Transport failures, non-2xx statuses, malformed envelopes, consent and
 // budget refusals are not retried: they are the endpoint's or the user's

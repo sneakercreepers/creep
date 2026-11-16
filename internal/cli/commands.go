@@ -24,7 +24,7 @@ type command struct {
 
 var commands = []command{
 	{"init", "create a creep.yaml for this project (not implemented yet)", stub("init", "#2")},
-	{"doctor", "check models, sandbox runtime and environment (not implemented yet)", stub("doctor", "#6, #21")},
+	{"doctor", "check the model: a command model must pass the tool canary (sandbox checks: #21)", runDoctor},
 	{"scan", "scan the repository in the current directory; reports go to .creep/", runScan},
 	{"estimate", "estimate the calls, tokens, time and cost of a scan here, without calling a model", runEstimate},
 	{"why", "why <id>: show the evidence behind a finding of the last scan", runWhy},

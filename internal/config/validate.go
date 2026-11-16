@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -35,6 +36,14 @@ func validateKey(c *Config, key string) error {
 		return checkPositive(field(c, key).Int())
 	case "calibration.cache_days":
 		return checkRange(c.Calibration.CacheDays, minCacheDays, maxCacheDays)
+	case "model.run":
+		return checkCommandLine(c.Model.Run)
+	case "model.env":
+		return checkEnvNames(c.Model.Env)
+	case "model.timeout_seconds":
+		return checkRange(c.Model.TimeoutSeconds, minTimeoutSeconds, maxTimeoutSeconds)
+	case "model.max_output_bytes":
+		return checkRange(c.Model.MaxOutputBytes, minOutputBytes, maxOutputBytes)
 	}
 	return nil
 }
@@ -98,6 +107,33 @@ func checkPositive(n int64) error {
 func checkRange(n, lo, hi int) error {
 	if n < lo || n > hi {
 		return fmt.Errorf("invalid value %d: want %d to %d", n, lo, hi)
+	}
+	return nil
+}
+
+// maxCommandBytes matches the gateway's limit; the gateway splits and checks
+// the command line itself when the model is opened.
+const maxCommandBytes = 4096
+
+// checkCommandLine rejects control characters and whitespace other than
+// spaces, which could hide arguments in logs and terminals.
+func checkCommandLine(s string) error {
+	if len(s) > maxCommandBytes {
+		return fmt.Errorf("invalid command line: over %d bytes", maxCommandBytes)
+	}
+	if strings.IndexFunc(s, func(r rune) bool { return r != ' ' && (unicode.IsSpace(r) || !unicode.IsPrint(r)) }) >= 0 {
+		return fmt.Errorf("invalid command line %q: contains control characters or whitespace other than spaces", s)
+	}
+	return nil
+}
+
+var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+func checkEnvNames(names []string) error {
+	for _, n := range names {
+		if !envNamePattern.MatchString(n) {
+			return fmt.Errorf("invalid environment variable name %q: want letters, digits and _", n)
+		}
 	}
 	return nil
 }

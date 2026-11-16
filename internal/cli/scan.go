@@ -71,6 +71,10 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
+	if err := s.checkTools(ctx); err != nil {
+		printError(e.stderr, "creep scan: tool canary", err)
+		return failureCode(err)
+	}
 	done := s.stats.start(phaseCalibrate)
 	cal, err := s.calibrate(ctx)
 	done()
@@ -126,8 +130,12 @@ func openSession(e env, r *config.Resolved) (*session, error) {
 
 func checkModelConfig(m config.Model) error {
 	switch {
+	case m.Contract == "command" && m.Run == "":
+		return errors.New("model.run must be set for contract command (user config, --config, --model-run or CREEP_POLICY)")
+	case m.Contract == "command":
+		return nil
 	case m.Contract != "openai" && m.Contract != "anthropic":
-		return fmt.Errorf("model.contract %q is not supported by scan yet (the command contract is #6)", m.Contract)
+		return fmt.Errorf("model.contract %q is not supported by scan", m.Contract)
 	case m.Endpoint == "" || m.Name == "":
 		return errors.New("model.endpoint and model.name must be set (user config, --config or CREEP_POLICY)")
 	}
@@ -157,17 +165,25 @@ func (s *session) mode() state.Mode {
 }
 
 func (s *session) openModel() error {
-	key, err := models.KeyFromEnv(os.Getenv)
+	send := s.stats.countRequests(recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send)))
+	opts, err := sessionModelOptions(s.cfg.Model, s.link.command, send)
 	if err != nil {
 		return err
 	}
-	send := s.stats.countRequests(recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send)))
-	s.model, err = models.NewHTTP(modelOptions(s.cfg.Model, key, send))
-	if err != nil {
+	if s.model, err = models.NewHTTP(opts); err != nil {
 		return err
 	}
 	s.red, err = redact.New()
 	return err
+}
+
+// checkTools runs the tool canary once per run before calibration, so no
+// repository text reaches a CLI that has tools. A replay starts no program.
+func (s *session) checkTools(ctx context.Context) error {
+	if s.mode() == state.ModeReplay {
+		return nil
+	}
+	return checkTools(ctx, models.NewCanary(), s.cfg.Model, modelLink{send: s.stats.countSent(s.link.send), command: s.link.command})
 }
 
 // modelOptions are the scan's model settings. estimate measures requests
