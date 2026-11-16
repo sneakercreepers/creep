@@ -130,7 +130,7 @@ Tests are in the package named, as `file:Test`; "budget" means `make budget` (`i
 | S4 | A workflow leaks a token or runs untrusted code with secrets | Actions and images pinned by digest; no `pull_request_target`; workflows start from `permissions: {}`; actionlint and zizmor | budget (`workflow.go`); CI `workflows` job |
 | S5 | Known-vulnerable code or a committed secret | govulncheck, gitleaks over the full history, CodeQL, dependency review, Scorecard | CI |
 | S6 | The review loop is weakened quietly | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md and the PR template; changing the loop needs an ADR | `tools/budget/policy_test.go`; budget |
-| S7 | Release tampering | `v*` tags immutable and admin-only; immutable releases; the `release` environment needs the maintainer's approval. Signatures, provenance and SBOM are **planned** (#19) | `.github/rulesets/`, `.github/settings/` (`make rulesets`) |
+| S7 | Release tampering | `v*` tags immutable and admin-only; immutable releases; the `release` environment needs the maintainer's approval and is the only job with write or OIDC permissions; the tagged commit must be on `main` or a `release/*` branch; cosign keyless signature of `checksums.txt`, SBOM per archive and build provenance, verified by the workflow before the draft is published; pinned, checksum-verified release tools; reproducible builds | `.github/rulesets/`, `.github/settings/` (`make rulesets`); `.github/workflows/release.yml` (`dry-run` job tests the ancestry guard and reproducibility on every PR touching the release files) |
 
 ## 5. AGENTS.md invariants
 
@@ -164,7 +164,6 @@ These parts are on the roadmap, not on `main`. The PR that adds one must meet th
 | Command model contract and tool canary (#6) | The command comes only from operator layers, never from `creep.yaml`; the prompt goes through the gateway's redaction and `egress.log` like an HTTP call; the canary fails the run when the model CLI uses tools it was told not to |
 | Presets (#7) and recipes (v0.3) | Data, never code; recipes pinned by commit in `creep.lock`; they cannot set endpoints, consent, gates or redaction, and cannot come from the scanned repository |
 | Sandbox and PoC verification (v0.2) | No internet (internal network only); never on the host; model-written PoCs run only inside it; `verified` is reachable only through it |
-| Release signing, provenance, SBOM (#19) | The release workflow checks the tag's ancestry, signs artifacts and publishes provenance from the `release` environment only |
 
 ## 8. Out of scope
 

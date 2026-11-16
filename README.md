@@ -7,6 +7,7 @@
 
 [![v0.1 progress](https://img.shields.io/github/milestones/progress-percent/sneakercreepers/creep/1?label=v0.1)](https://github.com/sneakercreepers/creep/milestone/1)
 [![Open issues](https://img.shields.io/github/issues/sneakercreepers/creep)](https://github.com/sneakercreepers/creep/issues)
+[![Release](https://img.shields.io/github/v/release/sneakercreepers/creep?include_prereleases&sort=semver)](https://github.com/sneakercreepers/creep/releases)
 [![CI](https://github.com/sneakercreepers/creep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sneakercreepers/creep/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/sneakercreepers/creep/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/sneakercreepers/creep/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/sneakercreepers/creep/badge)](https://scorecard.dev/viewer/?uri=github.com/sneakercreepers/creep)
@@ -39,12 +40,20 @@
 **Prebuilt binary** (Windows, macOS, Linux · amd64/arm64) from [Releases](https://github.com/sneakercreepers/creep/releases), then verify it:
 
 ```sh
+# 1. checksums.txt was signed by this repository's release workflow (cosign v3+)
 cosign verify-blob \
-  --certificate-identity-regexp 'https://github.com/sneakercreepers/creep/.*' \
+  --certificate-identity-regexp '^https://github\.com/sneakercreepers/creep/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
+# 2. your archive matches checksums.txt (macOS: shasum -a 256 --check --ignore-missing checksums.txt)
 sha256sum --check --ignore-missing checksums.txt
+# 3. your archive was built by that workflow from this repository (build provenance)
+gh attestation verify creep_<version>_<os>_<arch>.tar.gz \
+  --repo sneakercreepers/creep \
+  --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
+
+Each release's notes repeat these commands with the exact tag, and each archive ships an SPDX SBOM (`<archive>.sbom.json`). Details in [SECURITY.md](SECURITY.md#verifying-a-release).
 
 **With Go** (1.24+):
 

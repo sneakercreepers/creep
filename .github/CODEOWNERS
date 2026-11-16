@@ -17,6 +17,8 @@ prompts/                 @Ludocius
 /.github/rulesets/       @Ludocius
 /.github/settings/       @Ludocius
 /.goreleaser.yaml        @Ludocius
+/.github/scripts/        @Ludocius
+/.github/release.yml     @Ludocius
 
 # Guardrails: lint rules, build checks, dependency budget and ADRs
 /AGENTS.md               @Ludocius
