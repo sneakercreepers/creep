@@ -155,10 +155,19 @@ func recordedSend(store *state.Store, mode state.Mode, send models.SendFunc) mod
 	}
 }
 
+// cacheKey names a recording by the exact body, the model and where the
+// call went: c.Model is "command" for every model CLI, and one model name
+// can sit behind two endpoints, so the endpoint (a URL, or the command's
+// hash of path, arguments and environment names) keeps an answer recorded
+// for one from being served for another (pentest P8). The endpoint goes
+// into the content hash, ahead of the body and a NUL no URL holds, so any
+// URL fits the key's character set and length.
 func cacheKey(c gateway.Call) state.Key {
-	sum := sha256.Sum256(c.Payload)
+	h := sha256.New()
+	h.Write([]byte(c.Endpoint + "\x00"))
+	h.Write(c.Payload)
 	return state.Key{
-		ContentHash:   hex.EncodeToString(sum[:]),
+		ContentHash:   hex.EncodeToString(h.Sum(nil)),
 		Model:         c.Model,
 		PromptVersion: fmt.Sprintf("%s.r%d.c%d", c.Purpose, reader.PromptVersion, calibrate.PromptVersion),
 	}
