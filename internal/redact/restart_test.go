@@ -41,7 +41,8 @@ func TestDenseKeysKeepCodeVisible(t *testing.T) {
 	}
 	for _, tt := range tests {
 		text := tt.before + keys + tt.after
-		if !budgetRunsOut(t, text) {
+		// The input is seeded, so the job without -race checks this for both.
+		if !raceEnabled && !budgetRunsOut(t, text) {
 			t.Fatalf("%s: the generic rule kept within its budget; the test needs it spent", tt.name)
 		}
 		viaFile, err := newRedactor(t).File([]byte(text))
@@ -146,9 +147,10 @@ func TestGivenUpLineMasksDanglingValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Under -race: one value and less code, which only shrinks the budget.
 			for range underRace(4, 1) {
 				value := fakeToken(rng, alnum, 24)
-				code := codeBlock(8 << 10)
+				code := codeBlock(underRace(8<<10, 2<<10))
 				text := strings.TrimSuffix(keys, "\n") + tt.open + fmt.Sprintf(tt.close, value) + code
 				assertValueMasked(t, text, value, code)
 			}
