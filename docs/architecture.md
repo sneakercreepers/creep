@@ -211,3 +211,4 @@ Skipped on purpose: architectural quanta per service, cross-service schema evolu
 | [0009](adr/0009-scan-and-why-contract.md) | `creep scan` and `creep why` contract: report location, incompleteness rules, gate severities, report v1 additions |
 | [0010](adr/0010-optional-scanners-detect-only.md) | Optional scanners are detected on `PATH`, not run; `coverage.scanners` lists each with its classes |
 | [0011](adr/0011-estimate-and-stats.md) | `creep estimate` (no model or network call), `--stats`, `--price-in`/`--price-out` |
+| [0012](adr/0012-language-kits.md) | Language kits as data: `.scm` queries in a Go matcher over the validated tree, closed sink tables, embedded-only loading; semantics and fail-closed rules stay in Go |
