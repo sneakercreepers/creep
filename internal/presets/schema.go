@@ -53,7 +53,13 @@ type Preset struct {
 	// HostReadsDetail names what can still read, for the warning. Required
 	// with host_reads: unbounded, empty otherwise.
 	HostReadsDetail string `yaml:"host_reads_detail"`
+	// Verified says a maintainer ran the manual canary check (CONTRIBUTING.md)
+	// with the real CLI. Required, so a new preset states it explicitly.
+	Verified *bool `yaml:"verified"`
 }
+
+// IsVerified reports whether a maintainer checked the preset with the real CLI.
+func (p Preset) IsVerified() bool { return p.Verified != nil && *p.Verified }
 
 // Values of Preset.HostReads.
 const (
@@ -114,6 +120,9 @@ func (p Preset) validate() error {
 	}
 	if err := checkArgs(p.Args); err != nil {
 		return err
+	}
+	if p.Verified == nil {
+		return errors.New("verified: want true (a maintainer ran the manual canary check) or false")
 	}
 	if err := p.checkHostReads(); err != nil {
 		return err

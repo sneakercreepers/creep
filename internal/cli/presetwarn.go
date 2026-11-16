@@ -3,26 +3,37 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/presets"
 )
 
-// warnHostReads tells the operator, before anything is sent, that the
-// selected preset's CLI can still read the host. The tool canary only sees
-// writes and commands that leave files, so it cannot catch this; a prompt
-// injection in scanned code could make the CLI read a secret and put it in
-// a prompt to its provider, past creep's redaction.
-func warnHostReads(w io.Writer, m config.Model) {
+// warnPreset tells the operator, in one line before anything is sent, what
+// the selected preset does not guarantee. An unverified preset's flags were
+// never checked against the real CLI by a maintainer. A preset whose CLI can
+// read the host is outside what the tool canary sees (writes and commands
+// that leave files): a prompt injection in scanned code could make the CLI
+// read a secret and put it in a prompt to its provider, past redaction.
+func warnPreset(w io.Writer, m config.Model) {
 	if m.Preset == "" {
 		return
 	}
 	p, err := presets.Lookup(m.Preset)
-	if err != nil || p.HostReads != presets.HostReadsUnbounded {
+	if err != nil {
 		return
 	}
-	msg := fmt.Sprintf("warning: preset %q can read files outside its empty working directory: %s. "+
-		"Scanned code could steer it to read host secrets and send them to the model provider unredacted; "+
-		"for untrusted code prefer the claude-code or ollama preset", p.Name, p.HostReadsDetail)
+	var parts []string
+	if !p.IsVerified() {
+		parts = append(parts, "is not verified against the real CLI by a maintainer (the tool canary still runs; see CONTRIBUTING.md, Model presets)")
+	}
+	if p.HostReads == presets.HostReadsUnbounded {
+		parts = append(parts, "can read files outside its empty working directory: "+p.HostReadsDetail+
+			"; scanned code could steer it to read host secrets and send them to the model provider unredacted")
+	}
+	if len(parts) == 0 {
+		return
+	}
+	msg := fmt.Sprintf("warning: preset %q %s; for untrusted code prefer the claude-code preset", p.Name, strings.Join(parts, ", and "))
 	fmt.Fprintln(w, escapeControl(msg))
 }

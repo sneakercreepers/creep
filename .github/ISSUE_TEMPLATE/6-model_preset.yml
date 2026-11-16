@@ -28,7 +28,7 @@ body:
     id: canary
     attributes:
       label: Tool canary output
-      description: Output of `creep --config <file> doctor` with the preset selected, and the CLI version (see CONTRIBUTING.md, Manual canary check). Command presets are rejected if the canary fails.
+      description: Output of `creep --config <file> doctor` with the preset selected, the tools-on control, and the CLI version (see CONTRIBUTING.md, Manual canary check and verified). A maintainer reviews it before the preset gets verified true. Command presets are rejected if the canary fails.
       render: text
     validations:
       required: true

@@ -31,6 +31,10 @@ func TestEmbeddedPresets(t *testing.T) {
 		if wantNone := name == "claude-code" || name == "ollama"; wantNone != (p.HostReads == HostReadsNone) {
 			t.Errorf("%s: host_reads = %q", name, p.HostReads)
 		}
+		// Only claude-code was checked by hand against the real CLI (#7).
+		if p.IsVerified() != (name == "claude-code") {
+			t.Errorf("%s: verified = %v", name, p.IsVerified())
+		}
 	}
 }
 
@@ -94,6 +98,7 @@ description: A demo CLI.
 docs: https://example.com/demo
 program: demo
 host_reads: none
+verified: false
 args: [-p, --no-tools]
 tools_off:
   - [--no-tools]
@@ -129,6 +134,8 @@ func TestSchemaRejects(t *testing.T) {
 		{"two placeholders", "demo.yaml", strings.Replace(valid, "[-p, --no-tools]", `["{model}", "{model}", --no-tools]`, 1), "appears 2 times"},
 		{"http docs", "demo.yaml", strings.Replace(valid, "https://example.com/demo", "http://example.com/demo", 1), "https"},
 		{"empty description", "demo.yaml", strings.Replace(valid, "A demo CLI.", `""`, 1), "description"},
+		{"missing verified", "demo.yaml", strings.Replace(valid, "verified: false\n", "", 1), "verified"},
+		{"verified not a bool", "demo.yaml", strings.Replace(valid, "verified: false", "verified: maybe", 1), "cannot unmarshal"},
 		{"missing host_reads", "demo.yaml", strings.Replace(valid, "host_reads: none\n", "", 1), "host_reads"},
 		{"bad host_reads", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: some", 1), "host_reads"},
 		{"unbounded without detail", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded", 1), "host_reads_detail"},

@@ -24,3 +24,4 @@ tools_off:
 no_tools: false
 host_reads: unbounded
 host_reads_detail: read-only built-in tools (read_file, glob, web fetch and google_web_search) and MCP servers from ~/.gemini/settings.json may stay enabled
+verified: false

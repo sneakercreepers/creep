@@ -23,3 +23,4 @@ tools_off:
 no_tools: false
 host_reads: unbounded
 host_reads_detail: codex runs shell commands without approval; --sandbox read-only blocks writes and network, not reads of files such as ~/.ssh or ~/.aws
+verified: false

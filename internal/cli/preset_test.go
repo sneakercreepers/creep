@@ -82,13 +82,13 @@ func installFake(t *testing.T, dst string) {
 // trap is caught with a fix naming the preset's flags.
 func TestPresetsRunTheCanary(t *testing.T) {
 	tests := []struct {
-		program, preset, fix string
-		readsHost            bool
+		program, preset, fix  string
+		readsHost, unverified bool
 	}{
-		{"claude", "claude-code", `it already has --tools "" and --strict-mcp-config`, false},
-		{"gemini", "gemini", "it already has --approval-mode default", true},
-		{"codex", "codex", "it already has --sandbox read-only", true},
-		{"ollama", "ollama", "ollama run has no tools", false},
+		{"claude", "claude-code", `it already has --tools "" and --strict-mcp-config`, false, false},
+		{"gemini", "gemini", "it already has --approval-mode default", true, true},
+		{"codex", "codex", "it already has --sandbox read-only", true, true},
+		{"ollama", "ollama", "ollama run has no tools", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.preset, func(t *testing.T) {
@@ -99,6 +99,12 @@ func TestPresetsRunTheCanary(t *testing.T) {
 			}
 			if warned := strings.Contains(stderr, "can read files outside its empty working directory"); warned != tt.readsHost {
 				t.Errorf("host-read warning = %v, want %v: %s", warned, tt.readsHost, stderr)
+			}
+			if warned := strings.Contains(stderr, "is not verified against the real CLI"); warned != tt.unverified {
+				t.Errorf("unverified warning = %v, want %v: %s", warned, tt.unverified, stderr)
+			}
+			if n := strings.Count(stderr, "warning: preset"); n > 1 {
+				t.Errorf("%d warning lines, want at most one: %s", n, stderr)
 			}
 			t.Setenv(fakeCLIEnv, "obey")
 			code, _, stderr = runScanWith(commandDeps(), "--config", cfg, "doctor")
@@ -117,8 +123,8 @@ func TestScanWarnsWhenPresetReadsHost(t *testing.T) {
 	if code != exitcode.ModelOrSandbox {
 		t.Fatalf("exit %d, stderr %s", code, stderr)
 	}
-	warn := strings.Index(stderr, `warning: preset "codex" can read files`)
-	if warn < 0 || warn > strings.Index(stderr, "tool canary") || !strings.Contains(stderr, "~/.ssh") {
+	warn := strings.Index(stderr, `warning: preset "codex" is not verified`)
+	if warn < 0 || warn > strings.Index(stderr, "tool canary") || !strings.Contains(stderr, "can read files") || !strings.Contains(stderr, "~/.ssh") {
 		t.Errorf("stderr %s", stderr)
 	}
 }

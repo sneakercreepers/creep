@@ -24,7 +24,9 @@
 //   - host_reads declares whether the CLI can still read outside its empty
 //     working directory (read-only tools, a shell under a read-only sandbox,
 //     web search). The canary cannot see reads, so the CLI warns before every
-//     doctor and scan run of an "unbounded" preset (ADR 0015).
+//     doctor and scan run of an "unbounded" preset (ADR 0015). verified says
+//     a maintainer saw the manual canary check pass with the real CLI; an
+//     unverified preset gets the same one-line warning.
 //   - The only value that reaches argv from configuration is model.name,
 //     for presets whose args hold the {model} placeholder. It must look like
 //     a model name (no leading "-", no spaces or quotes), and config refuses

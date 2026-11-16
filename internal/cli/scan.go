@@ -72,7 +72,7 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
-	warnHostReads(e.stderr, resolved.Config.Model)
+	warnPreset(e.stderr, resolved.Config.Model)
 	if err := s.checkTools(ctx); err != nil {
 		printError(e.stderr, "creep scan: tool canary", err)
 		return failureCode(err)
