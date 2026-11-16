@@ -166,6 +166,50 @@ func TestScanFailsBeforeReport(t *testing.T) {
 	}
 }
 
+// #205 audit M1a: a source file static has no grammar for (Go, PHP, ...)
+// is listed as unsupported_language and the run exits 4, never 0 with every
+// class covered; findings from the files static can read are still reported.
+// Vendor copies stay by design, and non-source files are not listed.
+func TestScanListsUngrammaredSource(t *testing.T) {
+	tests := []struct {
+		name     string
+		files    map[string]string
+		wantCode int
+		listed   []string
+		findings int
+	}{
+		{"go only", map[string]string{"main.go": "package main\n", "internal/db/q.GO": "package db\n", "README.md": "# x\n"},
+			exitcode.Incomplete, []string{"main.go  unsupported_language", "internal/db/q.GO  unsupported_language", "files not evaluated in full: 2"}, 0},
+		{"flask plus php", map[string]string{"app.py": "@flask", "legacy/login.php": "<?php echo 1;\n"},
+			exitcode.Incomplete, []string{"legacy/login.php  unsupported_language", "files not evaluated in full: 1"}, 4},
+		{"vendored go by design", map[string]string{"app.py": "@flask", "vendor/x/y.go": "package y\n", "notes.txt": "x\n"},
+			exitcode.OK, []string{"vendor/x/y.go  vendor", "files not evaluated in full: 1"}, 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := scanRepo(t, tt.files, "")
+			code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--config", cfg)
+			if code != tt.wantCode {
+				t.Fatalf("exit %d, want %d\n%s\n%s", code, tt.wantCode, out, errOut)
+			}
+			for _, want := range tt.listed {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
+			}
+			rep, err := readLastReport()
+			if err != nil || len(rep.Findings) != tt.findings {
+				t.Fatalf("report: %v, %d findings, want %d", err, len(rep.Findings), tt.findings)
+			}
+			wantReason := ""
+			if tt.wantCode == exitcode.Incomplete {
+				wantReason = string(report.SkipUnsupported)
+			}
+			checkJSONReport(t, wantReason)
+		})
+	}
+}
+
 // With --format json the report itself goes to stdout and the incomplete
 // mark to stderr, so a redirected report never hides it.
 func TestScanFormatJSONMarksStderr(t *testing.T) {

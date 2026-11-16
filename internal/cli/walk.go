@@ -43,6 +43,9 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 		}
 		lang, ok := static.LanguageForPath(rel)
 		if !ok {
+			if reason, gap := ungrammaredSource(rel, d); gap {
+				gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
+			}
 			return nil
 		}
 		if reason, gap := addRepoFile(ctx, ex, p, root, rel, lang, d); gap {
