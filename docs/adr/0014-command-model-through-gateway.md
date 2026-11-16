@@ -3,6 +3,7 @@
 - **Status:** Accepted (maintainer approval on PR #225, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
+- **Qualified by:** [ADR 0015](0015-model-presets.md). "Reading is bounded" (Consequences) holds only for a CLI with no tool that reads: an empty working directory does not stop a CLI that can still run read-only commands or read tools (codex, gemini) from reading files under HOME. Presets declare this as `host_reads`, and creep warns when it is `unbounded`.
 - **Changes:** the command model contract (architecture §4), the config schema (`model.run`, `model.env`, `model.timeout_seconds`, `model.max_output_bytes`), the CLI contract (`--model-run`, `creep doctor`), the `egress.log` line (command endpoints and three result outcomes), and which package may start a process
 
 ## Context

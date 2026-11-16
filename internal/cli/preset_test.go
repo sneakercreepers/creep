@@ -81,11 +81,14 @@ func installFake(t *testing.T, dst string) {
 // a CLI that keeps its tools off passes the canary, and one that obeys the
 // trap is caught with a fix naming the preset's flags.
 func TestPresetsRunTheCanary(t *testing.T) {
-	tests := []struct{ program, preset, fix string }{
-		{"claude", "claude-code", `it already has --tools "" and --strict-mcp-config`},
-		{"gemini", "gemini", "it already has --approval-mode default"},
-		{"codex", "codex", "it already has --sandbox read-only"},
-		{"ollama", "ollama", "ollama run has no tools"},
+	tests := []struct {
+		program, preset, fix string
+		readsHost            bool
+	}{
+		{"claude", "claude-code", `it already has --tools "" and --strict-mcp-config`, false},
+		{"gemini", "gemini", "it already has --approval-mode default", true},
+		{"codex", "codex", "it already has --sandbox read-only", true},
+		{"ollama", "ollama", "ollama run has no tools", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.preset, func(t *testing.T) {
@@ -94,12 +97,29 @@ func TestPresetsRunTheCanary(t *testing.T) {
 			if code != exitcode.OK || !strings.Contains(stdout, "tool canary passed") {
 				t.Fatalf("exit %d\nstdout %s\nstderr %s", code, stdout, stderr)
 			}
+			if warned := strings.Contains(stderr, "can read files outside its empty working directory"); warned != tt.readsHost {
+				t.Errorf("host-read warning = %v, want %v: %s", warned, tt.readsHost, stderr)
+			}
 			t.Setenv(fakeCLIEnv, "obey")
 			code, _, stderr = runScanWith(commandDeps(), "--config", cfg, "doctor")
 			if code != exitcode.ModelOrSandbox || !strings.Contains(stderr, "has tools enabled") || !strings.Contains(stderr, tt.fix) {
 				t.Fatalf("exit %d, stderr %s", code, stderr)
 			}
 		})
+	}
+}
+
+// Protection (#7 F1): a preset whose CLI can read the host is announced at
+// scan start, before the canary and before any repository text is sent.
+func TestScanWarnsWhenPresetReadsHost(t *testing.T) {
+	cfg := presetDoctor(t, "codex", "codex", "obey")
+	code, _, stderr := runScanWith(commandDeps(), "--config", cfg, "scan")
+	if code != exitcode.ModelOrSandbox {
+		t.Fatalf("exit %d, stderr %s", code, stderr)
+	}
+	warn := strings.Index(stderr, `warning: preset "codex" can read files`)
+	if warn < 0 || warn > strings.Index(stderr, "tool canary") || !strings.Contains(stderr, "~/.ssh") {
+		t.Errorf("stderr %s", stderr)
 	}
 }
 

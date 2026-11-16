@@ -54,6 +54,7 @@ func doctorCommand(e env, r *config.Resolved) int {
 		printError(e.stderr, "creep doctor", errors.New("contract command: the model command is not open"))
 		return exitcode.ConfigError
 	}
+	warnHostReads(e.stderr, r.Config.Model)
 	if err := checkTools(context.Background(), models.NewCanary(), r.Config.Model, link); err != nil {
 		printError(e.stderr, "creep doctor: tool canary", err)
 		return failureCode(err)

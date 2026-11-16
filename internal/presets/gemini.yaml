@@ -7,8 +7,9 @@
 #   --extensions none        loads no extensions (they can add tools and MCP
 #                            servers).
 #   --output-format text     the bare reply; json wraps it in an envelope.
-# Uncertain: read-only tools (read_file, web search) may still be available,
-# and MCP servers from ~/.gemini/settings.json are not switched off by a
+# host_reads: unbounded. Read-only tools (read_file, glob, web fetch, and
+# google_web_search, which reaches the web outside creep's gateway) may stay
+# available in headless mode, and MCP servers from ~/.gemini/settings.json are not switched off by a
 # flag; the canary catches writes and commands, not reads. Credentials:
 # gemini's own login under HOME, or GEMINI_API_KEY declared in model.env.
 version: 1
@@ -21,3 +22,5 @@ tools_off:
   - [--approval-mode, default]
   - [--extensions, none]
 no_tools: false
+host_reads: unbounded
+host_reads_detail: read-only built-in tools (read_file, glob, web fetch and google_web_search) and MCP servers from ~/.gemini/settings.json may stay enabled

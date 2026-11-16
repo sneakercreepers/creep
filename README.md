@@ -117,12 +117,15 @@ Or pick a built-in **preset**, which sets `contract: command` and a reviewed com
 model: { preset: claude-code }   # also: gemini, codex, ollama (needs name: <model>)
 ```
 
-| Preset | Command line |
-|---|---|
-| `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` |
-| `gemini` | `gemini --approval-mode default --extensions none --output-format text` |
-| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -` |
-| `ollama` | `ollama run <model.name> --format json` |
+| Preset | Command line | Can read host files |
+|---|---|---|
+| `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` | no |
+| `gemini` | `gemini --approval-mode default --extensions none --output-format text` | **yes**: read-only tools, web search, MCP servers from its settings |
+| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -` | **yes**: its read-only sandbox blocks writes, not reads |
+| `ollama` | `ollama run <model.name> --format json` | no |
+
+> [!WARNING]
+> The tool canary catches writes and commands, not reads. With `gemini` or `codex`, code being scanned could steer the CLI to read host secrets (`~/.ssh`, `~/.aws`) and send them to its provider unredacted; creep prints a warning at `creep doctor` and every scan. For untrusted code, prefer `claude-code` or `ollama`.
 
 `creep config explain` shows the resolved `model.run`. Presets are embedded in the binary ([ADR 0015](docs/adr/0015-model-presets.md)); add or fix one with the *Model preset* issue form ([CONTRIBUTING.md](CONTRIBUTING.md#model-presets)).
 

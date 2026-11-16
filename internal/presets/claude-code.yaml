@@ -21,3 +21,4 @@ tools_off:
   - [--tools, ""]
   - [--strict-mcp-config]
 no_tools: false
+host_reads: none

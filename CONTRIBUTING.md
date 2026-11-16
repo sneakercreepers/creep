@@ -51,7 +51,12 @@ tools_off:                     # every argument run that switches tools off; eac
   - [--tools, ""]
   - [--strict-mcp-config]
 no_tools: false                # true (with tools_off: []) only for a CLI that has no tools
+host_reads: none               # none: nothing can read outside the empty working directory
+                               # unbounded: some tool can still read HOME or the web; then also
+# host_reads_detail: one line naming what can still read (printed as a warning at doctor and scan)
 ```
+
+The canary only sees writes, so `host_reads` is declared, not tested: say `unbounded` whenever a read-only tool, a shell under a read-only sandbox, web search or user MCP servers can remain.
 
 `{model}` as a whole argument is replaced by `model.name`. Unknown or duplicate keys fail `TestEmbeddedPresets`, which `make check` and CI run. The CLI must read the prompt on stdin and print only the reply on stdout; comment each flag in the file and say what you could not verify.
 

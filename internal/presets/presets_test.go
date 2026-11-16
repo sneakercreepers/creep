@@ -27,6 +27,10 @@ func TestEmbeddedPresets(t *testing.T) {
 		if _, err := p.CommandLine("llama3.1:8b"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
+		// Only presets whose CLI keeps no tool that reads the host may say none.
+		if wantNone := name == "claude-code" || name == "ollama"; wantNone != (p.HostReads == HostReadsNone) {
+			t.Errorf("%s: host_reads = %q", name, p.HostReads)
+		}
 	}
 }
 
@@ -58,7 +62,7 @@ func TestModelNameCannotInjectArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, model := range []string{"", "--insecure", "-x", "a b", `a"b`, "a'b", "a;b", "a\nb", "a$(id)", strings.Repeat("a", 129)} {
+	for _, model := range []string{"", "--insecure", "-x", "a b", `a"b`, "a'b", "a;b", "a\nb", "a\x00b", "llama3\n", "llama3\r\n", " llama3", "a$(id)", strings.Repeat("a", 129)} {
 		if got, err := p.CommandLine(model); err == nil {
 			t.Errorf("model %q accepted: %q", model, got)
 		}
@@ -89,6 +93,7 @@ name: demo
 description: A demo CLI.
 docs: https://example.com/demo
 program: demo
+host_reads: none
 args: [-p, --no-tools]
 tools_off:
   - [--no-tools]
@@ -124,6 +129,12 @@ func TestSchemaRejects(t *testing.T) {
 		{"two placeholders", "demo.yaml", strings.Replace(valid, "[-p, --no-tools]", `["{model}", "{model}", --no-tools]`, 1), "appears 2 times"},
 		{"http docs", "demo.yaml", strings.Replace(valid, "https://example.com/demo", "http://example.com/demo", 1), "https"},
 		{"empty description", "demo.yaml", strings.Replace(valid, "A demo CLI.", `""`, 1), "description"},
+		{"missing host_reads", "demo.yaml", strings.Replace(valid, "host_reads: none\n", "", 1), "host_reads"},
+		{"bad host_reads", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: some", 1), "host_reads"},
+		{"unbounded without detail", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded", 1), "host_reads_detail"},
+		{"detail without unbounded", "demo.yaml", valid + "host_reads_detail: reads files\n", "host_reads_detail"},
+		{"detail with control char", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded\nhost_reads_detail: \"x\\u001b[2J\"", 1), "host_reads_detail"},
+		{"unbounded with detail", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded\nhost_reads_detail: it can read HOME", 1), ""},
 		{"oversized", "demo.yaml", valid + "# " + strings.Repeat("x", maxFileBytes), "bytes"},
 	}
 	for _, tt := range tests {

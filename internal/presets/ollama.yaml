@@ -17,3 +17,4 @@ program: ollama
 args: [run, "{model}", --format, json]
 tools_off: []
 no_tools: true
+host_reads: none

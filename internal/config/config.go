@@ -17,7 +17,7 @@ type Config struct {
 }
 
 type Model struct {
-	Contract       string   `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command."`
+	Contract       string   `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command. Cannot be set in the project file."`
 	Endpoint       string   `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
 	Name           string   `yaml:"name" desc:"Model name sent to the endpoint."`
 	Tier           string   `yaml:"tier" desc:"Model tier; selects the prompt variant."`
@@ -92,8 +92,10 @@ var enums = map[string][]string{
 // projectForbidden keys decide where scanned code is sent; a hostile repo
 // could otherwise point them at itself through its creep.yaml.
 // model.run and model.env pick the program that receives the code and the
-// secrets it gets.
+// secrets it gets; model.preset picks a command line, and model.contract
+// switches between an HTTP API and that command.
 var projectForbidden = map[string]bool{
+	"model.contract": true,
 	"model.endpoint": true,
 	"model.run":      true,
 	"model.env":      true,

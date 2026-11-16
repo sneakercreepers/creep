@@ -88,7 +88,7 @@
       "properties": {
         "contract": {
           "default": "openai",
-          "description": "How creep talks to the model: an HTTP API (openai, anthropic) or a local command.",
+          "description": "How creep talks to the model: an HTTP API (openai, anthropic) or a local command. Cannot be set in the project file.",
           "enum": [
             "openai",
             "anthropic",

@@ -45,7 +45,21 @@ type Preset struct {
 	ToolsOff [][]string `yaml:"tools_off"`
 	// NoTools says the CLI has no tools to switch off (ollama run).
 	NoTools bool `yaml:"no_tools"`
+	// HostReads says whether the CLI, with these flags, can still read
+	// files outside its empty working directory (HOME, ~/.ssh, ~/.aws) or
+	// fetch from the web: "none" or "unbounded". The canary cannot see
+	// reads, so this is declared and creep warns about "unbounded".
+	HostReads string `yaml:"host_reads"`
+	// HostReadsDetail names what can still read, for the warning. Required
+	// with host_reads: unbounded, empty otherwise.
+	HostReadsDetail string `yaml:"host_reads_detail"`
 }
+
+// Values of Preset.HostReads.
+const (
+	HostReadsNone      = "none"
+	HostReadsUnbounded = "unbounded"
+)
 
 var (
 	namePattern    = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -101,7 +115,28 @@ func (p Preset) validate() error {
 	if err := checkArgs(p.Args); err != nil {
 		return err
 	}
+	if err := p.checkHostReads(); err != nil {
+		return err
+	}
 	return p.checkToolsOff()
+}
+
+// checkHostReads makes every preset state whether it can read the host,
+// with a one-line reason when it can.
+func (p Preset) checkHostReads() error {
+	switch p.HostReads {
+	case HostReadsNone:
+		if p.HostReadsDetail != "" {
+			return errors.New("host_reads_detail: only with host_reads: unbounded")
+		}
+		return nil
+	case HostReadsUnbounded:
+		if p.HostReadsDetail == "" || len(p.HostReadsDetail) > maxDescription || !isPlainText(p.HostReadsDetail) {
+			return fmt.Errorf("host_reads_detail: want one line of at most %d characters saying what can still read", maxDescription)
+		}
+		return nil
+	}
+	return fmt.Errorf("host_reads %q: want %s or %s", p.HostReads, HostReadsNone, HostReadsUnbounded)
 }
 
 // checkArgs refuses arguments CommandLine could not quote losslessly and a
