@@ -98,11 +98,15 @@
 // or escaping paths are an error), files whose leading comment block
 // carries an exact generator marker ("Code generated ... DO NOT EDIT.",
 // "@generated" as the first word, or protoc's header; strings, docstrings
-// and loose wording never count), and minified scripts (*.min.js, or an
-// average line over 500 bytes; never Python). Callers list them with
-// AddIgnored (AddPython and AddJavaScript do so themselves) as File.Ignored
-// with the reason, so the report shows them as not evaluated; they are
-// never silently dropped.
+// and loose wording never count), and minified scripts (an average line
+// over 500 bytes; never Python; a .min.js name alone does not count,
+// pentest P4). Callers list them with AddIgnored (AddPython and
+// AddJavaScript do so themselves) as File.Ignored with the reason, so the
+// report shows them as not evaluated; they are never silently dropped.
+// Which of them may be left out without making a run incomplete is the
+// caller's decision; VendorByDesign tells a dependency tree at the
+// repository root (or any node_modules) from a vendor-named directory
+// inside first-party code.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

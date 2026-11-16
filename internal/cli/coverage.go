@@ -113,8 +113,8 @@ func findingGap(f report.Finding) string {
 
 // incompleteReason is why the run is not complete, or "" when it is: an
 // early stop first, then the first finding gap in sink order, then the
-// first file gap. Vendor, generated and minified files and low-risk skips
-// are left out by design and do not count.
+// first file gap. Root dependency trees and minified scripts are left out
+// by design and do not count (byDesign).
 func incompleteReason(stop string, findings []report.Finding, gaps []report.NotEvaluated) string {
 	if stop != "" {
 		return stop
@@ -125,7 +125,7 @@ func incompleteReason(stop string, findings []report.Finding, gaps []report.NotE
 		}
 	}
 	for _, g := range gaps {
-		if !byDesign(g.Reason) {
+		if !byDesign(g) {
 			return string(g.Reason)
 		}
 	}
@@ -135,7 +135,7 @@ func incompleteReason(stop string, findings []report.Finding, gaps []report.NotE
 // fileGapped reports a file gap that makes every class partial.
 func fileGapped(gaps []report.NotEvaluated) bool {
 	for _, g := range gaps {
-		if !byDesign(g.Reason) {
+		if !byDesign(g) {
 			return true
 		}
 	}

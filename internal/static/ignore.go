@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -19,8 +20,9 @@ const (
 	IgnoredVendor Ignored = iota + 1
 	// IgnoredGenerated: a comment near the top marks the file as generated.
 	IgnoredGenerated
-	// IgnoredMinified: a JavaScript or TypeScript file named *.min.js or
-	// whose average line is longer than minifiedLineBytes.
+	// IgnoredMinified: a JavaScript or TypeScript file whose average line
+	// is longer than minifiedLineBytes. A .min.js name alone does not count:
+	// the name is the author's say-so (pentest P4).
 	IgnoredMinified
 )
 
@@ -98,15 +100,31 @@ func repoRelative(name string) (string, error) {
 }
 
 func inVendorDir(name string) bool {
-	dirs := strings.Split(path.Dir(name), "/")
-	for _, d := range dirs {
-		for _, v := range vendorDirs {
-			if strings.EqualFold(d, v) {
-				return true
-			}
-		}
+	return slices.ContainsFunc(strings.Split(path.Dir(name), "/"), isVendorName)
+}
+
+// VendorByDesign reports whether a vendor file (IgnoredVendor) sits in a
+// real dependency tree that a scan may leave out without a gap: a vendor
+// directory at the repository root (vendor/, .venv/, node_modules/), or
+// node_modules at any depth, which package managers create per package.
+// A vendor-named directory inside first-party code (app/vendor/,
+// src/third_party/) is the author's say-so, not a dependency tree, so the
+// caller counts it as a gap (pentest P4, #213). name is repo-relative; an
+// invalid name is never by design.
+func VendorByDesign(name string) bool {
+	rel, err := repoRelative(name)
+	if err != nil {
+		return false
 	}
-	return false
+	dirs := strings.Split(path.Dir(rel), "/")
+	if isVendorName(dirs[0]) {
+		return true
+	}
+	return slices.ContainsFunc(dirs, func(d string) bool { return strings.EqualFold(d, "node_modules") })
+}
+
+func isVendorName(dir string) bool {
+	return slices.ContainsFunc(vendorDirs, func(v string) bool { return strings.EqualFold(dir, v) })
 }
 
 // goGenerated is Go's convention (go help generate), which many generators
@@ -176,11 +194,6 @@ func minified(name string, src []byte) bool {
 	lang, ok := LanguageForPath(name)
 	if !ok || lang == Python {
 		return false
-	}
-	base := strings.ToLower(path.Base(name))
-	stem := strings.TrimSuffix(base, path.Ext(base))
-	if strings.HasSuffix(stem, ".min") || strings.HasSuffix(stem, "-min") {
-		return true
 	}
 	lines := bytes.Count(src, []byte("\n")) + 1
 	return len(src) >= minifiedMinBytes && len(src)/lines > minifiedLineBytes

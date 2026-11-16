@@ -52,3 +52,13 @@ Vendor, generated and minified files (a source file of any listed language under
 - From the first release on, report fields change only with a `schema_version` bump, as the schema says.
 - `resume` still fails closed; continuing a run needs per-step resume, a follow-up.
 - `--diff`, a `--gate` choice (`gates.nightly`) and a severity per finding are not decided here.
+
+## Follow-up: what counts as left out by design (v0.1 release pentest P4, #213)
+
+The repository's author decides where files sit, what their first comment says and what they are named, so "by design" above let first-party code be skipped while the run read complete. Since the v0.1 release pentest, only what a dependency tree or a build tool really looks like stays by design:
+
+- `vendor` is by design only for a vendor directory at the repository root (`vendor/`, `.venv/`, `node_modules/`, `third_party/` and the other `static` vendor names) or `node_modules` at any depth (`static.VendorByDesign`). A vendor-named directory inside first-party code (`app/vendor/`, `src/third_party/`, `services/venv/`) is still listed as `vendor` and not read, but it makes the run incomplete (reason `vendor`).
+- `generated` (a generator header in the leading comments) is listed and makes the run incomplete (reason `generated`).
+- `minified` needs the content heuristic (an average line over 500 bytes); a `.min.js` name alone no longer skips a file, which is then parsed and evaluated. A file that really is minified stays by design.
+
+The report reasons and schema do not change. A vendor directory at the root is still the author's choice; it is listed, and a new top-level directory shows in the pull request diff. Still open in #213 for v0.2: a manifest-aware vendor rule for monorepos (a nested `.venv` next to `pyproject.toml` now makes the run incomplete), extracting generated files instead of listing them, and a by-design count next to "covered" in the summaries.

@@ -150,8 +150,18 @@ func addIgnored(ex *static.Extractor, rel string, why static.Ignored) (report.Sk
 	return report.SkipInvalidPath, true
 }
 
-// byDesign reports a file left out on purpose (vendor, generated or
-// minified code): listed, but not a gap that makes the run partial.
-func byDesign(r report.SkipReason) bool {
-	return r == report.SkipVendor || r == report.SkipGenerated || r == report.SkipMinified
+// byDesign reports a file left out on purpose: listed, but not a gap that
+// makes the run partial. Only what the repository's author cannot simply
+// declare counts (pentest P4, #213): a dependency tree at the root or in
+// node_modules (static.VendorByDesign) and a script whose lines really are
+// minified. A vendor-named directory inside first-party code and a
+// generator header are the author's say-so, so they are gaps.
+func byDesign(g report.NotEvaluated) bool {
+	switch g.Reason {
+	case report.SkipVendor:
+		return static.VendorByDesign(g.Path)
+	case report.SkipMinified:
+		return true
+	}
+	return false
 }
