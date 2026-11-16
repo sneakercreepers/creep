@@ -32,7 +32,7 @@ func TestProcessExitCodes(t *testing.T) {
 		{"unknown flag", []string{"--nope", "version"}, 2},
 		{"invalid format", []string{"version", "--format", "xml"}, 2},
 		{"missing config", []string{"--config", "does-not-exist.yaml", "version"}, 2},
-		{"unimplemented scan fails closed", []string{"scan", "."}, 2},
+		{"scan without a model fails closed", []string{"scan", "."}, 2},
 		{"invalid format after positional", []string{"scan", ".", "--format", "xml"}, 2},
 		{"short help", []string{"-h"}, 0},
 		{"help command", []string{"help"}, 0},
@@ -47,8 +47,13 @@ func TestProcessExitCodes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// A fresh directory and home: scan must never find the
+			// developer's model config and reach a real model here.
+			home := t.TempDir()
 			cmd := exec.Command(os.Args[0], tt.args...)
-			cmd.Env = append(os.Environ(), reexecEnv+"=1")
+			cmd.Dir = t.TempDir()
+			cmd.Env = append(os.Environ(), reexecEnv+"=1", "HOME="+home, "XDG_CONFIG_HOME="+home,
+				"AppData="+home, "LocalAppData="+home, "USERPROFILE="+home, "CREEP_POLICY=")
 			if got := exitCode(t, cmd.Run()); got != tt.want {
 				t.Errorf("exit code = %d, want %d", got, tt.want)
 			}

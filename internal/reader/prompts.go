@@ -54,3 +54,16 @@ func System(tier Tier) (string, error) {
 	}
 	return "", fmt.Errorf("%w %q", ErrTier, string(tier))
 }
+
+// CallTokens is the most input one reader call can take at tier: the system
+// prompt with the schema (promptBudget) and the user turn (sliceBudget),
+// counted as bytes like both budgets. The scan adds the reply's max_tokens
+// to get planner.Budget.StepTokens; the gateway still enforces real spend.
+func CallTokens(tier Tier) (int, error) {
+	prompt, okPrompt := promptBudget[tier]
+	slice, okSlice := sliceBudget[tier]
+	if !okPrompt || !okSlice {
+		return 0, fmt.Errorf("%w %q", ErrTier, string(tier))
+	}
+	return prompt + slice, nil
+}

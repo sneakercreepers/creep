@@ -21,34 +21,43 @@ func TestEvaluateCall(t *testing.T) {
 		Redactions: map[string]int{"password": 1},
 	}
 	vulnerable := appHypothesis{variant: variantVulnerable, sink: 2}
+	safe := appHypothesis{variant: variantSafe, sink: 2}
 	tests := []struct {
-		name string
-		tier Tier
-		want error
+		name    string
+		tier    Tier
+		partial bool // the slice was cut to fit
+		answer  appHypothesis
+		verdict Verdict
+		want    error
 	}{
-		{"tier M", TierM, nil},
-		{"tier S", TierS, nil},
-		{"unknown tier", Tier("XL"), ErrTier},
+		{"tier M", TierM, false, vulnerable, VerdictVulnerable, nil},
+		{"tier S", TierS, false, vulnerable, VerdictVulnerable, nil},
+		// #175: a not_vulnerable from a cut slice keeps Partial, so the
+		// report can show partial coverage instead of a clean verdict.
+		{"partial slice not vulnerable", TierM, true, safe, VerdictNotVulnerable, nil},
+		{"unknown tier", Tier("XL"), false, vulnerable, 0, ErrTier},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []gateway.Call
 			client, err := replayClient(func(_ context.Context, c gateway.Call) (*gateway.Reply, error) {
 				calls = append(calls, c)
-				body, err := synthesizedReply(vulnerable)
+				body, err := synthesizedReply(tt.answer)
 				return &gateway.Reply{Status: 200, Body: body}, err
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			sig, err := Evaluate(context.Background(), client, tt.tier, slice)
+			in := slice
+			in.Partial = tt.partial
+			sig, err := Evaluate(context.Background(), client, tt.tier, in)
 			if tt.want != nil {
 				if !errors.Is(err, tt.want) || len(calls) != 0 {
 					t.Fatalf("err = %v after %d calls, want %v before any", err, len(calls), tt.want)
 				}
 				return
 			}
-			if err != nil || sig.Hypothesis != 3 || sig.Verdict != VerdictVulnerable {
+			if err != nil || sig.Hypothesis != 3 || sig.Verdict != tt.verdict || sig.Partial != tt.partial {
 				t.Fatalf("Evaluate = %+v, %v", sig, err)
 			}
 			if len(calls) != 1 {

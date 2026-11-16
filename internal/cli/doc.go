@@ -4,4 +4,14 @@
 // (global flags, subcommands, usage text and exit codes) can be exercised in
 // tests through Run without building or spawning a binary. It uses only the
 // standard library flag package; no third-party CLI framework.
+//
+// It is also the only package above every pipeline layer, so `creep scan`
+// wires them here (ADR 0009): calibrate the model, extract the static graph
+// from the current directory, map it to planner values by explicit switch
+// (plannermap.go; the planner may not import static, calibrate or reader),
+// plan, slice and evaluate with the reader through the gateway and the
+// record/replay cache, and build the report. Everything a run leaves out is
+// listed as not evaluated, and a run that left out more than vendor code and
+// tier S's low-risk sinks exits 4, never 0. `creep why` reads the last JSON
+// report back strictly and prints a finding's evidence escaped.
 package cli

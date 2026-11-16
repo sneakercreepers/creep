@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/sneakercreepers/creep/blob/main/docs/schemas/report-v1.json",
   "title": "creep JSON report, schema_version 1",
-  "description": "Written by creep's JSON report format. Fields are added only with a schema_version bump and a new schema file; a committed fixture per version must stay valid (internal/report contract test).",
+  "description": "Written by creep's JSON report format. Once a release ships it, fields are added only with a schema_version bump and a new schema file; a committed fixture per version must stay valid (internal/report contract test). Before the first release, ADR 0009 amended version 1 additively.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "tool", "run", "findings", "coverage", "data_handling"],
@@ -73,7 +73,24 @@
         "class": { "$ref": "#/definitions/id" },
         "status": { "enum": ["verified", "probable", "discarded", "not_evaluated"] },
         "path": { "$ref": "#/definitions/path" },
-        "line": { "description": "1-based; 0 means the whole file.", "$ref": "#/definitions/count" }
+        "line": { "description": "1-based; 0 means the whole file.", "$ref": "#/definitions/count" },
+        "reason": { "description": "Why a not-evaluated finding was not decided (ADR 0009).", "$ref": "#/definitions/id" },
+        "partial": { "description": "The verdict came from a slice that left lines out: partial coverage, never clean.", "type": "boolean" },
+        "confidence": { "description": "The reader's confidence, 0-100.", "type": "integer", "minimum": 0, "maximum": 100 },
+        "evidence": {
+          "description": "Line ranges of the finding's file that the reader cited.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/lineRange" }
+        }
+      }
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
       }
     },
     "classCoverage": {
@@ -95,7 +112,7 @@
       "required": ["path", "reason"],
       "properties": {
         "path": { "type": "string" },
-        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget"] }
+        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language"] }
       }
     },
     "dataHandling": {

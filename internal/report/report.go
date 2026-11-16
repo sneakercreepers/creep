@@ -40,12 +40,12 @@ const (
 	ClassNotEvaluated ClassStatus = "not_evaluated"
 )
 
-// SkipReason mirrors gateway.SkipReason, a closed set. report may not import
-// gateway (layer table), so the CLI converts and a test there keeps the two
-// sets equal.
+// SkipReason is why a file was not evaluated in full, a closed set. The
+// first seven mirror gateway.SkipReason; report may not import gateway
+// (layer table), so the CLI converts and a test there keeps the sets equal.
 type SkipReason string
 
-// Reasons a file was not evaluated.
+// Reasons a file was not evaluated in full.
 const (
 	SkipReadFailed   SkipReason = "read_failed"
 	SkipTooLarge     SkipReason = "too_large"
@@ -54,11 +54,28 @@ const (
 	SkipRunFull      SkipReason = "run_full"
 	SkipSendFailed   SkipReason = "send_failed"
 	SkipBudget       SkipReason = "budget"
+	// SkipLinesShifted is reader.FileLinesShifted: redaction joined lines
+	// (a multi-line key), so no slice of the file could be numbered.
+	SkipLinesShifted SkipReason = "lines_shifted"
+	// Static analysis (ADR 0009). Vendor, generated and minified files are
+	// left out by design; the rest are gaps in the run.
+	SkipVendor      SkipReason = "vendor"
+	SkipGenerated   SkipReason = "generated"
+	SkipMinified    SkipReason = "minified"
+	SkipNotRegular  SkipReason = "not_regular"          // a link or special file with a source extension
+	SkipInvalidPath SkipReason = "invalid_path"         // static refused the repo-relative name
+	SkipParseFailed SkipReason = "parse_failed"         // the parser hit a limit or failed
+	SkipSyntaxError SkipReason = "syntax_error"         // partial: routes in the broken region may be missing
+	SkipTruncated   SkipReason = "truncated"            // partial: a route or sink cap cut the file
+	SkipUnsupported SkipReason = "unsupported_language" // a source language static cannot extract yet
 )
 
 var skipReasons = map[SkipReason]bool{
 	SkipReadFailed: true, SkipTooLarge: true, SkipLineTooLong: true, SkipRedactFailed: true,
-	SkipRunFull: true, SkipSendFailed: true, SkipBudget: true,
+	SkipRunFull: true, SkipSendFailed: true, SkipBudget: true, SkipLinesShifted: true,
+	SkipVendor: true, SkipGenerated: true, SkipMinified: true, SkipNotRegular: true,
+	SkipInvalidPath: true, SkipParseFailed: true, SkipSyntaxError: true, SkipTruncated: true,
+	SkipUnsupported: true,
 }
 
 // Incomplete reasons when the run state gives none.
@@ -70,6 +87,13 @@ const (
 // idPattern matches finding IDs, class names and reasons: identifiers, never
 // free text, so `creep why <id>` and every format can print them safely.
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+
+// ValidID reports whether s is a well-formed finding ID, so `creep why`
+// refuses anything else before reading a report.
+func ValidID(s string) bool { return idPattern.MatchString(s) }
+
+// maxConfidence is the top of the reader's confidence scale.
+const maxConfidence = 100
 
 // ErrInvalid is wrapped by every validation error from New.
 var ErrInvalid = errors.New("invalid report input")
@@ -89,12 +113,26 @@ type RunInfo struct {
 
 // Finding is one hypothesis and its verdict. Path comes from the scanned
 // repository (slash-separated, relative); Line is 1-based, 0 for the file.
+// The optional fields are the evidence `creep why` prints (ADR 0009).
 type Finding struct {
 	ID     string `json:"id"`
 	Class  string `json:"class"`
 	Status Status `json:"status"`
 	Path   string `json:"path"`
 	Line   int    `json:"line"`
+	// Reason is an ID saying why a not-evaluated finding was not decided
+	// (step_cap, budget, inconclusive, ...).
+	Reason string `json:"reason,omitempty"`
+	// Partial means the verdict came from a slice that left lines out.
+	Partial    bool        `json:"partial,omitempty"`
+	Confidence int         `json:"confidence,omitempty"` // the reader's 0-100
+	Evidence   []LineRange `json:"evidence,omitempty"`   // lines the reader cited
+}
+
+// LineRange is an inclusive range of 1-based lines in the finding's file.
+type LineRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
 }
 
 // ClassCoverage is one class's status and its calibration result: Detected
@@ -213,6 +251,15 @@ func checkFinding(f Finding, seen map[string]bool) error {
 		return fmt.Errorf("%w: finding %s: empty path", ErrInvalid, f.ID)
 	case f.Line < 0:
 		return fmt.Errorf("%w: finding %s: line %d", ErrInvalid, f.ID, f.Line)
+	case f.Reason != "" && !idPattern.MatchString(f.Reason):
+		return fmt.Errorf("%w: finding %s: reason %q", ErrInvalid, f.ID, f.Reason)
+	case f.Confidence < 0 || f.Confidence > maxConfidence:
+		return fmt.Errorf("%w: finding %s: confidence %d", ErrInvalid, f.ID, f.Confidence)
+	}
+	for _, r := range f.Evidence {
+		if r.Start < 1 || r.End < r.Start {
+			return fmt.Errorf("%w: finding %s: evidence %d-%d", ErrInvalid, f.ID, r.Start, r.End)
+		}
 	}
 	if _, ok := statusRank[f.Status]; !ok {
 		return fmt.Errorf("%w: finding %s: status %q", ErrInvalid, f.ID, f.Status)
