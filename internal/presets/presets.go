@@ -97,11 +97,6 @@ func Lookup(name string) (Preset, error) {
 	return p, nil
 }
 
-// NeedsModel reports whether the command line takes model.name.
-func (p Preset) NeedsModel() bool {
-	return slices.Contains(p.Args, ModelPlaceholder)
-}
-
 var modelNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$`)
 
 // CommandLine returns the preset as a model.run value: the program and its

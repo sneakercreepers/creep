@@ -32,7 +32,7 @@ func TestLayerOrder(t *testing.T) {
 	in := Inputs{
 		Policy:  file("policy.yaml", "defaults:\n  model:\n    tier: small\n    name: p\n  budget:\n    max_calls: 10\n"),
 		User:    file("~/.creep/config.yaml", "model:\n  name: u\n  endpoint: https://user.example\n"),
-		Project: file("creep.yaml", "model:\n  name: proj\noutput:\n  format: json\n"),
+		Project: file("creep.yaml", "log:\n  level: warn\noutput:\n  format: json\n"),
 		Flags:   []Flag{{Name: "--format", Key: "output.format", Value: "sarif"}},
 	}
 	r, err := Load(in)
@@ -44,7 +44,8 @@ func TestLayerOrder(t *testing.T) {
 		{"model.tier", `policy "policy.yaml"`},
 		{"budget.max_calls", `policy "policy.yaml"`},
 		{"model.endpoint", `user "~/.creep/config.yaml"`},
-		{"model.name", `project "creep.yaml"`},
+		{"model.name", `user "~/.creep/config.yaml"`},
+		{"log.level", `project "creep.yaml"`},
 		{"output.format", "flag --format"},
 	}
 	for _, tt := range tests {
@@ -52,7 +53,7 @@ func TestLayerOrder(t *testing.T) {
 			t.Errorf("source of %s = %s, want %s", tt.key, got, tt.source)
 		}
 	}
-	if r.Config.Model.Name != "proj" || r.Config.Output.Format != "sarif" || r.Config.Budget.MaxCalls != 10 {
+	if r.Config.Model.Name != "u" || r.Config.Log.Level != "warn" || r.Config.Output.Format != "sarif" || r.Config.Budget.MaxCalls != 10 {
 		t.Errorf("unexpected config: %+v", r.Config)
 	}
 }

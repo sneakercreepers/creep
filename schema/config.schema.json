@@ -8,13 +8,13 @@
       "properties": {
         "max_calls": {
           "default": 500,
-          "description": "Maximum model calls per scan.",
+          "description": "Maximum model calls per scan. The project file may only lower it.",
           "minimum": 1,
           "type": "integer"
         },
         "max_tokens": {
           "default": 2000000,
-          "description": "Maximum model tokens per scan.",
+          "description": "Maximum model tokens per scan. The project file may only lower it.",
           "minimum": 1,
           "type": "integer"
         }
@@ -26,7 +26,7 @@
       "properties": {
         "cache_days": {
           "default": 30,
-          "description": "Days a model calibration stays valid.",
+          "description": "Days a model calibration stays valid. The project file may only lower it.",
           "maximum": 365,
           "minimum": 1,
           "type": "integer"
@@ -111,14 +111,14 @@
         },
         "max_output_bytes": {
           "default": 1048576,
-          "description": "Largest stdout a model command call may print.",
+          "description": "Largest stdout a model command call may print. The project file may only lower it.",
           "maximum": 8388608,
           "minimum": 1024,
           "type": "integer"
         },
         "name": {
           "default": "",
-          "description": "Model name sent to the endpoint.",
+          "description": "Model name sent to the endpoint. Cannot be set in the project file.",
           "type": "string"
         },
         "preset": {
@@ -143,7 +143,7 @@
         },
         "timeout_seconds": {
           "default": 300,
-          "description": "Seconds one model command call may run before it is killed.",
+          "description": "Seconds one model command call may run before it is killed. The project file may only lower it.",
           "maximum": 3600,
           "minimum": 1,
           "type": "integer"
@@ -196,12 +196,12 @@
       "properties": {
         "enabled": {
           "default": false,
-          "description": "Run proofs of concept in a container (v0.2). The sandbox never has internet access.",
+          "description": "Run proofs of concept in a container (v0.2). The sandbox never has internet access. Cannot be set in the project file.",
           "type": "boolean"
         },
         "runtime": {
           "default": "docker",
-          "description": "Container runtime for the sandbox.",
+          "description": "Container runtime for the sandbox. Cannot be set in the project file.",
           "enum": [
             "docker",
             "podman"

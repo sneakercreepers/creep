@@ -41,7 +41,7 @@ func TestLockedKeyCannotBeOverridden(t *testing.T) {
 }
 
 func TestLockedKeyKeepsPolicyValue(t *testing.T) {
-	r, err := Load(Inputs{Policy: file("org.yaml", lockingPolicy), Project: file("creep.yaml", "model:\n  name: x\n")})
+	r, err := Load(Inputs{Policy: file("org.yaml", lockingPolicy), Project: file("creep.yaml", "log:\n  level: warn\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
