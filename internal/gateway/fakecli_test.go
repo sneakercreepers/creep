@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -56,8 +57,30 @@ func fakeCLI(mode string) int {
 	case "exit3":
 		fmt.Fprint(os.Stderr, "secret prompt echo")
 		return 3
+	case "spawn", "spawnhang":
+		startLateWriter()
+		fmt.Print(`{"ok":true}`)
+		if mode == "spawnhang" {
+			time.Sleep(time.Minute)
+		}
+	case "late":
+		time.Sleep(3 * time.Second) // past -race builds' 1 s exit delay
+		_ = os.WriteFile("late.txt", []byte("x"), 0o600)
+		_ = os.WriteFile(os.Getenv(fakeMarkEnv), []byte("x"), 0o600) //nolint:gosec // G703: the test sets this path in t.TempDir()
 	}
 	return 0
+}
+
+// fakeMarkEnv names the file a late writer creates outside its working
+// directory, so a test can see whether it outlived the run.
+const fakeMarkEnv = "CREEP_FAKE_MARK"
+
+// startLateWriter starts a detached background child that writes after
+// its parent has exited, like a CLI helper process left behind.
+func startLateWriter() {
+	child := exec.Command(os.Args[0]) //nolint:gosec // G204: this test binary
+	child.Env = append(os.Environ(), fakeCLIEnv+"=late")
+	_ = child.Start()
 }
 
 // fakeCommand returns a Command that re-runs this test binary in mode.

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -121,10 +122,17 @@ func checkCommandLimits(opts CommandOptions) error {
 	return nil
 }
 
-// resolveProgram returns the absolute, symlink-free path of the program.
-// A relative path with a separator would be relative to the repository.
+// resolveProgram returns the final path of the program: every link and
+// junction followed, any \\?\ prefix removed. A relative path with a
+// separator would be relative to the repository; a device or UNC path
+// would reach a device or another host. The final path must lie outside
+// RepoDir and the current directory, compared by file identity, so no
+// spelling (\\?\, 8.3 names, case) or link reaches into them.
 func resolveProgram(name, repoDir string) (string, error) {
-	if !filepath.IsAbs(name) && strings.ContainsAny(name, `/\`) {
+	if isDeviceOrUNC(name) {
+		return "", fmt.Errorf("%w: program %q is a device or network path", ErrCommand, name)
+	}
+	if !filepath.IsAbs(stripVerbatim(name)) && strings.ContainsAny(name, `/\`) {
 		return "", fmt.Errorf("%w: program %q must be a name on PATH or an absolute path", ErrCommand, name)
 	}
 	found, err := exec.LookPath(name)
@@ -134,34 +142,41 @@ func resolveProgram(name, repoDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: program %q not found", ErrCommand, name)
 	}
-	real, err := filepath.EvalSymlinks(found)
-	if err == nil {
-		real, err = filepath.Abs(real)
-	}
+	final, err := finalPath(found)
 	if err != nil {
-		return "", fmt.Errorf("%w: program %q: %w", ErrCommand, name, err)
+		return "", fmt.Errorf("%w: program %q: cannot follow its links or junctions to a final path: %w", ErrCommand, name, err)
 	}
-	if insideDir(real, repoDir) {
-		return "", fmt.Errorf("%w: program %q is inside the scanned repository", ErrCommand, name)
+	if isDeviceOrUNC(final) {
+		return "", fmt.Errorf("%w: program %q resolves to a network path", ErrCommand, name)
 	}
-	return real, nil
+	return final, checkOutside(name, found, final, repoDir)
 }
 
-// insideDir reports whether path is dir or below it, after resolving links
-// in dir. An empty or unresolvable dir contains nothing.
-func insideDir(path, dir string) bool {
-	if dir == "" {
-		return false
-	}
-	real, err := filepath.EvalSymlinks(dir)
-	if err == nil {
-		real, err = filepath.Abs(real)
-	}
+// checkOutside refuses a final program path inside repoDir or the current
+// directory. When a link or junction led there, the error says so, since
+// the path as written looks outside.
+func checkOutside(name, found, final, repoDir string) error {
+	cwd, err := os.Getwd()
 	if err != nil {
-		return false
+		return fmt.Errorf("%w: program %q: %w", ErrCommand, name, err)
 	}
-	rel, err := filepath.Rel(real, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+	for _, root := range []string{repoDir, cwd} {
+		if root == "" {
+			continue
+		}
+		inside, err := underDir(final, root)
+		if err != nil {
+			return fmt.Errorf("%w: program %q: cannot check that it is outside the repository: %w", ErrCommand, name, err)
+		}
+		if !inside {
+			continue
+		}
+		if !strings.EqualFold(filepath.Clean(stripVerbatim(found)), final) {
+			return fmt.Errorf("%w: program %q follows a link or junction to %q, inside the scanned repository or the current directory", ErrCommand, name, final)
+		}
+		return fmt.Errorf("%w: program %q is inside the scanned repository or the current directory", ErrCommand, name)
+	}
+	return nil
 }
 
 // commandEnv is baseEnv plus the declared names, each only when set.

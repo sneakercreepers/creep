@@ -130,10 +130,14 @@
 // line written and synced, then the run, then the result line (outcomes
 // add tool_use, timeout and command_failed). The command line is split
 // without a shell and refuses shell syntax; the program comes from an
-// absolute PATH entry or an absolute path, never the current directory or
-// the repository. Each run gets only the base and declared environment
-// variables, an empty temp working directory and its own TMPDIR, a timeout
-// and a stdout cap; stderr is discarded. Anything left in the working
-// directory means the CLI used a tool: the reply is dropped with a
-// *ToolUseError.
+// absolute PATH entry or an absolute path whose final path (links,
+// junctions and \\?\ resolved) is outside the repository and the current
+// directory by file identity; device and UNC paths are refused. Each run
+// gets only the base and declared environment variables, an empty temp
+// working directory and its own TMPDIR, a timeout and a stdout cap; stderr
+// is discarded. On Unix the CLI's whole process group is killed after it
+// exits or times out, before the working directory is checked; Windows
+// kills only the CLI (no job object without x/sys or unsafe). Anything
+// left in the working directory means the CLI used a tool: the reply is
+// dropped with a *ToolUseError.
 package gateway

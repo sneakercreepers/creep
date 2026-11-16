@@ -77,7 +77,11 @@ func (c *Command) run(ctx context.Context, payload []byte) ([]byte, error) {
 	runCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	out := &cappedBuffer{max: c.maxOut, onFull: cancel}
-	runErr := c.start(runCtx, work, tmp, payload, out).Run()
+	cmd := c.start(runCtx, work, tmp, payload, out)
+	runErr := cmd.Run()
+	// The working directory is checked only once the whole process group is
+	// gone, so a background child cannot write into it after the check.
+	killTree(cmd)
 	return c.outcome(ctx, runCtx, work, out, runErr)
 }
 
@@ -91,6 +95,7 @@ func (c *Command) start(ctx context.Context, work, tmp string, payload []byte, o
 	cmd.Stdout = out
 	cmd.Stderr = nil // the null device: stderr may echo the prompt
 	cmd.WaitDelay = waitDelay
+	ownProcessGroup(cmd)
 	return cmd
 }
 
