@@ -32,7 +32,7 @@
 - **Redaction through the gateway.** Every model call goes through one package that redacts secrets from the whole file before fragmenting it, checks consent and the token budget, and only then sends.
 - **`egress.log`.** Every request is written and fsynced before a byte is sent, then its result, with a payload file (mode `0600`).
 - **The planner never reads code.** It receives only IDs, enums and booleans, so text in the scanned repository cannot steer it.
-- **Honest incompleteness.** Anything not evaluated (unsupported language, unresolved route, skipped sink, failed scanner, budget hit) is listed and the run exits `4`, never `0`.
+- **Honest incompleteness.** Anything not evaluated (unsupported language, unresolved route, skipped sink, failed scanner, budget hit, a file name that is not a clean relative path) is listed and the run exits `4`, never `0`.
 - **Model output is never executed** on your machine.
 - No telemetry; no network except the model endpoints you configure.
 
@@ -190,7 +190,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#207, #210, #213, #214), config and redaction hardening (#62, #63, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#207, #210, #213, #214), config and redaction hardening (#63 first, then #62, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
