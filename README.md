@@ -14,12 +14,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.1%20release%20candidate-yellow)
+![Status](https://img.shields.io/badge/status-v0.1.0%20released-green)
 
 </div>
 
 > [!NOTE]
-> **v0.1 is feature-complete.** [`v0.1.0-rc.1`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0-rc.1) is a **pre-release** (release candidate); the final `v0.1.0` follows on the same commit. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only. There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
+> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only. There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
 
 ---
 
@@ -32,7 +32,7 @@
 - **Redaction through the gateway.** Every model call goes through one package that redacts secrets from the whole file before fragmenting it, checks consent and the token budget, and only then sends.
 - **`egress.log`.** Every request is written and fsynced before a byte is sent, then its result, with a payload file (mode `0600`).
 - **The planner never reads code.** It receives only IDs, enums and booleans, so text in the scanned repository cannot steer it.
-- **Honest incompleteness.** Anything not evaluated (unsupported language, unresolved route, skipped sink, failed scanner, budget hit) is listed and the run exits `4`, never `0`.
+- **Honest incompleteness.** Anything not evaluated (unsupported language, unresolved route, skipped sink, failed scanner, budget hit, a file name that is not a clean relative path) is listed and the run exits `4`, never `0`.
 - **Model output is never executed** on your machine.
 - No telemetry; no network except the model endpoints you configure.
 
@@ -48,17 +48,17 @@ Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md
 
 ### From the GitHub release
 
-Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one, [`v0.1.0-rc.1`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0-rc.1), is a **pre-release**.
+Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0).
 
-Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.1.0-rc.1` on linux/amd64:
+Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.1.0` on linux/amd64:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.1.0-rc.1' \
+  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.1.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
-gh attestation verify creep_0.1.0-rc.1_linux_amd64.tar.gz \
+gh attestation verify creep_0.1.0_linux_amd64.tar.gz \
   --repo sneakercreepers/creep \
   --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
@@ -190,7 +190,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#207, #210, #213, #214), config and redaction hardening (#62, #63, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#207, #210, #213, #214), config and redaction hardening (#63 first, then #62, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
