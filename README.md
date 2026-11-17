@@ -14,12 +14,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.1%20release%20candidate-yellow)
+![Status](https://img.shields.io/badge/status-v0.1.0%20released-green)
 
 </div>
 
 > [!NOTE]
-> **v0.1 is feature-complete.** [`v0.1.0-rc.1`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0-rc.1) is a **pre-release** (release candidate); the final `v0.1.0` follows on the same commit. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only. There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
+> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only. There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
 
 ---
 
@@ -48,17 +48,17 @@ Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md
 
 ### From the GitHub release
 
-Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one, [`v0.1.0-rc.1`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0-rc.1), is a **pre-release**.
+Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0).
 
-Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.1.0-rc.1` on linux/amd64:
+Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.1.0` on linux/amd64:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.1.0-rc.1' \
+  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.1.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
-gh attestation verify creep_0.1.0-rc.1_linux_amd64.tar.gz \
+gh attestation verify creep_0.1.0_linux_amd64.tar.gz \
   --repo sneakercreepers/creep \
   --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
