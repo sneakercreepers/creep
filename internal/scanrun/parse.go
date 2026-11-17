@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -108,7 +109,10 @@ func (c *collector) add(repo, path string, line, max int, parts ...string) Failu
 
 // repoRelative turns a reported path into a slash-separated path inside
 // repo. A relative path is taken as relative to repo; anything that leaves
-// it, is empty, too long or not UTF-8 is refused.
+// it, is empty, too long or not UTF-8 is refused, and so is a name the
+// report refuses (report.ValidPath): one holding a backslash or starting
+// like a drive letter, which Unix allows but Windows reads as a separator
+// or a volume.
 func repoRelative(path, repo string) (string, bool) {
 	if path == "" || len(path) > maxPathBytes || !utf8.ValidString(path) {
 		return "", false
@@ -124,7 +128,11 @@ func repoRelative(path, repo string) (string, bool) {
 	if !filepath.IsLocal(rel) || rel == "." {
 		return "", false // a finding names a file in the repository
 	}
-	return filepath.ToSlash(rel), true
+	slash := filepath.ToSlash(rel)
+	if strings.ContainsRune(slash, '\\') || (len(slash) > 1 && slash[1] == ':') {
+		return "", false
+	}
+	return slash, true
 }
 
 // findingKey hashes the location and the tool's identifiers, length-
