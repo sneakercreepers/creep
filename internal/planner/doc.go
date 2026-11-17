@@ -31,7 +31,9 @@
 // parameters; Medium: input with auth or bound parameters; Low: a literal
 // argument), then unauthenticated first, then unparameterized, then sink
 // severity (shell, SQL, template, file, HTTP client), then direct calls
-// before helpers, then state-changing methods, then lower sink ID.
+// before helpers, then state-changing methods, then lower sink ID. Only SQL
+// sinks have bound parameters: Parameterized on another kind is ignored, so
+// a mapping bug cannot demote a shell or file sink.
 //
 // Each hypothesis is one reader step and reserves Budget.StepTokens, so a
 // plan never needs more than Budget.Tokens. The tier bounds the steps:
