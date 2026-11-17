@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -183,8 +184,20 @@ func TestRepoRelative(t *testing.T) {
 		{"../x.py", "", false},
 		{filepath.Join(repo+"2", "x.py"), "", false},
 		{"bad\xffname", "", false},
+		{"C:/x.py", "", false}, // #177: names the report refuses
+		{"c:x.py", "", false},
+		{"a:b.py", "", false},
 	}
-	for _, tc := range tests {
+	// A backslash is a separator on Windows and a name byte elsewhere,
+	// where the report would refuse the name.
+	backslash := struct {
+		path, want string
+		ok         bool
+	}{`a\b.py`, "", false}
+	if runtime.GOOS == "windows" {
+		backslash.want, backslash.ok = "a/b.py", true
+	}
+	for _, tc := range append(tests, backslash) {
 		got, ok := repoRelative(tc.path, repo)
 		if got != tc.want || ok != tc.ok {
 			t.Errorf("repoRelative(%q) = %q, %v; want %q, %v", tc.path, got, ok, tc.want, tc.ok)

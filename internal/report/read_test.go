@@ -35,6 +35,7 @@ func TestReadJSON(t *testing.T) {
 		{"other version", strings.Replace(text, `"schema_version": 1`, `"schema_version": 2`, 1)},
 		{"finding with free-text ID", strings.Replace(text, `"id": "f1"`, `"id": "f1 \u001b[2J"`, 1)},
 		{"unknown status", strings.Replace(text, `"status": "verified"`, `"status": "fixed"`, 1)},
+		{"path outside the repository", strings.Replace(text, `"path": "app/db.py"`, `"path": "../../etc/passwd"`, 1)},
 		{"truncated", text[:len(text)/2]},
 		{"empty", ""},
 	}

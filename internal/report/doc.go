@@ -22,6 +22,9 @@
 //     runes shown as escapes, so no file name can inject markup, links or
 //     terminal sequences. SARIF URIs are percent-encoded; JSON escaping is
 //     encoding/json's.
+//   - A finding path is relative, slash-separated and clean, with no
+//     backslash or drive letter (ValidPath), so no SARIF location resolves
+//     outside %SRCROOT%; New and ReadJSON refuse any other.
 //   - Output is deterministic (no clock, sorted findings), so a replayed run
 //     renders byte-identical reports.
 //   - ReadJSON reads a report back for `creep why` as strictly as New

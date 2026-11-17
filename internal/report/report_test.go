@@ -51,6 +51,58 @@ func TestNewRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+// Acceptance (#177): a finding path that is absolute, has a drive letter or
+// a backslash, or is not clean could point a SARIF location outside
+// %SRCROOT%, so New refuses it; odd but clean repository names pass.
+func TestNewFindingPaths(t *testing.T) {
+	tests := []struct {
+		path string
+		ok   bool
+	}{
+		{"/abs", false},
+		{"/", false},
+		{"C:/x", false},
+		{"c:x", false},
+		{`C:\x`, false},
+		{`\\server\share\x.py`, false},
+		{"a:b.py", false}, // a drive letter to Windows
+		{"a/../b", false},
+		{"../x", false},
+		{"..", false},
+		{"./x", false},
+		{".", false},
+		{"a/./b", false},
+		{`a\b`, false},
+		{"a//b", false},
+		{"a/", false},
+		{"", false},
+		{"a/b.go", true},
+		{"dir with space/a b.py", true},
+		{"a#b.py", true},
+		{"100%.py", true},
+		{"ünï/日本.py", true},
+		{".hidden/..x.py", true},
+		{"bad\xffutf8.py", true}, // a valid name on Linux; escaped on output
+		{"1:x.py", true},         // no drive letter
+		{"web/C:x.js", true},     // a colon past the first segment is no volume
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := ValidPath(tt.path); got != tt.ok {
+				t.Errorf("ValidPath(%q) = %v, want %v", tt.path, got, tt.ok)
+			}
+			in := Input{Run: completeRun, Findings: []Finding{{ID: "f1", Class: "sqli", Status: StatusProbable, Path: tt.path}}}
+			_, err := New(in)
+			if tt.ok && err != nil {
+				t.Fatalf("New() = %v, want the path accepted", err)
+			}
+			if !tt.ok && !errors.Is(err, ErrInvalid) {
+				t.Fatalf("New() = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
+
 func TestRunIncompleteness(t *testing.T) {
 	tests := []struct {
 		name       string

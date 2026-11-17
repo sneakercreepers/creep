@@ -81,8 +81,12 @@ func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, pr
 
 // addFile extracts one file into ex and says whether, and why, the file was
 // not evaluated in full. A name static refuses (such as a:b.py, which it
-// reads as a drive letter) is listed, never dropped and never fatal.
+// reads as a drive letter) is listed, never dropped and never fatal. So is
+// a name report.New would refuse on a finding, such as a\b.py on Unix.
 func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel string, lang static.Language, src []byte) (report.SkipReason, bool) {
+	if !report.ValidPath(rel) {
+		return report.SkipInvalidPath, true
+	}
 	if _, err := static.IgnoreReason(rel, src); err != nil {
 		return report.SkipInvalidPath, true
 	}

@@ -3,8 +3,10 @@ package report
 import (
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/sneakercreepers/creep/internal/buildinfo"
 	"github.com/sneakercreepers/creep/internal/state"
@@ -112,7 +114,8 @@ type RunInfo struct {
 }
 
 // Finding is one hypothesis and its verdict. Path comes from the scanned
-// repository (slash-separated, relative); Line is 1-based, 0 for the file.
+// repository and must pass ValidPath (relative, slash-separated, clean);
+// Line is 1-based, 0 for the file.
 // The optional fields are the evidence `creep why` prints (ADR 0009).
 type Finding struct {
 	ID     string `json:"id"`
@@ -254,8 +257,8 @@ func checkFinding(f Finding, seen map[string]bool) error {
 		return fmt.Errorf("%w: duplicate finding ID %q", ErrInvalid, f.ID)
 	case !idPattern.MatchString(f.Class):
 		return fmt.Errorf("%w: finding %s: class %q", ErrInvalid, f.ID, f.Class)
-	case f.Path == "":
-		return fmt.Errorf("%w: finding %s: empty path", ErrInvalid, f.ID)
+	case !ValidPath(f.Path):
+		return fmt.Errorf("%w: finding %s: path %q", ErrInvalid, f.ID, f.Path)
 	case f.Line < 0:
 		return fmt.Errorf("%w: finding %s: line %d", ErrInvalid, f.ID, f.Line)
 	case f.Reason != "" && !idPattern.MatchString(f.Reason):
@@ -273,6 +276,32 @@ func checkFinding(f Finding, seen map[string]bool) error {
 	}
 	seen[f.ID] = true
 	return nil
+}
+
+// ValidPath reports whether p can name a finding's file: relative to the
+// repository root, slash-separated and clean (no empty, "." or ".."
+// segment, no trailing slash), with no backslash and no drive letter. Any
+// other path could make a SARIF location resolve outside %SRCROOT%, and
+// Windows reads a backslash as a separator and "C:" as a volume.
+func ValidPath(p string) bool {
+	switch {
+	case p == "" || p == "." || path.Clean(p) != p:
+		return false
+	case path.IsAbs(p) || p == ".." || strings.HasPrefix(p, "../"):
+		return false
+	case strings.ContainsRune(p, '\\'):
+		return false
+	}
+	return !hasDriveLetter(p)
+}
+
+// hasDriveLetter reports a leading "C:" in any case, as Windows reads it.
+func hasDriveLetter(p string) bool {
+	if len(p) < 2 || p[1] != ':' {
+		return false
+	}
+	c := p[0] | 0x20 // ASCII lower case
+	return 'a' <= c && c <= 'z'
 }
 
 func findingLess(a, b Finding) bool {

@@ -60,7 +60,7 @@ func TestWhy(t *testing.T) {
 // text: why never echoes a repository string raw.
 func TestWhyDistrustsTheReportFile(t *testing.T) {
 	const planted = `{"schema_version":1,"tool":{"name":"creep","version":"x","commit":"y"},"run":{"incomplete":false},` +
-		`"findings":[{"id":"f1","class":"sqli","status":"probable","path":"a\u001b]8;;http://evil\u0007.py","line":3}],` +
+		`"findings":[{"id":"f1","class":"sqli","status":"probable","path":"a\u001b]8;;http:evil\u0007.py","line":3}],` +
 		`"coverage":{"classes":[],"not_evaluated":[]},"data_handling":{"requests":0,"bytes":0,"endpoints":[],"redactions":{}}}`
 	tests := []struct {
 		name     string
@@ -68,7 +68,8 @@ func TestWhyDistrustsTheReportFile(t *testing.T) {
 		wantCode int
 		want     string
 	}{
-		{"hostile path is escaped", planted, exitcode.OK, `a\x1b]8;;http://evil\x07.py:3`},
+		{"hostile path is escaped", planted, exitcode.OK, `a\x1b]8;;http:evil\x07.py:3`},
+		{"unclean path refused", strings.Replace(planted, `http:evil`, `http://evil`, 1), exitcode.ConfigError, "invalid report input"}, // #177
 		{"unknown field refused", strings.Replace(planted, `"line":3`, `"line":3,"cmd":"x"`, 1), exitcode.ConfigError, "invalid report input"},
 		{"not JSON", "#!/bin/sh\n", exitcode.ConfigError, "invalid report input"},
 	}
