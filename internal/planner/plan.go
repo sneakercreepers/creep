@@ -129,10 +129,17 @@ func riskOf(s Sink, r Route) Risk {
 	switch {
 	case !s.DynamicArg:
 		return RiskLow
-	case !s.Parameterized && !r.Authenticated:
+	case !boundParams(s) && !r.Authenticated:
 		return RiskHigh
 	}
 	return RiskMedium
+}
+
+// boundParams reports whether bound parameters mitigate the sink. Only SQL
+// has them; static sets the flag on nothing else, so the flag on another
+// kind is a mapping bug and must not demote a shell or file sink (#202).
+func boundParams(s Sink) bool {
+	return s.Kind == SinkSQL && s.Parameterized
 }
 
 // compareRisk orders a before b when a is riskier: risk, then no auth,
@@ -143,7 +150,7 @@ func compareRisk(a, b candidate) int {
 	return cmp.Or(
 		cmp.Compare(b.risk, a.risk),
 		cmp.Compare(btoi(!b.route.Authenticated), btoi(!a.route.Authenticated)),
-		cmp.Compare(btoi(!b.sink.Parameterized), btoi(!a.sink.Parameterized)),
+		cmp.Compare(btoi(!boundParams(b.sink)), btoi(!boundParams(a.sink))),
 		cmp.Compare(severity(b.sink.Kind), severity(a.sink.Kind)),
 		cmp.Compare(btoi(!b.sink.Indirect), btoi(!a.sink.Indirect)),
 		cmp.Compare(btoi(b.route.Methods&writeMethods != 0), btoi(a.route.Methods&writeMethods != 0)),

@@ -97,7 +97,7 @@ type Sink struct {
 	Route         RouteID
 	Kind          SinkKind
 	DynamicArg    bool // the first argument is not built only from literals
-	Parameterized bool // a SQL call passes bound parameters
+	Parameterized bool // a SQL call passes bound parameters; ignored on other kinds
 	Indirect      bool // the call sits in a helper the handler calls
 }
 

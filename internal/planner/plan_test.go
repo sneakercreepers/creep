@@ -46,6 +46,8 @@ func TestBuildPrioritizes(t *testing.T) {
 		{"direct above indirect", []Sink{{ID: 1, Route: 1, Kind: SinkSQL, DynamicArg: true, Indirect: true}, dyn(2, SinkSQL)}, []SinkID{2, 1}},
 		{"write method above GET", []Sink{with(getOnly, 1), dyn(2, SinkSQL)}, []SinkID{2, 1}},
 		{"ties go to the lower sink ID", []Sink{dyn(9, SinkSQL), dyn(3, SinkSQL), dyn(7, SinkSQL)}, []SinkID{3, 7, 9}},
+		{"parameterized ignored on non-SQL tie-break", []Sink{dyn(2, SinkShell), {ID: 1, Route: 1, Kind: SinkShell, DynamicArg: true, Parameterized: true}}, []SinkID{1, 2}},
+		{"parameterized file stays above parameterized SQL", []Sink{{ID: 2, Route: 1, Kind: SinkSQL, DynamicArg: true, Parameterized: true}, {ID: 1, Route: 1, Kind: SinkFile, DynamicArg: true, Parameterized: true}}, []SinkID{1, 2}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -182,6 +184,14 @@ func TestRiskAndClass(t *testing.T) {
 		{Sink{Kind: SinkSQL, DynamicArg: true, Parameterized: true}, Route{}, RiskMedium, ClassSQLInjection},
 		{Sink{Kind: SinkFile}, Route{}, RiskLow, ClassPathTraversal},
 		{Sink{Kind: SinkHTTPClient, Parameterized: true}, Route{Authenticated: true}, RiskLow, ClassSSRF},
+		// Parameterized means bound SQL parameters; on any other kind it is a
+		// mapping bug and must not lower the risk (#202).
+		{Sink{Kind: SinkShell, DynamicArg: true, Parameterized: true}, Route{}, RiskHigh, ClassCommandInjection},
+		{Sink{Kind: SinkFile, DynamicArg: true, Parameterized: true}, Route{}, RiskHigh, ClassPathTraversal},
+		{Sink{Kind: SinkHTTPClient, DynamicArg: true, Parameterized: true}, Route{}, RiskHigh, ClassSSRF},
+		{Sink{Kind: SinkTemplate, DynamicArg: true, Parameterized: true}, Route{}, RiskHigh, ClassTemplateInjection},
+		{Sink{Kind: SinkShell, DynamicArg: true, Parameterized: true}, Route{Authenticated: true}, RiskMedium, ClassCommandInjection},
+		{Sink{Kind: SinkShell, Parameterized: true}, Route{}, RiskLow, ClassCommandInjection},
 		{Sink{Kind: SinkTemplate, DynamicArg: true, Indirect: true}, Route{}, RiskHigh, ClassTemplateInjection},
 	}
 	for _, tt := range tests {
@@ -190,6 +200,23 @@ func TestRiskAndClass(t *testing.T) {
 		}
 		if got := classOf(tt.sink.Kind); got != tt.class {
 			t.Errorf("classOf(%d) = %d, want %d", tt.sink.Kind, got, tt.class)
+		}
+	}
+}
+
+// TestBuildIgnoresParameterizedOnNonSQL checks the flag end to end: Build
+// accepts it on every kind, but only a SQL sink is demoted by it.
+func TestBuildIgnoresParameterizedOnNonSQL(t *testing.T) {
+	for k := SinkSQL; k <= SinkTemplate; k++ {
+		want := RiskHigh
+		if k == SinkSQL {
+			want = RiskMedium
+		}
+		in := input(TierM, 10, Sink{ID: 1, Route: 1, Kind: k, DynamicArg: true, Parameterized: true})
+		p := mustBuild(t, in)
+		checkPlan(t, in, p)
+		if len(p.Hypotheses) != 1 || p.Hypotheses[0].Risk != want {
+			t.Errorf("kind %d: hypotheses %+v, want one with risk %d", k, p.Hypotheses, want)
 		}
 	}
 }
