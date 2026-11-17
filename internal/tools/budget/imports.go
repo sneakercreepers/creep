@@ -63,7 +63,7 @@ func collectSources(fsys fs.FS, modPath string) ([]sourceFile, error) {
 		if err != nil {
 			return err
 		}
-		if skipDir(name, d) {
+		if skipDir(fsys, name, d) {
 			return fs.SkipDir
 		}
 		if d.IsDir() || path.Ext(name) != ".go" {

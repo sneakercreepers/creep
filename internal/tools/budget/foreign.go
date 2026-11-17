@@ -44,7 +44,7 @@ func walkForeignFiles(fsys fs.FS) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if skipDir(name, d) && d.Name() != "bin" && d.Name() != "dist" {
+		if skipDir(fsys, name, d) && d.Name() != "bin" && d.Name() != "dist" {
 			return fs.SkipDir
 		}
 		if !d.IsDir() && foreignExts[strings.ToLower(path.Ext(name))] {
