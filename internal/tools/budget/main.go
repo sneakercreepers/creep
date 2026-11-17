@@ -200,7 +200,7 @@ func workflowProblems(cfg config) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if skipDir(name, d) {
+		if skipDir(fsys, name, d) {
 			return fs.SkipDir
 		}
 		if d.IsDir() || !isWorkflowFile(name) {

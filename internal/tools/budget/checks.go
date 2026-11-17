@@ -51,10 +51,11 @@ func checkCap(what string, got, limit int64, unit string) []string {
 }
 
 // skipDir reports directories the budget does not own: .git and testdata
-// anywhere (the go command never builds testdata), and the build outputs and
+// anywhere (the go command never builds testdata), the build outputs and
 // vendor tree only at the root, so a package named internal/bin is still
-// checked. A root vendor/ fails the workspace check instead.
-func skipDir(name string, d fs.DirEntry) bool {
+// checked, and nested git checkouts of other Go modules. A root vendor/ fails
+// the workspace check instead.
+func skipDir(fsys fs.FS, name string, d fs.DirEntry) bool {
 	if !d.IsDir() || name == "." {
 		return false
 	}
@@ -64,7 +65,21 @@ func skipDir(name string, d fs.DirEntry) bool {
 	case "bin", "dist", "vendor":
 		return path.Dir(name) == "."
 	}
-	return false
+	return isNestedCheckout(fsys, name)
+}
+
+// isNestedCheckout reports a directory holding both a .git entry and its own
+// go.mod, such as an agent worktree under .claude/worktrees. Both are needed:
+// git refuses to track any path named .git, so such a directory never reaches
+// a commit or CI, and go.mod makes it a separate module the go command does
+// not build into this one. A .git alone would let a local file hide a product
+// package, and a go.mod alone is committable and could hide an action.yml.
+func isNestedCheckout(fsys fs.FS, name string) bool {
+	if _, err := fs.Stat(fsys, path.Join(name, ".git")); err != nil {
+		return false
+	}
+	info, err := fs.Stat(fsys, path.Join(name, "go.mod"))
+	return err == nil && !info.IsDir()
 }
 
 // isADRPath accepts only clean slash paths inside docs/adr/, so an allowlist
