@@ -12,18 +12,22 @@ type jsFile struct {
 	imports map[string]string
 	// funcs maps top-level function names (declarations and const
 	// bindings of function or arrow expressions) to their definitions.
-	funcs   map[string]*Node
+	funcs map[string]*Node
+	// models holds names bound anywhere in the file to a Mongoose model
+	// or a MongoDB collection (jsfind.go).
+	models  map[string]bool
 	express bool // the file imports express
 }
 
 func newJSFile(root *Node, src []byte) *jsFile {
-	f := &jsFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}}
+	f := &jsFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}, models: map[string]bool{}}
 	walk(root, func(n *Node) bool {
 		switch n.Type {
 		case "import_statement":
 			f.addImport(n)
 		case "variable_declarator":
 			f.addRequire(n)
+			f.addModel(n)
 		}
 		return true
 	})
@@ -191,7 +195,8 @@ func (f *jsFile) resolve(n *Node) (name string, method bool) {
 
 // localCall reports whether a callee is, or is a member of, a module of the
 // repository itself (./db, ../models/User, an @/ or ~/ alias), imported or
-// required; method is the called property, "" for the import itself. Such
+// required, or a "#" subpath import; method is the called property, "" for
+// the import itself. Such
 // a receiver is an unknown object from another file, like a variable.
 func (f *jsFile) localCall(n *Node) (method string, ok bool) {
 	var props []string
@@ -219,9 +224,10 @@ func (f *jsFile) localCall(n *Node) (method string, ok bool) {
 
 // localModule reports whether a module specifier (or module.member) names a
 // file of the repository rather than a package: npm names never start with
-// "." or "/", and "@/" and "~/" are path aliases, not scopes.
+// "." or "/", "@/" and "~/" are path aliases, not scopes, and "#" starts a
+// Node subpath import, which package.json maps inside the package.
 func localModule(spec string) bool {
-	for _, p := range []string{".", "/", "@/", "~/"} {
+	for _, p := range []string{".", "/", "@/", "~/", "#"} {
 		if strings.HasPrefix(spec, p) {
 			return true
 		}
