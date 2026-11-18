@@ -114,8 +114,8 @@ func TestJSLocalModulesAndEscapes(t *testing.T) {
 
 func TestLocalModule(t *testing.T) {
 	for spec, want := range map[string]bool{
-		"./db": true, "../models/User": true, ".": true, "/srv/app/db": true, "@/models": true, "~/lib/db": true,
-		"express": false, "@prisma/client": false, "node-fetch": false, "fs.promises": false, "": false,
+		"./db": true, "../models/User": true, ".": true, "/srv/app/db": true, "@/models": true, "~/lib/db": true, "#models/item": true,
+		"express": false, "@prisma/client": false, "node-fetch": false, "fs.promises": false, "src/db": false, "@app/models": false, "": false,
 	} {
 		if localModule(spec) != want {
 			t.Errorf("%q: want %v", spec, want)

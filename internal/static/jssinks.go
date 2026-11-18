@@ -18,7 +18,7 @@ var jsSinkSpecs = []sinkSpec{
 	{".$queryRawUnsafe", SinkSQL},
 	{".$executeRawUnsafe", SinkSQL},
 	// NoSQL (MongoDB driver and Mongoose model methods)
-	{".find", SinkNoSQL}, // only with an object literal filter; see jsFindNeedsObject
+	{".find", SinkNoSQL}, // only with a filter; see jsFindNeedsObject
 	{".findOne", SinkNoSQL},
 	{".findOneAndUpdate", SinkNoSQL},
 	{".findOneAndDelete", SinkNoSQL},
@@ -88,8 +88,8 @@ var jsSinkSpecs = []sinkSpec{
 }
 
 // jsFindNeedsObject: Array.prototype.find shares the name of MongoDB's
-// find, so ".find" counts only when its first argument is an object literal
-// filter, never a callback.
+// find, so ".find" counts only when its first argument is a filter, never a
+// callback (findKind in jsfind.go).
 const jsFindNeedsObject = ".find"
 
 // fsAliases are module prefixes that expose the fs API.

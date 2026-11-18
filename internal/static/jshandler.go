@@ -48,9 +48,10 @@ func (x *jsExtraction) helperSinks(def *Node) []foundSink {
 	return s
 }
 
-// directSinks lists the sink calls of a scan. A call into a module of the
-// repository that matches no sink runs code the scan cannot see, so it sets
-// s.foreign and the route becomes partial.
+// directSinks lists the sink calls of a scan. A call the scan cannot
+// classify (into a module of the repository that matches no sink, a
+// sink-named method on an unresolved import alias, a ".find" whose argument
+// may or may not be a filter) sets s.foreign and the route becomes partial.
 func (x *jsExtraction) directSinks(s *jsScan) []foundSink {
 	var out []foundSink
 	for _, call := range s.calls {
@@ -58,12 +59,9 @@ func (x *jsExtraction) directSinks(s *jsScan) []foundSink {
 		if args == nil {
 			continue // tagged template: the tag gets the parts, not a string
 		}
-		api, ok, local := x.classify(field(call, "function"))
-		if ok && api.String() == jsFindNeedsObject && !findFilter(args, local) {
-			ok = false
-		}
+		api, ok, unseen := x.sinkCall(field(call, "function"), args, s)
+		s.foreign = s.foreign || unseen
 		if !ok {
-			s.foreign = s.foreign || local
 			continue
 		}
 		out = append(out, foundSink{
@@ -75,6 +73,25 @@ func (x *jsExtraction) directSinks(s *jsScan) []foundSink {
 		})
 	}
 	return out
+}
+
+// sinkCall classifies one call: a sink, or not one, and unseen when the
+// scan cannot tell, so the route must be partial.
+func (x *jsExtraction) sinkCall(callee *Node, args []*Node, s *jsScan) (api SinkAPI, ok, unseen bool) {
+	api, ok, local := x.classify(callee)
+	if !ok {
+		return 0, false, local || x.file.unseenAliasCall(callee)
+	}
+	if api.String() != jsFindNeedsObject {
+		return api, true, false
+	}
+	switch x.findKind(callee, args, s, local) {
+	case findFilter:
+		return api, true, false
+	case findUnknown:
+		return 0, false, true
+	}
+	return 0, false, local
 }
 
 // classify matches a callee against the sink table by its resolved name,
@@ -92,18 +109,6 @@ func (x *jsExtraction) classify(callee *Node) (api SinkAPI, ok, local bool) {
 	}
 	api, ok = lookupJSSink(m, true)
 	return api, ok, true
-}
-
-// findFilter: ".find" is a NoSQL sink only with a filter, never a callback.
-// On an unknown receiver only an object literal proves a filter, since
-// arrays share the name; a model from a module of the repository is not an
-// array, so any argument but a function counts.
-func findFilter(args []*Node, local bool) bool {
-	if len(args) == 0 {
-		return false
-	}
-	first := unwrapCast(args[0])
-	return first.Type == "object" || (local && !isFunction(first))
 }
 
 // jsArgs returns a call's arguments, or nil for a tagged template. A call

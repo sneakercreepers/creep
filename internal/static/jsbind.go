@@ -18,8 +18,8 @@ type jsScan struct {
 	opaque bool
 	// cut is set when the scan ran out of budget.
 	cut bool
-	// foreign is set when the function calls into a module of the
-	// repository with a call that is not a sink (jshandler.go).
+	// foreign is set when the function makes a call the scan cannot
+	// classify, such as into a module of the repository (jshandler.go).
 	foreign bool
 }
 
