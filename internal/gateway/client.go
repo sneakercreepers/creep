@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -19,11 +20,16 @@ const maxRedirects = 10
 // Default timeouts, so a stalled endpoint cannot hang a scan. They are
 // constants until they get config keys. The
 // response-header wait is long because a non-streaming model answer arrives
-// only when generation ends.
+// only when generation ends. dialTimeout bounds one DNS lookup and one
+// address; dialAllTimeout bounds a dial over every pinned address. A body
+// fails after bodyIdleTimeout without a byte or bodyTotalTimeout in all.
 const (
 	dialTimeout           = 10 * time.Second
+	dialAllTimeout        = 30 * time.Second
 	tlsHandshakeTimeout   = 10 * time.Second
 	responseHeaderTimeout = 5 * time.Minute
+	bodyIdleTimeout       = 2 * time.Minute
+	bodyTotalTimeout      = 10 * time.Minute
 	idleConnTimeout       = 90 * time.Second
 )
 
@@ -35,6 +41,8 @@ type Options struct {
 	Resolver Resolver
 	Dial     DialFunc
 	RootCAs  *x509.CertPool
+
+	limits timeLimits // zero fields take the defaults; tests shorten them
 }
 
 // Client is the handle Send uses to reach a model. It is opaque on purpose:
@@ -72,20 +80,9 @@ func newHTTPClient(opts Options) (*http.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway client: %w", err)
 	}
-	d := &pinningDialer{
-		allow:    allow,
-		resolver: opts.Resolver,
-		dial:     opts.Dial,
-		pinned:   map[string]*pin{},
-	}
-	if d.resolver == nil {
-		d.resolver = net.DefaultResolver
-	}
-	if d.dial == nil {
-		d.dial = (&net.Dialer{Timeout: dialTimeout}).DialContext
-	}
+	d := newPinningDialer(allow, opts.Resolver, opts.Dial, opts.limits)
 	return &http.Client{
-		Transport:     guard{allow: allow, next: newTransport(d, opts.RootCAs)},
+		Transport:     guard{allow: allow, limits: d.limits, next: newTransport(d, opts.RootCAs)},
 		CheckRedirect: sameOrigin,
 	}, nil
 }
@@ -104,10 +101,11 @@ func newTransport(d *pinningDialer, roots *x509.CertPool) *http.Transport {
 }
 
 // guard checks every request, redirects included, before the transport can
-// resolve or dial anything.
+// resolve or dial anything, and bounds the time its response body may take.
 type guard struct {
-	allow allowlist
-	next  http.RoundTripper
+	allow  allowlist
+	limits timeLimits
+	next   http.RoundTripper
 }
 
 func (g guard) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -118,7 +116,15 @@ func (g guard) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return nil, fmt.Errorf("gateway: %w", err)
 	}
-	return g.next.RoundTrip(req)
+	ctx, cancel := context.WithCancel(req.Context())
+	resp, err := g.next.RoundTrip(req.WithContext(ctx))
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	resp.Request = req
+	resp.Body = watchBody(resp.Body, cancel, g.limits)
+	return resp, nil
 }
 
 // CloseIdleConnections lets http.Client.CloseIdleConnections reach the

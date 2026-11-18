@@ -14,7 +14,7 @@ func newDialer(t *testing.T, allow []string, res Resolver, d *recordingDial) *pi
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &pinningDialer{allow: a, resolver: res, dial: d.dial, pinned: map[string]*pin{}}
+	return newPinningDialer(a, res, d.dial, timeLimits{})
 }
 
 // The dialer repeats the allowlist check, so a transport path that skipped
