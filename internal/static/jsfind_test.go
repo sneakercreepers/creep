@@ -36,8 +36,22 @@ GET /d express auth=none params=0 dynamic=false handler=:9 partial=true
 const find = require("lodash/find");
 const nunjucks = require("nunjucks");
 const cfg = require("src/config");
+const R = require("ramda");
+const { execute } = require("graphql");
+const { query } = require("express-validator");
 app.get("/a", (req, res) => { ReactDOM.render(req.query.v); find(req.query.l, req.query.k); nunjucks.render("t.html"); cfg.get(req.query.k); });
-`, `GET /a express auth=none params=0 dynamic=false handler=:8
+app.get("/b", (req, res) => { R.find(R.propEq(req.query.k), list); execute({ schema, document: req.body }); query("id"); });
+`, `GET /a express auth=none params=0 dynamic=false handler=:11
+GET /b express auth=none params=0 dynamic=false handler=:12
+`},
+	{"unlisted database packages stay partial", "app.js", jsHeader + `const knex = require("knex")({ client: "pg" });
+const { sql } = require("@vercel/postgres");
+const db = require("knex");
+app.get("/a", (req, res) => { db.raw("SELECT " + req.query.q); });
+app.get("/b", (req, res) => { sql.query("SELECT " + req.query.q); });
+`, `file 0 syntax_error=false truncated=true
+GET /a express auth=none params=0 dynamic=false handler=:7 partial=true
+GET /b express auth=none params=0 dynamic=false handler=:8 partial=true
 `},
 	{"in-file mongoose model and native collection find", "app.js", jsHeader + `const mongoose = require("mongoose");
 const User = mongoose.model("User", new mongoose.Schema({}));
@@ -59,6 +73,8 @@ app.get("/b", (req, res) => { const q = req.body.filter; Items.find(q); });
 app.get("/c", (req, res) => { arr.find(isAdmin); });
 app.get("/d", (req, res) => { arr.find((x) => x.id === req.query.id); arr.find("x"); arr.find(); });
 app.get("/e", (req, res) => { Items.find(someVar); });
+app.get("/f", (req, res) => { const a = req.query; const b = a; const c = b; const d = c; Items.find(d); });
+app.get("/g", (req, res) => { const a = req.query; const b = a; const c = b; const d = c; const e = d; Items.find(e); });
 `, `file 0 syntax_error=false truncated=true
 GET /a express auth=none params=0 dynamic=false handler=:4
   nosql .find line=4 dynamic=true parameterized=false indirect=false
@@ -67,6 +83,9 @@ GET /b express auth=none params=0 dynamic=false handler=:5
 GET /c express auth=none params=0 dynamic=false handler=:6 partial=true
 GET /d express auth=none params=0 dynamic=false handler=:7
 GET /e express auth=none params=0 dynamic=false handler=:8 partial=true
+GET /f express auth=none params=0 dynamic=false handler=:9
+  nosql .find line=9 dynamic=true parameterized=false indirect=false
+GET /g express auth=none params=0 dynamic=false handler=:10 partial=true
 `},
 }
 

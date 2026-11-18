@@ -95,12 +95,15 @@ func (x *jsExtraction) fromRequest(n *Node, s *jsScan, depth int) bool {
 	for n != nil && (n.Type == "member_expression" || n.Type == "subscript_expression") {
 		n = unwrapCast(field(n, "object"))
 	}
-	if n == nil || n.Type != "identifier" || depth == 0 {
+	if n == nil || n.Type != "identifier" {
 		return false
 	}
 	name := x.file.text(n)
 	if name == "req" || name == "request" {
 		return true
+	}
+	if depth == 0 {
+		return false
 	}
 	for _, v := range s.assigns[name] {
 		if x.fromRequest(v, s, depth-1) {

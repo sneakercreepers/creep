@@ -3,11 +3,13 @@ package static
 import "strings"
 
 // knownPackages are packages whose sink-named methods are not database
-// calls: utility and view libraries (ReactDOM.render, _.find) and express.
+// calls: utility and view libraries (ReactDOM.render, _.find, R.find),
+// graphql's execute, express and express-validator's query().
 // Packages of the sink table are known too (see jsKnownPackage).
 var knownPackages = map[string]bool{
 	"express": true, "react": true, "react-dom": true,
 	"lodash": true, "lodash-es": true, "underscore": true, "fs-extra": true,
+	"ramda": true, "graphql": true, "express-validator": true,
 }
 
 // unseenAliasCall reports a call to a sink-named method (.query, .find,
