@@ -166,7 +166,7 @@ An incomplete run never exits `0`, even when the gate also trips.
 
 ## Configuration
 
-Layers, later overriding earlier: built-in defaults → org policy (`CREEP_POLICY`, can lock keys and set limits) → user file (`~/.creep/config.yaml`) → project file (`./creep.yaml`) → flags. `--config` replaces the user and project files. Unknown keys are errors; schema: [schema/config.schema.json](schema/config.schema.json).
+Layers, later overriding earlier: built-in defaults → org policy (`CREEP_POLICY`, an absolute path; can lock keys and set limits) → user file (`~/.creep/config.yaml`) → project file (`./creep.yaml`) → flags. `--config` replaces the user and project files. Unknown keys are errors; schema: [schema/config.schema.json](schema/config.schema.json).
 
 The project file comes from the repository being scanned, so it is untrusted. It **cannot**:
 

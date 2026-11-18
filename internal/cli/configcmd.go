@@ -52,6 +52,9 @@ func loadConfig(opts globalOptions) (*config.Resolved, error) {
 	in := config.Inputs{Flags: configFlags(opts)}
 	var err error
 	if path := os.Getenv(policyEnv); path != "" {
+		if err := requireAbsPolicy(path); err != nil {
+			return nil, err
+		}
 		if in.Policy, err = readLayer(policyEnv, path, path); err != nil {
 			return nil, err
 		}
@@ -100,11 +103,25 @@ func readUserLayer() (*config.File, error) {
 	return readOptional("user config", filepath.Join(home, filepath.FromSlash(userConfig)), "~/"+userConfig)
 }
 
+// requireAbsPolicy rejects a relative CREEP_POLICY: it would resolve against
+// the working directory, which in CI is the scanned repository, so the
+// repository could supply the policy meant to constrain it.
+func requireAbsPolicy(path string) error {
+	if filepath.IsAbs(path) {
+		return nil
+	}
+	return fmt.Errorf("%s %q: must be an absolute path; a relative path resolves inside the scanned repository", policyEnv, path)
+}
+
 func readProjectLayer() (*config.File, error) {
-	if err := requireNoLink("project config", projectFile); err != nil {
+	data, err := readConfigWith(openProjectConfig, "project config", projectFile)
+	if errors.Is(err, errNoFile) {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
 	}
-	return readOptional("project config", projectFile, projectFile)
+	return &config.File{Name: projectFile, Data: data}, nil
 }
 
 func printExplain(w io.Writer, r *config.Resolved) error {

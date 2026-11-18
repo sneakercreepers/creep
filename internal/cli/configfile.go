@@ -21,10 +21,16 @@ var errNoFile = errors.New("file does not exist")
 // (NUL, CON, /dev/zero, a FIFO) or a swapped path cannot pass as a config
 // file. label names the source in errors ("--config", "CREEP_POLICY").
 func openConfig(label, path string) (*os.File, os.FileInfo, error) {
+	return openConfigWith(openForCheck, label, path)
+}
+
+// openConfigWith is openConfig with the system open chosen by the caller, so
+// the project file can be opened without following links.
+func openConfigWith(open func(string) (*os.File, error), label, path string) (*os.File, os.FileInfo, error) {
 	if err := checkConfigPath(label, path); err != nil {
 		return nil, nil, err
 	}
-	f, err := openForCheck(path)
+	f, err := open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil, fmt.Errorf("%s %q: %w", label, path, errNoFile)
 	}
@@ -106,28 +112,18 @@ func requireRegular(f *os.File) (os.FileInfo, error) {
 	return info, nil
 }
 
-// requireNoLink rejects a symlink or other special entry at path itself. The
-// project file comes from the repository being scanned, so a link there could
-// point at a UNC share or a file outside the repository.
-func requireNoLink(label, path string) error {
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil // openConfig reports it
-	}
-	if err != nil {
-		return configError(label, path, err)
-	}
-	if info.Mode()&os.ModeType != 0 && !info.IsDir() {
-		return fmt.Errorf("%s %q: must be a regular file, not a link or special file", label, path)
-	}
-	return nil
-}
-
 // readConfigFile returns the raw bytes of a config file for the parser.
 // Reading more or less than stat reported means the file is virtual or
 // changed under us; either way it is not a config file to trust.
 func readConfigFile(label, path string) ([]byte, error) {
-	f, info, err := openConfig(label, path)
+	return readConfigWith(openConfig, label, path)
+}
+
+// configOpener opens a config file and returns it with its Fstat info.
+type configOpener func(label, path string) (*os.File, os.FileInfo, error)
+
+func readConfigWith(open configOpener, label, path string) ([]byte, error) {
+	f, info, err := open(label, path)
 	if err != nil {
 		return nil, err
 	}
