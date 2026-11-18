@@ -44,7 +44,7 @@ func (b *watchedBody) expire() {
 
 func (b *watchedBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
-	// After expire, any end of the body is ours: cancelling can make the
+	// After expire, any end of the body is ours: canceling can make the
 	// server stop writing and close the stream cleanly, which reads as EOF.
 	if err != nil && b.stalled.Load() {
 		return n, fmt.Errorf("read response: %w", ErrResponseStalled)
