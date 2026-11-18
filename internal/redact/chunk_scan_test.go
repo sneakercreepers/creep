@@ -21,13 +21,22 @@ func scannedBytes(text string) int {
 func TestChunkScanIsBounded(t *testing.T) {
 	const maxRatio = 1.2
 	short := float64(scannedBytes(textWithLines(MaxFileBytes, 100)))
-	worst, worstShape := 0.0, [2]int{}
+	var shapes [][]int
 	for a := 1; a <= MaxLineBytes; a += 997 {
 		for _, b := range []int{1, 100, 1000, chunkOverlap, 21379, MaxLineBytes - a%2} {
-			text := textWithLines(MaxFileBytes, a, b)
-			if ratio := float64(scannedBytes(text)) / short; ratio > worst {
-				worst, worstShape = ratio, [2]int{a, b}
-			}
+			shapes = append(shapes, []int{a, b})
+		}
+	}
+	shapes = append(shapes,
+		[]int{MaxLineBytes, chunkOverlap + 1, 1},
+		[]int{MaxLineBytes, 2 * chunkOverlap, 100},
+		[]int{30000, 1000, 21379, 5000},
+		[]int{MaxLineBytes, 1, chunkOverlap - 1, 2*chunkOverlap + 1})
+	worst, worstShape := 0.0, []int(nil)
+	for _, shape := range shapes {
+		text := textWithLines(MaxFileBytes, shape...)
+		if ratio := float64(scannedBytes(text)) / short; ratio > worst {
+			worst, worstShape = ratio, shape
 		}
 	}
 	alternating := float64(scannedBytes(textWithLines(MaxFileBytes, 1000, 21379))) / short

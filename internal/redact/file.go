@@ -9,11 +9,11 @@ import (
 
 // MaxFileBytes bounds one File call. Ordinary code costs about 2 s per MiB
 // on a 2019 laptop CPU (BenchmarkFileRepoCode). The worst case is a file at
-// the cap crafted to wake every rule: about 3 min 15 s in short lines and
-// 2 min 30 s in alternating long lines on an i7-10510U
-// (BenchmarkFileEveryKeyword), so plan for about 4 minutes on a slow runner.
-// Line lengths cannot raise it much: the chunks re-scan at most about 1.13
-// times the bytes they would for short lines (TestChunkScanIsBounded), and
+// the cap crafted to wake every rule, in short or in alternating long lines:
+// about 4 to 5 minutes on an i7-10510U (BenchmarkFileEveryKeyword), so plan
+// for 5. Line lengths cannot raise it much: the chunks scan about 1.2 times
+// the bytes of the short-line shape at most, about 1.3 times the file
+// (TestChunkScanIsBounded), and
 // the whole-file key scan is linear (TestFileBlankTailIsLinear). A larger
 // cap would let one hostile file stall a scan for longer; larger files fail
 // closed with ErrFileTooLarge.
@@ -83,7 +83,9 @@ func (r *Redactor) detectFile(text string) []span {
 	return found
 }
 
-// chunk is a byte range of the text: whole lines, at most MaxInputBytes.
+// chunk is a byte range of the text, at most MaxInputBytes, that ends at a
+// line end and starts at a line start or, after a long line, at a rune start
+// inside it (nextChunkStart).
 type chunk struct{ start, end int }
 
 // chunkBounds cuts text into chunks that end at line ends, at most
