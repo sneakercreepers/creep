@@ -35,7 +35,7 @@ func kindClass(k static.SinkKind) string {
 var readClasses = map[string]bool{
 	string(calibrate.ClassSQLi): true, string(calibrate.ClassCommandInjection): true,
 	string(calibrate.ClassPathTraversal): true, string(calibrate.ClassSSRF): true,
-	classTemplateInjection: true,
+	classTemplateInjection: true, string(calibrate.ClassNoSQLInjection): true,
 }
 
 // classSeverity rates a confirmed finding of each class for the gate
@@ -46,6 +46,7 @@ var classSeverity = map[string]string{
 	string(calibrate.ClassPathTraversal):    "high",
 	string(calibrate.ClassSSRF):             "high",
 	classTemplateInjection:                  "high",
+	string(calibrate.ClassNoSQLInjection):   "critical",
 	// Optional scanner classes (ADR 0013): probable until a person checks.
 	"hardcoded_secret":      "high",
 	"vulnerable_dependency": "high",

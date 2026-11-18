@@ -23,8 +23,8 @@ func probeKind(k planner.SinkKind) bool {
 
 // Every static.SinkKind (those with a name) maps to a planner kind, every
 // kind the planner accepts is the image of one, and an unknown kind fails
-// closed. A kind added on either side fails here until it is mapped (#201
-// added static.SinkNoSQL, pending in pendingKinds until #212).
+// closed. A kind added on either side fails here until it is mapped or
+// named in pendingKinds (#201 added static.SinkNoSQL; #212 mapped it).
 func TestSinkKindMappingIsExhaustive(t *testing.T) {
 	mapped := map[planner.SinkKind]bool{}
 	for k := static.SinkKind(1); k != 0; k++ {
@@ -165,4 +165,28 @@ func readerReportName(c reader.Class) string {
 		return string(calibrate.ClassSQLi)
 	}
 	return c.String()
+}
+
+// With pendingKinds empty since #212, no real kind reaches the unmapped
+// path; a kind static may add later must still be held out of the planner
+// input and returned for the report, while a NoSQL sink is planned.
+func TestPlannerInputHoldsOutUnmappedKinds(t *testing.T) {
+	g := static.Graph{
+		Routes: []static.Route{{ID: 0, Methods: static.MethodPost}},
+		Sinks: []static.Sink{
+			{ID: 0, Route: 0, Kind: static.SinkNoSQL, DynamicArg: true},
+			{ID: 1, Route: 0, Kind: static.SinkKind(200), DynamicArg: true},
+		},
+	}
+	in, unmapped := plannerInput(g, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1})
+	if len(unmapped) != 1 || unmapped[0] != 1 {
+		t.Fatalf("unmapped %v, want [1]", unmapped)
+	}
+	if len(in.Sinks) != 1 || in.Sinks[0].Kind != planner.SinkNoSQL {
+		t.Fatalf("planner sinks %+v, want the NoSQL sink only", in.Sinks)
+	}
+	plan, err := planner.Build(in)
+	if err != nil || len(plan.Hypotheses) != 1 || plan.Hypotheses[0].Class != planner.ClassNoSQLInjection {
+		t.Fatalf("plan %+v, %v", plan, err)
+	}
 }

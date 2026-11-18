@@ -8,7 +8,7 @@ import (
 
 // PromptVersion names the prompts in prompts/ and the answer schema. A
 // change to either bumps it, so a recorded verdict says what produced it.
-const PromptVersion = 1
+const PromptVersion = 2
 
 // Tier selects the prompt variant. It mirrors calibrate.Tier, which reader
 // may not import (both are layer 4); the caller converts with Tier(t).

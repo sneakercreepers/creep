@@ -30,7 +30,7 @@
 // argument that can carry input on a route with no auth seen and no bound
 // parameters; Medium: input with auth or bound parameters; Low: a literal
 // argument), then unauthenticated first, then unparameterized, then sink
-// severity (shell, SQL, template, file, HTTP client), then direct calls
+// severity (shell, SQL, NoSQL, template, file, HTTP client), then direct calls
 // before helpers, then state-changing methods, then lower sink ID. Only SQL
 // sinks have bound parameters: Parameterized on another kind is ignored, so
 // a mapping bug cannot demote a shell or file sink.

@@ -23,9 +23,8 @@ var errUnmapped = errors.New("no planner mapping")
 // with the issue that adds them. Their sinks are listed as not evaluated
 // (unmapped_kind) and the run is incomplete. plannermap_test.go fails if one
 // gets a mapping without leaving this list, or if any other kind is unmapped.
-var pendingKinds = map[static.SinkKind]string{
-	static.SinkNoSQL: "#212",
-}
+// It is empty since #212 mapped SinkNoSQL.
+var pendingKinds = map[static.SinkKind]string{}
 
 // plannerKind maps a static sink kind. An unmapped kind (a new static kind
 // before the planner learns it) is listed as not evaluated, never planned.
@@ -41,6 +40,8 @@ func plannerKind(k static.SinkKind) (planner.SinkKind, error) {
 		return planner.SinkHTTPClient, nil
 	case static.SinkTemplate:
 		return planner.SinkTemplate, nil
+	case static.SinkNoSQL:
+		return planner.SinkNoSQL, nil
 	}
 	return 0, fmt.Errorf("sink kind %d: %w", k, errUnmapped)
 }
@@ -125,6 +126,8 @@ func readerClass(c planner.Class) (reader.Class, error) {
 		return reader.ClassSSRF, nil
 	case planner.ClassTemplateInjection:
 		return reader.ClassTemplateInjection, nil
+	case planner.ClassNoSQLInjection:
+		return reader.ClassNoSQLInjection, nil
 	}
 	return 0, fmt.Errorf("class %d: %w", c, errUnmapped)
 }
