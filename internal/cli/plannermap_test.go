@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
+	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/static"
@@ -188,5 +189,25 @@ func TestPlannerInputHoldsOutUnmappedKinds(t *testing.T) {
 	plan, err := planner.Build(in)
 	if err != nil || len(plan.Hypotheses) != 1 || plan.Hypotheses[0].Class != planner.ClassNoSQLInjection {
 		t.Fatalf("plan %+v, %v", plan, err)
+	}
+}
+
+// A sink of an unmapped kind stays not evaluated with reason unmapped_kind
+// through planSinks, and that alone makes the run incomplete (exit 4).
+func TestUnmappedKindMakesRunIncomplete(t *testing.T) {
+	rs := repoScan{
+		graph: static.Graph{
+			Routes: []static.Route{{ID: 0, Methods: static.MethodGet}},
+			Sinks:  []static.Sink{{ID: 0, Route: 0, Kind: static.SinkKind(200), DynamicArg: true}},
+		},
+		locs: static.Locations{Files: []string{"app.js"}, Sinks: []static.SinkLocation{{Line: 3}}},
+	}
+	findings := baseFindings(rs)
+	if _, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1}, findings); err != nil {
+		t.Fatal(err)
+	}
+	reason := incompleteReason("", findings, nil)
+	if reason != reasonUnmappedKind || exitcode.ForReport(reason != "", false) != exitcode.Incomplete {
+		t.Fatalf("reason %q, findings %+v", reason, findings)
 	}
 }
