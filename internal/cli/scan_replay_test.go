@@ -30,7 +30,7 @@ func TestScanReplay(t *testing.T) {
 				t.Fatalf("record: exit %d after %d calls\n%s\n%s", code, recorder.calls, recorded, errOut)
 			}
 			offline := &fakeModel{fail: map[string]error{}}
-			for _, class := range []string{"sql_injection", "ssrf", "path_traversal", "command_injection", "template_injection"} {
+			for _, class := range []string{"sql_injection", "ssrf", "path_traversal", "command_injection", "template_injection", "nosql_injection"} {
 				offline.fail[class] = errors.New("replay must not call the model")
 			}
 			code, replayed, errOut := runScanWith(fakeDeps(offline, calibrate.TierM), "scan", "--replay", "--config", cfg)

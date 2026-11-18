@@ -42,7 +42,7 @@ func TestBuildPrioritizes(t *testing.T) {
 		{"unauth parameterized above auth unparameterized", []Sink{with(authed, 1), {ID: 2, Route: 1, Kind: SinkSQL, DynamicArg: true, Parameterized: true}}, []SinkID{2, 1}},
 		{"dynamic above literal even with auth", []Sink{{ID: 1, Route: 1, Kind: SinkShell}, with(authed, 2)}, []SinkID{2, 1}},
 		{"unparameterized above parameterized", []Sink{{ID: 1, Route: 1, Kind: SinkSQL, DynamicArg: true, Parameterized: true}, dyn(2, SinkSQL)}, []SinkID{2, 1}},
-		{"severity", []Sink{dyn(1, SinkHTTPClient), dyn(2, SinkFile), dyn(3, SinkTemplate), dyn(4, SinkSQL), dyn(5, SinkShell)}, []SinkID{5, 4, 3, 2, 1}},
+		{"severity", []Sink{dyn(1, SinkHTTPClient), dyn(2, SinkFile), dyn(3, SinkTemplate), dyn(4, SinkNoSQL), dyn(5, SinkSQL), dyn(6, SinkShell)}, []SinkID{6, 5, 4, 3, 2, 1}},
 		{"direct above indirect", []Sink{{ID: 1, Route: 1, Kind: SinkSQL, DynamicArg: true, Indirect: true}, dyn(2, SinkSQL)}, []SinkID{2, 1}},
 		{"write method above GET", []Sink{with(getOnly, 1), dyn(2, SinkSQL)}, []SinkID{2, 1}},
 		{"ties go to the lower sink ID", []Sink{dyn(9, SinkSQL), dyn(3, SinkSQL), dyn(7, SinkSQL)}, []SinkID{3, 7, 9}},
@@ -193,6 +193,10 @@ func TestRiskAndClass(t *testing.T) {
 		{Sink{Kind: SinkShell, DynamicArg: true, Parameterized: true}, Route{Authenticated: true}, RiskMedium, ClassCommandInjection},
 		{Sink{Kind: SinkShell, Parameterized: true}, Route{}, RiskLow, ClassCommandInjection},
 		{Sink{Kind: SinkTemplate, DynamicArg: true, Indirect: true}, Route{}, RiskHigh, ClassTemplateInjection},
+		// NoSQL drivers have no bound parameters: the flag must not demote it.
+		{Sink{Kind: SinkNoSQL, DynamicArg: true, Parameterized: true}, Route{}, RiskHigh, ClassNoSQLInjection},
+		{Sink{Kind: SinkNoSQL, DynamicArg: true}, Route{Authenticated: true}, RiskMedium, ClassNoSQLInjection},
+		{Sink{Kind: SinkNoSQL}, Route{}, RiskLow, ClassNoSQLInjection},
 	}
 	for _, tt := range tests {
 		if got := riskOf(tt.sink, tt.route); got != tt.risk {
@@ -207,7 +211,7 @@ func TestRiskAndClass(t *testing.T) {
 // TestBuildIgnoresParameterizedOnNonSQL checks the flag end to end: Build
 // accepts it on every kind, but only a SQL sink is demoted by it.
 func TestBuildIgnoresParameterizedOnNonSQL(t *testing.T) {
-	for k := SinkSQL; k <= SinkTemplate; k++ {
+	for k := SinkSQL; k <= SinkNoSQL; k++ {
 		want := RiskHigh
 		if k == SinkSQL {
 			want = RiskMedium
@@ -237,7 +241,7 @@ func BenchmarkBuild(b *testing.B) {
 	for i := range n {
 		id := uint32(i) //nolint:gosec // G115: i < n
 		in.Routes = append(in.Routes, Route{ID: RouteID(id), Methods: Methods(id) & allMethods, Authenticated: i%3 == 0})
-		in.Sinks = append(in.Sinks, Sink{ID: SinkID(n - id), Route: RouteID(id), Kind: SinkKind(i%5 + 1), DynamicArg: i%2 == 0, Parameterized: i%7 == 0})
+		in.Sinks = append(in.Sinks, Sink{ID: SinkID(n - id), Route: RouteID(id), Kind: SinkKind(i%6 + 1), DynamicArg: i%2 == 0, Parameterized: i%7 == 0})
 	}
 	for b.Loop() {
 		if _, err := Build(in); err != nil {

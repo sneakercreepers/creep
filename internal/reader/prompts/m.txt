@@ -7,6 +7,8 @@ Trace the value from the source to the sink. Account for every check, sanitizer,
 - "not_vulnerable": the data cannot reach the sink, or a check on every path stops this class.
 - "inconclusive": the decision depends on code that is not shown.
 
+For nosql_injection, a request value in a query filter can be an object with operators such as $ne, and input in $where runs as code. Only making it a string or number, or stripping keys that start with $, stops this class; a schema does not.
+
 Reply with one JSON object and nothing else:
 {"verdict": "vulnerable" | "not_vulnerable" | "inconclusive", "evidence": [{"start": <first line>, "end": <last line>}], "confidence": <integer 0 to 100>}
 

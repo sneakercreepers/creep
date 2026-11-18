@@ -47,6 +47,8 @@ const (
 	SinkFile
 	SinkHTTPClient
 	SinkTemplate
+	// SinkNoSQL is a document-store query, such as MongoDB's findOne.
+	SinkNoSQL
 )
 
 // Tier is the calibration tier (calibrate.Tier S, M or L). The zero value
@@ -151,7 +153,7 @@ func checkSinks(list []Sink, routes map[RouteID]Route) error {
 		if _, ok := routes[s.Route]; !ok {
 			return fmt.Errorf("%w: sink %d names unknown route %d", ErrInput, s.ID, s.Route)
 		}
-		if s.Kind < SinkSQL || s.Kind > SinkTemplate {
+		if s.Kind < SinkSQL || s.Kind > SinkNoSQL {
 			return fmt.Errorf("%w: sink %d has kind %d", ErrInput, s.ID, s.Kind)
 		}
 	}

@@ -25,9 +25,10 @@ import (
 var hypothesisLine = regexp.MustCompile(`HYPOTHESIS: ([a-z_]+), source line ([0-9]+), sink line ([0-9]+)`)
 
 // fakeModel answers reader calls without a network: verdicts by reader
-// class (default not_vulnerable), an error for a class, and a call count.
+// class or by "class@sink line" (default not_vulnerable), an error for a
+// class, and a call count.
 type fakeModel struct {
-	verdict map[string]string // reader class -> verdict or "invalid"
+	verdict map[string]string // reader class or class@sink line -> verdict or "invalid"
 	fail    map[string]error  // reader class -> send error
 	calls   int
 }
@@ -42,7 +43,10 @@ func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, err
 		return nil, err
 	}
 	sink, _ := strconv.Atoi(string(match[3]))
-	verdict := m.verdict[string(match[1])]
+	verdict := m.verdict[string(match[1])+"@"+string(match[3])]
+	if verdict == "" {
+		verdict = m.verdict[string(match[1])]
+	}
 	if verdict == "" {
 		verdict = "not_vulnerable"
 	}

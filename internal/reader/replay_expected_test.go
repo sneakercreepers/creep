@@ -16,10 +16,11 @@ var readerClass = map[string]Class{
 	"command_injection": ClassCommandInjection,
 	"path_traversal":    ClassPathTraversal,
 	"ssrf":              ClassSSRF,
+	"nosql_injection":   ClassNoSQLInjection,
 }
 
 var unreadClasses = map[string]bool{
-	"idor": true, "missing_auth": true, "nosql_injection": true, "prototype_pollution": true,
+	"idor": true, "missing_auth": true, "prototype_pollution": true,
 }
 
 type expectedFinding struct {

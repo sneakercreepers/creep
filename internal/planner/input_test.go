@@ -27,7 +27,7 @@ func TestBuildRejectsBadInput(t *testing.T) {
 		{"duplicate sink", edit(func(in *Input) { in.Sinks = append(in.Sinks, dyn(1, SinkShell)) })},
 		{"dangling route", edit(func(in *Input) { in.Sinks[0].Route = 99 })},
 		{"zero sink kind", edit(func(in *Input) { in.Sinks[0].Kind = 0 })},
-		{"unknown sink kind", edit(func(in *Input) { in.Sinks[0].Kind = SinkTemplate + 1 })},
+		{"unknown sink kind", edit(func(in *Input) { in.Sinks[0].Kind = SinkNoSQL + 1 })},
 		{"too many sinks", edit(func(in *Input) { in.Sinks = make([]Sink, maxEntries+1) })},
 		{"too many routes", edit(func(in *Input) { in.Routes = make([]Route, maxEntries+1) })},
 	}
@@ -52,7 +52,7 @@ func TestBuildRejectsBadInput(t *testing.T) {
 func TestBuildAcceptsEveryKnownValue(t *testing.T) {
 	for _, tier := range []Tier{TierS, TierM, TierL} {
 		in := Input{Tier: tier, Budget: Budget{Tokens: 1, StepTokens: 1}, Routes: []Route{{ID: 0, Methods: allMethods}}}
-		for k := SinkSQL; k <= SinkTemplate; k++ {
+		for k := SinkSQL; k <= SinkNoSQL; k++ {
 			in.Sinks = append(in.Sinks, Sink{ID: SinkID(k), Route: 0, Kind: k, DynamicArg: true})
 		}
 		p := mustBuild(t, in)

@@ -45,7 +45,9 @@ type appCase struct {
 // TestAppCasesMatchExpected keeps it in step with testdata/apps.
 var appCases = []appCase{
 	{"express", "app.js", []appHypothesis{
+		{variantVulnerable, ClassNoSQLInjection, "/login", 41, 43},
 		{variantVulnerable, ClassCommandInjection, "/diagnostics/ping", 50, 52},
+		{variantSafe, ClassNoSQLInjection, "/login", 52, 57},
 		{variantSafe, ClassCommandInjection, "/diagnostics/ping", 64, 69},
 	}},
 	{"fastapi", "app.py", []appHypothesis{

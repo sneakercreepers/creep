@@ -21,6 +21,7 @@ const (
 	ClassPathTraversal
 	ClassSSRF
 	ClassTemplateInjection
+	ClassNoSQLInjection
 )
 
 var classNames = map[Class]string{
@@ -29,6 +30,7 @@ var classNames = map[Class]string{
 	ClassPathTraversal:     "path_traversal",
 	ClassSSRF:              "ssrf",
 	ClassTemplateInjection: "template_injection",
+	ClassNoSQLInjection:    "nosql_injection",
 }
 
 // String returns the class name the user turn shows.

@@ -13,6 +13,8 @@ Steps:
    - "not_vulnerable": the value cannot reach the sink unsafely.
    - "inconclusive": the lines shown are not enough to decide.
 
+For nosql_injection: a request value put in a query object can be an object with operators such as $ne or $where. Only a check or conversion that makes it a string or number makes it safe.
+
 Reply with one JSON object and nothing else:
 {"verdict": "vulnerable" | "not_vulnerable" | "inconclusive", "evidence": [{"start": <first line>, "end": <last line>}], "confidence": <integer 0 to 100>}
 

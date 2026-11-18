@@ -7,6 +7,8 @@ Trace the data from the source to the sink across every path shown. Account for 
 - "not_vulnerable": the data cannot reach the sink, or a check on every path stops this class.
 - "inconclusive": the decision depends on code that is not shown, such as a helper defined elsewhere.
 
+For nosql_injection, a request value in a query filter or update can be an object with operators such as $ne, $gt or $regex, and input in $where runs as code. Only making the value a string or number on every path, rejecting objects, or stripping keys that start with $ (mongo-sanitize) stops this class; schema casting and escaping quotes do not.
+
 Reply with one JSON object and nothing else:
 {"verdict": "vulnerable" | "not_vulnerable" | "inconclusive", "evidence": [{"start": <first line>, "end": <last line>}], "confidence": <integer 0 to 100>}
 

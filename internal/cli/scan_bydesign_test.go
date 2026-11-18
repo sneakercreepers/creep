@@ -29,10 +29,8 @@ func TestScanDoesNotTrustDeclaredSkips(t *testing.T) {
 		{"nested vendor", map[string]string{"app/vendor/app.py": "@flask"}, exitcode.GateExceeded, "", "probable  sqli  app/vendor/app.py:"},
 		{"python under node_modules", map[string]string{"src/node_modules/app/package.json": "{}", "src/node_modules/app/app.py": "@flask"}, exitcode.GateExceeded, "", "probable  sqli  src/node_modules/app/app.py:"},
 		{"generated header", map[string]string{"app.py": generated + "@flask"}, exitcode.GateExceeded, "", "probable  sqli  app.py:"},
-		// Express findings are evaluated; its NoSQL sink has no reader class
-		// yet, which keeps those runs incomplete on its own.
-		{"padded with one long line", map[string]string{"app.js": padding + "@express"}, exitcode.Incomplete, "unmapped_kind", "probable  command_injection  app.js:"},
-		{"min.js name", map[string]string{"app.min.js": "@express"}, exitcode.Incomplete, "unmapped_kind", "probable  command_injection  app.min.js:"},
+		{"padded with one long line", map[string]string{"app.js": padding + "@express"}, exitcode.GateExceeded, "", "probable  command_injection  app.js:"},
+		{"min.js name", map[string]string{"app.min.js": "@express"}, exitcode.GateExceeded, "", "probable  command_injection  app.min.js:"},
 		{"venv with pyvenv.cfg", map[string]string{"venv/pyvenv.cfg": "home = /usr\n", "venv/lib/app.py": "@flask"}, exitcode.OK, "", "venv/lib/app.py  vendor"},
 		{"node_modules package", map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}, exitcode.OK, "", "node_modules/app/app.js  vendor"},
 		{"generated, no route", map[string]string{"api_pb2.py": generated + "import os\n"}, exitcode.OK, "", "api_pb2.py  generated"},
