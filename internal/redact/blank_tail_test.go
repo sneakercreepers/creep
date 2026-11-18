@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// fileWorstCase is the worst case documented on MaxFileBytes.
+// fileWorstCase bounds a File call on blank-heavy input, which wakes few
+// rules; it stays well under the worst case documented on MaxFileBytes.
 const fileWorstCase = 2 * time.Minute
 
 // bodyLinesQuadratic is bodyLines as it was before #74, kept as the

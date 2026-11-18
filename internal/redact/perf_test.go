@@ -41,6 +41,12 @@ func largeInputs() map[string]string {
 // everyKeyword wakes every rule, then pads with a word run: the slowest input
 // found for the rule set, measured only by BenchmarkRedact.
 func everyKeyword(tb testing.TB) string {
+	head := keywordLines(tb)
+	return head + fill("a")[len(head):]
+}
+
+// keywordLines holds every rule's keywords, one rule per line.
+func keywordLines(tb testing.TB) string {
 	rules, err := defaultRules()
 	if err != nil {
 		tb.Fatal(err)
@@ -49,7 +55,7 @@ func everyKeyword(tb testing.TB) string {
 	for _, r := range rules {
 		b.WriteString(strings.Join(r.keywords, " ") + "\n")
 	}
-	return b.String() + fill("a")[b.Len():]
+	return b.String()
 }
 
 // RE2 is linear, so these finish quickly. The bound is generous for slow CI

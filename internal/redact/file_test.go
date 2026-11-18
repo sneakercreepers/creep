@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // repoCode returns about n bytes of the repository's own Go code, whole lines.
@@ -75,6 +76,8 @@ func TestChunkBounds(t *testing.T) {
 		"longest lines": textWithLines(4*MaxInputBytes, MaxLineBytes),
 		"mixed":         textWithLines(6*MaxInputBytes, MaxLineBytes, 3, chunkOverlap+1, 500),
 		"no final \\n":  textWithLines(3*MaxInputBytes, 100) + "tail",
+		"alternating":   textWithLines(6*MaxInputBytes, 1000, 21379),
+		"multibyte cut": strings.Repeat(strings.Repeat("é", MaxLineBytes/2-1)+"\n", 8),
 	}
 	for name, text := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -89,20 +92,29 @@ func isLineStart(text string, i int) bool {
 	return i == 0 || i == len(text) || text[i-1] == '\n'
 }
 
-// assertChunkShape checks every chunk is whole lines within MaxInputBytes,
-// the chunks run from start to end of text, and each overlaps the previous
-// one by at least chunkOverlap bytes.
+func isRuneStart(text string, i int) bool {
+	return i == len(text) || utf8.RuneStart(text[i])
+}
+
+// assertChunkShape checks every chunk ends at a line end within
+// MaxInputBytes and starts at a rune start, the chunks run from start to end
+// of text, and each overlaps the previous one by chunkOverlap to
+// maxChunkOverlap bytes.
 func assertChunkShape(t *testing.T, text string, chunks []chunk) {
 	t.Helper()
 	if chunks[0].start != 0 || chunks[len(chunks)-1].end != len(text) {
 		t.Fatalf("chunks %v do not span the text of %d bytes", chunks, len(text))
 	}
 	for i, c := range chunks {
-		if c.end-c.start > MaxInputBytes || !isLineStart(text, c.start) || !isLineStart(text, c.end) {
-			t.Fatalf("chunk %d %v is not whole lines within the cap", i, c)
+		if c.end-c.start > MaxInputBytes || !isRuneStart(text, c.start) || !isLineStart(text, c.end) {
+			t.Fatalf("chunk %d %v does not end a line within the cap", i, c)
 		}
-		if i > 0 && (c.start <= chunks[i-1].start || chunks[i-1].end-c.start < chunkOverlap) {
-			t.Fatalf("chunk %d %v after %v: no progress or overlap too short", i, c, chunks[i-1])
+		if i == 0 {
+			continue
+		}
+		overlap := chunks[i-1].end - c.start
+		if c.start <= chunks[i-1].start || overlap < chunkOverlap || overlap > maxChunkOverlap {
+			t.Fatalf("chunk %d %v after %v: no progress or overlap %d out of bounds", i, c, chunks[i-1], overlap)
 		}
 	}
 }
