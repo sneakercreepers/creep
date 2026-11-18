@@ -33,17 +33,21 @@
 //     request, at most 10. https→http and port changes are refused.
 //
 // The dialer then pins addresses: each allowlisted host is resolved once per
-// client and later dials use only the pinned IPs, while TLS still verifies
-// the certificate and sends SNI and Host for the hostname. A slow lookup
-// holds only its own host. "localhost" is never resolved; it means
+// client and later dials use only the pinned IPs (at most 8), while TLS still
+// verifies the certificate and sends SNI and Host for the hostname. Only
+// when every pinned address fails (not when the caller gives up) is the pin
+// dropped, and the next dial resolves again under the same checks. A slow
+// lookup holds only its own host, and a dial waiting on it returns when its
+// own context ends. "localhost" is never resolved; it means
 // 127.0.0.1, then ::1. A DNS answer containing any non-public address
 // (loopback, private, CGNAT, link-local and cloud metadata, multicast, or
 // NAT64, SIIT and 6to4 forms of those) is refused whole, always. A model on a
 // private network is reached by allowlisting and requesting its IP literal
 // ("10.0.0.5:8443"); that entry never vouches for a name resolving to it.
 //
-// Dial, TLS handshake and response-header waits have fixed default timeouts
-// (client.go) until they get config keys.
+// DNS lookup, each dial and the dial over all pinned addresses, TLS
+// handshake, response-header wait and response body (idle and total) have
+// fixed default timeouts (client.go) until they get config keys.
 //
 // Proxy environment variables are ignored: a proxy resolves names itself,
 // which would bypass the address checks and pinning above.
