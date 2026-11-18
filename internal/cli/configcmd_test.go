@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -41,7 +42,8 @@ calibration:
 `
 
 // configEnv runs a test from a fresh directory with its own home, project
-// file and policy, so the developer's real files never leak in.
+// file and policy, so the developer's real files never leak in. CREEP_POLICY
+// must be absolute; shortPolicy maps it back to "policy.yaml" in output.
 func configEnv(t *testing.T, policy, user, project string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -55,7 +57,7 @@ func configEnv(t *testing.T, policy, user, project string) string {
 	t.Chdir(work)
 	if policy != "" {
 		mustWrite(t, filepath.Join(work, "policy.yaml"), policy)
-		t.Setenv(policyEnv, "policy.yaml")
+		t.Setenv(policyEnv, filepath.Join(work, "policy.yaml"))
 	}
 	if user != "" {
 		mustWrite(t, filepath.Join(home, ".creep", "config.yaml"), user)
@@ -64,6 +66,12 @@ func configEnv(t *testing.T, policy, user, project string) string {
 		mustWrite(t, filepath.Join(work, projectFile), project)
 	}
 	return work
+}
+
+// shortPolicy replaces the quoted absolute policy path with "policy.yaml", so
+// golden output does not depend on the temporary directory.
+func shortPolicy(work, out string) string {
+	return strings.ReplaceAll(out, strconv.Quote(filepath.Join(work, "policy.yaml")), `"policy.yaml"`)
 }
 
 func mustMkdir(t *testing.T, path string) {
@@ -87,8 +95,9 @@ func TestConfigExplainGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	configEnv(t, goldenPolicy, goldenUser, goldenProject)
+	work := configEnv(t, goldenPolicy, goldenUser, goldenProject)
 	code, stdout, stderr := run("config", "explain", "--log-level", "debug")
+	stdout = shortPolicy(work, stdout)
 	if code != exitcode.OK {
 		t.Fatalf("exit code = %d\nstderr: %s", code, stderr)
 	}
@@ -144,8 +153,9 @@ func TestConfigExplainFailures(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			configEnv(t, tt.policy, tt.user, tt.project)
+			work := configEnv(t, tt.policy, tt.user, tt.project)
 			code, stdout, stderr := run(append([]string{"config", "explain"}, tt.args...)...)
+			stderr = shortPolicy(work, stderr)
 			if code != exitcode.ConfigError {
 				t.Fatalf("exit code = %d, want %d\nstdout: %s\nstderr: %s", code, exitcode.ConfigError, stdout, stderr)
 			}
@@ -166,10 +176,11 @@ func assertNoControl(t *testing.T, s string) {
 
 func TestConfigFileLayers(t *testing.T) {
 	t.Run("missing policy fails closed", func(t *testing.T) {
-		configEnv(t, "", "", "")
-		t.Setenv(policyEnv, "nope.yaml")
+		work := configEnv(t, "", "", "")
+		missing := filepath.Join(work, "nope.yaml")
+		t.Setenv(policyEnv, missing)
 		code, _, stderr := run("config", "explain")
-		if code != exitcode.ConfigError || !strings.Contains(stderr, `CREEP_POLICY "nope.yaml": file does not exist`) {
+		if code != exitcode.ConfigError || !strings.Contains(stderr, "CREEP_POLICY "+strconv.Quote(missing)+": file does not exist") {
 			t.Errorf("code = %d, stderr = %s", code, stderr)
 		}
 	})
@@ -249,5 +260,42 @@ func TestConfigRejectsLinkToProc(t *testing.T) {
 	code, _, stderr := run("--config", link, "version")
 	if code != exitcode.ConfigError || !strings.Contains(stderr, "not allowed") {
 		t.Errorf("code = %d, stderr = %s", code, stderr)
+	}
+}
+
+// TestPolicyMustBeAbsolute guards against a relative CREEP_POLICY, which
+// resolves inside the scanned repository and lets it supply the policy.
+func TestPolicyMustBeAbsolute(t *testing.T) {
+	tests := []struct {
+		name, goos, path, want string
+	}{
+		{"bare name", "", "policy.yaml", "must be an absolute path"},
+		{"dot relative", "", "./policy.yaml", "must be an absolute path"},
+		{"parent relative", "", "../policy.yaml", "must be an absolute path"},
+		{"control runes escaped", "", "evil\x1b[31m.yaml", `"evil\x1b[31m.yaml": must be an absolute path`},
+		{"rooted without drive", "windows", `\policy.yaml`, "must be an absolute path"},
+		{"drive relative", "windows", `C:policy.yaml`, "must be an absolute path"},
+		{"absolute works", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			skipUnlessOS(t, tt.goos)
+			work := configEnv(t, goldenPolicy, "", "")
+			if tt.path != "" {
+				t.Setenv(policyEnv, tt.path)
+			}
+			code, stdout, stderr := run("config", "explain")
+			if tt.want == "" {
+				if code != exitcode.OK || !strings.Contains(stdout, strconv.Quote(filepath.Join(work, "policy.yaml"))) {
+					t.Fatalf("code = %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+				}
+				return
+			}
+			if code != exitcode.ConfigError {
+				t.Fatalf("exit code = %d, want %d\nstderr: %s", code, exitcode.ConfigError, stderr)
+			}
+			assertContains(t, "stderr", stderr, []string{"CREEP_POLICY", tt.want})
+			assertNoControl(t, stderr)
+		})
 	}
 }
