@@ -90,8 +90,10 @@
 // line of a key body, a token's tail with no prefix). File finds private keys
 // over the whole file (from BEGIN to END, BEGIN to the end of the file, the
 // start of the file to END, and bare key bodies), then runs the other
-// detectors on chunks of at most MaxInputBytes cut at line ends, each
-// reaching chunkOverlap (4 KiB) back into the previous one. Every line lies in
+// detectors on chunks of at most MaxInputBytes that end at line ends, each
+// reaching chunkOverlap (4 KiB) to twice that back into the previous one; a
+// chunk starts inside a line only when a long line straddles that reach, so
+// long lines cannot make chunks re-scan most of a file. Every line lies in
 // one chunk with the 4 KiB before it, and no non-exempt rule reaches more than
 // a few hundred bytes back from its last line (derived per regex by
 // TestChunkOverlapBound), so every match is seen whole by some chunk. Spans

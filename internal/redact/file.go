@@ -4,16 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // MaxFileBytes bounds one File call. Ordinary code costs about 2 s per MiB
-// on a 2019 laptop CPU (BenchmarkFileRepoCode); input crafted to wake every
-// rule costs about 8 s per chunk (BenchmarkRedact, "every keyword"), and a
-// file at the cap is at least 17 chunks, so over two minutes. The whole-file key scan is linear in the file size
-// (TestFileBlankTailIsLinear), but lines near MaxLineBytes make chunks overlap
-// more, so a crafted file can take several times longer. A larger cap would
-// let one hostile file stall a scan for longer; larger files fail closed with
-// ErrFileTooLarge.
+// on a 2019 laptop CPU (BenchmarkFileRepoCode). The worst case is a file at
+// the cap crafted to wake every rule, in short or in alternating long lines:
+// about 4 to 5 minutes on an i7-10510U (BenchmarkFileEveryKeyword), so plan
+// for 5. Line lengths cannot raise it much: the chunks scan about 1.2 times
+// the bytes of the short-line shape at most, about 1.3 times the file
+// (TestChunkScanIsBounded), and
+// the whole-file key scan is linear (TestFileBlankTailIsLinear). A larger
+// cap would let one hostile file stall a scan for longer; larger files fail
+// closed with ErrFileTooLarge.
 const MaxFileBytes = 1 << 20
 
 // MaxLineBytes bounds one line of a file given to File, newline included.
@@ -80,23 +83,27 @@ func (r *Redactor) detectFile(text string) []span {
 	return found
 }
 
-// chunk is a byte range of the text: whole lines, at most MaxInputBytes.
+// chunk is a byte range of the text, at most MaxInputBytes, that ends at a
+// line end and starts at a line start or, after a long line, at a rune start
+// inside it (nextChunkStart).
 type chunk struct{ start, end int }
 
-// chunkBounds cuts text into chunks of whole lines, at most MaxInputBytes
-// each, every chunk starting at the last line start at least chunkOverlap
-// bytes before the end of the previous one.
+// chunkBounds cuts text into chunks that end at line ends, at most
+// MaxInputBytes each, every chunk starting at or before chunkOverlap bytes
+// before the end of the previous one (nextChunkStart).
 //
 // So every line L lies in some chunk together with the chunkOverlap bytes
 // before it: take the last chunk k that starts at or before L's start minus
-// chunkOverlap; chunk k+1 starts after that point and at least chunkOverlap
-// before chunk k's end, so chunk k ends past L's start, and since it ends at
-// a line end, past L's end. A match ending on L whose earlier lines span at
-// most chunkOverlap bytes is therefore whole in chunk k.
+// chunkOverlap; chunk k+1 starts after that point and at or before
+// chunkOverlap before chunk k's end, so chunk k ends past L's start, and
+// since it ends at a line end, past L's end. A match ending on L whose
+// earlier lines span at most chunkOverlap bytes is therefore whole in chunk k.
 //
-// Lines of at most MaxLineBytes guarantee progress: a chunk's end is more than
-// MaxInputBytes-MaxLineBytes past its start, so the next start falls after
-// the chunk's first line.
+// Each chunk reaches back at most maxChunkOverlap bytes and holds more than
+// MaxInputBytes-MaxLineBytes, so the bytes scanned stay within about 1.3
+// times the file whatever its line lengths (TestChunkScanIsBounded).
+// Progress follows from the same sizes: the next start falls after the
+// chunk's start.
 func chunkBounds(text string) []chunk {
 	var out []chunk
 	for start := 0; ; {
@@ -105,7 +112,7 @@ func chunkBounds(text string) []chunk {
 		if end == len(text) {
 			return out
 		}
-		next := lineStartBefore(text, end-chunkOverlap)
+		next := nextChunkStart(text, end)
 		if next <= start {
 			// next <= start means a line over MaxLineBytes, which File
 			// rejects; ending here keeps a broken caller from looping.
@@ -113,6 +120,30 @@ func chunkBounds(text string) []chunk {
 		}
 		start = next
 	}
+}
+
+// maxChunkOverlap bounds how far a chunk reaches back into the previous one.
+const maxChunkOverlap = 2 * chunkOverlap
+
+// nextChunkStart returns where the chunk after one ending at end starts:
+// the last line start at least chunkOverlap before end, as long as that
+// reaches back at most maxChunkOverlap. A longer line straddling that point
+// would make the chunks overlap by up to MaxLineBytes (issue #102), so the
+// chunk starts inside that line instead, chunkOverlap before end, moved back
+// to a rune start. The guarantee only needs the start at or before end minus
+// chunkOverlap. A cut inside a line changes the context ("^", "\b") only for
+// a match starting right at the cut, which would reach back chunkOverlap
+// bytes, far more than any bounded rule (TestChunkOverlapBound); elsewhere it
+// can only add matches, which mask more, never less.
+func nextChunkStart(text string, end int) int {
+	reach := max(end-chunkOverlap, 0)
+	if next := lineStartBefore(text, reach); end-next <= maxChunkOverlap {
+		return next
+	}
+	for i := 0; i < utf8.UTFMax-1 && reach > 0 && !utf8.RuneStart(text[reach]); i++ {
+		reach--
+	}
+	return reach
 }
 
 // lineStartBefore returns the last line start at or before pos, or the end
