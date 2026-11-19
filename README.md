@@ -40,7 +40,7 @@
 
 - Languages: Python (Flask, FastAPI) and JS/TS (Express). Source files in other languages are listed as `unsupported_language` and make the run incomplete.
 - The `codex` and `gemini` presets can read host files outside redaction and `egress.log` (see [Presets](#presets), [ADR 0015](docs/adr/0015-model-presets.md)).
-- Known gaps that can let a run read as covered are tracked for v0.2: [#207](https://github.com/sneakercreepers/creep/issues/207), [#210](https://github.com/sneakercreepers/creep/issues/210), [#213](https://github.com/sneakercreepers/creep/issues/213), [#214](https://github.com/sneakercreepers/creep/issues/214).
+- Known gaps that can let a run read as covered are tracked for v0.2: [#207](https://github.com/sneakercreepers/creep/issues/207), [#213](https://github.com/sneakercreepers/creep/issues/213), [#214](https://github.com/sneakercreepers/creep/issues/214).
 
 Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md).
 
@@ -190,7 +190,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#207, #210, #213, #214), config and redaction hardening (#63 first, then #62, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#207, #213, #214), config and redaction hardening (#62, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
