@@ -35,6 +35,9 @@ func largeInputs() map[string]string {
 		// Long variable names give the generic rule's lazy 50-byte prefix a
 		// match at every byte, each scanning the whole line again.
 		"env keys": fill("SERVICE_ACCOUNT_PRIMARY_REGION_DEFAULT_SECONDARY_TOKEN=" + strings.Repeat("Ab3x", 30) + "\n"),
+		// A format character after the start makes every detector run twice:
+		// on the text and on its copy without them (#70).
+		"format chars": fill("api_key = to" + zwsp + "ken secret pass" + zwsp + "word "),
 	}
 }
 
@@ -58,6 +61,14 @@ func keywordLines(tb testing.TB) string {
 	return b.String()
 }
 
+// withFormatChar puts a zero-width space in place of three bytes in the
+// middle of text, keeping its length, so it takes both passes of
+// withoutFormat: the worst case for its size.
+func withFormatChar(text string) string {
+	mid := len(text) / 2
+	return text[:mid] + zwsp + text[mid+len(zwsp):]
+}
+
 // RE2 is linear, so these finish quickly. The bound is generous for slow CI
 // runners and -race; it catches a quadratic regression, not small slowdowns.
 func TestRedactLargeInputIsBounded(t *testing.T) {
@@ -79,6 +90,7 @@ func TestRedactLargeInputIsBounded(t *testing.T) {
 func BenchmarkRedact(b *testing.B) {
 	inputs := largeInputs()
 	inputs["every keyword"] = everyKeyword(b)
+	inputs["every keyword, format char"] = withFormatChar(everyKeyword(b))
 	r := newRedactor(b)
 	for name, text := range inputs {
 		b.Run(name, func(b *testing.B) {

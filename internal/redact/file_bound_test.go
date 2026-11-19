@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"regexp/syntax"
 	"slices"
-	"strings"
 	"testing"
 	"unicode"
 	"unicode/utf8"
@@ -165,55 +164,40 @@ func leadOf(t *testing.T, re *regexp.Regexp) int {
 	return measure(parsed).lead
 }
 
-// overlapExempt lists the rules whose multi-line reach has no byte bound,
-// each with the reason a chunked run still covers it in practice.
-var overlapExempt = []struct{ id, reason string }{
-	{"private-key", "found over the whole file before chunking"},
-	{"jwt-base64", "lines wrapped at 40 to 76 columns are masked by the whole-file key-body detector"},
-	{"curl-auth-header", "continuation lines of any length; covered while they fit in chunkOverlap"},
-	{"curl-auth-user", "continuation lines of any length; covered while they fit in chunkOverlap"},
-	{"freemius-secret-key", "unbounded only through a run of blanks"},
-	{"kubernetes-secret-yaml", "unbounded only through a run of blanks"},
-	{"nuget-config-password", "unbounded only through a run of blanks"},
-}
-
-// exemptReason looks a marker label up in overlapExempt by its rule id.
-func exemptReason(label string) string {
-	id := strings.ReplaceAll(strings.TrimPrefix(label, "SECRET_"), "_", "-")
-	for _, e := range overlapExempt {
-		if strings.EqualFold(e.id, id) {
-			return e.reason
-		}
-	}
-	return ""
-}
-
 // TestChunkOverlapBound derives the bound chunkOverlap documents: for every
 // rule and detector, the bytes a match can hold before the start of its last
-// line. A rule added upstream with a longer multi-line reach fails here.
+// line. A rule over it must be in wholeFileRules, which File runs over the
+// whole file, and a rule in that list must still need it; a pattern detector
+// has no such escape. A rule added upstream with a longer multi-line reach
+// fails here.
 func TestChunkOverlapBound(t *testing.T) {
 	rules, err := defaultRules()
 	if err != nil {
 		t.Fatal(err)
 	}
-	longest := 0
-	check := func(label string, re *regexp.Regexp) {
+	longest, whole := 0, 0
+	check := func(label string, re *regexp.Regexp, wholeFile bool) {
 		lead := leadOf(t, re)
-		if exemptReason(label) == "" && lead > chunkOverlap {
+		switch {
+		case !wholeFile && lead > chunkOverlap:
 			t.Errorf("%s: a match can start %d bytes before its last line, over chunkOverlap", label, lead)
-		}
-		if exemptReason(label) != "" && lead <= chunkOverlap {
-			t.Errorf("%s: reach %d is bounded now; drop it from overlapExempt", label, lead)
-		}
-		if exemptReason(label) == "" {
+		case wholeFile && lead <= chunkOverlap:
+			t.Errorf("%s: reach %d is bounded now; drop it from wholeFileRules", label, lead)
+		case !wholeFile:
 			longest = max(longest, lead)
 		}
 	}
 	for _, r := range rules {
-		check(r.label, r.re)
+		check(r.label, r.re, r.wholeFile)
+		if r.wholeFile {
+			whole++
+		}
+	}
+	if whole != len(wholeFileRules) {
+		t.Errorf("%d rules run over the whole file, wholeFileRules lists %d: an id is stale", whole, len(wholeFileRules))
 	}
 	for _, d := range slices.Concat(credentialDetectors, piiDetectors) {
-		check(d.label, d.re)
+		check(d.label, d.re, false)
 	}
 	t.Logf("longest multi-line reach: %d bytes (chunkOverlap %d)", longest, chunkOverlap)
 }

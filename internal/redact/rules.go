@@ -29,6 +29,7 @@ type secretRule struct {
 	wholeMatch  bool // the groups label or repeat parts; they do not bound the secret
 	urlShaped   bool // the regex has a literal "/": it also runs on decoded separators
 	crossesLine bool // the regex can match a newline: a match may go on to the next line
+	wholeFile   bool // File runs it over the whole file (wholeFileRules)
 	keywords    []string
 }
 
@@ -116,6 +117,7 @@ func compileRule(s ruleSpec) (secretRule, error) {
 		wholeMatch:  structuralGroups(parsed, false),
 		urlShaped:   hasLiteralSlash(parsed),
 		crossesLine: matchesNewline(parsed),
+		wholeFile:   wholeFileRules[s.ID],
 		keywords:    s.Keywords,
 	}, nil
 }

@@ -115,7 +115,11 @@ func TestRedactAWSSecretKey(t *testing.T) {
 	}{
 		{"next to key id", id + "," + key + "\n", true},
 		{"key id elsewhere", "id: " + id + "\nother: x\nsk: " + key, true},
+		// The ordering limit in doc.go: with no id in the input the bare key
+		// is sent, unless its usual name sits next to it.
 		{"no key id", "sk: " + key, false},
+		{"env name, no id", "aws_secret_access_key = " + key, true},
+		{"JSON name, no id", "{\"SecretAccessKey\": \"" + key + "\"}", true},
 		{"hex digest", id + " " + digest, false},
 	}
 	for _, tc := range tests {
@@ -129,6 +133,17 @@ func TestRedactAWSSecretKey(t *testing.T) {
 				t.Fatalf("masked = %v, want %v: %q", !leaked, tc.masked, out)
 			}
 		})
+	}
+}
+
+// File gates on the whole file, so a key id in its last chunk still masks a
+// bare secret key in its first: the ordering limit is only across files.
+func TestFileAWSSecretKeyIDInLaterChunk(t *testing.T) {
+	rng := rand.New(rand.NewPCG(25, 26))
+	key := fakeToken(rng, alnum, 30) + "Ab/+" + fakeToken(rng, alnum, 6)
+	text := "sk: " + key + "\n" + repoCode(t, MaxInputBytes+2*chunkOverlap) + "id: " + fakeAWS(rng) + "\n"
+	if out := mustFile(t, newRedactor(t), text); strings.Contains(out, key) {
+		t.Fatal("bare secret key leaked with its key id in a later chunk")
 	}
 }
 
