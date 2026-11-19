@@ -102,3 +102,28 @@ func TestFileMasksAcrossCutAsRedact(t *testing.T) {
 		})
 	}
 }
+
+// BenchmarkFileWholeFileRules measures File at the cap on input crafted for
+// the whole-file rules, with no format character: curl blocks whose
+// continuation line of about MaxLineBytes ends in -u or -H, and freemius
+// keys followed by blanks. It backs the cost stated in doc.go (Whole files).
+func BenchmarkFileWholeFileRules(b *testing.B) {
+	lines := strings.Repeat("a", MaxLineBytes-8) + " \\\n"
+	value := strings.Repeat("Ab3x", 4)
+	shapes := map[string]string{
+		"curl user":     "cu" + "rl https://x.test \\\n" + lines + "  -u admin:" + value + "\n",
+		"curl header":   "cu" + "rl https://x.test \\\n" + lines + "  -H 'Author" + "ization: Bearer " + value + "'\n",
+		"freemius gaps": "'secret" + "_key' =>" + blanks(20000) + "'x'\n",
+	}
+	for name, unit := range shapes {
+		text := strings.Repeat(unit, MaxFileBytes/len(unit))
+		b.Run(name, func(b *testing.B) {
+			b.SetBytes(int64(len(text)))
+			for b.Loop() {
+				if _, err := newRedactor(b).File([]byte(text)); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

@@ -65,7 +65,8 @@
 // (format.go). The bytes sent change only where they are masked. A value
 // masked with format characters inside is also remembered without them.
 // Searching the original too keeps a match that the removal would break (a
-// key id followed by a zero-width space and a word). A leading run of them,
+// key id followed by a zero-width space and a word), though not when the
+// token also holds one inside (see Detection limits). A leading run of them,
 // such as a byte order mark, joins nothing, so it costs no second pass.
 //
 // Detection limits: what follows is not masked, or not always. Each needs a
@@ -85,9 +86,19 @@
 //     40-character base64 run would mask paths and identifiers of that length.
 //     A secret key next to its usual name (aws_secret_access_key,
 //     SecretAccessKey) is masked by the password and generic rules anyway.
-//   - Other hidden or look-alike characters: only category Cf is removed.
-//     Variation selectors, the combining grapheme joiner, Hangul fillers,
-//     unusual spaces and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
+//   - A format character at a token's edge next to a word character, plus
+//     one inside the token ("word", U+200B, "AK", U+200B, "IA..."), gets past
+//     a rule anchored on \b, such as the AWS key id: the original text has
+//     the inner one, and the copy glues the token to the word. That reads
+//     like a key glued to a word, which such a rule misses in plain text too.
+//     Rules with no boundary (GitHub, Slack) still match. Telling an edge
+//     from an inside character would take a third pass per shape.
+//   - Other invisible or look-alike characters: only category Cf is removed.
+//     Invisible characters outside it, such as variation selectors (U+FE0F,
+//     U+E0100), the combining grapheme joiner (U+034F), the Mongolian free
+//     variation selectors (U+180B), Khmer inherent vowels (U+17B4), Hangul
+//     fillers (U+3164, U+115F), the braille blank (U+2800) and unusual
+//     spaces, and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
 //     rule, and so do encodings other than the separators listed below.
 //   - A value split from its key by other text (see Performance).
 //
@@ -133,7 +144,14 @@
 // (wholeFileRules: the private-key rule, base64 JWTs wrapped over lines, the
 // two curl rules, whose continuation lines may be of any length, and the
 // freemius, kubernetes and nuget rules, which reach through a run of blanks
-// of any length). It runs every other detector on chunks of at most
+// of any length). That can cost more than chunks on input crafted for those
+// rules, even with no format character, since a match and the restarts after
+// it can now run past 64 KiB: up to about 5.4 times for 1 MiB of curl -u
+// blocks in the #70 review (0.9 s to 4.8 s; curl -H blocks and freemius
+// blanks about 1.5 to 2 times). BenchmarkFileWholeFileRules measures 0.7 to
+// 2.6 s for its shapes on an i7-10510U. It stays linear and far under the
+// every-keyword worst case on MaxFileBytes. It runs every other detector on
+// chunks of at most
 // MaxInputBytes that end at line ends, each
 // reaching chunkOverlap (4 KiB) to twice that back into the previous one; a
 // chunk starts inside a line only when a long line straddles that reach, so
