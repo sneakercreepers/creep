@@ -123,12 +123,12 @@ func (a testApp) propose(ans *Answer, file int) {
 	routes := a.routes()
 	for _, r := range routes {
 		line := a.routeLine(r)
-		ans.Entries = append(ans.Entries, EntryProposal{File: file, Start: line, End: line + 1, Kind: "http"})
+		ans.Entries = append(ans.Entries, entryAt(file, line, line+1, "http"))
 	}
 	for _, fd := range a.findings {
 		if kind, ok := classKind[fd.Class]; ok && kind != 0 {
 			entry := first + slices.Index(routes, fd.Route) // routes holds every finding's route
-			ans.Sinks = append(ans.Sinks, SinkProposal{File: file, Line: fd.Line, Kind: kind.String(), Entry: entry})
+			ans.Sinks = append(ans.Sinks, sinkAt(file, fd.Line, kind.String(), entry))
 		}
 	}
 }

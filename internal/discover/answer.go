@@ -38,71 +38,126 @@ type Answer struct {
 }
 
 // EntryProposal is one entry point in file File. Kind never changes
-// planning.
+// planning. Numbers are pointers so a missing or null key, which models
+// does not refuse in prompt mode, is told apart from 0 and refused.
 type EntryProposal struct {
-	File  int    `json:"file"`
-	Start int    `json:"start"`
-	End   int    `json:"end"`
+	File  *int   `json:"file"`
+	Start *int   `json:"start"`
+	End   *int   `json:"end"`
 	Kind  string `json:"kind"`
 }
 
 // SinkProposal is one sink line in file File; Entry is an index into
 // Answer.Entries whose File is the same, or -1.
 type SinkProposal struct {
-	File  int    `json:"file"`
-	Line  int    `json:"line"`
+	File  *int   `json:"file"`
+	Line  *int   `json:"line"`
 	Kind  string `json:"kind"`
-	Entry int    `json:"entry"`
+	Entry *int   `json:"entry"`
 }
 
 // AuthProposal is a span holding an auth check. It may only widen the
 // reader's slice: it never sets Authenticated and never skips a sink.
 type AuthProposal struct {
-	File  int `json:"file"`
-	Start int `json:"start"`
-	End   int `json:"end"`
+	File  *int `json:"file"`
+	Start *int `json:"start"`
+	End   *int `json:"end"`
 }
 
-// Validate checks what decoding cannot: enums, ranges, entry links and the
-// per-file caps. Bounds against the batch are checked later (inBounds).
-// Messages state the rule and never quote a value, because they go back
-// into the prompt.
-func (a *Answer) Validate() error {
+// reply is an Answer with every required number present: what batch.go
+// works on once Validate has passed.
+type reply struct {
+	entries []entryRec
+	sinks   []sinkRec
+	auth    []authRec
+}
+
+type entryRec struct {
+	file, start, end int
+	kind             string
+}
+
+type sinkRec struct {
+	file, line, entry int
+	kind              string
+}
+
+type authRec struct{ file, start, end int }
+
+var errMissingKey = errors.New("every entry, sink and auth item needs all its keys, none null")
+
+// reply converts a, refusing any missing or null number.
+func (a *Answer) reply() (reply, error) {
 	if a.Entries == nil || a.Sinks == nil || a.Auth == nil {
-		return errors.New("entries, sinks and auth must be arrays")
+		return reply{}, errors.New("entries, sinks and auth must be arrays")
 	}
+	var r reply
 	for _, e := range a.Entries {
-		if !validFile(e.File) || !validRange(e.Start, e.End) || !slices.Contains(entryKindNames, e.Kind) {
+		if e.File == nil || e.Start == nil || e.End == nil {
+			return reply{}, errMissingKey
+		}
+		r.entries = append(r.entries, entryRec{*e.File, *e.Start, *e.End, e.Kind})
+	}
+	for _, s := range a.Sinks {
+		if s.File == nil || s.Line == nil || s.Entry == nil {
+			return reply{}, errMissingKey
+		}
+		r.sinks = append(r.sinks, sinkRec{*s.File, *s.Line, *s.Entry, s.Kind})
+	}
+	for _, s := range a.Auth {
+		if s.File == nil || s.Start == nil || s.End == nil {
+			return reply{}, errMissingKey
+		}
+		r.auth = append(r.auth, authRec{*s.File, *s.Start, *s.End})
+	}
+	return r, nil
+}
+
+// Validate checks what decoding cannot: required keys, enums, ranges,
+// entry links and the per-file caps. Bounds against the batch are checked
+// later (inBounds). Messages state the rule and never quote a value,
+// because they go back into the prompt.
+func (a *Answer) Validate() error {
+	r, err := a.reply()
+	if err != nil {
+		return err
+	}
+	return r.validate()
+}
+
+func (r reply) validate() error {
+	for _, e := range r.entries {
+		if !validFile(e.file) || !validRange(e.start, e.end) || !slices.Contains(entryKindNames, e.kind) {
 			return errors.New("each entry needs a file index, 1 <= start <= end and a kind the schema lists")
 		}
 	}
-	for _, s := range a.Sinks {
-		if _, ok := sinkKindByName(s.Kind); !ok || !validFile(s.File) || !validRange(s.Line, s.Line) {
+	for _, s := range r.sinks {
+		if _, ok := sinkKindByName(s.kind); !ok || !validFile(s.file) || !validRange(s.line, s.line) {
 			return errors.New("each sink needs a file index, a line from 1 and a kind the schema lists")
 		}
-		if s.Entry != noEntry && (s.Entry < 0 || s.Entry >= len(a.Entries) || a.Entries[s.Entry].File != s.File) {
+		if s.entry != noEntry && (s.entry < 0 || s.entry >= len(r.entries) || r.entries[s.entry].file != s.file) {
 			return errors.New("each sink entry must be -1 or the index of an entry in the same file")
 		}
 	}
-	for _, s := range a.Auth {
-		if !validFile(s.File) || !validRange(s.Start, s.End) {
+	for _, s := range r.auth {
+		if !validFile(s.file) || !validRange(s.start, s.end) {
 			return errors.New("each auth span needs a file index and 1 <= start <= end")
 		}
 	}
-	return a.checkCaps()
+	return r.checkCaps()
 }
 
 // checkCaps refuses a file over a per-file cap.
-func (a *Answer) checkCaps() error {
+func (r reply) checkCaps() error {
 	var entries, sinks, auth [maxFiles]int
-	for _, e := range a.Entries {
-		entries[e.File]++
+	for _, e := range r.entries {
+		entries[e.file]++
 	}
-	for _, s := range a.Sinks {
-		sinks[s.File]++
+	for _, s := range r.sinks {
+		sinks[s.file]++
 	}
-	for _, s := range a.Auth {
-		auth[s.File]++
+	for _, s := range r.auth {
+		auth[s.file]++
 	}
 	for f := range maxFiles {
 		if entries[f] > MaxEntriesPerFile || sinks[f] > MaxSinksPerFile || auth[f] > MaxAuthPerFile {

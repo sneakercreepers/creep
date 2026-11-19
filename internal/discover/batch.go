@@ -36,11 +36,12 @@ func (r *run) flush(ctx context.Context) {
 		r.callFailed(secs, err)
 		return
 	}
-	if !inBounds(a, batch) {
+	rep, err := a.reply() // Validate passed, so this cannot fail; checked anyway
+	if err != nil || !inBounds(rep, batch) {
 		r.failAll(secs, CoverageSendFailed, ReasonParseFailed)
 		return
 	}
-	r.apply(a, batch, c)
+	r.apply(rep, batch, c)
 }
 
 // callFailed lists a batch with no reply. An invalid reply is the
@@ -73,20 +74,20 @@ func (r *run) failAll(secs []section, cov Coverage, reason Reason) {
 // names a file of the batch (F1), every span lies inside that file's
 // lines, and every sink sits on a line that holds code. Any proposal out
 // of bounds makes the whole reply invalid (ADR 0017).
-func inBounds(a Answer, batch []section) bool {
+func inBounds(a reply, batch []section) bool {
 	fits := func(file, end int) bool { return file < len(batch) && end <= len(batch[file].lines) }
-	for _, e := range a.Entries {
-		if !fits(e.File, e.End) {
+	for _, e := range a.entries {
+		if !fits(e.file, e.end) {
 			return false
 		}
 	}
-	for _, s := range a.Auth {
-		if !fits(s.File, s.End) {
+	for _, s := range a.auth {
+		if !fits(s.file, s.end) {
 			return false
 		}
 	}
-	for _, s := range a.Sinks {
-		if !fits(s.File, s.Line) || strings.TrimSpace(batch[s.File].lines[s.Line-1]) == "" {
+	for _, s := range a.sinks {
+		if !fits(s.file, s.line) || strings.TrimSpace(batch[s.file].lines[s.line-1]) == "" {
 			return false
 		}
 	}
@@ -97,7 +98,7 @@ func inBounds(a Answer, batch []section) bool {
 // recorded; a missed canary makes every file of the batch canary_missed,
 // but its proposals are still kept, since union only adds. A cap affects
 // only its own file.
-func (r *run) apply(a Answer, batch []section, c canary) {
+func (r *run) apply(a reply, batch []section, c canary) {
 	found := c.found(a)
 	for i, s := range batch {
 		if s.work < 0 {
@@ -118,23 +119,23 @@ func (r *run) apply(a Answer, batch []section, c canary) {
 
 // take records the proposals for batch file index file and reports
 // whether the file reached a cap.
-func (w *fileWork) take(a Answer, file int) bool {
+func (w *fileWork) take(a reply, file int) bool {
 	entries, sinks, auth := 0, 0, 0
-	for _, e := range a.Entries {
-		if e.File == file {
-			w.entries = append(w.entries, entryProp{lines: span(e.Start, e.End), kind: entryKind(e.Kind)})
+	for _, e := range a.entries {
+		if e.file == file {
+			w.entries = append(w.entries, entryProp{lines: span(e.start, e.end), kind: entryKind(e.kind)})
 			entries++
 		}
 	}
-	for _, s := range a.Sinks {
-		if s.File == file {
+	for _, s := range a.sinks {
+		if s.file == file {
 			w.sinks = append(w.sinks, sinkFrom(a, s))
 			sinks++
 		}
 	}
-	for _, s := range a.Auth {
-		if s.File == file {
-			w.auth = append(w.auth, span(s.Start, s.End))
+	for _, s := range a.auth {
+		if s.file == file {
+			w.auth = append(w.auth, span(s.start, s.end))
 			auth++
 		}
 	}
@@ -143,12 +144,12 @@ func (w *fileWork) take(a Answer, file int) bool {
 
 // sinkFrom converts a validated sink proposal, with its entry's lines when
 // it names one (Validate checked the entry is in the same file).
-func sinkFrom(a Answer, s SinkProposal) sinkProp {
-	kind, _ := sinkKindByName(s.Kind)
-	p := sinkProp{line: span(s.Line, s.Line).Start, kind: kind}
-	if s.Entry != noEntry {
-		e := a.Entries[s.Entry]
-		p.entry, p.hasEntry = span(e.Start, e.End), true
+func sinkFrom(a reply, s sinkRec) sinkProp {
+	kind, _ := sinkKindByName(s.kind)
+	p := sinkProp{line: span(s.line, s.line).Start, kind: kind}
+	if s.entry != noEntry {
+		e := a.entries[s.entry]
+		p.entry, p.hasEntry = span(e.start, e.end), true
 	}
 	return p
 }

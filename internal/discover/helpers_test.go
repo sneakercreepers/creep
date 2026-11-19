@@ -80,12 +80,26 @@ func canaryOf(secs []promptSection) (canary, bool) {
 	return canary{}, false
 }
 
+func num(n int) *int { return &n }
+
+func entryAt(file, start, end int, kind string) EntryProposal {
+	return EntryProposal{File: num(file), Start: num(start), End: num(end), Kind: kind}
+}
+
+func sinkAt(file, line int, kind string, entry int) SinkProposal {
+	return SinkProposal{File: num(file), Line: num(line), Kind: kind, Entry: num(entry)}
+}
+
+func authAt(file, start, end int) AuthProposal {
+	return AuthProposal{File: num(file), Start: num(start), End: num(end)}
+}
+
 // honest reports nothing but the canary: its entry is Entries[0].
 func honest(secs []promptSection) Answer {
 	c, _ := canaryOf(secs)
 	return Answer{
-		Entries: []EntryProposal{{File: c.section, Start: c.entry, End: c.entry + 2, Kind: "http"}},
-		Sinks:   []SinkProposal{{File: c.section, Line: c.sink, Kind: "file", Entry: 0}},
+		Entries: []EntryProposal{entryAt(c.section, c.entry, c.entry+2, "http")},
+		Sinks:   []SinkProposal{sinkAt(c.section, c.sink, "file", 0)},
 		Auth:    []AuthProposal{},
 	}
 }

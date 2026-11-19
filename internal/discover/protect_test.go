@@ -3,7 +3,6 @@ package discover
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -147,19 +146,57 @@ func TestModelCannotLowerRisk(t *testing.T) {
 	}
 }
 
-// models does not enforce a schema's required keys, so a proposal with no
-// "file" decodes as file index 0. That can only add a worst-case candidate
-// to file 0 and never removes or lowers one; the tripwire hit stays.
-func TestMissingFileKeyOnlyAdds(t *testing.T) {
-	res := discoverApp(t, rawReply{sinks: `{"line":1,"kind":"shell","entry":-1}`})
-	for _, s := range res.Sinks {
-		if !s.DynamicArg || s.Parameterized || s.Indirect {
-			t.Errorf("sink %+v: a missing file key lowered risk", s)
+// M1 (#268 review): models does not enforce a schema's required keys in
+// prompt mode, so discover does. A missing or null key in any item of any
+// array makes the whole reply invalid, instead of reading as 0 and moving
+// a proposal to file 0.
+func TestMissingOrNullKeyIsParseFailed(t *testing.T) {
+	items := []struct {
+		array string
+		keys  [][2]string // key, value, in wire order
+	}{
+		{"entries", [][2]string{{"file", "N"}, {"start", "4"}, {"end", "5"}, {"kind", `"http"`}}},
+		{"sinks", [][2]string{{"file", "N"}, {"line", "6"}, {"kind", `"sql"`}, {"entry", "-1"}}},
+		{"auth", [][2]string{{"file", "N"}, {"start", "4"}, {"end", "4"}}},
+	}
+	for _, it := range items {
+		for drop := range it.keys {
+			for _, mode := range []string{"missing", "null"} {
+				item := itemWith(it.keys, drop, mode)
+				t.Run(it.array+" "+it.keys[drop][0]+" "+mode, func(t *testing.T) {
+					r := rawReply{}
+					switch it.array {
+					case "entries":
+						r.entries = item
+					case "sinks":
+						r.sinks = item
+					default:
+						r.auth = item
+					}
+					res := discoverApp(t, r)
+					f := fileOf(t, res, 0)
+					if f.Coverage != CoverageSendFailed || f.Reason != ReasonParseFailed || res.Complete() {
+						t.Errorf("%s: file = %+v; want send_failed, parse_failed, incomplete", item, f)
+					}
+					assertTripwireOnly(t, res)
+				})
+			}
 		}
 	}
-	if !slices.ContainsFunc(res.Sinks, func(s Sink) bool { return s.Line == 6 && s.Kind == SinkSQL }) {
-		t.Errorf("sinks = %+v: the tripwire hit was removed", res.Sinks)
+}
+
+// itemWith renders keys as a JSON object with key drop left out or null.
+func itemWith(keys [][2]string, drop int, mode string) string {
+	var parts []string
+	for i, kv := range keys {
+		switch {
+		case i != drop:
+			parts = append(parts, fmt.Sprintf("%q:%s", kv[0], kv[1]))
+		case mode == "null":
+			parts = append(parts, fmt.Sprintf("%q:null", kv[0]))
+		}
 	}
+	return "{" + strings.Join(parts, ",") + "}"
 }
 
 // Acceptance (#265): model output can never remove a candidate. A reply
@@ -182,18 +219,18 @@ func TestMissingCanaryIsIncomplete(t *testing.T) {
 	}{
 		{"no canary proposals", func(canary, int) ([]EntryProposal, []SinkProposal) { return nil, nil }},
 		{"entry only", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
-			return []EntryProposal{{File: c.section, Start: c.entry, End: c.entry, Kind: "http"}}, nil
+			return []EntryProposal{entryAt(c.section, c.entry, c.entry, "http")}, nil
 		}},
 		{"sink only", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
-			return nil, []SinkProposal{{File: c.section, Line: c.sink, Kind: "file", Entry: -1}}
+			return nil, []SinkProposal{sinkAt(c.section, c.sink, "file", -1)}
 		}},
 		{"entry beside its line", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
-			return []EntryProposal{{File: c.section, Start: c.entry + 1, End: c.entry + 2, Kind: "http"}},
-				[]SinkProposal{{File: c.section, Line: c.sink, Kind: "file", Entry: -1}}
+			return []EntryProposal{entryAt(c.section, c.entry+1, c.entry+2, "http")},
+				[]SinkProposal{sinkAt(c.section, c.sink, "file", -1)}
 		}},
 		{"right lines in the wrong file", func(c canary, app int) ([]EntryProposal, []SinkProposal) {
-			return []EntryProposal{{File: app, Start: 4, End: 4, Kind: "http"}},
-				[]SinkProposal{{File: app, Line: 6, Kind: "file", Entry: -1}}
+			return []EntryProposal{entryAt(app, 4, 4, "http")},
+				[]SinkProposal{sinkAt(app, 6, "file", -1)}
 		}},
 	}
 	for _, tt := range tests {
@@ -203,7 +240,7 @@ func TestMissingCanaryIsIncomplete(t *testing.T) {
 				app := 1 - c.section
 				e, s := tt.canary(c, app)
 				return Answer{
-					Entries: append([]EntryProposal{{File: app, Start: 4, End: 5, Kind: "http"}}, e...),
+					Entries: append([]EntryProposal{entryAt(app, 4, 5, "http")}, e...),
 					Sinks:   append([]SinkProposal{}, s...),
 					Auth:    []AuthProposal{},
 				}
@@ -271,7 +308,7 @@ func TestRawReplyDecodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var a Answer
-	if err := json.Unmarshal(body, &a); err != nil || a.Validate() != nil || len(a.Entries) != 2 || a.Entries[0].File != 1 {
+	if err := json.Unmarshal(body, &a); err != nil || a.Validate() != nil || len(a.Entries) != 2 || *a.Entries[0].File != 1 {
 		t.Fatalf("raw reply %s decodes to %+v, %v", body, a, err)
 	}
 }

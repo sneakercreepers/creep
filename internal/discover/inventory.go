@@ -165,17 +165,56 @@ func indexOf(list []string, s string) int {
 }
 
 // classify says what the file at name is. content may be nil when the
-// file could not be read; then only its name decides.
+// file could not be read; then only its name decides. A NUL byte never
+// changes the answer: hasNUL is the caller's check.
 func (t inventoryTable) classify(name string, content []byte) Entry {
 	base := baseName(name)
-	e, found := t.byName(base)
-	if !found && path.Ext(base) == "" {
-		e = t.exact[matchShebang][interpreter(content)]
+	if e, found := t.byName(base); found {
+		return e
 	}
-	if e.Language != 0 && bytes.IndexByte(content[:min(len(content), binaryProbeBytes)], 0) >= 0 {
+	if !extensionless(base) {
 		return Entry{}
 	}
-	return e
+	return t.byShebang(interpreter(content))
+}
+
+// needsContent reports that only the file's bytes can say what it is: no
+// name rule matches and it has no extension, so a shebang may make it
+// source. Such a file that cannot be read is listed, never skipped.
+func (t inventoryTable) needsContent(name string) bool {
+	base := baseName(name)
+	_, found := t.byName(base)
+	return !found && extensionless(base)
+}
+
+// extensionless counts a dotfile with no other dot (".deploy") as having
+// no extension.
+func extensionless(base string) bool {
+	ext := path.Ext(base)
+	return ext == "" || ext == base
+}
+
+// byShebang looks up the interpreter as written, then without its version
+// ("pypy3", "python3.12"), then by its leading letters ("python3.12-dbg").
+func (t inventoryTable) byShebang(prog string) Entry {
+	if prog == "" {
+		return Entry{}
+	}
+	letters := strings.IndexFunc(prog, func(r rune) bool { return r < 'a' || r > 'z' })
+	for _, p := range []string{prog, strings.TrimRight(prog, "0123456789."), prog[:max(letters, 0)]} {
+		if e, ok := t.exact[matchShebang][p]; ok && p != "" {
+			return e
+		}
+	}
+	return Entry{}
+}
+
+// hasNUL reports a NUL byte in the first binaryProbeBytes of content. A
+// source file that holds one is listed not read, never skipped: an author
+// could otherwise hide a file from the tripwire and discovery (ADR 0017
+// inventory, decided fail-closed in #268).
+func hasNUL(content []byte) bool {
+	return bytes.IndexByte(content[:min(len(content), binaryProbeBytes)], 0) >= 0
 }
 
 func (t inventoryTable) byName(base string) (Entry, bool) {
@@ -198,9 +237,13 @@ func baseName(name string) string {
 // maxShebangBytes bounds the first line read for an interpreter.
 const maxShebangBytes = 256
 
-// interpreter returns the program a "#!" line runs, through env, with its
-// version digits dropped ("python3.12" is "python"), or "".
+// utf8BOM is the byte order mark some editors write before "#!".
+const utf8BOM = "\xef\xbb\xbf"
+
+// interpreter returns the program a "#!" line runs, through env, or "".
+// A UTF-8 byte order mark before "#!" is skipped.
 func interpreter(content []byte) string {
+	content = bytes.TrimPrefix(content, []byte(utf8BOM))
 	if !bytes.HasPrefix(content, []byte("#!")) {
 		return ""
 	}
@@ -210,17 +253,18 @@ func interpreter(content []byte) string {
 	}
 	fields := strings.Fields(string(line))
 	if len(fields) > 0 && path.Base(fields[0]) == "env" {
-		fields = dropFlags(fields[1:])
+		fields = dropEnvArgs(fields[1:])
 	}
 	if len(fields) == 0 {
 		return ""
 	}
-	return strings.TrimRight(path.Base(fields[0]), "0123456789.")
+	return path.Base(fields[0])
 }
 
-// dropFlags skips env's options, such as -S, before the program name.
-func dropFlags(fields []string) []string {
-	for len(fields) > 0 && strings.HasPrefix(fields[0], "-") {
+// dropEnvArgs skips env's options (-S) and NAME=value settings before the
+// program name.
+func dropEnvArgs(fields []string) []string {
+	for len(fields) > 0 && (strings.HasPrefix(fields[0], "-") || strings.Contains(fields[0], "=")) {
 		fields = fields[1:]
 	}
 	return fields

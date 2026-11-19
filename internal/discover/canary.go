@@ -94,10 +94,10 @@ func canarySize() int {
 
 // found reports whether a holds an entry covering the canary's entry line
 // and a sink on its sink line, both in the canary's file.
-func (c canary) found(a Answer) bool {
-	entry := slices.ContainsFunc(a.Entries, func(e EntryProposal) bool {
-		return e.File == c.section && e.Start <= c.entry && c.entry <= e.End
+func (c canary) found(a reply) bool {
+	entry := slices.ContainsFunc(a.entries, func(e entryRec) bool {
+		return e.file == c.section && e.start <= c.entry && c.entry <= e.end
 	})
-	sink := slices.ContainsFunc(a.Sinks, func(s SinkProposal) bool { return s.File == c.section && s.Line == c.sink })
+	sink := slices.ContainsFunc(a.sinks, func(s sinkRec) bool { return s.file == c.section && s.line == c.sink })
 	return entry && sink
 }

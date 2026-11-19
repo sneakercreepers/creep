@@ -9,9 +9,9 @@ import (
 func TestValidate(t *testing.T) {
 	ok := func() Answer {
 		return Answer{
-			Entries: []EntryProposal{{File: 0, Start: 2, End: 3, Kind: "http"}, {File: maxFiles - 1, Start: 1, End: 1, Kind: "cli"}},
-			Sinks:   []SinkProposal{{File: 0, Line: 3, Kind: "sql", Entry: 0}, {File: 2, Line: 9, Kind: "nosql", Entry: -1}},
-			Auth:    []AuthProposal{{File: 0, Start: 2, End: 2}},
+			Entries: []EntryProposal{entryAt(0, 2, 3, "http"), entryAt(maxFiles-1, 1, 1, "cli")},
+			Sinks:   []SinkProposal{sinkAt(0, 3, "sql", 0), sinkAt(2, 9, "nosql", -1)},
+			Auth:    []AuthProposal{authAt(0, 2, 2)},
 		}
 	}
 	tests := []struct {
@@ -26,24 +26,24 @@ func TestValidate(t *testing.T) {
 		{"nil entries", func(a *Answer) { a.Entries = nil }, false},
 		{"nil sinks", func(a *Answer) { a.Sinks = nil }, false},
 		{"nil auth", func(a *Answer) { a.Auth = nil }, false},
-		{"entry file -1", func(a *Answer) { a.Entries[0].File = -1 }, false},
-		{"entry file past the batch cap", func(a *Answer) { a.Entries[1].File = maxFiles }, false},
-		{"sink file past the batch cap", func(a *Answer) { a.Sinks[1].File = maxFiles }, false},
-		{"auth file -1", func(a *Answer) { a.Auth[0].File = -1 }, false},
-		{"entry end before start", func(a *Answer) { a.Entries[0].End = 1 }, false},
-		{"entry past MaxLine", func(a *Answer) { a.Entries[0].End = MaxLine + 1 }, false},
+		{"entry file -1", func(a *Answer) { a.Entries[0].File = num(-1) }, false},
+		{"entry file past the batch cap", func(a *Answer) { a.Entries[1].File = num(maxFiles) }, false},
+		{"sink file past the batch cap", func(a *Answer) { a.Sinks[1].File = num(maxFiles) }, false},
+		{"auth file -1", func(a *Answer) { a.Auth[0].File = num(-1) }, false},
+		{"entry end before start", func(a *Answer) { a.Entries[0].End = num(1) }, false},
+		{"entry past MaxLine", func(a *Answer) { a.Entries[0].End = num(MaxLine + 1) }, false},
 		{"entry kind case", func(a *Answer) { a.Entries[0].Kind = "HTTP" }, false},
-		{"sink line 0", func(a *Answer) { a.Sinks[0].Line = 0 }, false},
+		{"sink line 0", func(a *Answer) { a.Sinks[0].Line = num(0) }, false},
 		{"sink kind eval", func(a *Answer) { a.Sinks[0].Kind = "eval" }, false},
-		{"sink entry past entries", func(a *Answer) { a.Sinks[0].Entry = 2 }, false},
-		{"sink entry in another file", func(a *Answer) { a.Sinks[0].Entry = 1 }, false},
-		{"sink entry -2", func(a *Answer) { a.Sinks[0].Entry = -2 }, false},
-		{"auth end before start", func(a *Answer) { a.Auth[0].Start = 3 }, false},
+		{"sink entry past entries", func(a *Answer) { a.Sinks[0].Entry = num(2) }, false},
+		{"sink entry in another file", func(a *Answer) { a.Sinks[0].Entry = num(1) }, false},
+		{"sink entry -2", func(a *Answer) { a.Sinks[0].Entry = num(-2) }, false},
+		{"auth end before start", func(a *Answer) { a.Auth[0].Start = num(3) }, false},
 		{"entries at the cap", func(a *Answer) { a.Entries = repeatEntries(0, MaxEntriesPerFile) }, true},
 		{"entries over the cap", func(a *Answer) { a.Entries = repeatEntries(0, MaxEntriesPerFile+1) }, false},
 		{"cap counted per file", func(a *Answer) {
 			a.Entries = append(repeatEntries(1, MaxEntriesPerFile), repeatEntries(2, MaxEntriesPerFile)...)
-			a.Sinks[0].Entry = -1
+			a.Sinks[0].Entry = num(-1)
 		}, true},
 	}
 	for _, tt := range tests {
@@ -62,7 +62,7 @@ func TestValidate(t *testing.T) {
 func repeatEntries(file, n int) []EntryProposal {
 	out := make([]EntryProposal, n)
 	for i := range out {
-		out[i] = EntryProposal{File: file, Start: 1, End: 1, Kind: "rpc"}
+		out[i] = entryAt(file, 1, 1, "rpc")
 	}
 	return out
 }

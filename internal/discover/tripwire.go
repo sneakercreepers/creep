@@ -2,15 +2,17 @@ package discover
 
 import (
 	"bytes"
+	"cmp"
 	_ "embed" // the sink signatures are data in tripwire.tsv
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 )
 
 const (
 	// MaxTripwireHits caps the candidates one file can add (ADR 0017). A
-	// file at the cap is marked TripwireCut, which reports as truncated.
+	// file past the cap is marked TripwireCut, which reports as truncated.
 	MaxTripwireHits = 1024
 	// maxTripwireRows and the signature bounds are the table limits ADR
 	// 0017 fixes, so matching stays linear in file size times table size.
@@ -22,8 +24,9 @@ const (
 // signature is one tripwire row.
 type signature struct {
 	kind    SinkKind
-	token   []byte
-	bounded bool // starts with an identifier byte, so must not follow one
+	token   []byte // searched bytes: the row without a call's final "("
+	call    bool   // the row ends in "(" after an identifier byte: blanks may come before it
+	bounded bool   // starts with an identifier byte, so must not follow one
 	fixture string
 }
 
@@ -74,78 +77,94 @@ func parseSignature(line string) (signature, error) {
 	if len(token) < minSignatureBytes || len(token) > maxSignatureBytes {
 		return signature{}, fmt.Errorf("signature of %d bytes, want %d to %d", len(token), minSignatureBytes, maxSignatureBytes)
 	}
-	return signature{kind: kind, token: []byte(token), bounded: isIdentByte(token[0]), fixture: cols[2]}, nil
+	s := signature{kind: kind, token: []byte(token), bounded: isIdentByte(token[0]), fixture: cols[2]}
+	if n := len(token); token[n-1] == '(' && isIdentByte(token[n-2]) {
+		s.token, s.call = s.token[:n-1], true
+	}
+	return s, nil
 }
 
-// tripwire matches every signature on every line of text, the redacted
-// file, and returns one hit per line and sink kind, in line order. cut
-// reports that the file reached MaxTripwireHits. Work is linear in the
-// file size times the table size: a file at redact.MaxFileBytes takes
-// about 15 ms as ordinary code and 0.12 s in the worst shape measured, one
-// line of repeated near-misses, on an i7-10510U (BenchmarkTripwire).
+// tripwire matches every signature over text, the redacted file, and
+// returns one hit per line and sink kind, in line order. cut reports that
+// the file had more than MaxTripwireHits. Each row is one forward search
+// of the whole file that jumps to the next line after a hit, so work is
+// linear in the file size times the table size and does not grow with
+// the line count. On an i7-10510U a file at redact.MaxFileBytes takes
+// about 17 ms of empty or one-byte lines and up to 0.16 s when every line
+// holds a hit or a near-miss (BenchmarkTripwire), below what redact.File
+// takes on the same file.
 func tripwire(rows []signature, text []byte) (hits []hit, cut bool) {
-	var line uint32
-	for len(text) > 0 {
-		line++
-		var l []byte
-		l, text = nextLine(text)
-		for _, k := range lineKinds(rows, l) {
-			if len(hits) == MaxTripwireHits {
-				return hits, true
-			}
-			hits = append(hits, hit{line: line, kind: k})
-		}
+	for _, r := range rows {
+		hits = r.lines(text, hits)
+	}
+	slices.SortFunc(hits, func(a, b hit) int {
+		return cmp.Or(cmp.Compare(a.line, b.line), cmp.Compare(a.kind, b.kind))
+	})
+	hits = slices.Compact(hits)
+	if len(hits) > MaxTripwireHits {
+		return hits[:MaxTripwireHits], true
 	}
 	return hits, false
 }
 
-// lineKinds returns each sink kind some signature matches on l, once.
-func lineKinds(rows []signature, l []byte) []SinkKind {
-	var kinds []SinkKind
-	for _, r := range rows {
-		if !containsKind(kinds, r.kind) && r.matches(l) {
-			kinds = append(kinds, r.kind)
+// lines appends a hit for each line the row matches, up to one past the
+// cap: a row's later lines cannot be among the file's first
+// MaxTripwireHits hits.
+func (r signature) lines(text []byte, hits []hit) []hit {
+	line, counted := uint32(1), 0
+	for from, found := 0, 0; found <= MaxTripwireHits; found++ {
+		at := r.next(text, from)
+		if at < 0 {
+			return hits
 		}
+		line += uint32(bytes.Count(text[counted:at], []byte{'\n'})) //nolint:gosec // G115: at most redact.MaxFileBytes lines
+		counted = at
+		hits = append(hits, hit{line: line, kind: r.kind})
+		end := bytes.IndexByte(text[at:], '\n')
+		if end < 0 {
+			return hits
+		}
+		from = at + end + 1
 	}
-	return kinds
+	return hits
 }
 
 // matches reports whether the signature occurs in l at an allowed place.
-// Each search resumes after the last occurrence, so it is linear in l.
-func (r signature) matches(l []byte) bool {
-	for from := 0; from < len(l); {
-		i := bytes.Index(l[from:], r.token)
+func (r signature) matches(l []byte) bool { return r.next(l, 0) >= 0 }
+
+// next returns the offset of the first allowed occurrence at or after
+// from, or -1. A rejected occurrence resumes one byte later; the blank
+// skip of a call stops at the first other byte, which no blank run
+// shares with another occurrence, so the search stays linear.
+func (r signature) next(text []byte, from int) int {
+	for from < len(text) {
+		i := bytes.Index(text[from:], r.token)
 		if i < 0 {
-			return false
+			return -1
 		}
 		at := from + i
-		if !r.bounded || at == 0 || !isIdentByte(l[at-1]) {
-			return true
+		if r.allowed(text, at) {
+			return at
 		}
 		from = at + 1
 	}
-	return false
+	return -1
+}
+
+func (r signature) allowed(text []byte, at int) bool {
+	if r.bounded && at > 0 && isIdentByte(text[at-1]) {
+		return false
+	}
+	if !r.call {
+		return true
+	}
+	j := at + len(r.token)
+	for j < len(text) && (text[j] == ' ' || text[j] == '\t') {
+		j++
+	}
+	return j < len(text) && text[j] == '('
 }
 
 func isIdentByte(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
-}
-
-func containsKind(kinds []SinkKind, k SinkKind) bool {
-	for _, have := range kinds {
-		if have == k {
-			return true
-		}
-	}
-	return false
-}
-
-// nextLine splits off the first line of b, without its line end, as
-// splitLines counts lines.
-func nextLine(b []byte) (line, rest []byte) {
-	i := bytes.IndexByte(b, '\n')
-	if i < 0 {
-		return bytes.TrimSuffix(b, []byte{'\r'}), nil
-	}
-	return bytes.TrimSuffix(b[:i], []byte{'\r'}), b[i+1:]
 }

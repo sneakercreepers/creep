@@ -6,8 +6,15 @@
 # string of 2 to 64 bytes, matched case-sensitively on each line of the
 # redacted file, comments and strings included. A signature that starts
 # with an identifier byte (A-Z, a-z, 0-9, _) must not follow one, so
-# "open(" does not match "fopen(". The fixture line must match its row
+# "open(" does not match "fopen(". A signature ending in "(" after an
+# identifier byte also matches with spaces or tabs before the "(", so
+# "exec(" matches "exec (cmd)". The fixture line must match its row
 # (tripwire_test.go). A hit is a candidate for the reader, never a finding.
+#
+# Known gaps, left to discovery: Ruby backtick commands (a backtick row
+# would hit every JavaScript template literal), calls of a bare name
+# imported from elsewhere ("from subprocess import run", then "run(cmd)";
+# the import line is the hit), and calls split across lines.
 #
 # SQL
 sql	execute(	cursor.execute(query)
@@ -262,3 +269,35 @@ template	ERB.new(	ERB.new(tpl).result(binding)
 template	Liquid::Template.parse(	Liquid::Template.parse(tpl)
 template	render inline:	render inline: params[:tpl]
 template	Razor.Parse(	Razor.Parse(tpl, model)
+#
+# Common spellings the first review found missing
+sql	->query(	$r = $db->query("SELECT * FROM t WHERE id = $id");
+sql	->real_query(	$mysqli->real_query($sql);
+sql	->exec(	$pdo->exec($sql);
+sql	.Raw(	db.Raw(q).Scan(&users)
+sql	DB::select(	$rows = DB::select("SELECT * FROM t WHERE id = $id");
+sql	DB::statement(	DB::statement($sql);
+sql	DB::raw(	$q->orderBy(DB::raw($order));
+sql	exec_driver_sql(	conn.exec_driver_sql(q)
+sql	.where("	User.where("name = '#{name}'")
+sql	jdbcTemplate.query	List<User> u = jdbcTemplate.query(sql, mapper);
+sql	jdbcTemplate.update(	jdbcTemplate.update(sql);
+shell	Popen(	p = Popen(cmd, shell=True)
+shell	check_output(	out = check_output(cmd, shell=True)
+shell	check_call(	check_call(cmd, shell=True)
+shell	from subprocess import	from subprocess import run
+shell	import subprocess	import subprocess
+shell	:os.cmd(	:os.cmd(to_charlist(cmd))
+shell	system "	system "ls #{dir}"
+shell	exec "	exec "ls #{dir}"
+shell	Deno.Command(	const c = new Deno.Command(cmd, { args });
+shell	Deno.run(	Deno.run({ cmd: [c] })
+shell	Bun.spawn(	Bun.spawn([cmd])
+file	Bun.file(	const f = Bun.file(path)
+http_client	urllib3.	r = urllib3.request("GET", url)
+http_client	http.client.	c = http.client.HTTPSConnection(host)
+http_client	wp_remote_get(	$r = wp_remote_get($url);
+http_client	wp_remote_post(	$r = wp_remote_post($url, $args);
+http_client	Http::get(	$r = Http::get($url);
+http_client	Http::post(	$r = Http::post($url, $data);
+http_client	$http->	$r = $http->get($url);

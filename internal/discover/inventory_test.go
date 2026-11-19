@@ -33,21 +33,51 @@ func TestClassify(t *testing.T) {
 		{"build/web.dockerfile", "", Entry{Container: container(t, "dockerfile")}},
 		{"docker-compose.yml", "", Entry{Container: container(t, "compose")}},
 		// Shebangs only for extensionless files, through env and its flags.
+		{"app/gui.pyw", "", py},
 		{"bin/serve", "#!/usr/bin/env python3.12\nimport os\n", py},
 		{"bin/serve", "#!/usr/bin/env -S node --no-warnings\n", Entry{Language: lang(t, "javascript")}},
+		{"bin/serve", "#!/usr/bin/nodejs\n", Entry{Language: lang(t, "javascript")}},
+		{"bin/serve", "#!/usr/bin/env pypy3\n", py},
+		{"bin/serve", "#!/usr/bin/python3.12-dbg\n", py},
+		{"bin/serve", "#!/usr/bin/env VAR=1 OTHER=2 python3\n", py},
+		{"bin/serve", utf8BOM + "#!/usr/bin/env ruby\n", Entry{Language: lang(t, "ruby")}},
+		{"bin/serve", "#!/usr/bin/env ts-node\n", Entry{Language: lang(t, "typescript")}},
+		{"bin/serve", "#!/usr/bin/php8.1\n", Entry{Language: lang(t, "php")}},
+		{"bin/.deploy", "#!/usr/bin/env python3\n", py},
 		{"bin/serve", "#!/bin/sh\n", Entry{}},
+		{"bin/serve", "#!/usr/bin/env VAR=1\n", Entry{}},
+		{"bin/serve", "#!\n", Entry{}},
 		{"bin/serve.txt", "#!/usr/bin/python\n", Entry{}},
 		{"bin/serve", "no shebang", Entry{}},
-		// Not source: no rule, or binary.
+		{"bin/serve", " #!/usr/bin/python\n", Entry{}},
+		// Not source: no rule.
 		{"README.md", "", Entry{}},
 		{"dockerfile", "", Entry{}}, // exact names match with case
-		{"app/main.py", "abc\x00def", Entry{}},
-		{"app/main.py", strings.Repeat("a", binaryProbeBytes) + "\x00", py},
+		// A NUL never changes the class (L3): the caller lists it not read.
+		{"app/main.py", "abc\x00def", py},
+		{"bin/serve", "#!/usr/bin/python\n\x00", py},
 		{"package.json", "\x00", Entry{Manifest: manifest(t, "npm")}},
 	}
 	for _, tt := range tests {
 		if got := inv.classify(tt.name, []byte(tt.content)); got != tt.want {
 			t.Errorf("classify(%q, %.20q) = %+v, want %+v", tt.name, tt.content, got, tt.want)
+		}
+	}
+}
+
+func TestHasNUL(t *testing.T) {
+	tests := []struct {
+		content string
+		want    bool
+	}{
+		{"", false},
+		{"abc\x00def", true},
+		{strings.Repeat("a", binaryProbeBytes-1) + "\x00", true},
+		{strings.Repeat("a", binaryProbeBytes) + "\x00", false},
+	}
+	for _, tt := range tests {
+		if got := hasNUL([]byte(tt.content)); got != tt.want {
+			t.Errorf("hasNUL(%d bytes) = %v, want %v", len(tt.content), got, tt.want)
 		}
 	}
 }

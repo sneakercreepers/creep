@@ -44,7 +44,8 @@ func containsHit(hits []hit, line uint32, kind SinkKind) bool {
 
 // F7: the identifier rule applies only to signatures that start with an
 // identifier byte; one that starts with punctuation, like ".raw(", matches
-// after any byte.
+// after any byte. A signature ending in "(" after an identifier byte also
+// takes spaces or tabs before the "(", never a line break.
 func TestSignatureBoundary(t *testing.T) {
 	tests := []struct {
 		token, line string
@@ -66,6 +67,16 @@ func TestSignatureBoundary(t *testing.T) {
 		{"$where", "{ $where: f }", true},
 		{"$where", "x$where", true},
 		{"%x(", "o = %x(ls)", true},
+		{"exec(", "exec (cmd)", true},
+		{"exec(", "cp.exec\t (cmd)", true},
+		{"os.system(", "os.system (cmd)", true},
+		{"Process.Start(", "Process.Start (p)", true},
+		{"exec(", "executor (cmd)", false},
+		{"exec(", "exec x(cmd)", false},
+		{"exec(", "exec\n(cmd)", false},
+		{"exec(", "exec ", false},
+		{"system \"", "system \"ls\"", true},
+		{"system \"", "system  \"ls\"", false},
 	}
 	for _, tt := range tests {
 		s, err := parseSignature("sql\t" + tt.token + "\tfixture")
@@ -128,18 +139,24 @@ func TestParseTripwireRejects(t *testing.T) {
 }
 
 // BenchmarkTripwire measures the documented worst case: a file at
-// redact.MaxFileBytes. Short lines dense with near-misses make every row
-// search every line; one long line of repeated near-misses makes the
-// bounded signatures resume after each occurrence.
+// redact.MaxFileBytes. Empty and one-byte lines were the slow shape of a
+// per-line matcher; near-misses make the searches resume after each
+// rejected occurrence; blanks test the call skip; dense hits test the
+// per-row cap.
 func BenchmarkTripwire(b *testing.B) {
 	rows, err := loadTripwire()
 	if err != nil {
 		b.Fatal(err)
 	}
 	shapes := map[string][]byte{
-		"short lines": fill("fopen(x) reexecute(y) xspawn(z)\n"),
-		"one line":    fill("xopen(xexec(xeval(xsystem("),
-		"code":        fill("    rows = db.execute(query).fetchall()\n"),
+		"empty lines":  fill("\n"),
+		"1-byte lines": fill("x\n"),
+		"x( lines":     fill("x(\n"),
+		"short lines":  fill("fopen(x) reexecute(y) xspawn(z)\n"),
+		"one line":     fill("xopen(xexec(xeval(xsystem("),
+		"blanks":       fill("exec        x"),
+		"hits":         fill("os.system(x)\n"),
+		"code":         fill("    rows = db.execute(query).fetchall()\n"),
 	}
 	for name, text := range shapes {
 		b.Run(name, func(b *testing.B) {

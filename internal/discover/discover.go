@@ -128,9 +128,11 @@ func (r *run) addFile(ctx context.Context, i int) {
 	e := r.inv.classify(w.path, content)
 	w.file.Language, w.file.Manifest, w.file.Container = e.Language, e.Manifest, e.Container
 	switch {
+	case readErr != nil && (e.Language != 0 || r.inv.needsContent(w.path)):
+		w.fail(CoverageNotRead, ReasonReadFailed)
 	case e.Language == 0:
 		w.file.Coverage = CoverageNotSource
-	case readErr != nil:
+	case hasNUL(content):
 		w.fail(CoverageNotRead, ReasonReadFailed)
 	default:
 		r.addSource(ctx, i, content)
