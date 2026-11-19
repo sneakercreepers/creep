@@ -30,13 +30,13 @@ const goldenUser = `model:
   tier: large
 scanners:
   enabled: [gitleaks, semgrep]
+report:
+  formats: [sarif]
 `
 
 const goldenProject = `# committed in the repository
 gates:
   pr: probable:medium
-report:
-  formats: [sarif]
 calibration:
   cache_days: 7
 `
@@ -114,7 +114,7 @@ func TestConfigExplainGolden(t *testing.T) {
 }
 
 func TestConfigExplainJSON(t *testing.T) {
-	configEnv(t, "", "", "output:\n  format: json\n")
+	configEnv(t, "", "output:\n  format: json\n", "")
 	code, stdout, stderr := run("config", "explain")
 	if code != exitcode.OK {
 		t.Fatalf("exit code = %d\nstderr: %s", code, stderr)

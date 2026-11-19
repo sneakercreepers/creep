@@ -170,12 +170,13 @@ Layers, later overriding earlier: built-in defaults → org policy (`CREEP_POLIC
 
 The project file comes from the repository being scanned, so it is untrusted. It **cannot**:
 
-- choose where code goes or what reads it: `model.contract`, `model.endpoint`, `model.name`, `model.preset`, `model.run`, `model.env`, `egress.allow`;
+- choose where code goes or what reads it: `model.contract`, `model.endpoint`, `model.name`, `model.preset`, `model.run`, `model.env`, `egress.allow`, `model.tier` (unused today: the scan takes the tier from calibration; refused so a future forced-tier option cannot come from the repository);
 - choose the sandbox (`sandbox.enabled`, `sandbox.runtime`) or the scanners (`scanners.enabled`, not even to remove one);
-- loosen a gate (`gates.pr` and `gates.nightly` may only get stricter) or grant consent;
+- choose what creep writes or prints: `report.formats` and `output.format`, so a CI step that uploads `.creep/report.sarif` or reads `report.json` or the terminal output always gets its input;
+- loosen a gate or grant consent: `gates.pr` and `gates.nightly` may only get stricter than the stricter of the built-in gate, the policy limit and the gate the layers before it set (policy defaults, the user file), so a repository cannot hand back the built-in gate to an operator who tightened it;
 - raise a limit: `budget.max_tokens`, `budget.max_calls`, `model.timeout_seconds`, `model.max_output_bytes` and `calibration.cache_days` may only be lowered.
 
-Any of these is a configuration error (exit `2`) that names the project file. A lower limit cannot make a pull request pass with less checked: work skipped for budget, a call refused by the budget and a timed-out model call each make the run incomplete (exit `4`). Removing a scanner would leave a complete run without its classes, so the project file cannot set `scanners.enabled` at all.
+Any of these is a configuration error (exit `2`) that names the project file and, for a gate or a limit, the layer that set the value it would loosen. A lower limit cannot make a pull request pass with less checked: work skipped for budget, a call refused by the budget and a timed-out model call each make the run incomplete (exit `4`). Removing a scanner would leave a complete run without its classes, so the project file cannot set `scanners.enabled` at all.
 
 ### Optional scanners
 

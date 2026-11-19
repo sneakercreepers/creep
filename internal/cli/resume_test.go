@@ -87,12 +87,13 @@ func TestResumeFailsClosed(t *testing.T) {
 	}
 }
 
-// isolateUserConfig points os.UserConfigDir at a temporary directory, so
-// tests never read or create the developer's real state secret.
+// isolateUserConfig points os.UserConfigDir and os.UserHomeDir at a
+// temporary directory, so tests never read or create the developer's real
+// state secret or read their ~/.creep/config.yaml (USERPROFILE on Windows).
 func isolateUserConfig(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	for _, v := range []string{"XDG_CONFIG_HOME", "AppData", "HOME"} {
+	for _, v := range []string{"XDG_CONFIG_HOME", "AppData", "HOME", "USERPROFILE"} {
 		t.Setenv(v, dir)
 	}
 }

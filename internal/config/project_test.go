@@ -6,16 +6,20 @@ import (
 	"testing"
 )
 
-// Protection (pentest P2, #62): the scanned repository cannot pick the model
-// or how it is reached, opt the operator into the sandbox, or choose the
-// scanners, even when it restates the default; operator layers still can.
+// Protection (pentest P2, #62, #250): the scanned repository cannot pick the
+// model, its tier or how it is reached, opt the operator into the sandbox,
+// choose the scanners, or drop the reports and output a CI step consumes,
+// even when it restates the default; operator layers still can.
 func TestProjectCannotChooseModelOrSandbox(t *testing.T) {
 	tests := map[string]string{
 		"model.name":       "model:\n  name: o1-pro\n",
 		"model.contract":   "model:\n  contract: anthropic\n",
+		"model.tier":       "model:\n  tier: medium\n",
 		"sandbox.enabled":  "sandbox:\n  enabled: true\n",
 		"sandbox.runtime":  "sandbox:\n  runtime: podman\n",
 		"scanners.enabled": "scanners:\n  enabled: []\n",
+		"report.formats":   "report:\n  formats: [json]\n",
+		"output.format":    "output:\n  format: text\n",
 	}
 	for key, yaml := range tests {
 		t.Run(key, func(t *testing.T) {
@@ -23,6 +27,11 @@ func TestProjectCannotChooseModelOrSandbox(t *testing.T) {
 			want := fmt.Sprintf(`project "creep.yaml": key %q cannot be set in the project file`, key)
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("err = %v, want containing %q", err, want)
+			}
+			for _, reason := range []string{"which model reads it and how", "whether the sandbox runs it", "which reports creep writes and prints", "set it in the user file, --config or policy"} {
+				if !strings.Contains(err.Error(), reason) {
+					t.Errorf("message lacks %q: %v", reason, err)
+				}
 			}
 			if _, err := Load(Inputs{User: file("u", yaml)}); err != nil {
 				t.Fatalf("user file: %v", err)

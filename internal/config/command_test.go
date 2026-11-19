@@ -29,7 +29,7 @@ func TestProjectCannotChooseModelCommand(t *testing.T) {
 // policy lock keeps the organization's command over the user's.
 func TestModelCommandLayers(t *testing.T) {
 	user := file("u", "model:\n  contract: command\n  run: claude -p --tools \"\"\n  env: [ANTHROPIC_API_KEY]\n")
-	r, err := Load(Inputs{User: user, Project: file("creep.yaml", "model:\n  tier: large\n  timeout_seconds: 60\n")})
+	r, err := Load(Inputs{User: user, Project: file("creep.yaml", "model:\n  timeout_seconds: 60\n")})
 	if err != nil {
 		t.Fatal(err)
 	}

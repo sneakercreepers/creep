@@ -20,7 +20,7 @@ func (s *state) checkProjectKeys(c *Config, keys []string, src string) error {
 func (s *state) checkProjectKey(c *Config, k, src string) error {
 	switch {
 	case projectForbidden[k]:
-		return fmt.Errorf("%s: key %q cannot be set in the project file, because the scanned repository must not choose where its code is sent, which model reads it, how it is run or which scanners check it; set it in the user file, --config or policy", src, k)
+		return fmt.Errorf("%s: key %q cannot be set in the project file, because the scanned repository must not choose where its code is sent, which model reads it and how, whether the sandbox runs it, which scanners check it, or which reports creep writes and prints; set it in the user file, --config or policy", src, k)
 	case slices.Contains(projectLowerOnly, k):
 		return s.checkProjectCeiling(c, k, src)
 	}

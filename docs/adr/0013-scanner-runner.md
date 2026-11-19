@@ -5,6 +5,7 @@
 - **Deciders:** @Ludocius
 - **Changes:** the exec rule in `internal/tools/budget` (one new package, `internal/scanrun`, matched exactly, and one `syscallAllowed` file for its process group); the JSON report schema v1 (`coverage.scanners[].status` gains `evaluated` and `failed`, amended additively as ADR 0009 allows before the first release); the Markdown and SARIF scanner sections and the `creep scan` text summary; the `scanners.enabled` project-file rule
 - **Qualifies:** [ADR 0010](0010-optional-scanners-detect-only.md) (Consequences)
+- **Amended by:** #62 (2026-11-19)
 
 ## Context
 

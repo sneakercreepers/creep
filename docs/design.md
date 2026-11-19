@@ -40,7 +40,7 @@ No provider-specific code in the core. Presets are embedded data in `internal/pr
 - Only targets built from local source; no `--url`.
 - Secrets always redacted before the gateway sends code; `egress.log` always on. Exception: the `codex` and `gemini` presets can read host files the model asks for, outside redaction (`host_reads`, ADR 0015, #229); creep warns at `doctor` and scan start.
 - The planner never reads code.
-- The project file (`./creep.yaml`) never loosens a CI gate, grants consent, chooses the model command (`model.contract`, `model.run`, `model.env`, `model.preset`) or enables a scanner.
+- The project file (`./creep.yaml`) never loosens a CI gate below the built-in, policy-limit or inherited gate, grants consent or raises a limit (`budget.*`, `model.timeout_seconds`, `model.max_output_bytes`, `calibration.cache_days` may only be lowered), and cannot set `model.contract`, `model.endpoint`, `model.name`, `model.tier`, `model.run`, `model.env`, `model.preset`, `egress.allow`, `sandbox.enabled`, `sandbox.runtime`, `scanners.enabled`, `report.formats` or `output.format`.
 
 Each protection has a test that is proven able to fail, run by the required CI job `protections` (#17).
 

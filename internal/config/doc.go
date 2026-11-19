@@ -22,13 +22,16 @@
 //   - A key the policy locks cannot be set by any later layer.
 //   - A gate looser than the policy limit is rejected.
 //   - The project file may only make gates stricter: a project gates.pr or
-//     gates.nightly looser than the built-in default (or the policy limit)
-//     is rejected, so a pull request cannot disable the gate that judges it.
+//     gates.nightly looser than the built-in default, the policy limit or
+//     the gate the layers before it set (policy defaults, user file) is
+//     rejected, so a pull request cannot loosen the gate that judges it.
 //     Operator layers (user file, --config, flags, policy) may still loosen.
 //   - The project file comes from the repository being scanned, which is
 //     untrusted, so it cannot set where code is sent (model.endpoint,
-//     egress.allow) or which program receives it (model.run, model.env,
-//     model.preset, and model.name for a preset that passes it to the CLI).
+//     egress.allow), which program receives it (model.run, model.env,
+//     model.preset, model.contract, model.name), the model tier, the
+//     sandbox, the scanners or the report outputs (projectForbidden), and
+//     may only lower the operator's limits (projectLowerOnly).
 //     A preset (internal/presets) resolves into model.run and contract
 //     command after every layer has applied (preset.go).
 //   - Consent to send code to an endpoint is not a config key: only the
