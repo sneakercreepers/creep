@@ -21,13 +21,14 @@
 # provider; but tools, policies and include directories set in
 # ~/.gemini/settings.json are outside the preset, and the canary catches
 # writes and commands, not reads. Gemini also reads files above its working
-# directory: the first .env up the tree and, when a parent holds a .git,
-# GEMINI.md files up to it. On a shared machine keep TMPDIR private, so no
-# other user can plant them above creep's temp directory.
-# Credentials: GEMINI_API_KEY (a Google AI Studio key) declared in model.env;
-# a planted .env cannot replace a variable that is already set. A personal
-# Google login does not work: the server answers "This client is no longer
-# supported for Gemini Code Assist for individuals".
+# directory (the first .env up the tree, GEMINI.md files up to a .git); the
+# gateway puts that directory under the user's private cache directory, not
+# the system temp directory, so only the user's own files (~/.env) are above
+# it.
+# Credentials: GEMINI_API_KEY (a Google AI Studio key) declared in model.env.
+# A personal Google login does not work: the server answers "This client is
+# no longer supported for Gemini Code Assist for individuals". Google AI Pro
+# and Ultra moved to Antigravity CLI, which has no preset (ADR 0015).
 version: 1
 name: gemini
 description: Gemini CLI in headless mode with approvals pinned to default, no extensions and no MCP servers.
@@ -40,5 +41,5 @@ tools_off:
   - [--allowed-mcp-server-names, creep-no-mcp-server]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply, and a .env or GEMINI.md planted above its temp directory is read
+host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply, and it reads ~/.env and ~/.gemini/.env
 verified: false

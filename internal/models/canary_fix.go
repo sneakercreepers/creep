@@ -15,10 +15,7 @@ func canaryFix(program string, args []string) string {
 	case "gemini":
 		return geminiFix(args)
 	case "codex":
-		if hasValue(args, "read-only", "--sandbox", "-s") {
-			return "it already has --sandbox read-only; check ~/.codex/config.toml for tools or MCP servers"
-		}
-		return "add --sandbox read-only to the codex exec command"
+		return codexFix(args)
 	case "llm":
 		return removeFix(args, "-T", "--tool", "--functions", "--td", "--tools-debug")
 	case "ollama":
@@ -40,6 +37,27 @@ func claudeFix(args []string) string {
 		return `it already has --tools "" and --strict-mcp-config; check ~/.claude settings and hooks`
 	}
 	return "add " + strings.Join(missing, " and ") + " to the claude command"
+}
+
+// codexFix names the codex preset's tools-off flags (#229) missing from a
+// codex exec command line.
+func codexFix(args []string) string {
+	var missing []string
+	if !hasValue(args, "read-only", "--sandbox", "-s") {
+		missing = append(missing, "--sandbox read-only")
+	}
+	if !slices.Contains(args, "--ignore-user-config") {
+		missing = append(missing, "--ignore-user-config")
+	}
+	for _, o := range []string{"features.shell_tool=false", "features.view_image=false"} {
+		if !hasValue(args, o, "-c", "--config") {
+			missing = append(missing, "-c "+o)
+		}
+	}
+	if len(missing) == 0 {
+		return "it already has --sandbox read-only, --ignore-user-config and the -c tool overrides; check the codex version and ~/.codex/AGENTS.md"
+	}
+	return "add " + strings.Join(missing, " and ") + " to the codex exec command"
 }
 
 // geminiFix: --approval-mode default is what the gemini preset (#7) sets to

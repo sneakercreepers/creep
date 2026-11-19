@@ -11,27 +11,38 @@
 #                           switches the command execution tools off (config
 #                           reference: "Enable command execution tools"), the
 #                           path by which Codex could read files under HOME.
+#   -c features.view_image=false
+#                           switches off view_image, which opens local images
+#                           by path.
+#   -c project_root_markers=[]
+#                           "skip searching parent directories and treat the
+#                           current working directory as the project root"
+#                           (advanced config), so no AGENTS.md or .codex/
+#                           above the temp directory is read.
 #   --skip-git-repo-check   creep runs the CLI in an empty temp directory,
 #                           which is not a Git repository.
 #   --ephemeral             keeps no session rollout files on disk.
 #   --color never           no escape sequences in the reply.
-# Unverified (medium confidence): --ignore-user-config and
-# features.shell_tool are documented but not yet checked with the real CLI.
-# A renamed key could be ignored, leaving the shell on under the read-only
-# sandbox. So host_reads stays unbounded until the manual check confirms
-# them (#229). Credentials: CODEX_API_KEY declared in model.env, or the
-# login saved under CODEX_HOME.
+# Still read: the login and the global instructions under CODEX_HOME
+# (~/.codex/AGENTS.md), which are the operator's own files.
+# Unverified (medium confidence): --ignore-user-config and the -c overrides
+# are documented but not yet checked with the real CLI. A renamed key could
+# be ignored, leaving the shell on under the read-only sandbox. So
+# host_reads stays unbounded until the manual check confirms them (#229).
+# Credentials: CODEX_API_KEY declared in model.env, or the login saved
+# under CODEX_HOME.
 version: 1
 name: codex
-description: OpenAI Codex CLI exec mode in a read-only sandbox without shell tools or user config, prompt on stdin.
+description: OpenAI Codex CLI exec mode in a read-only sandbox without shell, image tools or user config, prompt on stdin.
 docs: https://developers.openai.com/codex/noninteractive
 program: codex
-args: [exec, --sandbox, read-only, --ignore-user-config, -c, features.shell_tool=false, --skip-git-repo-check, --ephemeral, --color, never, "-"]
+args: [exec, --sandbox, read-only, --ignore-user-config, -c, features.shell_tool=false, -c, features.view_image=false, -c, "project_root_markers=[]", --skip-git-repo-check, --ephemeral, --color, never, "-"]
 tools_off:
   - [--sandbox, read-only]
   - [--ignore-user-config]
   - [-c, features.shell_tool=false]
+  - [-c, features.view_image=false]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: the flags that turn off its shell tool and ~/.codex/config.toml are not yet checked with the real CLI, so assume it can still read files such as ~/.ssh
+host_reads_detail: the flags that turn off its shell and image tools and ~/.codex/config.toml are not yet checked with the real CLI, so assume it can still read files such as ~/.ssh
 verified: false

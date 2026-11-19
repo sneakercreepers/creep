@@ -110,7 +110,7 @@ func TestPresetArgsPinned(t *testing.T) {
 	tests := map[string][]string{
 		"claude-code": {"-p", "--tools", "", "--strict-mcp-config", "--output-format", "text"},
 		"gemini":      {"--skip-trust", "--approval-mode", "default", "--extensions", "none", "--allowed-mcp-server-names", "creep-no-mcp-server", "--output-format", "text"},
-		"codex":       {"exec", "--sandbox", "read-only", "--ignore-user-config", "-c", "features.shell_tool=false", "--skip-git-repo-check", "--ephemeral", "--color", "never", "-"},
+		"codex":       {"exec", "--sandbox", "read-only", "--ignore-user-config", "-c", "features.shell_tool=false", "-c", "features.view_image=false", "-c", "project_root_markers=[]", "--skip-git-repo-check", "--ephemeral", "--color", "never", "-"},
 		"ollama":      {"run", ModelPlaceholder, "--format", "json"},
 	}
 	for name, want := range tests {
