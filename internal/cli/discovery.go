@@ -14,6 +14,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/discover"
+	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
@@ -76,7 +77,7 @@ type fileMarks struct {
 func (m *fileMarks) readFile(path string) ([]byte, error) {
 	data, err := m.read(path)
 	if err != nil {
-		return nil, err
+		return data, err // an oversized file's head, for discovery to sniff
 	}
 	if why, err := repofile.IgnoreReason(path, data); err == nil && why != 0 {
 		m.marks[path] = why
@@ -84,10 +85,38 @@ func (m *fileMarks) readFile(path string) ([]byte, error) {
 	return data, nil
 }
 
+// wholeFileTarget names where discovery sends: the endpoint, or for a
+// model CLI its program, preset and consent key, which egress.log uses.
+func wholeFileTarget(m config.Model, cmd *gateway.Command) string {
+	if m.Contract != "command" {
+		return "endpoint " + m.Endpoint
+	}
+	if cmd == nil {
+		return "the model command (model.run)"
+	}
+	target := "the model command " + cmd.Program()
+	if m.Preset != "" {
+		target += " (preset " + m.Preset + ")"
+	}
+	return target + " at " + cmd.Endpoint()
+}
+
 // readRepoFile reads one repository file for discovery or the reader, at
 // most redact.MaxFileBytes: a larger file could not be redacted whole.
 func readRepoFile(root *os.Root) func(string) ([]byte, error) {
-	return func(path string) ([]byte, error) { return readInRoot(root, path, redact.MaxFileBytes) }
+	return func(path string) ([]byte, error) {
+		data, err := readInRoot(root, path, redact.MaxFileBytes)
+		if !errors.Is(err, errFileTooLarge) {
+			return data, err
+		}
+		// Only the head is read, so discovery can tell source by its
+		// shebang or bytes and list it too_large; it is never sent.
+		head, headErr := readHeadInRoot(root, path, discover.HeadBytes)
+		if headErr != nil {
+			head = nil
+		}
+		return head, fmt.Errorf("%w: %w", errFileTooLarge, redact.ErrFileTooLarge)
+	}
 }
 
 // walk lists the repository and says, before any model call, how many
@@ -100,7 +129,7 @@ func (s *session) walk(ctx context.Context, stderr io.Writer) (repoFiles, error)
 		return repoFiles{}, err
 	}
 	if s.mode() != state.ModeReplay {
-		noteWholeFiles(stderr, s.cfg.Model, files.sources())
+		noteWholeFiles(stderr, wholeFileTarget(s.cfg.Model, s.link.command), files.sources())
 	}
 	return files, nil
 }
@@ -108,11 +137,7 @@ func (s *session) walk(ctx context.Context, stderr io.Writer) (repoFiles, error)
 // noteWholeFiles is the scan-start notice: consent per endpoint carries
 // over to discovery's whole-file egress, so the operator is told every
 // time. The count is the walk's, made with no model call.
-func noteWholeFiles(w io.Writer, m config.Model, files int) {
-	target := "endpoint " + m.Endpoint
-	if m.Contract == "command" {
-		target = "the model command (model.run)"
-	}
+func noteWholeFiles(w io.Writer, target string, files int) {
 	fmt.Fprintf(w, "creep scan: discovery sends up to %d whole source files, each redacted, to %s; run creep estimate to see the volume\n",
 		files, escapeControl(target))
 }

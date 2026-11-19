@@ -30,6 +30,9 @@ type Discoverer struct {
 	// refused: a known seed would let a file author predict the canary.
 	Seed [32]byte
 	// Read returns a file's content; the caller opens it without blocking.
+	// For a file over redact.MaxFileBytes it returns an error wrapping
+	// redact.ErrFileTooLarge and, at most, the file's first HeadBytes, so
+	// the head alone says whether a file with no extension is source.
 	Read func(path string) ([]byte, error)
 }
 
@@ -131,21 +134,33 @@ func (r *run) addFile(ctx context.Context, i int) {
 		return
 	}
 	content, readErr := r.d.Read(w.path)
-	if readErr != nil {
+	tooLarge := errors.Is(readErr, redact.ErrFileTooLarge)
+	if readErr != nil && !tooLarge {
 		content = nil
 	}
 	e = r.inv.classify(w.path, content)
 	w.file.Language, w.file.Manifest, w.file.Container = e.Language, e.Manifest, e.Container
 	switch {
-	case readErr != nil:
-		w.fail(CoverageNotRead, ReasonReadFailed)
+	case readErr != nil && (!tooLarge || len(content) == 0):
+		// Unreadable, or too large with no head to sniff: fail closed.
+		w.fail(CoverageNotRead, readFailure(tooLarge))
 	case e.Language == 0:
 		w.file.Coverage = CoverageNotSource
 	case hasNUL(content):
 		w.fail(CoverageNotRead, ReasonReadFailed)
+	case tooLarge:
+		w.fail(CoverageNotRead, ReasonTooLarge)
 	default:
 		r.addSource(ctx, i, content)
 	}
+}
+
+// readFailure is the reason for a file Read refused.
+func readFailure(tooLarge bool) Reason {
+	if tooLarge {
+		return ReasonTooLarge
+	}
+	return ReasonReadFailed
 }
 
 // addSource redacts a source file whole, runs the tripwire on the

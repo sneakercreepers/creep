@@ -2,11 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
@@ -41,6 +43,44 @@ func TestScanEvaluatesAnyLanguage(t *testing.T) {
 			rep, err := readLastReport()
 			if err != nil || len(rep.Coverage.NotEvaluated) != 0 || rep.Findings[0].Status != report.StatusProbable {
 				t.Fatalf("report %+v, %v", rep, err)
+			}
+		})
+	}
+}
+
+// #270 review: a file over redact.MaxFileBytes is opened for its head
+// only. A large extensionless binary or data file is not source, so a run
+// that holds one can still exit 0; large source is listed too_large and
+// the run exits 4.
+func TestScanJudgesOversizedFilesByHead(t *testing.T) {
+	big := strings.Repeat("a", redact.MaxFileBytes)
+	tests := []struct {
+		name, file, src string
+		code            int
+		reason          report.SkipReason // "" when nothing is listed
+	}{
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00" + big, exitcode.OK, ""},
+		{"data with no extension", "data/dump", "id,name\n" + big, exitcode.OK, ""},
+		{"script with no extension", "bin/serve", "#!/usr/bin/env python3\n" + big, exitcode.Incomplete, report.SkipTooLarge},
+		{"named source", "app/big.py", "x = 1\n" + big, exitcode.Incomplete, report.SkipTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := scanRepo(t, map[string]string{tt.file: tt.src, "app.py": "x = 1\n"}, "")
+			code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--config", cfg)
+			if code != tt.code {
+				t.Fatalf("exit %d, want %d\n%s\n%s", code, tt.code, out, errOut)
+			}
+			rep, err := readLastReport()
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []report.NotEvaluated{}
+			if tt.reason != "" {
+				want = append(want, report.NotEvaluated{Path: tt.file, Reason: tt.reason})
+			}
+			if !slices.Equal(rep.Coverage.NotEvaluated, want) {
+				t.Errorf("not evaluated = %+v, want %+v", rep.Coverage.NotEvaluated, want)
 			}
 		})
 	}

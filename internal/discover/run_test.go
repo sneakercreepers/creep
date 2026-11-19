@@ -322,3 +322,47 @@ func TestRunRejectsConfig(t *testing.T) {
 		}
 	}
 }
+
+// A file over redact.MaxFileBytes is judged by its head alone (#270
+// review): an extensionless file whose head is not source is not_source,
+// so a large binary or data file never makes the run incomplete, while
+// source of any size is listed too_large. With no head to sniff, an
+// extensionless file fails closed.
+func TestOversizedFileIsJudgedByHead(t *testing.T) {
+	tooLarge := fmt.Errorf("read: %w", redact.ErrFileTooLarge)
+	tests := []struct {
+		name   string
+		path   string
+		head   string
+		cov    Coverage
+		reason Reason
+	}{
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\x00", CoverageNotSource, ReasonNone},
+		{"data with no extension", "data/dump", "id,name\n1,a\n", CoverageNotSource, ReasonNone},
+		{"script with no extension", "bin/serve", "#!/usr/bin/env python3\nimport os\n", CoverageNotRead, ReasonTooLarge},
+		{"script with a NUL", "bin/serve", "#!/usr/bin/env node\n\x00", CoverageNotRead, ReasonReadFailed},
+		{"named source", "app/big.py", "x = 1\n", CoverageNotRead, ReasonTooLarge},
+		{"named source, no head", "app/big.py", "", CoverageNotRead, ReasonTooLarge},
+		{"no extension, no head", "bin/serve", "", CoverageNotRead, ReasonTooLarge},
+		{"no rule names it", "notes.md", "os.system(x)\n", CoverageNotSource, ReasonNone},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var prompts []string
+			d := Discoverer{
+				Redactor: newRedactor(t), Model: fakeClient(t, honestReply, &prompts), Tier: TierL, Seed: testSeed,
+				Read: func(string) ([]byte, error) { return []byte(tt.head), tooLarge },
+			}
+			res, err := d.Run(context.Background(), []string{tt.path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f := fileOf(t, res, 0); f.Coverage != tt.cov || f.Reason != tt.reason {
+				t.Errorf("file = %+v, want coverage %d reason %q", f, tt.cov, tt.reason)
+			}
+			if len(prompts) != 0 || len(res.Sinks) != 0 {
+				t.Errorf("%d calls and %d sinks, want none: a head is never sent or matched", len(prompts), len(res.Sinks))
+			}
+		})
+	}
+}

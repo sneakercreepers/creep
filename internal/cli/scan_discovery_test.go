@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
+	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/report"
 )
@@ -110,5 +112,37 @@ func TestScanNoticeAndWholeFileCount(t *testing.T) {
 	_, _, errOut = runScanWith(fakeDeps(offlineModel(), calibrate.TierM), "scan", "--replay", "--config", cfg)
 	if strings.Contains(errOut, "discovery sends") {
 		t.Fatalf("replay printed the egress notice: %s", errOut)
+	}
+}
+
+// The notice names where whole files go: the endpoint over HTTP, and for
+// a model CLI its program, preset and the consent key egress.log uses.
+func TestWholeFileTargetNamesTheModel(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := config.Model{Contract: "command", Run: `"` + self + `" -p`, TimeoutSeconds: 60, MaxOutputBytes: 1 << 20}
+	cmd, err := newModelCommand(m, os.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preset := m
+	preset.Preset = "claude-code"
+	tests := []struct {
+		name string
+		m    config.Model
+		cmd  *gateway.Command
+		want string
+	}{
+		{"http", config.Model{Contract: "openai", Endpoint: "https://models.example.invalid/v1"}, nil, "endpoint https://models.example.invalid/v1"},
+		{"command", m, cmd, "the model command " + cmd.Program() + " at " + cmd.Endpoint()},
+		{"preset", preset, cmd, "the model command " + cmd.Program() + " (preset claude-code) at " + cmd.Endpoint()},
+		{"command not built", m, nil, "the model command (model.run)"},
+	}
+	for _, tt := range tests {
+		if got := wholeFileTarget(tt.m, tt.cmd); got != tt.want {
+			t.Errorf("%s: target = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }

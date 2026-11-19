@@ -19,7 +19,7 @@ var languageNames = []string{
 	"python", "javascript", "typescript", "go", "php", "java", "kotlin",
 	"scala", "groovy", "clojure", "ruby", "csharp", "vb", "fsharp", "rust",
 	"elixir", "erlang", "swift", "dart", "perl", "lua", "c", "cpp", "vue",
-	"svelte", "coldfusion",
+	"svelte", "coldfusion", "template",
 }
 
 // canaryLanguage labels the canary section, which is JavaScript.
@@ -76,6 +76,10 @@ var matchNames = []string{"name", "glob", "ext", "shebang"}
 
 // binaryProbeBytes is how much of a source file is searched for a NUL.
 const binaryProbeBytes = 8 << 10
+
+// HeadBytes is how much of a file over redact.MaxFileBytes Read returns:
+// enough for the shebang and the binary probe, never sent anywhere.
+const HeadBytes = binaryProbeBytes
 
 // inventoryTable holds one exact lookup per match kind; globs are a list
 // tried in table order.
