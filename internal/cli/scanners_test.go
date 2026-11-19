@@ -9,8 +9,8 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 const allScanners = "scanners:\n  enabled: [gitleaks, osv-scanner, semgrep]\n"
@@ -81,14 +81,14 @@ func checkReportScanners(t *testing.T, semgrep report.ScannerStatus) {
 		t.Fatal(err)
 	}
 	got := rep.Coverage.Scanners
-	if len(got) != len(static.Scanners()) {
+	if len(got) != len(repofile.Scanners()) {
 		t.Fatalf("report scanners = %+v, want one per scanner", got)
 	}
 	for _, s := range got {
 		if len(s.Classes) == 0 {
 			t.Errorf("scanner %s lists no classes", s.Name)
 		}
-		if s.Name == string(static.ScannerSemgrep) && s.Status != semgrep {
+		if s.Name == string(repofile.ScannerSemgrep) && s.Status != semgrep {
 			t.Errorf("semgrep status %s, want %s", s.Status, semgrep)
 		}
 	}
@@ -97,15 +97,15 @@ func checkReportScanners(t *testing.T, semgrep report.ScannerStatus) {
 // Every scanner maps to classes and every detection state to a report
 // status, by explicit switch; an unknown state is refused.
 func TestScannerMappingIsExhaustive(t *testing.T) {
-	for _, s := range static.Scanners() {
+	for _, s := range repofile.Scanners() {
 		if len(scannerClasses(s)) == 0 {
 			t.Errorf("scanner %s maps to no class", s)
 		}
 	}
-	states := map[static.ScannerState]report.ScannerStatus{
-		static.ScannerNotEnabled: report.ScannerNotEnabled, static.ScannerMissing: report.ScannerMissing,
-		static.ScannerRefused: report.ScannerRefused, static.ScannerFound: report.ScannerNotRun,
-		static.ScannerState(200): report.ScannerRefused,
+	states := map[repofile.ScannerState]report.ScannerStatus{
+		repofile.ScannerNotEnabled: report.ScannerNotEnabled, repofile.ScannerMissing: report.ScannerMissing,
+		repofile.ScannerRefused: report.ScannerRefused, repofile.ScannerFound: report.ScannerNotRun,
+		repofile.ScannerState(200): report.ScannerRefused,
 	}
 	for st, want := range states {
 		if got := scannerStatus(st); got != want {

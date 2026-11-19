@@ -15,8 +15,9 @@ import (
 
 // Scan phases, in pipeline order. --stats prints them by these IDs.
 const (
+	phaseWalk      = "walk"
 	phaseCalibrate = "calibrate"
-	phaseStatic    = "static"
+	phaseDiscover  = "discover"
 	phasePlan      = "plan"
 	phaseRead      = "read"
 	phaseReport    = "report"

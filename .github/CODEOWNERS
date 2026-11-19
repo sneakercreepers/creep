@@ -8,7 +8,8 @@
 /internal/redact/        @Ludocius
 /internal/models/        @Ludocius
 /internal/reader/        @Ludocius
-/internal/static/        @Ludocius
+# Vendor, generated and minified marks, scanner lookup and final-path refusal.
+/internal/repofile/      @Ludocius
 # Discovery sends whole redacted files to the model and decides what is read (ADR 0017).
 /internal/discover/      @Ludocius
 /internal/sandbox/       @Ludocius

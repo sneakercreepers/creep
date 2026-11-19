@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // osvDB lays out a local osv-scanner database under dir, as
@@ -40,23 +40,23 @@ func TestRun(t *testing.T) {
 	t.Setenv("CREEP_API_KEY", "sk-test-must-not-leak")
 	tests := []struct {
 		name     string
-		scanner  static.Scanner
+		scanner  repofile.Scanner
 		mode     string
 		limits   func(*Limits)
 		want     Outcome
 		failure  Failure
 		findings int
 	}{
-		{"gitleaks findings, deduplicated", static.ScannerGitleaks, "findings", nil, Evaluated, FailNone, 2},
-		{"osv-scanner advisories with exit 1", static.ScannerOSV, "findings", nil, Evaluated, FailNone, 2},
-		{"osv-scanner nothing to scan (exit 128)", static.ScannerOSV, "empty", nil, Evaluated, FailNone, 0},
-		{"malformed report", static.ScannerGitleaks, "malformed", nil, Failed, FailMalformed, 0},
-		{"missing report", static.ScannerGitleaks, "noreport", nil, Failed, FailMalformed, 0},
-		{"report over the byte cap", static.ScannerGitleaks, "huge", nil, Failed, FailTooLarge, 0},
-		{"more findings than the cap", static.ScannerGitleaks, "findings", func(l *Limits) { l.MaxFindings = 1 }, Failed, FailTooMany, 0},
-		{"path outside the repository", static.ScannerGitleaks, "outside", nil, Failed, FailPath, 0},
-		{"non-zero exit", static.ScannerGitleaks, "exit3", nil, Failed, FailExit, 0},
-		{"timeout", static.ScannerOSV, "slow", func(l *Limits) { l.Timeout = 500 * time.Millisecond }, Failed, FailTimeout, 0},
+		{"gitleaks findings, deduplicated", repofile.ScannerGitleaks, "findings", nil, Evaluated, FailNone, 2},
+		{"osv-scanner advisories with exit 1", repofile.ScannerOSV, "findings", nil, Evaluated, FailNone, 2},
+		{"osv-scanner nothing to scan (exit 128)", repofile.ScannerOSV, "empty", nil, Evaluated, FailNone, 0},
+		{"malformed report", repofile.ScannerGitleaks, "malformed", nil, Failed, FailMalformed, 0},
+		{"missing report", repofile.ScannerGitleaks, "noreport", nil, Failed, FailMalformed, 0},
+		{"report over the byte cap", repofile.ScannerGitleaks, "huge", nil, Failed, FailTooLarge, 0},
+		{"more findings than the cap", repofile.ScannerGitleaks, "findings", func(l *Limits) { l.MaxFindings = 1 }, Failed, FailTooMany, 0},
+		{"path outside the repository", repofile.ScannerGitleaks, "outside", nil, Failed, FailPath, 0},
+		{"non-zero exit", repofile.ScannerGitleaks, "exit3", nil, Failed, FailExit, 0},
+		{"timeout", repofile.ScannerOSV, "slow", func(l *Limits) { l.Timeout = 500 * time.Millisecond }, Failed, FailTimeout, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,43 +104,43 @@ func TestRunRefusesWithoutStarting(t *testing.T) {
 		want Outcome
 	}{
 		{"semgrep has no offline rules", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerSemgrep, Bin: installFake(t, base, "findings", "semgrep"), Repo: repo}
+			return Job{Scanner: repofile.ScannerSemgrep, Bin: installFake(t, base, "findings", "semgrep"), Repo: repo}
 		}, NotRun},
 		{"osv-scanner without a local database would go online", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo}
 		}, NotRun},
 		{"osv-scanner with a relative database path", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: "db"}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: "db"}
 		}, NotRun},
 		{"osv-scanner with an empty database directory", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: t.TempDir()}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: t.TempDir()}
 		}, NotRun},
 		{"osv-scanner with only an empty all.zip", func(t *testing.T, base, repo string) Job {
 			db := t.TempDir()
 			writeFile(t, filepath.Join(db, "osv-scanner", "npm", "all.zip"), "")
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: db}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: db}
 		}, NotRun},
 		{"osv-scanner with a missing database directory", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: filepath.Join(base, "none")}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: filepath.Join(base, "none")}
 		}, NotRun},
 		{"gitleaks with a repository .gitleaksignore", func(t *testing.T, base, repo string) Job {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "app/config.py:generic-api-key:3\n")
-			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
+			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
 		}, Failed},
 		{"gitleaks with a .gitleaksignore directory", func(t *testing.T, base, repo string) Job {
 			if err := os.Mkdir(filepath.Join(repo, ".gitleaksignore"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
+			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
 		}, Failed},
 		{"osv-scanner database inside the repository", func(t *testing.T, base, repo string) Job {
-			return Job{Scanner: static.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: osvDB(t, repo)}
+			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: osvDB(t, repo)}
 		}, Refused},
 		{"binary inside the repository", func(t *testing.T, _, repo string) Job {
-			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, repo, "findings", "gitleaks"), Repo: repo}
+			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, repo, "findings", "gitleaks"), Repo: repo}
 		}, Refused},
 		{"relative repository", func(t *testing.T, base, _ string) Job {
-			return Job{Scanner: static.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: "repo"}
+			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: "repo"}
 		}, Refused},
 		{"unknown scanner", func(t *testing.T, base, repo string) Job {
 			return Job{Scanner: "curl", Bin: installFake(t, base, "findings", "curl"), Repo: repo}

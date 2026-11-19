@@ -137,19 +137,3 @@ func splitAnySeparator(text string) []string {
 		return r == '\n' || r == '\r' || r == '\f' || r == '\v' || r == 0x85 || r == 0x2028 || r == 0x2029 || r == 0x1b
 	})
 }
-
-func TestEscapeLine(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"\tplain ascii = 1", "\tplain ascii = 1"},
-		{"caf\xc3\xa9 \xe2\x9c\x93", "caf\xc3\xa9 \xe2\x9c\x93"},
-		{"a\rb", "a" + bs + "x0db"},
-		{"\x00\x7f", bs + "x00" + bs + "x7f"},
-		{"\xe2\x80\x8b\xe2\x81\xa6x\xe2\x81\xa9", bs + "u200b" + bs + "u2066x" + bs + "u2069"},
-		{"bad \xc3", "bad " + bs + "xc3"},
-	}
-	for _, tt := range tests {
-		if got := escapeLine(tt.in); got != tt.want {
-			t.Errorf("escapeLine(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}

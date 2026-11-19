@@ -6,10 +6,9 @@ import (
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
-	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // probeKind reports whether the planner accepts a sink of kind k.
@@ -22,60 +21,60 @@ func probeKind(k planner.SinkKind) bool {
 	return err == nil
 }
 
-// Every static.SinkKind (those with a name) maps to a planner kind, every
+// Every discover.SinkKind (those with a name) maps to a planner kind, every
 // kind the planner accepts is the image of one, and an unknown kind fails
 // closed. A kind added on either side fails here until it is mapped or
-// named in pendingKinds (#201 added static.SinkNoSQL; #212 mapped it).
+// named in pendingKinds (#201 added SinkNoSQL; #212 mapped it).
 func TestSinkKindMappingIsExhaustive(t *testing.T) {
 	mapped := map[planner.SinkKind]bool{}
-	for k := static.SinkKind(1); k != 0; k++ {
+	for k := discover.SinkKind(1); k != 0; k++ {
 		got, err := plannerKind(k)
 		if k.String() == "unknown" {
 			if !errors.Is(err, errUnmapped) {
-				t.Errorf("unknown static kind %d mapped to %d", k, got)
+				t.Errorf("unknown discover kind %d mapped to %d", k, got)
 			}
 			continue
 		}
 		if issue, pending := pendingKinds[k]; pending {
 			if !errors.Is(err, errUnmapped) || readClasses[kindClass(k)] {
-				t.Errorf("static kind %s is pending (%s) but maps to %d; remove it from pendingKinds", k, issue, got)
+				t.Errorf("discover kind %s is pending (%s) but maps to %d; remove it from pendingKinds", k, issue, got)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("static kind %s has no planner mapping (or add it to pendingKinds with its issue)", k)
+			t.Errorf("discover kind %s has no planner mapping (or add it to pendingKinds with its issue)", k)
 			continue
 		}
 		if mapped[got] {
-			t.Errorf("static kind %s maps to planner kind %d twice", k, got)
+			t.Errorf("discover kind %s maps to planner kind %d twice", k, got)
 		}
 		mapped[got] = true
 		if kindClass(k) == k.String() || !readClasses[kindClass(k)] {
-			t.Errorf("static kind %s has no report class", k)
+			t.Errorf("discover kind %s has no report class", k)
 		}
 	}
 	for k := planner.SinkKind(1); k != 0; k++ {
 		if probeKind(k) && !mapped[k] {
-			t.Errorf("planner kind %d is accepted but no static kind maps to it", k)
+			t.Errorf("planner kind %d is accepted but no discover kind maps to it", k)
 		}
 	}
 }
 
-// Every named static method bit maps explicitly; every bit the planner
+// Every named discover method bit maps explicitly; every bit the planner
 // accepts is reached; an unknown bit becomes MethodOther, never dropped.
 func TestMethodMappingIsExhaustive(t *testing.T) {
 	var reached planner.Methods
 	for i := range 16 {
-		bit := static.Methods(1) << i
+		bit := discover.Methods(1) << i
 		got, ok := plannerMethod(bit)
-		if bit.String() == "" {
+		if bit&discover.AllMethods == 0 {
 			if ok || plannerMethods(bit) != planner.MethodOther {
 				t.Errorf("unnamed bit %#x mapped to %#x", uint16(bit), uint16(got))
 			}
 			continue
 		}
 		if !ok || got == 0 || got&(got-1) != 0 {
-			t.Errorf("method %s maps to %#x, want one planner bit", bit, uint16(got))
+			t.Errorf("method %#x maps to %#x, want one planner bit", uint16(bit), uint16(got))
 		}
 		reached |= got
 	}
@@ -127,7 +126,7 @@ func TestTierMappingIsExhaustive(t *testing.T) {
 // kind it came from.
 func TestClassMappingIsExhaustive(t *testing.T) {
 	reached := map[reader.Class]bool{}
-	for k := static.SinkKind(1); k != 0; k++ {
+	for k := discover.SinkKind(1); k != 0; k++ {
 		pk, err := plannerKind(k)
 		if err != nil {
 			continue
@@ -166,48 +165,4 @@ func readerReportName(c reader.Class) string {
 		return string(calibrate.ClassSQLi)
 	}
 	return c.String()
-}
-
-// With pendingKinds empty since #212, no real kind reaches the unmapped
-// path; a kind static may add later must still be held out of the planner
-// input and returned for the report, while a NoSQL sink is planned.
-func TestPlannerInputHoldsOutUnmappedKinds(t *testing.T) {
-	g := static.Graph{
-		Routes: []static.Route{{ID: 0, Methods: static.MethodPost}},
-		Sinks: []static.Sink{
-			{ID: 0, Route: 0, Kind: static.SinkNoSQL, DynamicArg: true},
-			{ID: 1, Route: 0, Kind: static.SinkKind(200), DynamicArg: true},
-		},
-	}
-	in, unmapped := plannerInput(g, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1})
-	if len(unmapped) != 1 || unmapped[0] != 1 {
-		t.Fatalf("unmapped %v, want [1]", unmapped)
-	}
-	if len(in.Sinks) != 1 || in.Sinks[0].Kind != planner.SinkNoSQL {
-		t.Fatalf("planner sinks %+v, want the NoSQL sink only", in.Sinks)
-	}
-	plan, err := planner.Build(in)
-	if err != nil || len(plan.Hypotheses) != 1 || plan.Hypotheses[0].Class != planner.ClassNoSQLInjection {
-		t.Fatalf("plan %+v, %v", plan, err)
-	}
-}
-
-// A sink of an unmapped kind stays not evaluated with reason unmapped_kind
-// through planSinks, and that alone makes the run incomplete (exit 4).
-func TestUnmappedKindMakesRunIncomplete(t *testing.T) {
-	rs := repoScan{
-		graph: static.Graph{
-			Routes: []static.Route{{ID: 0, Methods: static.MethodGet}},
-			Sinks:  []static.Sink{{ID: 0, Route: 0, Kind: static.SinkKind(200), DynamicArg: true}},
-		},
-		locs: static.Locations{Files: []string{"app.js"}, Sinks: []static.SinkLocation{{Line: 3}}},
-	}
-	findings := baseFindings(rs)
-	if _, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1}, findings); err != nil {
-		t.Fatal(err)
-	}
-	reason := incompleteReason("", findings, nil)
-	if reason != reasonUnmappedKind || exitcode.ForReport(reason != "", false) != exitcode.Incomplete {
-		t.Fatalf("reason %q, findings %+v", reason, findings)
-	}
 }

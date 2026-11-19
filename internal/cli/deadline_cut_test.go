@@ -17,12 +17,11 @@ import (
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // Protection (#260): past the deadline the slicer reads nothing from disk,
 // and every file it did not slice is still listed. The deadline is a cancel
-// at a fixed point, never a wall-clock race: before slicing, every parsed
+// at a fixed point, never a wall-clock race: before slicing, every discovered
 // file and its sinks are budget; during the first file's redaction, that
 // file is redact_failed (its sinks file_not_scanned) and the files after it
 // are budget, unread. No model call is made either way (the stage has no
@@ -56,7 +55,7 @@ func TestDeadlineListsUnreachedFilesAsBudget(t *testing.T) {
 }
 
 // walkFlaskFiles writes the vulnerable Flask app under each name and walks
-// the repository with no deadline.
+// the repository and runs discovery on it with no deadline.
 func walkFlaskFiles(t *testing.T, names ...string) repoScan {
 	t.Helper()
 	files := map[string]string{}
@@ -64,19 +63,9 @@ func walkFlaskFiles(t *testing.T, names ...string) repoScan {
 		files[n] = "@flask"
 	}
 	scanRepo(t, files, "")
-	root, err := os.OpenRoot(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = root.Close() })
-	p, err := static.NewParser(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer p.Close(context.Background())
-	rs, err := walkRepo(context.Background(), root, p)
-	if err != nil || len(rs.gaps) != 0 || len(rs.graph.Sinks) == 0 {
-		t.Fatalf("walk: %v, gaps %+v, %d sinks", err, rs.gaps, len(rs.graph.Sinks))
+	rs := discoverHere(t, &fakeModel{}, calibrate.TierM)
+	if len(rs.gaps) != 0 || len(rs.res.Sinks) == 0 {
+		t.Fatalf("discovery: gaps %+v, %d sinks", rs.gaps, len(rs.res.Sinks))
 	}
 	return rs
 }
@@ -173,10 +162,10 @@ func TestVendorProofsStopAtDeadline(t *testing.T) {
 	}
 }
 
-// A walk the deadline cut says nothing about the repository's routes: the
+// A discovery the deadline cut says nothing about the repository's routes: the
 // report names the deadline, never "no routes found".
-func TestDeadlineCutWalkIsNotNoRoutes(t *testing.T) {
-	scanRepo(t, map[string]string{"a.py": craftedSlowApp(t, true), "b.py": "@flask"}, "")
+func TestDeadlineCutDiscoveryIsNotNoRoutes(t *testing.T) {
+	scanRepo(t, map[string]string{"a.py": craftedSlowApp(t), "b.py": "@flask"}, "")
 	setOperatorPolicy(t)
 	writeUserConfig(t, "budget:\n  max_seconds: 1\n")
 	code, out, errOut := runScanWith(deadlineDeps(&fakeModel{}, false), "scan")
@@ -189,7 +178,7 @@ func TestDeadlineCutWalkIsNotNoRoutes(t *testing.T) {
 	}
 	for name, text := range map[string]string{"stdout": out, "report.md": string(md)} {
 		if strings.Contains(text, "routes found") || strings.Contains(text, "found no route") {
-			t.Errorf("%s says no routes after a cut walk:\n%s", name, text)
+			t.Errorf("%s says no routes after a cut discovery:\n%s", name, text)
 		}
 	}
 	if !strings.Contains(out, "INCOMPLETE RUN (reason budget)") || !strings.Contains(errOut, "scan deadline of 1 s") {
@@ -216,7 +205,7 @@ func TestEstimateDeadlineFailsClosed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := "@flask"
 			if tt.partial {
-				app = craftedSlowApp(t, false)
+				app = craftedSlowApp(t)
 			}
 			cfg := scanRepo(t, map[string]string{"app.py": app}, tt.config)
 			start := time.Now()

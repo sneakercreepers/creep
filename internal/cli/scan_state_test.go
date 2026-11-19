@@ -134,7 +134,7 @@ func TestScanPlantedCacheEntries(t *testing.T) {
 			}
 			live := &fakeModel{verdict: real}
 			code, out, errOut = runScanWith(fakeDeps(live, calibrate.TierM), "scan", "--config", cfg)
-			if code != exitcode.GateExceeded || out != recorded || live.calls != entries {
+			if code != exitcode.GateExceeded || out != recorded || live.calls != entries-1 { // one entry is the discovery seed, not a model call
 				t.Fatalf("live: exit %d after %d calls for %d entries; want 1, the model's verdicts\n%s\n%s", code, live.calls, entries, out, errOut)
 			}
 			want := exitcode.Incomplete
@@ -166,11 +166,11 @@ func plantCache(t *testing.T, plant func(t *testing.T, entry string, data []byte
 	return len(entries)
 }
 
-// offlineModel fails every reader call, so a replay that reached it would
+// offlineModel fails every discovery and reader call, so a replay that reached it would
 // show as a send failure and a call count.
 func offlineModel() *fakeModel {
 	m := &fakeModel{fail: map[string]error{}}
-	for _, class := range []string{"sql_injection", "ssrf", "path_traversal", "command_injection", "template_injection", "nosql_injection"} {
+	for _, class := range []string{"discover", "sql_injection", "ssrf", "path_traversal", "command_injection", "template_injection", "nosql_injection"} {
 		m.fail[class] = errors.New("replay must not call the model")
 	}
 	return m

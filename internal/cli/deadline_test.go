@@ -17,13 +17,13 @@ import (
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // deadlineOverrun bounds how long a run may go on past a 1 s deadline: it
-// covers starting the parser and one detector's pass under -race. A run the
+// covers one detector's pass under -race. A run the
 // crafted file kept alive would take minutes (redact.MaxFileBytes).
 const deadlineOverrun = 45 * time.Second
 
@@ -44,12 +44,10 @@ func TestScanDeadlineEndsRunIncomplete(t *testing.T) {
 		wantFiles []string // app.py's accepted reasons in not_evaluated; nil: not checked
 		wantSinks []string // accepted finding reasons
 	}{
-		// The deadline cuts redaction (redact_failed); under -race, starting
-		// the parser alone can take the whole second (budget).
-		{"file crafted to redact slowly", craftedSlowApp(t, false), "", "budget:\n  max_seconds: 1\n", false, exitcode.Incomplete,
+		// The deadline cuts discovery's redaction (redact_failed), so the
+		// tripwire never sees the file and no sink is planned.
+		{"file crafted to redact slowly", craftedSlowApp(t), "", "budget:\n  max_seconds: 1\n", false, exitcode.Incomplete,
 			[]string{"redact_failed", "budget"}, []string{"file_not_scanned", "budget"}},
-		{"file crafted to parse slowly", craftedSlowApp(t, true), "", "budget:\n  max_seconds: 1\n", false, exitcode.Incomplete,
-			[]string{"budget"}, []string{"budget"}},
 		{"model call outlives the deadline", "@flask", "", "budget:\n  max_seconds: 1\n", true, exitcode.Incomplete, nil, []string{"budget"}},
 		{"project file lowers the deadline", "@flask", "budget:\n  max_seconds: 1\n", "", true, exitcode.Incomplete, nil, []string{"budget"}},
 		{"within the deadline", "@flask", "", "", false, exitcode.GateExceeded, nil, nil},
@@ -83,34 +81,23 @@ func TestScanDeadlineEndsRunIncomplete(t *testing.T) {
 	}
 }
 
-// Past the deadline the walk lists every source file left, parses none and
-// still returns a scan, so the run reaches its report; files that are not
-// source stay unlisted, as in any walk.
-func TestWalkPastDeadlineListsFilesLeft(t *testing.T) {
+// Past the deadline discovery reads no file and calls no model, lists every
+// file that could be source as budget, and still returns a result, so the
+// run reaches its report; a file the name alone says is not source stays
+// unlisted, as in any run.
+func TestDiscoveryPastDeadlineListsFilesLeft(t *testing.T) {
 	scanRepo(t, map[string]string{"a.py": "@flask", "web/b.js": "@express", "c.go": "package c\n", "README.md": "# r\n"}, "")
-	root, err := os.OpenRoot(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	p, err := static.NewParser(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer p.Close(context.Background())
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cancel(errScanDeadline)
-	rs, err := walkRepo(ctx, root, p)
-	if err != nil {
-		t.Fatalf("walk past the deadline: %v", err)
-	}
+	m := &fakeModel{}
+	rs := discoverWithin(t, ctx, m, calibrate.TierM)
 	want := []report.NotEvaluated{
 		{Path: "a.py", Reason: report.SkipBudget},
-		{Path: "c.go", Reason: report.SkipUnsupported},
+		{Path: "c.go", Reason: report.SkipBudget},
 		{Path: "web/b.js", Reason: report.SkipBudget},
 	}
-	if !slices.Equal(rs.gaps, want) || len(rs.graph.Routes) != 0 {
-		t.Fatalf("gaps = %+v, %d routes; want %+v and none", rs.gaps, len(rs.graph.Routes), want)
+	if !slices.Equal(rs.gaps, want) || len(rs.res.Sinks) != 0 || m.calls != 0 {
+		t.Fatalf("gaps = %+v, %d sinks, %d calls; want %+v, none and none", rs.gaps, len(rs.res.Sinks), m.calls, want)
 	}
 }
 
@@ -212,34 +199,27 @@ var (
 	quoted      = regexp.MustCompile(`"([^"]*)"`)
 )
 
-// craftedSlowApp is the vulnerable Flask app padded to static's file cap
+// craftedSlowApp is the vulnerable Flask app padded to redact's file cap
 // with lines that hold every redaction rule's keywords, then short word
-// lines: every rule wakes and scans the whole file. In one raw string
-// literal (comments false) the file parses at once and redaction takes
-// minutes (redact.MaxFileBytes, BenchmarkFileEveryKeyword); as comment
-// lines the parse alone runs to static's 30 s per-file timeout, which
-// many such files would multiply.
-func craftedSlowApp(t *testing.T, comments bool) string {
+// lines: every rule wakes and scans the whole file, so redacting it takes
+// minutes (redact.MaxFileBytes, BenchmarkFileEveryKeyword).
+func craftedSlowApp(t *testing.T) string {
 	t.Helper()
 	rules, err := os.ReadFile(filepath.Join("..", "redact", "rules", "gitleaks.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	open, prefix, end := "\nNOTES = r\"\"\"\n", "", "\"\"\"\n"
-	if comments {
-		open, prefix, end = "\n", "# ", ""
-	}
+	end := "\"\"\"\n"
 	var b strings.Builder
-	b.WriteString(testApp(t, "flask") + open)
+	b.WriteString(testApp(t, "flask") + "\nNOTES = r\"\"\"\n")
 	for _, list := range keywordList.FindAllStringSubmatch(string(rules), -1) {
-		b.WriteString(prefix)
 		for _, kw := range quoted.FindAllStringSubmatch(list[1], -1) {
 			b.WriteString(kw[1] + " ")
 		}
 		b.WriteString("\n")
 	}
-	line := prefix + strings.Repeat("a", 99-len(prefix)) + "\n"
-	for b.Len()+len(line)+len(end) <= static.MaxFileBytes {
+	line := strings.Repeat("a", 99) + "\n"
+	for b.Len()+len(line)+len(end) <= redact.MaxFileBytes {
 		b.WriteString(line)
 	}
 	return b.String() + end

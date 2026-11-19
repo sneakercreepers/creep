@@ -41,8 +41,12 @@ func TestNewRejectsInvalidInput(t *testing.T) {
 		{"unknown scanner status", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: "ran", Classes: []string{"xss"}}}}},
 		{"scanner without classes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing}}}},
 		{"scanner class with escapes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing, Classes: []string{"x\x1b[2J"}}}}},
-		{"framework with markup", Input{NoRoutesIn: []string{"Flask", "**Django**"}}},
-		{"empty framework name", Input{NoRoutesIn: []string{""}}},
+		{"inventory ID with markup", Input{Discovery: Discovery{Inventory: []InventoryCount{{Kind: InventoryLanguage, ID: "**go**", Files: 1}}}}},
+		{"unknown inventory kind", Input{Discovery: Discovery{Inventory: []InventoryCount{{Kind: "framework", ID: "go", Files: 1}}}}},
+		{"empty inventory count", Input{Discovery: Discovery{Inventory: []InventoryCount{{Kind: InventoryLanguage, ID: "go"}}}}},
+		{"unknown batch cause", Input{Discovery: Discovery{Batches: []BatchNote{{Batch: 1, Files: 1, Cause: "syntax_error"}}}}},
+		{"batch zero", Input{Discovery: Discovery{Batches: []BatchNote{{Files: 1, Cause: CauseCanaryMissed}}}}},
+		{"negative whole files", Input{Discovery: Discovery{WholeFiles: -1}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,67 +163,6 @@ func TestIncompleteMarkedInEveryFormat(t *testing.T) {
 	clean := render(t, newTestReport(t, sampleInput(t, false)))
 	if bytes.Contains(clean["md"], []byte("INCOMPLETE")) || !bytes.Contains(clean["sarif"], []byte(`"executionSuccessful": true`)) {
 		t.Error("complete run reported as incomplete")
-	}
-}
-
-// #207: Markdown names the frameworks static looked in only when it found
-// no route; the names stay out of the JSON contract (run.reason says it).
-func TestNoRoutesInMarkdownOnly(t *testing.T) {
-	const line = "**No Flask/FastAPI/Express routes found.**"
-	in := sampleInput(t, true)
-	in.NoRoutesIn = []string{"Flask", "FastAPI", "Express"}
-	out := render(t, newTestReport(t, in))
-	if !bytes.Contains(out["md"], []byte(line)) {
-		t.Errorf("Markdown lacks %q:\n%s", line, out["md"])
-	}
-	if bytes.Contains(out["json"], []byte("FastAPI")) {
-		t.Errorf("JSON carries the framework names:\n%s", out["json"])
-	}
-	routed := render(t, newTestReport(t, sampleInput(t, true)))
-	if bytes.Contains(routed["md"], []byte("routes found")) {
-		t.Error("Markdown claims no routes for a run that found some")
-	}
-}
-
-// #248: a run with no route evaluated nothing, so its Not evaluated
-// section never says every file was, and still lists the files it left
-// out; a run with a route and no gap still says every file was. One file
-// reads in the singular.
-func TestNotEvaluatedSectionWithoutRoutes(t *testing.T) {
-	const noRoute, every = "Static analysis found no route, so no file was evaluated", "Every file was evaluated."
-	const one, many = "1 file was not evaluated in full", "files were not evaluated in full"
-	tests := []struct {
-		name      string
-		noRoutes  bool
-		files     int // files kept from the sample; -1 keeps them all
-		want, not string
-	}{
-		{"no route, no file listed", true, 0, noRoute, every},
-		{"no route, files listed", true, -1, noRoute, every},
-		{"route, no file listed", false, 0, every, noRoute},
-		{"route, files listed", false, -1, many, every},
-		{"route, one file listed", false, 1, one, many},
-		{"no route, one file listed", true, 1, one, every},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			in := sampleInput(t, true)
-			if tt.noRoutes {
-				in.NoRoutesIn = []string{"Flask"}
-			}
-			if tt.files >= 0 {
-				in.NotEvaluated = in.NotEvaluated[:tt.files]
-			}
-			md := string(render(t, newTestReport(t, in))["md"])
-			if !strings.Contains(md, tt.want) || strings.Contains(md, tt.not) {
-				t.Errorf("Markdown wants %q and not %q:\n%s", tt.want, tt.not, md)
-			}
-			for _, n := range in.NotEvaluated {
-				if !strings.Contains(md, codeSpan(n.Path)) {
-					t.Errorf("Markdown lacks not-evaluated file %q", n.Path)
-				}
-			}
-		})
 	}
 }
 

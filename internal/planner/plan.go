@@ -23,7 +23,7 @@ const (
 	ClassNoSQLInjection
 )
 
-// Risk is how likely a hypothesis is to hold and be reachable, from static
+// Risk is how likely a hypothesis is to hold and be reachable, from discovered
 // facts alone. The zero value is not a risk.
 type Risk uint8
 
@@ -137,7 +137,7 @@ func riskOf(s Sink, r Route) Risk {
 }
 
 // boundParams reports whether bound parameters mitigate the sink. Only SQL
-// has them; static sets the flag on nothing else, so the flag on another
+// has them; discovery never sets the flag, so the flag on another
 // kind is a mapping bug and must not demote a shell or file sink (#202).
 func boundParams(s Sink) bool {
 	return s.Kind == SinkSQL && s.Parameterized

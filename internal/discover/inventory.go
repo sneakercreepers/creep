@@ -19,7 +19,7 @@ var languageNames = []string{
 	"python", "javascript", "typescript", "go", "php", "java", "kotlin",
 	"scala", "groovy", "clojure", "ruby", "csharp", "vb", "fsharp", "rust",
 	"elixir", "erlang", "swift", "dart", "perl", "lua", "c", "cpp", "vue",
-	"svelte", "coldfusion",
+	"svelte", "coldfusion", "template",
 }
 
 // canaryLanguage labels the canary section, which is JavaScript.
@@ -76,6 +76,10 @@ var matchNames = []string{"name", "glob", "ext", "shebang"}
 
 // binaryProbeBytes is how much of a source file is searched for a NUL.
 const binaryProbeBytes = 8 << 10
+
+// HeadBytes is how much of a file over redact.MaxFileBytes Read returns:
+// enough for the shebang and the binary probe, never sent anywhere.
+const HeadBytes = binaryProbeBytes
 
 // inventoryTable holds one exact lookup per match kind; globs are a list
 // tried in table order.
@@ -185,6 +189,28 @@ func (t inventoryTable) needsContent(name string) bool {
 	base := baseName(name)
 	_, found := t.byName(base)
 	return !found && extensionless(base)
+}
+
+// MaybeSource reports whether Run could treat the file at name as source:
+// its name says so, or only its bytes can tell. A caller that cannot hand
+// such a file to Run (a link, an invalid name) lists it instead of
+// dropping it. A table that fails to load answers true: fail closed.
+func MaybeSource(name string) bool {
+	t, err := loadInventory()
+	if err != nil {
+		return true
+	}
+	return t.classify(name, nil).Language != 0 || t.needsContent(name)
+}
+
+// SourceName reports whether the name alone makes the file source. A
+// caller that never reads the file (a link) uses it: only a name can say.
+func SourceName(name string) bool {
+	t, err := loadInventory()
+	if err != nil {
+		return true
+	}
+	return t.classify(name, nil).Language != 0
 }
 
 // extensionless counts a dotfile with no other dot (".deploy") as having

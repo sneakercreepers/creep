@@ -16,13 +16,13 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	fmt.Fprintf(bw, "# creep report\n\n%s %s (commit %s) · report schema %d\n\n",
 		r.Tool.Name, codeSpan(r.Tool.Version), codeSpan(r.Tool.Commit), r.SchemaVersion)
 	writeRunStatus(bw, r.Run)
-	writeNoRoutes(bw, r.NoRoutesIn)
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
 	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))
-	writeNotEvaluated(bw, r.Coverage.NotEvaluated, len(r.NoRoutesIn) > 0)
+	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
+	writeDiscovery(bw, r.Discovery)
 	writeScanners(bw, r.Coverage.Scanners)
-	writeDataHandling(bw, r.DataHandling)
+	writeDataHandling(bw, r.DataHandling, r.Discovery.WholeFiles)
 	if err := bw.Flush(); err != nil {
 		return fmt.Errorf("write Markdown report: %w", err)
 	}
@@ -36,17 +36,6 @@ func writeRunStatus(w io.Writer, run RunInfo) {
 	}
 	fmt.Fprintf(w, "> **INCOMPLETE RUN** (reason %s): not everything was evaluated. This is not a clean result, whatever the findings below say.\n\n",
 		codeSpan(run.Reason))
-}
-
-// writeNoRoutes says where static looked when it found no route, so a
-// Django-only or empty repository never reads as covered (#207). The names
-// are IDs New checked.
-func writeNoRoutes(w io.Writer, frameworks []string) {
-	if len(frameworks) == 0 {
-		return
-	}
-	fmt.Fprintf(w, "**No %s routes found.** Static analysis extracted no route, so no class was evaluated.\n\n",
-		strings.Join(frameworks, "/"))
 }
 
 func writeFindings(w io.Writer, findings []Finding) {
@@ -89,17 +78,11 @@ func writeByDesign(w io.Writer, summary string) {
 	fmt.Fprintf(w, "**No class covers the %s**, listed under Not evaluated.\n\n", summary)
 }
 
-// writeNotEvaluated lists the files not evaluated in full. A run with no
-// route evaluated nothing, so it never says every file was (#248).
-func writeNotEvaluated(w io.Writer, files []NotEvaluated, noRoutes bool) {
+// writeNotEvaluated lists the files not evaluated in full.
+func writeNotEvaluated(w io.Writer, files []NotEvaluated) {
 	fmt.Fprint(w, "## Not evaluated\n\n")
-	switch {
-	case noRoutes:
-		fmt.Fprint(w, "Static analysis found no route, so no file was evaluated for any class.\n\n")
-	case len(files) == 0:
-		fmt.Fprint(w, "Every file was evaluated.\n\n")
-	}
 	if len(files) == 0 {
+		fmt.Fprint(w, "Every file was evaluated.\n\n")
 		return
 	}
 	count := fmt.Sprintf("%d files were", len(files))
@@ -125,8 +108,9 @@ func writeScanners(w io.Writer, scanners []ScannerCoverage) {
 	fmt.Fprint(w, "\n")
 }
 
-func writeDataHandling(w io.Writer, d DataHandling) {
+func writeDataHandling(w io.Writer, d DataHandling, wholeFiles int) {
 	fmt.Fprint(w, "## Data handling\n\n")
+	fmt.Fprint(w, wholeFilesLine(wholeFiles))
 	if d.Requests == 0 {
 		fmt.Fprint(w, "No data left the machine: `egress.log` records no request.\n")
 		return

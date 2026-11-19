@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"time"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
+	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // errScanDeadline is the run context's cause once budget.max_seconds has
@@ -38,9 +37,9 @@ func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, seconds 
 // starts after it and a hostile repository cannot spend it there. Each stage
 // lists what the deadline cut; a run it cut stops with reason budget and is
 // never clean.
-func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc, tier calibrate.Tier, stderr io.Writer) (scanResult, error) {
+func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc, tier calibrate.Tier, files repoFiles, stderr io.Writer) (scanResult, error) {
 	stop := startDeadline(ctx, cancel, s.cfg.Budget.MaxSeconds)
-	res, err := s.scan(ctx, tier)
+	res, err := s.scan(ctx, tier, files)
 	if err == nil {
 		res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), stderr)
 	}
@@ -54,19 +53,25 @@ func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc
 	return res, nil
 }
 
-// walkFile extracts one source file with addRepoFile. Past the deadline a
-// file is listed without being read, and a file the deadline cut while it
-// was parsed is listed for the deadline, not for the parse error the
-// canceled parser returned.
-func walkFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
-	if ctx.Err() != nil {
-		return report.SkipBudget, true
+// deadlineDiscovery names for the deadline what discovery left undone once
+// ctx is done: a file its Read refused (deadlineReads), and a file whose
+// batch the deadline cut or never sent (send_failed, the reason discovery
+// gives every file after a failed call). A file listed for its own reason
+// before the deadline keeps it, as does the file whose redaction the
+// deadline cut (redact_failed).
+func deadlineDiscovery(ctx context.Context, files []discover.File, paths []string, refused map[string]bool) {
+	if ctx.Err() == nil {
+		return
 	}
-	reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d)
-	if gap && ctx.Err() != nil {
-		return report.SkipBudget, true
+	for i, path := range paths {
+		if i >= len(files) {
+			return
+		}
+		f := &files[i]
+		if f.Reason == discover.ReasonSendFailed || (f.Reason == discover.ReasonReadFailed && refused[path]) {
+			f.Reason = discover.ReasonBudget
+		}
 	}
-	return reason, gap
 }
 
 // pastDeadline marks a stage's finding as cut by the deadline once ctx is

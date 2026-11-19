@@ -43,7 +43,7 @@ func TestScanStatsRecordAndReplay(t *testing.T) {
 			deps := usageDeps(&fakeModel{})
 			deps.now = tickingClock()
 			_, out, errOut := runScanWith(deps, "scan", tt.mode, "--stats", "--price-in", "3", "--price-out", "15", "--config", cfg)
-			if !strings.Contains(out, "phases: calibrate 1s, static 1s, plan 1s, read 1s, report 1s\n") {
+			if !strings.Contains(out, "phases: walk 1s, calibrate 1s, discover 1s, plan 1s, read 1s, report 1s\n") {
 				t.Fatalf("phases:\n%s\n%s", out, errOut)
 			}
 			m := requestsLine.FindStringSubmatch(out)
@@ -54,7 +54,7 @@ func TestScanStatsRecordAndReplay(t *testing.T) {
 			if (sent > 0) != tt.wantSent || (in > 0) != tt.wantSent {
 				t.Fatalf("sent %d, tokens in %d:\n%s", sent, in, out)
 			}
-			if !strings.Contains(out, "by purpose: reader ") || !strings.Contains(out, "cost: 0.") {
+			if !strings.Contains(out, "by purpose: discover 1, reader ") || !strings.Contains(out, "cost: 0.") {
 				t.Fatalf("purpose or cost missing:\n%s", out)
 			}
 		})

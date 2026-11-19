@@ -1,10 +1,10 @@
 # ADR 0008: wazero and tree-sitter grammars compiled to WebAssembly
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR 0017 (2026-11-19, #265 step F; first accepted 2026-11-14)
 - **Date:** 2026-11-14
 - **Deciders:** @Ludocius
 
-> **To be superseded by [ADR 0017](0017-language-agnostic-analysis.md) at step F of #265.** This ADR stays in force until then: wazero and the grammars still parse Python and JS/TS. Step F removes them (`dependencies.txt`, the budget net-reach exception for `internal/static`) only after ADR 0017's removal gate (D4) has passed in step E, and marks this record superseded in the same PR.
+> **Superseded by [ADR 0017](0017-language-agnostic-analysis.md).** #265 step F removed wazero, the grammars, `build.sh`, `glue.c`, the `dependencies.txt` entry, the budget net-reach exception for `internal/static` and the `glue.c` foreign-source allowance, after ADR 0017's amended removal gate (D4) passed in step E. `internal/static` is gone; its language-neutral rules live in `internal/repofile`. This record is kept for its threat analysis and spike numbers.
 
 ## Context
 

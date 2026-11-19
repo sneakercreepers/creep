@@ -61,9 +61,9 @@ func TestEstimateMakesNoModelCalls(t *testing.T) {
 		cached bool
 		want   []string
 	}{
-		{"cached calibration", map[string]string{"app.py": "@flask"}, true, []string{"cached, tier M", "M *", "4 sinks"}},
+		{"cached calibration", map[string]string{"app.py": "@flask"}, true, []string{"cached, tier M", "M *", "1 calls send 1 whole source files; the reader plans 4 tripwire candidates"}},
 		{"calibration not cached", map[string]string{"app.py": "@flask"}, false, []string{"not cached: the scan calibrates first, at least"}},
-		{"empty repository", nil, true, []string{"0 source files, 0 routes, 0 sinks", "M *         0       0          0          0        0s"}},
+		{"empty repository", nil, true, []string{"walk: 0 files, up to 0 source files go to discovery", "M *         0       0          0          0        0s"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,7 +148,7 @@ func TestEstimatePrintsNoRepositoryText(t *testing.T) {
 	if strings.Contains(out, "zz") || strings.ContainsAny(out, "\x1b\x00\r") {
 		t.Fatalf("repository text in output:\n%q", out)
 	}
-	if !strings.Contains(out, "1 sinks; 1 files not evaluated in full") {
+	if !strings.Contains(out, "walk: 2 files, up to 2 source files") || !strings.Contains(out, "plans 1 tripwire candidates") {
 		t.Fatalf("counts:\n%s", out)
 	}
 }

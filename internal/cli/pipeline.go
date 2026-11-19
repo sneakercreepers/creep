@@ -11,7 +11,6 @@ import (
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // Finding reasons the scan adds to the report's own (ADR 0009). All are IDs.
@@ -26,38 +25,38 @@ const (
 	reasonInvalidOutput   = "invalid_output"
 	reasonNotEvaluated    = "not_evaluated"
 	reasonPartialSlice    = "partial_slice"
-	// reasonNoRoutes: static extracted no route at all (a Django-only or
-	// empty repository), so nothing was evaluated for any class (#207).
-	reasonNoRoutes = "no_routes"
 )
 
-// baseFindings has one finding per sink, indexed by sink ID, each not
-// evaluated until a stage decides it: a sink no stage reaches stays listed.
+// baseFindings has one finding per sink, at the sink's index (discover
+// numbers sinks 1..n), each not evaluated until a stage decides it: a sink
+// no stage reaches stays listed.
 func baseFindings(rs repoScan) []report.Finding {
-	out := make([]report.Finding, len(rs.graph.Sinks))
-	for i, s := range rs.graph.Sinks {
-		route := rs.graph.Routes[s.Route]
+	out := make([]report.Finding, len(rs.res.Sinks))
+	for i, s := range rs.res.Sinks {
 		out[i] = report.Finding{
 			ID: fmt.Sprintf("sink-%d", s.ID), Class: kindClass(s.Kind), Status: report.StatusNotEvaluated,
-			Path: rs.locs.Files[route.File], Line: rs.locs.Sinks[i].Line,
+			Path: rs.paths[s.File], Line: int(s.Line),
 		}
 	}
 	return out
 }
 
+// sinkIndex is the finding index of a planner or discover sink ID.
+func sinkIndex[ID ~uint32](id ID) int { return int(id) - 1 }
+
 // planSinks builds the plan and records every sink it leaves out, with its
 // reason. planner.ErrInput is returned for the caller to fail closed.
 func planSinks(rs repoScan, tier planner.Tier, budget planner.Budget, findings []report.Finding) (planner.Plan, error) {
-	in, unmapped := plannerInput(rs.graph, tier, budget)
+	in, unmapped := plannerInput(rs.res, tier, budget)
 	for _, id := range unmapped {
-		findings[id].Reason = reasonUnmappedKind
+		findings[sinkIndex(id)].Reason = reasonUnmappedKind
 	}
 	plan, err := planner.Build(in)
 	if err != nil {
 		return planner.Plan{}, err
 	}
 	for _, s := range plan.Skipped {
-		findings[s.Sink].Reason = skipName(s.Reason)
+		findings[sinkIndex(s.Sink)].Reason = skipName(s.Reason)
 	}
 	return plan, nil
 }
@@ -87,7 +86,7 @@ type readStage struct {
 func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, findings []report.Finding) ([]report.NotEvaluated, string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
 	// Past the deadline the slicer still lists every file, without reading
-	// it (deadlineReads), so a file static parsed but nothing sliced is in
+	// it (deadlineReads), so a file discovery read but nothing sliced is in
 	// coverage too.
 	rep, err := r.slicer.Build(targets)
 	if err != nil && !rep.Incomplete {
@@ -105,24 +104,32 @@ func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, find
 	return gaps, stop, nil
 }
 
-// targetsFor turns hypotheses into reader targets; static IDs index the
-// graph and locations directly.
-func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]reader.Target, map[reader.HypothesisID]static.SinkID) {
+// targetsFor turns hypotheses into reader targets. The route's first line
+// is the source (the sink's own line for a file-level route) and the
+// sink's line the sink; the path comes from the walk, by the sink's file
+// ID. sinkOf maps a hypothesis to its finding index.
+func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]reader.Target, map[reader.HypothesisID]int) {
 	targets := make([]reader.Target, 0, len(plan.Hypotheses))
-	sinkOf := make(map[reader.HypothesisID]static.SinkID, len(plan.Hypotheses))
+	sinkOf := make(map[reader.HypothesisID]int, len(plan.Hypotheses))
 	for _, h := range plan.Hypotheses {
+		at := sinkIndex(h.Sink)
 		class, err := readerClass(h.Class)
 		if err != nil {
-			findings[h.Sink].Reason = reasonUnmappedClass
+			findings[at].Reason = reasonUnmappedClass
 			continue
 		}
-		route := rs.graph.Routes[h.Route]
+		sink, route := rs.res.Sinks[at], rs.res.Routes[sinkIndex(h.Route)]
+		source := int(route.Lines.Start)
+		if route.FileLevel {
+			// No entry point holds the sink: the slice starts from the sink
+			// and walks back, not from line 1 of the file.
+			source = int(sink.Line)
+		}
 		id := reader.HypothesisID(h.ID)
 		targets = append(targets, reader.Target{
-			Hypothesis: id, Class: class, Path: rs.locs.Files[route.File],
-			SourceLine: rs.locs.Routes[h.Route].Line, SinkLine: rs.locs.Sinks[h.Sink].Line,
+			Hypothesis: id, Class: class, Path: rs.paths[sink.File], SourceLine: source, SinkLine: int(sink.Line),
 		})
-		sinkOf[id] = static.SinkID(h.Sink)
+		sinkOf[id] = at
 	}
 	return targets, sinkOf
 }
@@ -131,7 +138,7 @@ func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]re
 // ends the run (budget, the scan deadline, run_full, transport) marks this
 // and every later hypothesis with its reason and returns it; a bad answer
 // marks only its own hypothesis.
-func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf map[reader.HypothesisID]static.SinkID, findings []report.Finding) string {
+func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf map[reader.HypothesisID]int, findings []report.Finding) string {
 	for i, s := range slices {
 		reason, stop := r.evaluateOne(ctx, s, &findings[sinkOf[s.Hypothesis]])
 		if !stop {

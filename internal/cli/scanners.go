@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/scanrun"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // reasonScannerFailed marks a run incomplete because an enabled scanner
@@ -23,13 +23,13 @@ const osvDBEnv = "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"
 // secrets in the code for gitleaks, known-vulnerable dependencies for
 // osv-scanner, and semgrep rule classes the reader does not evaluate. An
 // unknown scanner gets none, which report.New refuses.
-func scannerClasses(s static.Scanner) []string {
+func scannerClasses(s repofile.Scanner) []string {
 	switch s {
-	case static.ScannerGitleaks:
+	case repofile.ScannerGitleaks:
 		return []string{"hardcoded_secret"}
-	case static.ScannerOSV:
+	case repofile.ScannerOSV:
 		return []string{"vulnerable_dependency"}
-	case static.ScannerSemgrep:
+	case repofile.ScannerSemgrep:
 		return []string{"xss", "insecure_deserialization", "weak_crypto"}
 	}
 	return nil
@@ -37,16 +37,16 @@ func scannerClasses(s static.Scanner) []string {
 
 // scannerStatus maps a detection result to the report. A found scanner
 // is not_run until the runner says otherwise.
-func scannerStatus(st static.ScannerState) report.ScannerStatus {
+func scannerStatus(st repofile.ScannerState) report.ScannerStatus {
 	switch st {
-	case static.ScannerNotEnabled:
+	case repofile.ScannerNotEnabled:
 		return report.ScannerNotEnabled
-	case static.ScannerMissing:
+	case repofile.ScannerMissing:
 		return report.ScannerMissing
-	case static.ScannerFound:
+	case repofile.ScannerFound:
 		return report.ScannerNotRun
 	}
-	return report.ScannerRefused // static.ScannerRefused, or unknown: the strict side
+	return report.ScannerRefused // repofile.ScannerRefused, or unknown: the strict side
 }
 
 // runStatus maps a run outcome to the report; an unknown one is failed,
@@ -79,13 +79,13 @@ func runScanners(ctx context.Context, enabled []string, run func(context.Context
 	if err != nil {
 		repo = ""
 	}
-	checks := static.DetectScanners(enabled, static.ScannerEnv{
+	checks := repofile.DetectScanners(enabled, repofile.ScannerEnv{
 		Path: os.Getenv("PATH"), PathExt: os.Getenv("PATHEXT"), Repo: repo,
 	})
 	var out scannerRun
 	for _, c := range checks {
 		status := scannerStatus(c.State)
-		if c.State == static.ScannerFound {
+		if c.State == repofile.ScannerFound {
 			job := scanrun.Job{Scanner: c.Scanner, Bin: c.Path, Repo: repo, OSVDB: os.Getenv(osvDBEnv), Limits: scanrun.DefaultLimits()}
 			res := run(ctx, job)
 			status = runStatus(res.Outcome)
@@ -103,7 +103,7 @@ func runScanners(ctx context.Context, enabled []string, run func(context.Context
 // scannerFindings turns runner findings into probable report findings of
 // the scanner's class. IDs are the scanner's prefix and the runner's hex
 // key; the path was checked to lie inside the repository.
-func scannerFindings(s static.Scanner, in []scanrun.Finding) []report.Finding {
+func scannerFindings(s repofile.Scanner, in []scanrun.Finding) []report.Finding {
 	class, prefix := scannerFindingClass(s)
 	out := make([]report.Finding, 0, len(in))
 	for _, f := range in {
@@ -114,11 +114,11 @@ func scannerFindings(s static.Scanner, in []scanrun.Finding) []report.Finding {
 
 // scannerFindingClass is the class and ID prefix of a scanner's findings;
 // only scanners the runner can run have one.
-func scannerFindingClass(s static.Scanner) (class, prefix string) {
+func scannerFindingClass(s repofile.Scanner) (class, prefix string) {
 	switch s {
-	case static.ScannerGitleaks:
+	case repofile.ScannerGitleaks:
 		return "hardcoded_secret", "gitleaks"
-	case static.ScannerOSV:
+	case repofile.ScannerOSV:
 		return "vulnerable_dependency", "osv"
 	}
 	return "unknown", "unknown" // never produced: the runner runs only the two above

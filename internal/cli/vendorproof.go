@@ -7,7 +7,7 @@ import (
 	"path"
 
 	"github.com/sneakercreepers/creep/internal/gitindex"
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // gitIndexPath is the index of the repository at the scan root.
@@ -17,7 +17,7 @@ const gitIndexPath = ".git/index"
 // to an installed dependency tree, so it may be listed as vendor without
 // being read. Both must hold:
 //
-//   - its package manager's mark (static.VendorEvidence) is a regular file
+//   - its package manager's mark (repofile.VendorEvidence) is a regular file
 //     in the repository with exactly that name;
 //   - git tracks nothing in the tree, and nothing above it that could hold
 //     it (a submodule): a package manager's install is never committed, and
@@ -50,7 +50,7 @@ func (v *vendorProofs) proven(rel string) bool {
 	if v.ctx.Err() != nil {
 		return false
 	}
-	mark, ok := static.VendorEvidence(rel)
+	mark, ok := repofile.VendorEvidence(rel)
 	if !ok {
 		return false
 	}

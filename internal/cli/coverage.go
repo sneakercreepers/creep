@@ -3,29 +3,29 @@ package cli
 import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
+	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // classTemplateInjection is a reader class calibration does not measure yet.
 const classTemplateInjection = "template_injection"
 
-// kindClass names the report class of a static sink kind, using the
+// kindClass names the report class of a discover sink kind, using the
 // calibration's names so findings and coverage rows agree. An unmapped kind
-// keeps static's own name; its sinks are never planned.
-func kindClass(k static.SinkKind) string {
+// keeps discover's own name; its sinks are never planned.
+func kindClass(k discover.SinkKind) string {
 	switch k {
-	case static.SinkSQL:
+	case discover.SinkSQL:
 		return string(calibrate.ClassSQLi)
-	case static.SinkShell:
+	case discover.SinkShell:
 		return string(calibrate.ClassCommandInjection)
-	case static.SinkFile:
+	case discover.SinkFile:
 		return string(calibrate.ClassPathTraversal)
-	case static.SinkHTTPClient:
+	case discover.SinkHTTPClient:
 		return string(calibrate.ClassSSRF)
-	case static.SinkTemplate:
+	case discover.SinkTemplate:
 		return classTemplateInjection
-	case static.SinkNoSQL:
+	case discover.SinkNoSQL:
 		return string(calibrate.ClassNoSQLInjection)
 	}
 	return k.String()

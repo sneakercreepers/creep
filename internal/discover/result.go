@@ -24,6 +24,10 @@ type File struct {
 	Container Container
 	Coverage  Coverage
 	Reason    Reason // why Coverage is not read_full; ReasonNone otherwise
+	// Batch is the 1-based number of the discovery call that sent the
+	// file whole, in send order; 0 when it was never sent. It lets the
+	// caller count whole-file egress and name a failed batch's cause.
+	Batch uint32
 	// TripwireCut means the file reached MaxTripwireHits; it reports as
 	// truncated.
 	TripwireCut bool

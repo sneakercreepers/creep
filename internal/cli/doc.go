@@ -6,17 +6,19 @@
 // standard library flag package; no third-party CLI framework.
 //
 // It is also the only package above every pipeline layer, so `creep scan`
-// wires them here (ADR 0009): calibrate the model, extract the static graph
-// from the current directory, map it to planner values by explicit switch
-// (plannermap.go; the planner may not import static, calibrate or reader),
-// plan, slice and evaluate with the reader through the gateway and the
-// record/replay cache, and build the report. Everything a run leaves out is
-// listed as not evaluated, and a run that left out more than vendor code and
-// tier S's low-risk sinks exits 4, never 0. `creep why` reads the last JSON
-// report back strictly and prints a finding's evidence escaped.
+// wires them here (ADR 0009, ADR 0017): walk the current directory, say how
+// many whole files discovery may send, calibrate the model, run discovery
+// (inventory, tripwire and model, joined by union only), map its result to
+// planner values by explicit switch (plannermap.go; the planner may not
+// import discover, calibrate or reader), plan, slice and evaluate with the
+// reader through the gateway and the record/replay cache, and build the
+// report. Everything a run leaves out is listed as not evaluated, and a run
+// that left out more than code left out by design and tier S's low-risk
+// sinks exits 4, never 0. `creep why` reads the last JSON report back
+// strictly and prints a finding's evidence escaped.
 //
-// `creep estimate` (ADR 0011) runs the same static, planner and slicer code
-// and hands each request to a send function with no transport, which
+// `creep estimate` (ADR 0011) runs the same discovery, planner and slicer
+// code and hands each request to a send function with no transport, which
 // measures it and refuses it, so an estimate never reaches a model or the
 // network. `--stats` counts a scan's requests on both sides of the cache.
 package cli

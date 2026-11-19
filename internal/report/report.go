@@ -56,17 +56,18 @@ const (
 	// SkipLinesShifted is reader.FileLinesShifted: redaction joined lines
 	// (a multi-line key), so no slice of the file could be numbered.
 	SkipLinesShifted SkipReason = "lines_shifted"
-	// Static analysis (ADR 0009). Vendor, generated and minified files are
-	// left out by design; the rest are gaps in the run.
+	// The walk and discovery (ADR 0009, ADR 0017 D2). Vendor, generated and
+	// minified files are left out by design; the rest are gaps in the run.
 	SkipVendor      SkipReason = "vendor"
 	SkipGenerated   SkipReason = "generated"
 	SkipMinified    SkipReason = "minified"
-	SkipNotRegular  SkipReason = "not_regular"          // a link or special file with a source extension
-	SkipInvalidPath SkipReason = "invalid_path"         // static refused the repo-relative name
-	SkipParseFailed SkipReason = "parse_failed"         // the parser hit a limit or failed
-	SkipSyntaxError SkipReason = "syntax_error"         // partial: routes in the broken region may be missing
-	SkipTruncated   SkipReason = "truncated"            // partial: a route or sink cap cut the file
-	SkipUnsupported SkipReason = "unsupported_language" // a source language static cannot extract yet
+	SkipNotRegular  SkipReason = "not_regular"  // a link or special file named as source
+	SkipInvalidPath SkipReason = "invalid_path" // the walk refused the repo-relative name
+	SkipParseFailed SkipReason = "parse_failed" // discovery's reply was invalid or missed the batch's canary
+	SkipTruncated   SkipReason = "truncated"    // partial: a tripwire or reply cap cut the file
+	// Kept for JSON v1 readers: no run since ADR 0017 emits these two.
+	SkipSyntaxError SkipReason = "syntax_error"
+	SkipUnsupported SkipReason = "unsupported_language"
 )
 
 var skipReasons = map[SkipReason]bool{
@@ -170,11 +171,10 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Coverage      Coverage     `json:"coverage"`
 	DataHandling  DataHandling `json:"data_handling"`
-	// NoRoutesIn names the frameworks static looked in when it found no
-	// route at all, for Markdown to state (ADR 0009 amendment, #207). The
-	// JSON says it with run.reason no_routes; this is not part of the
-	// contract, so a report read back has none.
-	NoRoutesIn []string `json:"-"`
+	// Discovery is the inventory, the whole-file egress and the failed
+	// discovery batches, for Markdown and the text summary (ADR 0017 D3).
+	// It is not part of the contract, so a report read back has none.
+	Discovery Discovery `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -188,7 +188,7 @@ type Input struct {
 	NotEvaluated   []NotEvaluated
 	Scanners       []ScannerCoverage // in the caller's fixed order
 	DataHandling   DataHandling
-	NoRoutesIn     []string // framework names (IDs); empty when a route was found
+	Discovery      Discovery
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -211,7 +211,7 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkFrameworks(in.NoRoutesIn); err != nil {
+	if err := checkDiscovery(in.Discovery); err != nil {
 		return nil, err
 	}
 	info := buildinfo.Get()
@@ -222,7 +222,10 @@ func New(in Input) (*Report, error) {
 		Findings:      findings,
 		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners},
 		DataHandling:  in.DataHandling.normalized(),
-		NoRoutesIn:    slices.Clone(in.NoRoutesIn),
+		Discovery: Discovery{
+			WholeFiles: in.Discovery.WholeFiles,
+			Inventory:  slices.Clone(in.Discovery.Inventory), Batches: slices.Clone(in.Discovery.Batches),
+		},
 	}, nil
 }
 

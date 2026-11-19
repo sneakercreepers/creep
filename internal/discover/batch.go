@@ -23,6 +23,7 @@ func (r *run) flush(ctx context.Context) {
 		r.failAll(secs, CoverageCanaryMissed, ReasonParseFailed)
 		return
 	}
+	r.number(secs)
 	prompt := renderBatch(batch)
 	a, err := models.Complete[Answer](ctx, r.d.Model, models.Request{
 		Purpose:    purpose,
@@ -62,6 +63,14 @@ func (r *run) callFailed(secs []section, err error) {
 	}
 	r.failAll(secs, CoverageSendFailed, reason)
 	r.halt(CoverageSendFailed, reason, err)
+}
+
+// number gives the batch about to be sent the next batch number.
+func (r *run) number(secs []section) {
+	r.batches++
+	for _, s := range secs {
+		r.work[s.work].file.Batch = r.batches
+	}
 }
 
 func (r *run) failAll(secs []section, cov Coverage, reason Reason) {

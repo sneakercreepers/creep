@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
+	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
-// The planner may not import static, calibrate or reader (invariant 3 and
+// The planner may not import discover, calibrate or reader (invariant 3 and
 // the layer table), and its enums repeat their numeric values. A numeric
 // cast would pass a value added on one side straight through, so each value
 // is mapped by an explicit switch; plannermap_test.go fails when either side
@@ -19,28 +19,28 @@ import (
 // errUnmapped means a value has no mapping here; the scan fails closed.
 var errUnmapped = errors.New("no planner mapping")
 
-// pendingKinds are static sink kinds the planner and reader cannot take yet,
+// pendingKinds are discover sink kinds the planner and reader cannot take yet,
 // with the issue that adds them. Their sinks are listed as not evaluated
 // (unmapped_kind) and the run is incomplete. plannermap_test.go fails if one
 // gets a mapping without leaving this list, or if any other kind is unmapped.
 // It is empty since #212 mapped SinkNoSQL.
-var pendingKinds = map[static.SinkKind]string{}
+var pendingKinds = map[discover.SinkKind]string{}
 
-// plannerKind maps a static sink kind. An unmapped kind (a new static kind
+// plannerKind maps a discover sink kind. An unmapped kind (a new discover kind
 // before the planner learns it) is listed as not evaluated, never planned.
-func plannerKind(k static.SinkKind) (planner.SinkKind, error) {
+func plannerKind(k discover.SinkKind) (planner.SinkKind, error) {
 	switch k {
-	case static.SinkSQL:
+	case discover.SinkSQL:
 		return planner.SinkSQL, nil
-	case static.SinkShell:
+	case discover.SinkShell:
 		return planner.SinkShell, nil
-	case static.SinkFile:
+	case discover.SinkFile:
 		return planner.SinkFile, nil
-	case static.SinkHTTPClient:
+	case discover.SinkHTTPClient:
 		return planner.SinkHTTPClient, nil
-	case static.SinkTemplate:
+	case discover.SinkTemplate:
 		return planner.SinkTemplate, nil
-	case static.SinkNoSQL:
+	case discover.SinkNoSQL:
 		return planner.SinkNoSQL, nil
 	}
 	return 0, fmt.Errorf("sink kind %d: %w", k, errUnmapped)
@@ -48,9 +48,9 @@ func plannerKind(k static.SinkKind) (planner.SinkKind, error) {
 
 // plannerMethods maps each method bit. An unknown bit becomes MethodOther,
 // which the planner ranks as state-changing: the safe direction.
-func plannerMethods(m static.Methods) planner.Methods {
+func plannerMethods(m discover.Methods) planner.Methods {
 	var out planner.Methods
-	for bit := static.Methods(1); bit != 0; bit <<= 1 {
+	for bit := discover.Methods(1); bit != 0; bit <<= 1 {
 		if m&bit == 0 {
 			continue
 		}
@@ -63,25 +63,25 @@ func plannerMethods(m static.Methods) planner.Methods {
 	return out
 }
 
-func plannerMethod(bit static.Methods) (planner.Methods, bool) {
+func plannerMethod(bit discover.Methods) (planner.Methods, bool) {
 	switch bit {
-	case static.MethodGet:
+	case discover.MethodGet:
 		return planner.MethodGet, true
-	case static.MethodPost:
+	case discover.MethodPost:
 		return planner.MethodPost, true
-	case static.MethodPut:
+	case discover.MethodPut:
 		return planner.MethodPut, true
-	case static.MethodPatch:
+	case discover.MethodPatch:
 		return planner.MethodPatch, true
-	case static.MethodDelete:
+	case discover.MethodDelete:
 		return planner.MethodDelete, true
-	case static.MethodHead:
+	case discover.MethodHead:
 		return planner.MethodHead, true
-	case static.MethodOptions:
+	case discover.MethodOptions:
 		return planner.MethodOptions, true
-	case static.MethodTrace:
+	case discover.MethodTrace:
 		return planner.MethodTrace, true
-	case static.MethodOther:
+	case discover.MethodOther:
 		return planner.MethodOther, true
 	}
 	return 0, false
@@ -113,6 +113,20 @@ func readerTier(t calibrate.Tier) (reader.Tier, error) {
 	return "", fmt.Errorf("tier %q: %w", string(t), errUnmapped)
 }
 
+// discoverTier maps the calibrated tier to discovery's prompt and batch
+// budget.
+func discoverTier(t calibrate.Tier) (discover.Tier, error) {
+	switch t {
+	case calibrate.TierS:
+		return discover.TierS, nil
+	case calibrate.TierM:
+		return discover.TierM, nil
+	case calibrate.TierL:
+		return discover.TierL, nil
+	}
+	return "", fmt.Errorf("tier %q: %w", string(t), errUnmapped)
+}
+
 // readerClass maps a hypothesis class to the reader's.
 func readerClass(c planner.Class) (reader.Class, error) {
 	switch c {
@@ -132,16 +146,19 @@ func readerClass(c planner.Class) (reader.Class, error) {
 	return 0, fmt.Errorf("class %d: %w", c, errUnmapped)
 }
 
-// plannerInput copies the graph's IDs, enums and booleans, and nothing else,
-// into the planner's input. Sinks of an unmapped kind are returned apart so
-// the report lists them as not evaluated.
-func plannerInput(g static.Graph, tier planner.Tier, budget planner.Budget) (planner.Input, []static.SinkID) {
-	in := planner.Input{Tier: tier, Budget: budget, Routes: make([]planner.Route, len(g.Routes))}
-	for i, r := range g.Routes {
-		in.Routes[i] = planner.Route{ID: planner.RouteID(r.ID), Methods: plannerMethods(r.Methods), Authenticated: r.Auth != 0}
+// plannerInput copies discovery's IDs, enums and booleans, and nothing
+// else, into the planner's input (invariant 3): no path, span or line
+// reaches it. Discovery already forced every flag to the worst case
+// (ADR 0017); they are copied as they are, never recomputed here. Sinks of
+// an unmapped kind are returned apart so the report lists them as not
+// evaluated.
+func plannerInput(res discover.Result, tier planner.Tier, budget planner.Budget) (planner.Input, []discover.SinkID) {
+	in := planner.Input{Tier: tier, Budget: budget, Routes: make([]planner.Route, len(res.Routes))}
+	for i, r := range res.Routes {
+		in.Routes[i] = planner.Route{ID: planner.RouteID(r.ID), Methods: plannerMethods(r.Methods), Authenticated: r.Authenticated}
 	}
-	var unmapped []static.SinkID
-	for _, s := range g.Sinks {
+	var unmapped []discover.SinkID
+	for _, s := range res.Sinks {
 		kind, err := plannerKind(s.Kind)
 		if err != nil {
 			unmapped = append(unmapped, s.ID)

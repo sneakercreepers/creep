@@ -15,7 +15,6 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // reportNames are the files scan writes in .creep, per report.formats.
@@ -51,9 +50,6 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 
 func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*report.Report, error) {
 	reason := incompleteReason(res.stop, res.findings, res.gaps)
-	if reason == "" && res.noRoutes {
-		reason = reasonNoRoutes
-	}
 	if reason == "" && res.scanners.failed {
 		reason = reasonScannerFailed
 	}
@@ -76,16 +72,8 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
 		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
-		NoRoutesIn: noRoutesIn(res.noRoutes),
+		Discovery: res.disc,
 	})
-}
-
-// noRoutesIn names the frameworks static looked in when it found no route.
-func noRoutesIn(noRoutes bool) []string {
-	if !noRoutes {
-		return nil
-	}
-	return static.FrameworkNames()
 }
 
 // dataHandling summarizes egress.log; a run with no link writes none.
@@ -170,8 +158,8 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	}
 	w := e.stdout
 	fmt.Fprintf(w, "calibration: %s\n", escapeControl(cal.Header()))
-	printNoRoutes(w, rep.NoRoutesIn)
-	printFindings(w, rep.Findings, len(rep.NoRoutesIn) > 0)
+	printDiscovery(w, rep.Discovery)
+	printFindings(w, rep.Findings)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
 	if summary := report.ByDesignSummary(rep.Coverage.NotEvaluated); summary != "" {
@@ -201,13 +189,8 @@ func (s *session) printStats(e env) {
 	s.stats.print(w, pricingFor(s.opts, s.cfg.Model.Contract))
 }
 
-// incompleteMark states the reason and how much was not evaluated. With no
-// route nothing was, so a count of files and findings would understate it
-// (#248).
+// incompleteMark states the reason and how much was not evaluated.
 func incompleteMark(rep *report.Report) string {
-	if len(rep.NoRoutesIn) > 0 {
-		return fmt.Sprintf("INCOMPLETE RUN (reason %s): static found no route, so no class was evaluated; this is not a clean result", rep.Run.Reason)
-	}
 	n := len(rep.Coverage.NotEvaluated)
 	for _, f := range rep.Findings {
 		if f.Status == report.StatusNotEvaluated {
@@ -217,28 +200,32 @@ func incompleteMark(rep *report.Report) string {
 	return fmt.Sprintf("INCOMPLETE RUN (reason %s): %d not evaluated; this is not a clean result", rep.Run.Reason, n)
 }
 
-// printNoRoutes says where static looked when it found no route (#207).
-func printNoRoutes(w io.Writer, frameworks []string) {
-	if len(frameworks) > 0 {
-		fmt.Fprintf(w, "routes: no %s routes found; no class was evaluated\n", strings.Join(frameworks, "/"))
+// printDiscovery prints the inventory, discovery's whole-file egress and
+// the cause of each failed batch. Every value is a count or an ID
+// report.New checked.
+func printDiscovery(w io.Writer, d report.Discovery) {
+	if len(d.Inventory) > 0 {
+		parts := make([]string, len(d.Inventory))
+		for i, c := range d.Inventory {
+			parts[i] = fmt.Sprintf("%s %s %d", c.Kind, c.ID, c.Files)
+		}
+		fmt.Fprintf(w, "inventory: %s\n", strings.Join(parts, ", "))
+	}
+	fmt.Fprintf(w, "discovery: %d whole source files sent, redacted\n", d.WholeFiles)
+	for _, b := range d.Batches {
+		fmt.Fprintf(w, "  %s\n", b.Text())
 	}
 }
 
 // printFindings counts findings by status and lists the probable and
-// verified ones; `creep why <id>` shows the rest of the evidence. With no
-// route there is no sink to leave undecided, and "0 not evaluated" would
-// read as full coverage (#248), so that count gives way to the reason.
-func printFindings(w io.Writer, findings []report.Finding, noRoutes bool) {
+// verified ones; `creep why <id>` shows the rest of the evidence.
+func printFindings(w io.Writer, findings []report.Finding) {
 	counts := map[report.Status]int{}
 	for _, f := range findings {
 		counts[f.Status]++
 	}
-	undecided := fmt.Sprintf("%d not evaluated", counts[report.StatusNotEvaluated])
-	if noRoutes {
-		undecided = "no sink to evaluate"
-	}
-	fmt.Fprintf(w, "findings: %d verified, %d probable, %d discarded, %s\n",
-		counts[report.StatusVerified], counts[report.StatusProbable], counts[report.StatusDiscarded], undecided)
+	fmt.Fprintf(w, "findings: %d verified, %d probable, %d discarded, %d not evaluated\n",
+		counts[report.StatusVerified], counts[report.StatusProbable], counts[report.StatusDiscarded], counts[report.StatusNotEvaluated])
 	for _, f := range findings {
 		if f.Status == report.StatusVerified || f.Status == report.StatusProbable {
 			fmt.Fprintf(w, "  %s  %s  %s  %s\n", f.ID, f.Status, f.Class, escapeControl(location(f)))

@@ -28,13 +28,27 @@ var hypothesisLine = regexp.MustCompile(`HYPOTHESIS: ([a-z_]+), source line ([0-
 // class or by "class@sink line" (default not_vulnerable), an error for a
 // class, and a call count.
 type fakeModel struct {
-	verdict map[string]string // reader class or class@sink line -> verdict or "invalid"
-	fail    map[string]error  // reader class -> send error
-	calls   int
+	verdict    map[string]string // reader class or class@sink line -> verdict or "invalid"
+	fail       map[string]error  // reader class, or "discover" -> send error
+	missCanary bool              // discovery answers never report the canary
+	claimAuth  bool              // discovery answers mark every repository line as an auth check
+	calls      int
+	discovered int // discovery calls
 }
 
 func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, error) {
 	m.calls++
+	if answer, ok := discoveryAnswer(c.Payload, m.missCanary); ok {
+		m.discovered++
+		if err := m.fail["discover"]; err != nil {
+			return nil, err
+		}
+		if m.claimAuth {
+			answer["auth"] = authEverywhere(c.Payload)
+		}
+		body, err := chatReply(answer)
+		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
+	}
 	match := hypothesisLine.FindSubmatch(c.Payload)
 	if match == nil {
 		return nil, errors.New("fake model: no hypothesis in request")

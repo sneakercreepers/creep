@@ -9,7 +9,7 @@
 // What it guarantees:
 //   - Every finding has one of four statuses: verified, probable, discarded
 //     or not evaluated. Every class is covered, partial or not evaluated.
-//   - Every file the gateway, the reader or static analysis did not evaluate
+//   - Every file the walk, discovery, the gateway or the reader did not evaluate
 //     in full is listed as not evaluated with its closed-enum reason. An
 //     unknown reason is an error, never dropped. Files left out by design
 //     (vendor, generated, minified: SkipReason.ByDesign) are also counted

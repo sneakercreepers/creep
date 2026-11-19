@@ -1,8 +1,0 @@
-GET /items fastapi auth=none params=0 dynamic=false handler=list_items:43
-  sql .execute line=44 dynamic=true parameterized=false indirect=false
-POST /items fastapi auth=dependency params=0 dynamic=false handler=create_item:49
-  sql .execute line=50 dynamic=false parameterized=true indirect=false
-DELETE /items/{item_id} fastapi auth=none params=1 dynamic=false handler=delete_item:56
-  sql .execute line=57 dynamic=false parameterized=true indirect=false
-POST /webhooks/test fastapi auth=dependency params=0 dynamic=false handler=test_webhook:63
-  http_client httpx.post line=64 dynamic=true parameterized=false indirect=false

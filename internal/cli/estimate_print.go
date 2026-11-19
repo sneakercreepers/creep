@@ -12,8 +12,8 @@ import (
 // scanned code can reach the terminal through it.
 func printEstimate(w io.Writer, est *estimateRun) {
 	fmt.Fprintln(w, "estimate: no model was called and no connection was opened")
-	fmt.Fprintf(w, "static: %d source files, %d routes, %d sinks; %d files not evaluated in full\n",
-		len(est.scan.graph.Files), len(est.scan.graph.Routes), len(est.scan.graph.Sinks), len(est.scan.gaps))
+	fmt.Fprintf(w, "walk: %d files, up to %d source files go to discovery whole and redacted; %d files listed without reading\n",
+		len(est.files.paths), est.files.sources(), len(est.files.gaps))
 	fmt.Fprintf(w, "calibration: %s\n", est.calibrationLine())
 	price := pricingFor(est.opts, est.cfg.Model.Contract)
 	fmt.Fprintf(w, "%-6s %6s %7s %10s %10s %9s\n", "tier", "calls", "cached", "tokens in", "tokens out", "time")
@@ -56,6 +56,8 @@ func tierLabel(t tierEstimate) string {
 func (est *estimateRun) printTierNotes(w io.Writer, t tierEstimate, price pricing) {
 	r := est.rowMeasure(t)
 	fmt.Fprintf(w, "tier %s: cost %s\n", t.tier, price.cost(r.inputTokens(), r.outputTokens()))
+	fmt.Fprintf(w, "  discovery: %d calls send %d whole source files; the reader plans %d tripwire candidates (the model may propose more)\n",
+		t.discovery.calls, t.wholeFiles, t.candidates)
 	if len(t.skipped) > 0 {
 		fmt.Fprintf(w, "  sinks not evaluated: %s\n", reasonCounts(t.skipped))
 	}

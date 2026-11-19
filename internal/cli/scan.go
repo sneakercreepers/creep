@@ -17,7 +17,6 @@ import (
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 const (
@@ -48,14 +47,15 @@ type scanResult struct {
 	gaps     []report.NotEvaluated
 	stop     string // why the run stopped early, or ""
 	planned  bool   // false when the planner refused the input or never ran
-	noRoutes bool   // static extracted no route: no class was evaluated
+	disc     report.Discovery
 	scanners scannerRun
 }
 
-// runScan scans the current directory: calibrate, static graph, plan,
-// reader, report. Errors before a report exists exit 2 (or 3 for the
-// model); afterwards the exit code is exitcode.ForReport, never 0 for an
-// incomplete run (ADR 0007).
+// runScan scans the current directory: walk, calibrate, discovery (the
+// inventory, the tripwire and the model, ADR 0017), plan, reader, report.
+// Errors before a report exists exit 2 (or 3 for the model); afterwards
+// the exit code is exitcode.ForReport, never 0 for an incomplete run
+// (ADR 0007).
 func runScan(e env, args []string) int {
 	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
 		printError(e.stderr, "creep scan", fmt.Errorf("scans the current directory; run it from the repository root (got %d arguments)", len(args)))
@@ -77,6 +77,11 @@ func runScan(e env, args []string) int {
 	}
 	defer s.close()
 	warnPreset(e.stderr, resolved.Config.Model)
+	files, err := s.walk(ctx, e.stderr)
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	if err := s.checkTools(ctx); err != nil {
 		printError(e.stderr, "creep scan: tool canary", err)
 		return failureCode(err)
@@ -88,7 +93,7 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan: calibration", err)
 		return failureCode(err)
 	}
-	res, err := s.scanWithin(ctx, cancel, cal.Tier, e.stderr)
+	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
@@ -232,8 +237,21 @@ func (s *session) calibrate(ctx context.Context) (calibrate.Calibration, error) 
 	})
 }
 
-// scan runs static analysis, the planner and the reader.
-func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, error) {
+// scan runs discovery, the planner and the reader over the walked files.
+func (s *session) scan(ctx context.Context, tier calibrate.Tier, files repoFiles) (scanResult, error) {
+	rs, err := s.discover(ctx, tier, files)
+	if err != nil {
+		return scanResult{}, err
+	}
+	res, err := s.planAndRead(ctx, tier, rs)
+	res.disc = rs.disc
+	return res, err
+}
+
+// planAndRead plans every candidate and asks the reader about each
+// hypothesis. A repository with no candidate plans nothing and reads
+// nothing; whether that is complete is the files' to say (ADR 0017 D2).
+func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoScan) (scanResult, error) {
 	ptier, err := plannerTier(tier)
 	if err != nil {
 		return scanResult{}, err
@@ -242,20 +260,8 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	if err != nil {
 		return scanResult{}, err
 	}
-	done := s.stats.start(phaseStatic)
-	rs, err := s.walk(ctx)
-	done()
-	if err != nil {
-		return scanResult{}, err
-	}
-	if len(rs.graph.Routes) == 0 {
-		// No route means no sink either: there is nothing to plan or read.
-		// A walk the deadline cut says nothing about the repository's
-		// routes, so the run is not reported as having none (#260).
-		return scanResult{gaps: rs.gaps, noRoutes: ctx.Err() == nil}, nil
-	}
 	findings := baseFindings(rs)
-	done = s.stats.start(phasePlan)
+	done := s.stats.start(phasePlan)
 	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings)
 	done()
 	if errors.Is(err, planner.ErrInput) {
@@ -264,7 +270,7 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	if err != nil {
 		return scanResult{}, err
 	}
-	reads := newDeadlineReads(ctx, s.readRepo)
+	reads := newDeadlineReads(ctx, readRepoFile(s.repo))
 	stage := readStage{model: s.model, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read}}
 	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
@@ -283,23 +289,6 @@ func rejectedScan(findings []report.Finding, gaps []report.NotEvaluated) scanRes
 		findings[i].Reason = reasonPlannerRejected
 	}
 	return scanResult{findings: findings, gaps: gaps, stop: reasonPlannerRejected}
-}
-
-// walk starts the parser without the deadline, so a deadline that passes
-// while the runtime starts cannot fail the run before a report exists; each
-// parse still stops with ctx.
-func (s *session) walk(ctx context.Context) (repoScan, error) {
-	setup := context.WithoutCancel(ctx)
-	p, err := static.NewParser(setup)
-	if err != nil {
-		return repoScan{}, err
-	}
-	defer p.Close(setup)
-	return walkRepo(ctx, s.repo, p)
-}
-
-func (s *session) readRepo(path string) ([]byte, error) {
-	return readInRoot(s.repo, path, static.MaxFileBytes)
 }
 
 // planBudget gives the planner the run's token budget and what one reader

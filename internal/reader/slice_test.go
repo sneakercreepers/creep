@@ -138,7 +138,7 @@ func TestBuildMasksSecretsInSlices(t *testing.T) {
 }
 
 // Acceptance (#94): a file redact.File rejects, or one that cannot be read
-// (missing or renamed since static ran), is never sliced, raw or truncated;
+// (missing or renamed since discovery ran), is never sliced, raw or truncated;
 // it is listed as not scanned and the run goes on.
 func TestBuildSkipsFilesRedactRejects(t *testing.T) {
 	tests := []struct {

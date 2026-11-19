@@ -14,7 +14,6 @@ import (
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // estimateTiers are the tiers estimate plans for: the tier comes from a
@@ -25,28 +24,34 @@ var estimateTiers = []calibrate.Tier{calibrate.TierS, calibrate.TierM, calibrate
 type tierEstimate struct {
 	tier       calibrate.Tier
 	calibrated bool           // the cached calibration gives this tier
-	requests   requestMeasure // reader requests
+	requests   requestMeasure // discovery and reader requests
+	discovery  requestMeasure // discovery requests alone
+	wholeFiles int            // source files discovery sends whole
+	candidates int            // tripwire candidates: the reader's floor
 	skipped    map[string]int // sinks the plan or the slicer leaves out, by reason
 	partial    int            // slices cut to fit the tier's budget
 	incomplete string         // why the scan would end incomplete, or ""
 }
 
-// estimateRun is one estimate: the static view, the calibration and one
-// plan per tier. Nothing in it is repository text except what the slicer
-// reads to measure request sizes, and none of that is printed.
+// estimateRun is one estimate: the walk, the calibration and, per tier,
+// discovery and a plan. Nothing in it is repository text except what
+// discovery and the slicer read to measure request sizes, and none of
+// that is printed.
 type estimateRun struct {
 	cfg   config.Config
 	opts  globalOptions
 	repo  *os.Root
 	cache *state.Store // the run-state cache, or nil when .creep is missing
-	scan  repoScan
+	files repoFiles
+	seed  [32]byte // the stored discovery seed, so cached requests match
 	cal   calibrationEstimate
 	tiers []tierEstimate
 }
 
 // runEstimate prints what `creep scan` would cost here without calling a
 // model or opening a network connection (invariants 1, 2 and 5): the
-// static graph, the planner's plan and the exact request bodies the scan
+// inventory, the discovery batches, the planner's plan over the tripwire's
+// candidates and the exact request bodies the scan
 // would build, measured by a send function that never sends (ADR 0011).
 func runEstimate(e env, args []string) int {
 	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
@@ -118,16 +123,14 @@ func openCacheReadOnly() (*state.Store, error) {
 }
 
 func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {
-	// The parser and calibration (no repository text) run without the
-	// deadline; each parse and each redaction stops with ctx.
+	// Calibration (no repository text) runs without the deadline; each
+	// redaction and each discovery or reader read stops with ctx.
 	setup := context.WithoutCancel(ctx)
-	p, err := static.NewParser(setup)
-	if err != nil {
+	var err error
+	if est.files, err = walkRepo(ctx, est.repo); err != nil {
 		return err
 	}
-	est.scan, err = walkRepo(ctx, est.repo, p)
-	p.Close(setup)
-	if err != nil {
+	if est.seed, err = storedSeed(est.cache); err != nil {
 		return err
 	}
 	if est.cal, err = est.calibration(setup, deps); err != nil {
@@ -143,10 +146,18 @@ func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {
 	return nil
 }
 
-// tier plans the scan at one tier, as scan does, and measures each reader
-// request the plan leads to.
+// tier measures the scan at one tier, as scan runs it: discovery, then the
+// plan over its candidates and each reader request the plan leads to.
 func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEstimate, error) {
 	t := tierEstimate{tier: tier, calibrated: est.cal.cached && est.cal.tier == tier, skipped: map[string]int{}}
+	red, err := redact.NewWithContext(ctx)
+	if err != nil {
+		return t, err
+	}
+	rs, err := est.measureDiscovery(ctx, tier, red, &t)
+	if err != nil {
+		return t, err
+	}
 	ptier, err := plannerTier(tier)
 	if err != nil {
 		return t, err
@@ -155,10 +166,10 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	if err != nil {
 		return t, err
 	}
-	findings := baseFindings(est.scan)
-	plan, err := planSinks(est.scan, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings)
+	findings := baseFindings(rs)
+	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings)
 	if errors.Is(err, planner.ErrInput) {
-		rejected := rejectedScan(findings, est.scan.gaps)
+		rejected := rejectedScan(findings, rs.gaps)
 		t.skipped[reasonPlannerRejected] = len(rejected.findings)
 		t.incomplete = rejected.stop
 		return t, nil
@@ -166,7 +177,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	if err != nil {
 		return t, err
 	}
-	stop, err := est.measureReads(ctx, rtier, plan, findings, &t)
+	stop, err := est.measureReads(ctx, red, rtier, plan, rs, findings, &t)
 	if err != nil {
 		return t, err
 	}
@@ -174,7 +185,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 		stop = reasonDeadline // the deadline cut this tier's slicing
 	}
 	countSkipped(findings, t.skipped)
-	t.incomplete = incompleteReason(stop, findings, est.scan.gaps)
+	t.incomplete = incompleteReason(stop, findings, rs.gaps)
 	return t, nil
 }
 
@@ -182,9 +193,9 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 // request each one becomes. A sliced finding is marked discarded only so
 // incompleteReason sees it as answered: the estimate predicts which sinks
 // cannot be evaluated, not what the model will say.
-func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, plan planner.Plan, findings []report.Finding, t *tierEstimate) (string, error) {
-	targets, sinkOf := targetsFor(plan, est.scan, findings)
-	rep, err := est.slice(ctx, rtier, targets)
+func (est *estimateRun) measureReads(ctx context.Context, red *redact.Redactor, rtier reader.Tier, plan planner.Plan, rs repoScan, findings []report.Finding, t *tierEstimate) (string, error) {
+	targets, sinkOf := targetsFor(plan, rs, findings)
+	rep, err := est.slice(ctx, red, rtier, targets)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +207,7 @@ func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, pla
 	if err := m.readerRequests(context.WithoutCancel(ctx), est.cfg.Model, rtier, rep.Slices); err != nil {
 		return "", err
 	}
-	t.requests = m.requestMeasure
+	t.requests = t.requests.plus(m.requestMeasure)
 	for _, s := range rep.Slices {
 		f := &findings[sinkOf[s.Hypothesis]]
 		f.Status, f.Partial = report.StatusDiscarded, s.Partial
@@ -213,14 +224,8 @@ func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, pla
 // slice builds the tier's slices as the scan would, under the deadline:
 // the redactor stops with ctx, and files the slicer never reached are listed
 // as budget, unread.
-func (est *estimateRun) slice(ctx context.Context, rtier reader.Tier, targets []reader.Target) (reader.SliceReport, error) {
-	red, err := redact.NewWithContext(ctx)
-	if err != nil {
-		return reader.SliceReport{}, err
-	}
-	reads := newDeadlineReads(ctx, func(path string) ([]byte, error) {
-		return readInRoot(est.repo, path, static.MaxFileBytes)
-	})
+func (est *estimateRun) slice(ctx context.Context, red *redact.Redactor, rtier reader.Tier, targets []reader.Target) (reader.SliceReport, error) {
+	reads := newDeadlineReads(ctx, readRepoFile(est.repo))
 	rep, err := reader.Slicer{Redactor: red, Tier: rtier, Read: reads.Read}.Build(targets)
 	if err != nil && !rep.Incomplete {
 		return rep, err
