@@ -59,6 +59,9 @@ func sampleInput(t *testing.T, incomplete bool) Input {
 			{Path: hostilePaths[3], Reason: SkipReadFailed},
 			{Path: hostilePaths[5], Reason: SkipRedactFailed},
 			{Path: hostilePaths[6], Reason: SkipReadFailed},
+			{Path: "node_modules/pkg/index.js", Reason: SkipVendor},
+			{Path: "node_modules/pkg/lib.js", Reason: SkipVendor},
+			{Path: "api_pb2.py", Reason: SkipGenerated},
 		},
 		DataHandling: dh,
 	}

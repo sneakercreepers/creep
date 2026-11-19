@@ -44,7 +44,7 @@ func TestScanNoRoutesIsNotCovered(t *testing.T) {
 		{"javascript without express", map[string]string{"server.js": "const http = require(\"http\");\nhttp.createServer((req, res) => res.end(req.url)).listen(80);\n"}, exitcode.Incomplete, reasonNoRoutes, true},
 		{"empty repository", map[string]string{}, exitcode.Incomplete, reasonNoRoutes, true},
 		{"only non-source files", map[string]string{"README.md": "# x\n", "config.yaml": "a: 1\n"}, exitcode.Incomplete, reasonNoRoutes, true},
-		{"only by-design vendor code", map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}, exitcode.Incomplete, reasonNoRoutes, true},
+		{"only by-design vendor code", withGitIndex(map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}, []string{"node_modules"}), exitcode.Incomplete, reasonNoRoutes, true},
 		{"file gap names its reason first", map[string]string{"broken.py": "def f(:\n"}, exitcode.Incomplete, string(report.SkipSyntaxError), true},
 		{"flask route without sinks", map[string]string{"app.py": helloRoute}, exitcode.OK, "", false},
 		{"flask app without findings", map[string]string{"app.py": "@flask"}, exitcode.OK, "", false},
