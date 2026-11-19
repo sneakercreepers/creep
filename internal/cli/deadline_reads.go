@@ -6,8 +6,6 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/reader"
-	"github.com/sneakercreepers/creep/internal/report"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // deadlineReads is the slicer's Read under the scan deadline. Past it,
@@ -54,16 +52,4 @@ func (d *deadlineReads) relabel(rep *reader.SliceReport, targets []reader.Target
 			rep.NotEvaluated[i].Reason = reader.SkipReason(reasonDeadline)
 		}
 	}
-}
-
-// targetsPastDeadline marks every target's finding as cut by the deadline
-// when it has passed before slicing, so nothing is read, redacted or sent.
-func targetsPastDeadline(ctx context.Context, targets []reader.Target, sinkOf map[reader.HypothesisID]static.SinkID, findings []report.Finding) bool {
-	if ctx.Err() == nil {
-		return false
-	}
-	for _, t := range targets {
-		findings[sinkOf[t.Hypothesis]].Reason = reasonDeadline
-	}
-	return true
 }

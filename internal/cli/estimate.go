@@ -184,9 +184,6 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 // cannot be evaluated, not what the model will say.
 func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, plan planner.Plan, findings []report.Finding, t *tierEstimate) (string, error) {
 	targets, sinkOf := targetsFor(plan, est.scan, findings)
-	if targetsPastDeadline(ctx, targets, sinkOf, findings) {
-		return reasonDeadline, nil
-	}
 	rep, err := est.slice(ctx, rtier, targets)
 	if err != nil {
 		return "", err

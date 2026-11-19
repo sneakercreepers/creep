@@ -5,69 +5,135 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/reader"
+	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/static"
 )
 
-// Protection (#260): past the deadline the slicer reads nothing from disk.
-// Of three files crafted to redact slowly, at most the one being redacted
-// when the deadline passed is redact_failed (its sinks file_not_scanned);
-// every file the slicer never reached is listed budget, and so are its
-// sinks.
+// Protection (#260): past the deadline the slicer reads nothing from disk,
+// and every file it did not slice is still listed. The deadline is a cancel
+// at a fixed point, never a wall-clock race: before slicing, every parsed
+// file and its sinks are budget; during the first file's redaction, that
+// file is redact_failed (its sinks file_not_scanned) and the files after it
+// are budget, unread. No model call is made either way (the stage has no
+// model, so a call would panic).
 func TestDeadlineListsUnreachedFilesAsBudget(t *testing.T) {
-	slow := craftedSlowApp(t, false)
-	scanRepo(t, map[string]string{"a.py": slow, "b.py": slow, "c.py": slow}, "")
-	setOperatorPolicy(t)
-	writeUserConfig(t, "budget:\n  max_seconds: 1\n")
-	m := &fakeModel{}
-	start := time.Now()
-	code, out, errOut := runScanWith(deadlineDeps(m, false), "scan")
-	if took := time.Since(start); took > time.Second+deadlineOverrun {
-		t.Fatalf("run took %v past a 1 s deadline", took)
+	tests := []struct {
+		name     string
+		cancelAt string // cancel when this file is read; "" cancels before slicing
+		wantCut  string // the file listed redact_failed, or ""
+	}{
+		{"deadline before slicing", "", ""},
+		{"deadline during the first file's redaction", "a.py", "a.py"},
 	}
-	if code != exitcode.Incomplete || m.calls != 0 {
-		t.Fatalf("exit %d with %d model calls, want 4 and none\nstdout:\n%s\nstderr:\n%s", code, m.calls, out, errOut)
-	}
-	rep := readScanReport(t)
-	cutFile := checkUnreachedFiles(t, rep.Coverage.NotEvaluated)
-	for _, f := range rep.Findings {
-		want := reasonDeadline
-		if f.Path == cutFile {
-			want = string(reader.SkipFileNotScanned)
-		}
-		if f.Status != report.StatusNotEvaluated || f.Reason != want {
-			t.Errorf("finding %s in %s = %s (%s), want not evaluated (%s)", f.ID, f.Path, f.Status, f.Reason, want)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := walkFlaskFiles(t, "a.py", "b.py", "c.py")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			if tt.cancelAt == "" {
+				cancel(errScanDeadline)
+			}
+			gaps, findings := readPastDeadline(t, ctx, rs, func(path string) ([]byte, error) {
+				if path == tt.cancelAt {
+					cancel(errScanDeadline)
+				}
+				return os.ReadFile(path)
+			})
+			checkUnreachedFiles(t, gaps, findings, tt.wantCut)
+		})
 	}
 }
 
-// checkUnreachedFiles requires every crafted file listed, at most one as
-// redact_failed and the rest as budget, and returns the redact_failed one.
-func checkUnreachedFiles(t *testing.T, gaps []report.NotEvaluated) string {
+// walkFlaskFiles writes the vulnerable Flask app under each name and walks
+// the repository with no deadline.
+func walkFlaskFiles(t *testing.T, names ...string) repoScan {
 	t.Helper()
-	cut, listed := "", map[string]bool{}
-	for _, g := range gaps {
-		listed[g.Path] = true
-		switch {
-		case g.Reason == report.SkipBudget:
-		case g.Reason == report.SkipReason(gateway.SkipRedactFailed) && cut == "":
-			cut = g.Path
-		default:
-			t.Errorf("%s listed %s, want budget (or one redact_failed)", g.Path, g.Reason)
-		}
+	files := map[string]string{}
+	for _, n := range names {
+		files[n] = "@flask"
 	}
+	scanRepo(t, files, "")
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	p, err := static.NewParser(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close(context.Background())
+	rs, err := walkRepo(context.Background(), root, p)
+	if err != nil || len(rs.gaps) != 0 || len(rs.graph.Sinks) == 0 {
+		t.Fatalf("walk: %v, gaps %+v, %d sinks", err, rs.gaps, len(rs.graph.Sinks))
+	}
+	return rs
+}
+
+// readPastDeadline plans rs at tier M and runs the read stage under ctx,
+// with the scan's deadline-aware Read around read.
+func readPastDeadline(t *testing.T, ctx context.Context, rs repoScan, read func(string) ([]byte, error)) ([]report.NotEvaluated, []report.Finding) {
+	t.Helper()
+	findings := baseFindings(rs)
+	ptier, err := plannerTier(calibrate.TierM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rtier, err := readerTier(calibrate.TierM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := planSinks(rs, ptier, planBudget(2_000_000, rtier), findings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	red, err := redact.NewWithContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := newDeadlineReads(ctx, read)
+	stage := readStage{tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: red, Tier: rtier, Read: reads.Read}}
+	gaps, _, err := stage.run(ctx, plan, rs, findings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return gaps, findings
+}
+
+// checkUnreachedFiles requires each file listed once: cut as redact_failed
+// with its sinks file_not_scanned, every other file and sink as budget.
+func checkUnreachedFiles(t *testing.T, gaps []report.NotEvaluated, findings []report.Finding, cut string) {
+	t.Helper()
+	var want []report.NotEvaluated
 	for _, p := range []string{"a.py", "b.py", "c.py"} {
-		if !listed[p] {
-			t.Errorf("%s is not listed: %+v", p, gaps)
+		reason := report.SkipBudget
+		if p == cut {
+			reason = report.SkipReason(gateway.SkipRedactFailed)
+		}
+		want = append(want, report.NotEvaluated{Path: p, Reason: reason})
+	}
+	if !slices.Equal(gaps, want) {
+		t.Errorf("files = %+v, want %+v", gaps, want)
+	}
+	for _, f := range findings {
+		reason := reasonDeadline
+		if f.Path == cut {
+			reason = string(reader.SkipFileNotScanned)
+		}
+		if f.Status != report.StatusNotEvaluated || f.Reason != reason {
+			t.Errorf("finding %s in %s = %s (%s), want not evaluated (%s)", f.ID, f.Path, f.Status, f.Reason, reason)
 		}
 	}
-	return cut
 }
 
 // A walk the deadline cut says nothing about the repository's routes: the

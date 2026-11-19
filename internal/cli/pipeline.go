@@ -86,9 +86,9 @@ type readStage struct {
 // slicer could not use and the reason the run stopped early, if it did.
 func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, findings []report.Finding) ([]report.NotEvaluated, string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
-	if targetsPastDeadline(ctx, targets, sinkOf, findings) {
-		return nil, reasonDeadline, nil
-	}
+	// Past the deadline the slicer still lists every file, without reading
+	// it (deadlineReads), so a file static parsed but nothing sliced is in
+	// coverage too.
 	rep, err := r.slicer.Build(targets)
 	if err != nil && !rep.Incomplete {
 		return nil, "", err
