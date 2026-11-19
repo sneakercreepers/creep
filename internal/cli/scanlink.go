@@ -132,6 +132,11 @@ var errNotRecordable = errors.New("reply not recordable")
 // hash the exact request body, so a changed prompt, slice or model misses.
 func recordedSend(store *state.Store, mode state.Mode, send models.SendFunc) models.SendFunc {
 	return func(ctx context.Context, c gateway.Call) (*gateway.Reply, error) {
+		// A replayed answer needs no transport to notice a done context, so
+		// the scan deadline is checked here too (#260).
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("model call: %w", context.Cause(ctx))
+		}
 		var live *gateway.Reply
 		body, err := store.Respond(mode, cacheKey(c), func() ([]byte, error) {
 			r, err := send(ctx, c)

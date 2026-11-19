@@ -35,13 +35,26 @@ type repoScan struct {
 // run_full, a failed call) is not fatal: the files say why, and the run is
 // incomplete. Only a Discoverer that could not start is.
 func discoverRepo(ctx context.Context, d discover.Discoverer, files repoFiles) (repoScan, error) {
-	marks := &fileMarks{read: d.Read, marks: map[string]repofile.Ignored{}}
+	res, marks, err := runDiscovery(ctx, d, files)
+	if err != nil {
+		return repoScan{}, err
+	}
+	return discoverRepoResult(res, files, marks), nil
+}
+
+// runDiscovery runs d over the walked files under the scan deadline: past
+// it no file is read, and what the deadline left undone is budget
+// (deadlineDiscovery). It also returns each read file's mark.
+func runDiscovery(ctx context.Context, d discover.Discoverer, files repoFiles) (discover.Result, map[string]repofile.Ignored, error) {
+	reads := newDeadlineReads(ctx, d.Read)
+	marks := &fileMarks{read: reads.Read, marks: map[string]repofile.Ignored{}}
 	d.Read = marks.readFile
 	res, err := d.Run(ctx, files.paths)
 	if len(res.Files) != len(files.paths) {
-		return repoScan{}, fmt.Errorf("discover: %w", err)
+		return discover.Result{}, nil, fmt.Errorf("discover: %w", err)
 	}
-	return discoverRepoResult(res, files, marks.marks), nil
+	deadlineDiscovery(ctx, res.Files, files.paths, reads.refused)
+	return res, marks.marks, nil
 }
 
 // discoverRepoResult builds the scan's view from a discovery Result: the

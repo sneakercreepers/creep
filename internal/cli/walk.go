@@ -37,9 +37,11 @@ func (f repoFiles) sources() int {
 // walkRepo lists every file under root in lexical order, so the same tree
 // gives the same requests. Every regular file goes to discovery, which
 // decides from the name and bytes what is source (ADR 0017), except a file
-// listed by entryGap. Only a walk or context error stops it.
+// listed by entryGap. Only a walk error stops it; past a deadline on ctx
+// no vendor tree is proven (vendorProofs), so the files go to discovery,
+// which lists them unread.
 func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
-	proofs := newVendorProofs(root)
+	proofs := newVendorProofs(ctx, root)
 	var files repoFiles
 	err := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -58,7 +60,7 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 		case reason != "":
 			files.gaps = append(files.gaps, report.NotEvaluated{Path: rel, Reason: reason})
 		}
-		return ctx.Err()
+		return nil
 	})
 	if err != nil {
 		return repoFiles{}, fmt.Errorf("walk repository: %w", err)

@@ -168,7 +168,10 @@
 // catastrophic backtracking. Each Redact call is still bounded to
 // MaxInputBytes, each File call to MaxFileBytes (1 MiB) with lines of at most
 // MaxLineBytes, and both fail closed above their caps. The constants document
-// the measured worst case. Values from earlier fragments are re-masked through
+// the measured worst case. That worst case is minutes per file, so a
+// Redactor from NewWithContext stops between detectors and chunks once the
+// run's context is done (the scan deadline, #260) and returns no text.
+// Values from earlier fragments are re-masked through
 // an index of 8-byte windows, linear in the input however many values the run
 // knows. A rule whose matches overlap densely (a block of .env lines with
 // long names) stops searching again after a fixed multiple of the input,

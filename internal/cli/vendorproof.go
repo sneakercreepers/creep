@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path"
@@ -29,6 +30,7 @@ const gitIndexPath = ".git/index"
 // a large node_modules costs one directory read per package, and the index
 // is read once, on the first vendor file.
 type vendorProofs struct {
+	ctx     context.Context // the scan deadline (#260)
 	root    *os.Root
 	seen    map[string]bool
 	tracked *trackedIndex
@@ -36,11 +38,18 @@ type vendorProofs struct {
 	indexOK bool
 }
 
-func newVendorProofs(root *os.Root) *vendorProofs {
-	return &vendorProofs{root: root, seen: map[string]bool{}}
+func newVendorProofs(ctx context.Context, root *os.Root) *vendorProofs {
+	return &vendorProofs{ctx: ctx, root: root, seen: map[string]bool{}}
 }
 
+// proven reports whether rel is in an installed tree. Past the scan
+// deadline nothing is proven: reading the git index and comparing a tree's
+// identity read and stat the repository, which the deadline ends, so a
+// file is then read or listed like first-party code (fail closed).
 func (v *vendorProofs) proven(rel string) bool {
+	if v.ctx.Err() != nil {
+		return false
+	}
 	mark, ok := repofile.VendorEvidence(rel)
 	if !ok {
 		return false

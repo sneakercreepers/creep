@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -127,7 +128,7 @@ func openProofs(t *testing.T, repo string) *vendorProofs {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { root.Close() })
-	return newVendorProofs(root)
+	return newVendorProofs(context.Background(), root)
 }
 
 func mkdirTree(t *testing.T, repo, name string) {

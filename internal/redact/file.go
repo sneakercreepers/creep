@@ -57,6 +57,8 @@ var (
 // are merged over the whole file before any marker is written, so a value
 // found by two chunks is masked once, with one marker. A file holding a
 // format character after its start goes through all of it twice (format.go).
+// A Redactor from NewWithContext stops between detectors and chunks once its
+// context is done and returns the context's cause, never partial text.
 func (r *Redactor) File(content []byte) (string, error) {
 	if len(content) > MaxFileBytes {
 		return "", fmt.Errorf("redact file of %d bytes: %w", len(content), ErrFileTooLarge)
@@ -65,7 +67,11 @@ func (r *Redactor) File(content []byte) (string, error) {
 	if n := longestLine(text); n > MaxLineBytes {
 		return "", fmt.Errorf("redact file with a %d-byte line: %w", n, ErrLineTooLong)
 	}
-	return r.finish(text, withoutFormat(text, r.detectFile))
+	found := withoutFormat(text, r.detectFile)
+	if err := r.stopped(); err != nil {
+		return "", err
+	}
+	return r.finish(text, found)
 }
 
 // wholeFileRules are the rules a match of which can start more than
@@ -96,6 +102,9 @@ func (r *Redactor) detectFile(text string) []span {
 	whole, chunked := r.gated(text).splitWholeFile()
 	found := append(findPrivateKeys(text), whole.find(text)...)
 	for _, c := range chunkBounds(text) {
+		if chunked.stopped() {
+			break
+		}
 		for _, sp := range chunked.find(text[c.start:c.end]) {
 			sp.start += c.start
 			sp.end += c.start
@@ -109,6 +118,7 @@ func (r *Redactor) detectFile(text string) []span {
 // detectors it runs chunk by chunk.
 func (s detectorSet) splitWholeFile() (whole, chunked detectorSet) {
 	chunked.patterns = s.patterns
+	whole.done, chunked.done = s.done, s.done
 	whole.rules, chunked.rules = partitionWholeFile(s.rules)
 	whole.encoded, chunked.encoded = partitionWholeFile(s.encoded)
 	return whole, chunked

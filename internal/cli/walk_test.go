@@ -75,7 +75,7 @@ func (regularEntry) Info() (fs.FileInfo, error) { return nil, fs.ErrNotExist }
 // could be source, never sent and never fatal; one that cannot be is
 // dropped. Windows cannot hold these names, so entryGap is called directly.
 func TestEntryGapRefusedNames(t *testing.T) {
-	proofs := newVendorProofs(nil)
+	proofs := newVendorProofs(context.Background(), nil)
 	tests := []struct {
 		name string
 		want report.SkipReason

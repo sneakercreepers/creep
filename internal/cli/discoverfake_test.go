@@ -87,7 +87,13 @@ var testSeed = [32]byte{'c', 'r', 'e', 'e', 'p', 1}
 // discovery on it with m as the model, as scan does.
 func discoverHere(t *testing.T, m *fakeModel, tier calibrate.Tier) repoScan {
 	t.Helper()
-	ctx := context.Background()
+	return discoverWithin(t, context.Background(), m, tier)
+}
+
+// discoverWithin is discoverHere under ctx, which stands for the scan
+// deadline.
+func discoverWithin(t *testing.T, ctx context.Context, m *fakeModel, tier calibrate.Tier) repoScan {
+	t.Helper()
 	root, err := os.OpenRoot(".")
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +107,7 @@ func discoverHere(t *testing.T, m *fakeModel, tier calibrate.Tier) repoScan {
 	if err != nil {
 		t.Fatal(err)
 	}
-	red, err := redact.New()
+	red, err := redact.NewWithContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

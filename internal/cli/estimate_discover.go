@@ -39,12 +39,12 @@ func (est *estimateRun) measureDiscovery(ctx context.Context, tier calibrate.Tie
 		return repoScan{}, err
 	}
 	d := discover.Discoverer{Redactor: red, Model: model, Tier: dtier, Seed: est.seed, Read: readRepoFile(est.repo)}
-	res, err := d.Run(ctx, est.files.paths)
-	if len(res.Files) != len(est.files.paths) {
+	res, marks, err := runDiscovery(ctx, d, est.files)
+	if err != nil {
 		return repoScan{}, err
 	}
 	assumeCanaryFound(res.Files)
-	rs := discoverRepoResult(res, est.files, nil)
+	rs := discoverRepoResult(res, est.files, marks)
 	t.discovery, t.requests = m.requestMeasure, m.requestMeasure
 	t.wholeFiles, t.candidates = rs.disc.WholeFiles, len(rs.res.Sinks)
 	return rs, nil
