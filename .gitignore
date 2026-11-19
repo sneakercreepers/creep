@@ -6,3 +6,5 @@ egress.log
 !internal/report/testdata/golden/*.sarif
 coverage.out
 .DS_Store
+/.idea/
+/.vscode/
