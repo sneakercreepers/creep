@@ -18,7 +18,8 @@ creep scan .
                     lexical tripwire (one cross-language sink table matched on bytes) and model discovery
                     (whole redacted files through the gateway, closed schema of line spans and enums, one
                     canary per batch), combined by union only with worst-case planner flags. Static stays
-                    in the union until a 100% recall gate on testdata/apps, then goes; wazero last
+                    in the union until a 100% recall gate on testdata/apps with recorded model runs (after
+                    #204 and #35), then goes; wazero last
   3 Planner         sees only IDs, enums and booleans → deterministic ranking, no model call, tier step caps
   4 Reader          reads redacted slices (quarantined), answers in a closed schema
   5 Sandbox  v0.2   optional Docker/Podman through their CLI (ADR 0016): runtime detection, hardened

@@ -208,7 +208,7 @@ Adapted from *Building Evolutionary Architectures* (Ford, Parsons, Kua), taking 
 | Appropriate coupling (connascence) | Layer table and narrow interfaces; the auditor flags strong connascence across a package boundary | No coupling metrics tooling |
 | Anticorruption layer | Model contracts translate vendor output into closed schemas before planner or reader see it | — |
 | Last responsible moment | ADRs only when a dependency or public contract changes | — |
-| Evolvability over predictability | Prefer data (prompts, rules, kits, layer table) over code so changes stay local | No speculative plugin systems |
+| Evolvability over predictability | Prefer data (prompts, rules, inventory and tripwire tables, layer table) over code so changes stay local | No speculative plugin systems |
 
 Skipped on purpose: architectural quanta per service, cross-service schema evolution and per-team deployment pipelines. They target distributed systems; creep is one binary with no server.
 
