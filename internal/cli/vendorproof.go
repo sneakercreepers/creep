@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/sneakercreepers/creep/internal/gitindex"
 	"github.com/sneakercreepers/creep/internal/static"
 )
 
@@ -70,11 +71,11 @@ func (v *vendorProofs) installed(tree string) bool {
 // readTracked reads the paths the repository's git index tracks; ok is
 // false when there is no index or it cannot be read whole.
 func readTracked(root *os.Root) (*trackedIndex, bool) {
-	data, err := readInRoot(root, gitIndexPath, maxGitIndexBytes)
+	data, err := readInRoot(root, gitIndexPath, gitindex.MaxBytes)
 	if err != nil {
 		return nil, false
 	}
-	paths, err := parseGitIndex(data)
+	paths, err := gitindex.Parse(data)
 	if err != nil {
 		return nil, false
 	}

@@ -8,19 +8,34 @@ import (
 	"strings"
 )
 
+// maxTrackedSiblings bounds the tracked names compared with one directory.
+// A directory with more tracked names beside its aliases counts as tracked
+// (fail closed), so the identity check costs at most this many comparisons
+// per installed tree and per directory above one.
+const maxTrackedSiblings = 4096
+
 // trackedIndex answers whether git tracks anything in a directory of the
 // scanned tree. A path in the index is a name, and the file system may
 // resolve another name to the same directory: an NTFS 8.3 short name
 // (node_m~1), another case on Windows or macOS, NTFS trailing dots and
 // spaces, or another Unicode form on macOS (#267 tester H1). So names are
-// only a first guard (folded), and the answer comes from file identity: a
-// tracked path whose directory at the tree's depth is the tree itself
-// tracks the tree.
+// only a first guard (folded), and the answer comes from file identity.
+//
+// An alias resolves component by component, so a tracked name aliases a
+// directory only when its parent name aliases the directory's parent. The
+// check walks down from the root that way and compares a directory only
+// with the tracked names under its parent's aliases. Worst case: each
+// tracked name is resolved at most once per kind of lookup, and the
+// comparisons are at most maxTrackedSiblings per installed tree and per
+// distinct directory above one (BenchmarkTrackedIndexTracks).
 type trackedIndex struct {
-	folded  trackedPaths
-	nodes   map[int][]string // tracked entries and their directories, by depth
-	entries map[int][]string // tracked entries only, by depth
-	stats   map[string]statResult
+	folded    trackedPaths
+	children  map[string][]string // tracked entries and their directories, by parent ("." is the root)
+	entries   map[string][]string // tracked entries only, by parent
+	lstats    map[string]statResult
+	stats     map[string]statResult
+	aliases   map[string]aliasResult
+	submodule map[string]bool // directories above a tree: does a tracked entry resolve to one
 }
 
 type statResult struct {
@@ -28,14 +43,24 @@ type statResult struct {
 	err  error
 }
 
+// aliasResult holds the tracked names that resolve to a directory; ok is
+// false when that cannot be told.
+type aliasResult struct {
+	names []string
+	ok    bool
+}
+
 func newTrackedIndex(paths []string) *trackedIndex {
-	t := &trackedIndex{folded: newTrackedPaths(paths), nodes: map[int][]string{}, entries: map[int][]string{}, stats: map[string]statResult{}}
+	t := &trackedIndex{
+		folded: newTrackedPaths(paths), children: map[string][]string{}, entries: map[string][]string{},
+		lstats: map[string]statResult{}, stats: map[string]statResult{}, aliases: map[string]aliasResult{}, submodule: map[string]bool{},
+	}
 	seen := map[string]bool{}
 	for _, p := range paths {
-		t.entries[pathDepth(p)] = append(t.entries[pathDepth(p)], p)
+		t.entries[parentDir(p)] = append(t.entries[parentDir(p)], p)
 		for n := p; n != "." && !seen[n]; n = parentDir(n) {
 			seen[n] = true
-			t.nodes[pathDepth(n)] = append(t.nodes[pathDepth(n)], n)
+			t.children[parentDir(n)] = append(t.children[parentDir(n)], n)
 		}
 	}
 	return t
@@ -46,32 +71,36 @@ func newTrackedIndex(paths []string) *trackedIndex {
 // cannot resolve counts as tracked; a tracked path that does not exist on
 // disk holds no file, so it does not count.
 func (t *trackedIndex) tracks(root *os.Root, dir string) bool {
-	if t.folded.touches(dir) {
-		return true
-	}
-	info, err := root.Lstat(dir)
-	if err != nil || t.sameAsAny(root, info, t.nodes[pathDepth(dir)]) {
+	if t.folded.touches(dir) || t.resolvesTo(root, dir, t.children) {
 		return true
 	}
 	for a := parentDir(dir); a != "."; a = parentDir(a) {
-		info, err := root.Lstat(a)
-		if err != nil || t.sameAsAny(root, info, t.entries[pathDepth(a)]) {
+		hit, done := t.submodule[a]
+		if !done {
+			hit = t.resolvesTo(root, a, t.entries)
+			t.submodule[a] = hit
+		}
+		if hit {
 			return true
 		}
 	}
 	return false
 }
 
-// sameAsAny reports whether one of names resolves to target, or cannot be
-// resolved for any reason but its absence. Every alias of a name keeps its
-// depth, so only names at target's depth are compared.
-func (t *trackedIndex) sameAsAny(root *os.Root, target fs.FileInfo, names []string) bool {
+// resolvesTo reports whether a tracked name in byParent, under an alias of
+// dir's parent, resolves to dir, or whether that cannot be told.
+func (t *trackedIndex) resolvesTo(root *os.Root, dir string, byParent map[string][]string) bool {
+	target, err := root.Lstat(dir)
+	if err != nil {
+		return true
+	}
+	parents, ok := t.aliasesOf(root, parentDir(dir))
+	names := namesUnder(parents, byParent)
+	if !ok || len(names) > maxTrackedSiblings {
+		return true
+	}
 	for _, n := range names {
-		r, ok := t.stats[n]
-		if !ok {
-			r.info, r.err = root.Lstat(n)
-			t.stats[n] = r
-		}
+		r := cachedStat(t.lstats, root.Lstat, n)
 		switch {
 		case errors.Is(r.err, fs.ErrNotExist):
 		case r.err != nil, os.SameFile(r.info, target):
@@ -81,7 +110,60 @@ func (t *trackedIndex) sameAsAny(root *os.Root, target fs.FileInfo, names []stri
 	return false
 }
 
-func pathDepth(p string) int { return strings.Count(p, "/") + 1 }
+// aliasesOf returns the tracked directory names that resolve to dir,
+// following links as a path component does; "." is the root itself.
+func (t *trackedIndex) aliasesOf(root *os.Root, dir string) ([]string, bool) {
+	if dir == "." {
+		return []string{"."}, true
+	}
+	r, done := t.aliases[dir]
+	if !done {
+		r = t.findAliases(root, dir)
+		t.aliases[dir] = r
+	}
+	return r.names, r.ok
+}
+
+func (t *trackedIndex) findAliases(root *os.Root, dir string) aliasResult {
+	target, err := root.Stat(dir)
+	if err != nil {
+		return aliasResult{}
+	}
+	parents, ok := t.aliasesOf(root, parentDir(dir))
+	names := namesUnder(parents, t.children)
+	if !ok || len(names) > maxTrackedSiblings {
+		return aliasResult{}
+	}
+	out := []string{}
+	for _, n := range names {
+		r := cachedStat(t.stats, root.Stat, n)
+		switch {
+		case errors.Is(r.err, fs.ErrNotExist):
+		case r.err != nil:
+			return aliasResult{}
+		case os.SameFile(r.info, target):
+			out = append(out, n)
+		}
+	}
+	return aliasResult{names: out, ok: true}
+}
+
+func namesUnder(parents []string, byParent map[string][]string) []string {
+	var names []string
+	for _, p := range parents {
+		names = append(names, byParent[p]...)
+	}
+	return names
+}
+
+func cachedStat(cache map[string]statResult, stat func(string) (fs.FileInfo, error), name string) statResult {
+	r, ok := cache[name]
+	if !ok {
+		r.info, r.err = stat(name)
+		cache[name] = r
+	}
+	return r
+}
 
 func parentDir(p string) string {
 	i := strings.LastIndexByte(p, '/')

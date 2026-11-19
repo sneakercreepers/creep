@@ -7,6 +7,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
@@ -24,7 +25,7 @@ func withGitIndex(files map[string]string, installed []string, extra ...string) 
 		}
 	}
 	slices.Sort(tracked)
-	out[gitIndexPath] = string(buildGitIndex(gitIndexSpec{version: 2, paths: tracked}))
+	out[gitIndexPath] = string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked}))
 	return out
 }
 
@@ -142,7 +143,7 @@ func TestScanInstalledTreesStayByDesign(t *testing.T) {
 		{"node-gyp with C#", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/node-gyp/package.json": "{}", "node_modules/node-gyp/lib/Find-VisualStudio.cs": "class X {}\n", "node_modules/bcrypt/package.json": "{}", "node_modules/bcrypt/src/bcrypt.cc": "int x;\n"}, []string{"node_modules"}),
 			exitcode.OK, "", []string{"node_modules/node-gyp/lib/Find-VisualStudio.cs  vendor", "node_modules/bcrypt/src/bcrypt.cc  vendor"}},
 		{"sha-256 version 4 index", map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express",
-			gitIndexPath: string(buildGitIndex(gitIndexSpec{version: 4, hashLen: 32, paths: []string{"main.py"}}))},
+			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{"main.py"}}))},
 			exitcode.OK, "", []string{"node_modules/app/app.js  vendor"}},
 	})
 }

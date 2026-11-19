@@ -7,6 +7,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
 )
 
 // TestScanShortNameAlias (#267 tester H1): git for Windows checks
@@ -22,7 +23,7 @@ func TestScanShortNameAlias(t *testing.T) {
 	if !ok {
 		t.Skip("this file system makes no 8.3 names")
 	}
-	index := buildGitIndex(gitIndexSpec{version: 2, paths: []string{
+	index := gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{
 		short + "/app/app.js", short + "/app/package.json", "main.py", "node_modules/.keep",
 	}})
 	writeTreeFile(t, ".", gitIndexPath, string(index))

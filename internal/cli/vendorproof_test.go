@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
 )
 
 // TestVendorProofs (#213): a tree is installed only when its mark is a
@@ -54,7 +56,7 @@ func TestVendorProofs(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "node_modules", "dir", "package.json"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	writeTreeFile(t, repo, gitIndexPath, string(buildGitIndex(gitIndexSpec{version: 2, paths: tracked})))
+	writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked})))
 	proofs := openProofs(t, repo)
 	for _, tt := range tests {
 		for range 2 { // the second answer comes from the cache
@@ -77,15 +79,15 @@ func TestVendorProofsNeedAGitIndex(t *testing.T) {
 		{"no index", func(t *testing.T, repo string) { mkdirTree(t, repo, ".git") }},
 		{"index is a directory", func(t *testing.T, repo string) { mkdirTree(t, repo, gitIndexPath) }},
 		{"bad checksum", func(t *testing.T, repo string) {
-			data := buildGitIndex(gitIndexSpec{version: 2, paths: []string{"app.py"}})
+			data := gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"app.py"}})
 			data[len(data)-1] ^= 1
 			writeTreeFile(t, repo, gitIndexPath, string(data))
 		}},
 		{"split index", func(t *testing.T, repo string) {
-			writeTreeFile(t, repo, gitIndexPath, string(buildGitIndex(gitIndexSpec{version: 2, ext: gitExtension("link", make([]byte, 20))})))
+			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Ext: gitindextest.Extension("link", make([]byte, 20))})))
 		}},
 		{"unsigned", func(t *testing.T, repo string) {
-			writeTreeFile(t, repo, gitIndexPath, string(buildGitIndex(gitIndexSpec{version: 2, noSign: true})))
+			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, NoSign: true})))
 		}},
 	}
 	for _, tt := range tests {
@@ -112,7 +114,7 @@ func TestVendorProofsLinkedMark(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
-	writeTreeFile(t, repo, gitIndexPath, string(buildGitIndex(gitIndexSpec{version: 2, paths: []string{"real.json"}})))
+	writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"real.json"}})))
 	if openProofs(t, repo).proven("node_modules/linked/index.js") {
 		t.Error("a linked mark proves a tree installed")
 	}
