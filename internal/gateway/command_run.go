@@ -59,13 +59,14 @@ func (e *ToolUseError) Error() string {
 func (e *ToolUseError) Unwrap() error { return ErrToolUse }
 
 // run executes the program once with payload on stdin, in a fresh empty
-// working directory (never the repository) with its own temp directory, and
+// working directory (never the repository, never under the system temp
+// directory; see newRunRoot) with its own temp directory, and
 // returns stdout. Checks, in order: anything left in the working directory
 // (*ToolUseError), stdout over the cap, the timeout, the exit status.
 func (c *Command) run(ctx context.Context, payload []byte) ([]byte, error) {
-	root, err := os.MkdirTemp("", "creep-model-")
+	root, err := newRunRoot()
 	if err != nil {
-		return nil, fmt.Errorf("model command: temp dir: %w", err)
+		return nil, err
 	}
 	defer os.RemoveAll(root)
 	work, tmp := filepath.Join(root, "work"), filepath.Join(root, "tmp")

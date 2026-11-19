@@ -42,8 +42,8 @@ func TestEmbeddedPresets(t *testing.T) {
 func TestCommandLines(t *testing.T) {
 	tests := []struct{ preset, model, want string }{
 		{"claude-code", "", `claude -p --tools "" --strict-mcp-config --output-format text`},
-		{"gemini", "", "gemini --approval-mode default --extensions none --output-format text"},
-		{"codex", "", "codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -"},
+		{"gemini", "", "gemini --skip-trust --approval-mode default --extensions none --allowed-mcp-server-names creep-no-mcp-server --output-format text"},
+		{"codex", "", "codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false -c features.view_image=false -c \"project_root_markers=[]\" --skip-git-repo-check --ephemeral --color never -"},
 		{"ollama", "qwen3:8b", "ollama run qwen3:8b --format json"},
 		{"ollama", "library/llama3.1:8b-q4_K_M", "ollama run library/llama3.1:8b-q4_K_M --format json"},
 	}

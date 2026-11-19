@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,23 @@ func TestMain(m *testing.M) {
 	if mode := os.Getenv(fakeCLIEnv); mode != "" {
 		os.Exit(fakeCLI(mode))
 	}
-	os.Exit(m.Run())
+	os.Exit(runWithPrivateCache(m))
+}
+
+// runWithPrivateCache keeps model run directories out of the developer's
+// own cache directory while the tests run.
+func runWithPrivateCache(m *testing.M) int {
+	cache, err := os.MkdirTemp("", "creep-gateway-cache-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer os.RemoveAll(cache)
+	// The walk up from the run directory stops at "home", so it never reaches
+	// the system temp directory, which is world-writable on Linux.
+	userCacheDir = func() (string, error) { return cache, nil }
+	userHomeDir = userCacheDir
+	return m.Run()
 }
 
 // fakeCLI behaves like one kind of model CLI, reading the prompt on stdin.
@@ -34,6 +51,10 @@ func fakeCLI(mode string) int {
 		wd, _ := os.Getwd()
 		entries, _ := os.ReadDir(".")
 		fmt.Printf("%s\n%d", wd, len(entries))
+	case "walkup":
+		printFilesAbove()
+	case "geminilookup":
+		printGeminiLookup()
 	case "touch":
 		_ = os.WriteFile("creep-canary.txt", []byte("hi"), 0o600)
 		fmt.Print(`{"ok":true}`)
@@ -106,5 +127,54 @@ func fakeOptions(t *testing.T, mode string, timeout time.Duration) CommandOption
 		Getenv:         func(k string) string { return env[k] },
 		Timeout:        timeout,
 		MaxOutputBytes: 1 << 20,
+	}
+}
+
+// printFilesAbove prints the working directory, then every file in it or a
+// parent that a model CLI reads from above its working directory (Gemini
+// CLI: .env, .gemini/.env, GEMINI.md; Codex: AGENTS.md).
+func printFilesAbove() {
+	dir, _ := os.Getwd()
+	fmt.Println(dir)
+	for {
+		for _, name := range []string{".env", filepath.Join(".gemini", ".env"), "GEMINI.md", "AGENTS.md"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				fmt.Println(filepath.Join(dir, name))
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return
+		}
+		dir = parent
+	}
+}
+
+// printGeminiLookup mirrors Gemini CLI's upward searches from the working
+// directory (packages/cli/src/config/settings.ts findEnvFile, with
+// ignoreLocalEnv off; packages/core/src/utils/memoryDiscovery.ts
+// findProjectRoot) and prints, one per line: the env file a trusted run
+// loads, the one an untrusted run loads, and the GEMINI.md ceiling.
+func printGeminiLookup() {
+	wd, _ := os.Getwd()
+	fmt.Println(firstUp(wd, filepath.Join(".gemini", ".env"), ".env"))
+	fmt.Println(firstUp(wd, ".env"))
+	fmt.Println(filepath.Dir(firstUp(wd, ".git")))
+}
+
+// firstUp returns the first path dir/name that exists, trying each name in
+// order in each directory from dir up to the volume root, or "".
+func firstUp(dir string, names ...string) string {
+	for {
+		for _, name := range names {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return filepath.Join(dir, name)
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
 	}
 }
