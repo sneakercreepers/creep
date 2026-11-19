@@ -37,6 +37,7 @@ var execAllowed = []string{
 // shipped code and tests may run programs.
 var execAllowedExact = []string{
 	"internal/scanrun", // gitleaks and osv-scanner only: fixed offline arguments, no shell, final path outside the repo (ADR 0013)
+	"internal/sandbox", // the docker or podman CLI only: fixed argv builders, hardened run profile, local endpoint, final path outside the repo (ADR 0016)
 }
 
 // execAllowedInTests lists packages whose tests may run programs.

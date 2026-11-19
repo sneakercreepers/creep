@@ -91,6 +91,7 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), e.stderr)
+	noteSandbox(ctx, e.stderr, s.deps.sandbox, s.cfg.Sandbox)
 	return s.finish(e, cal, res)
 }
 

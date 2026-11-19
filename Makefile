@@ -64,8 +64,8 @@ map:
 # that proves it can fail, and the holistic --replay run (architecture.md §9).
 # make check runs them too; CI runs this target as the required protections job,
 # with a bounded fuzz run on top. internal/tools/budget checks every name exists.
-PROTECTION_TESTS := FuzzScanSendsNoSecret|TestScanProtectionsCatchBrokenPath|TestScanSendsOnlyRedactedFragments|FuzzRedactSecrets|FuzzFile|TestEveryCallLogged|TestToolCanaryProtection|TestInputCarriesNoText|TestTextCapableCatchesText|TestNetImportFailsBudget|TestHolisticReplayProtections|TestHolisticCatchesBrokenRun
-PROTECTION_PKGS  := ./internal/gateway ./internal/redact ./internal/models ./internal/planner ./internal/tools/budget ./internal/cli
+PROTECTION_TESTS := FuzzScanSendsNoSecret|TestScanProtectionsCatchBrokenPath|TestScanSendsOnlyRedactedFragments|FuzzRedactSecrets|FuzzFile|TestEveryCallLogged|TestToolCanaryProtection|TestInputCarriesNoText|TestTextCapableCatchesText|TestNetImportFailsBudget|TestHolisticReplayProtections|TestHolisticCatchesBrokenRun|TestEveryContainerIsHardened|TestHardeningCheckCatchesWeakenedRun|TestMountRefusesHostPaths
+PROTECTION_PKGS  := ./internal/gateway ./internal/redact ./internal/models ./internal/planner ./internal/tools/budget ./internal/cli ./internal/sandbox
 FUZZTIME ?= 30s
 protections:
 	go test -count=1 -run '^($(PROTECTION_TESTS))$$' $(PROTECTION_PKGS)
