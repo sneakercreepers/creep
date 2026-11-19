@@ -82,6 +82,61 @@ func TestRunDirIsNotUnderSystemTemp(t *testing.T) {
 	}
 }
 
+// geminiLookup runs the fake CLI that mirrors Gemini CLI's upward searches
+// and returns the trusted env file, the untrusted env file and the
+// GEMINI.md ceiling it found.
+func geminiLookup(t *testing.T) []string {
+	t.Helper()
+	l := openLog(t, runDir(t))
+	c := fakeCommand(t, "geminilookup", 10*time.Second)
+	r, err := l.Exec(context.Background(), c, commandCall(c, "x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := strings.Split(strings.TrimRight(string(r.Body), "\n"), "\n")
+	if len(found) != 3 {
+		t.Fatalf("lookup output %q", found)
+	}
+	return found
+}
+
+// Protection (#229 auditor A1): above home the walk checks nothing, and on
+// Windows any local user can create C:\.gemini\.env, which Gemini CLI would
+// load (GOOGLE_GEMINI_BASE_URL sends every prompt elsewhere). Empty stop
+// files in the run root end its .env search and its GEMINI.md search there.
+func TestGeminiSearchesStopInRunRoot(t *testing.T) {
+	planted := plantAbove(t) // stands for C:\ above the home directory
+	home := filepath.Join(planted, "home")
+	useDirs(t, filepath.Join(home, "cache"), home, nil)
+	found := geminiLookup(t)
+	root := filepath.Dir(found[1])
+	want := []string{filepath.Join(root, ".gemini", ".env"), filepath.Join(root, ".env"), root}
+	if filepath.Dir(root) != filepath.Join(home, "cache", "creep", "model") || strings.Join(found, "|") != strings.Join(want, "|") {
+		t.Errorf("lookup = %q, want %q in a run root under the cache dir", found, want)
+	}
+
+	// Control: without the stop files the same lookup loads the planted file.
+	prev := stopFiles
+	stopFiles = nil
+	t.Cleanup(func() { stopFiles = prev })
+	if found := geminiLookup(t); found[0] != filepath.Join(planted, ".gemini", ".env") {
+		t.Fatalf("control lookup = %q, want the planted .gemini/.env", found)
+	}
+}
+
+func TestStopFilesAreEmpty(t *testing.T) {
+	root := t.TempDir()
+	if err := writeStopFiles(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range stopFiles {
+		info, err := os.Lstat(filepath.Join(root, name))
+		if err != nil || !info.Mode().IsRegular() || info.Size() != 0 {
+			t.Errorf("%s: %v, %v", name, info, err)
+		}
+	}
+}
+
 // Protection (#229 G3): run directories a crashed process left behind are
 // removed, but nothing that is not an old, real run-* directory, and never
 // through a link.

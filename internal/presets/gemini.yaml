@@ -23,8 +23,8 @@
 # writes and commands, not reads. Gemini also reads files above its working
 # directory (the first .env up the tree, GEMINI.md files up to a .git); the
 # gateway puts that directory under the user's private cache directory, not
-# the system temp directory, so only the user's own files (~/.env) are above
-# it.
+# the system temp directory, with empty .env, .gemini/.env and .git stop
+# files in its parent, so both searches end inside creep's tree.
 # Credentials: GEMINI_API_KEY (a Google AI Studio key) declared in model.env.
 # A personal Google login does not work: the server answers "This client is
 # no longer supported for Gemini Code Assist for individuals". Google AI Pro
@@ -41,5 +41,5 @@ tools_off:
   - [--allowed-mcp-server-names, creep-no-mcp-server]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply, and it reads ~/.env and ~/.gemini/.env
+host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply
 verified: false

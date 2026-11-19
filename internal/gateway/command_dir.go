@@ -54,7 +54,35 @@ func newRunRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("model command: run dir: %w", err)
 	}
+	if err := writeStopFiles(root); err != nil {
+		_ = os.RemoveAll(root)
+		return "", err
+	}
 	return root, nil
+}
+
+// stopFiles are empty files in the run root, the parent of the working
+// directory, that end the CLIs' upward searches inside creep's tree. The
+// walk above checks directories only up to home; above it, a volume root
+// such as C:\ lets any local user create folders (C:\.gemini\.env).
+// Gemini CLI's findEnvFile returns the first .gemini/.env (trusted) or
+// .env (untrusted) going up, so an empty one loads nothing and stops it;
+// its GEMINI.md search ends at the first .git going up (file or directory),
+// and an empty .git file is also an invalid gitfile, which stops git's own
+// upward search with an error.
+var stopFiles = []string{".env", filepath.Join(".gemini", ".env"), ".git"}
+
+func writeStopFiles(root string) error {
+	for _, name := range stopFiles {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return fmt.Errorf("model command: run dir: %w", err)
+		}
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			return fmt.Errorf("model command: run dir: %w", err)
+		}
+	}
+	return nil
 }
 
 // userDirs returns the user cache and home directories, both absolute: a

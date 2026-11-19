@@ -53,6 +53,8 @@ func fakeCLI(mode string) int {
 		fmt.Printf("%s\n%d", wd, len(entries))
 	case "walkup":
 		printFilesAbove()
+	case "geminilookup":
+		printGeminiLookup()
 	case "touch":
 		_ = os.WriteFile("creep-canary.txt", []byte("hi"), 0o600)
 		fmt.Print(`{"ok":true}`)
@@ -143,6 +145,35 @@ func printFilesAbove() {
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return
+		}
+		dir = parent
+	}
+}
+
+// printGeminiLookup mirrors Gemini CLI's upward searches from the working
+// directory (packages/cli/src/config/settings.ts findEnvFile, with
+// ignoreLocalEnv off; packages/core/src/utils/memoryDiscovery.ts
+// findProjectRoot) and prints, one per line: the env file a trusted run
+// loads, the one an untrusted run loads, and the GEMINI.md ceiling.
+func printGeminiLookup() {
+	wd, _ := os.Getwd()
+	fmt.Println(firstUp(wd, filepath.Join(".gemini", ".env"), ".env"))
+	fmt.Println(firstUp(wd, ".env"))
+	fmt.Println(filepath.Dir(firstUp(wd, ".git")))
+}
+
+// firstUp returns the first path dir/name that exists, trying each name in
+// order in each directory from dir up to the volume root, or "".
+func firstUp(dir string, names ...string) string {
+	for {
+		for _, name := range names {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return filepath.Join(dir, name)
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
 		}
 		dir = parent
 	}

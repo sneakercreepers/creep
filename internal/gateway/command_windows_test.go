@@ -48,3 +48,27 @@ func TestNewCommandRefusesWindowsPathsIntoRepo(t *testing.T) {
 		})
 	}
 }
+
+// Protection (#229 auditor A4): a junction anywhere between the run
+// directory and home is refused like a Unix link, as the cache directory
+// itself or as an ancestor of it.
+func TestRunRootRefusesJunctions(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		home, target := t.TempDir(), t.TempDir()
+		if err := os.MkdirAll(filepath.Join(target, "cache"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		junction := filepath.Join(home, "a")
+		if out, err := exec.Command("cmd", "/c", "mklink", "/J", junction, target).CombinedOutput(); err != nil {
+			t.Fatalf("mklink: %v %s", err, out)
+		}
+		cache := junction
+		if nested {
+			cache = filepath.Join(junction, "cache")
+		}
+		useDirs(t, cache, home, nil)
+		if root, err := newRunRoot(); !errors.Is(err, errUnsafeRunDir) {
+			t.Errorf("nested=%v: newRunRoot() = %q, %v; want errUnsafeRunDir", nested, root, err)
+		}
+	}
+}
