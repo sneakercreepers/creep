@@ -50,6 +50,7 @@ func TestProjectMayOnlyLowerLimits(t *testing.T) {
 	}{
 		{"budget.max_tokens", "budget:\n  max_tokens: %d\n", 2_000_000, 1000},
 		{"budget.max_calls", "budget:\n  max_calls: %d\n", 500, 1},
+		{"budget.max_seconds", "budget:\n  max_seconds: %d\n", 7200, 1},
 		{"model.timeout_seconds", "model:\n  timeout_seconds: %d\n", 300, 1},
 		{"model.max_output_bytes", "model:\n  max_output_bytes: %d\n", 1 << 20, 1 << 10},
 		{"calibration.cache_days", "calibration:\n  cache_days: %d\n", 30, 1},

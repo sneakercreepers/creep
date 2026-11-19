@@ -32,6 +32,8 @@ func validateKey(c *Config, key string) error {
 		return checkPlain(c.Model.Name)
 	case "egress.allow":
 		return checkHosts(c.Egress.Allow)
+	case "budget.max_seconds":
+		return checkRange(c.Budget.MaxSeconds, minScanSeconds, maxScanSeconds)
 	case "budget.max_tokens", "budget.max_calls":
 		return checkPositive(field(c, key).Int())
 	case "calibration.cache_days":

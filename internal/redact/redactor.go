@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -38,6 +39,7 @@ var ErrTooLarge = errors.New("input exceeds redact.MaxInputBytes")
 // string, so it cannot be serialized or logged by accident.
 type Redactor struct {
 	rules []secretRule
+	ctx   context.Context // nil: calls never stop early (NewWithContext)
 	mu    sync.Mutex
 	state *runState // behind a pointer: fmt never prints nested pointees
 }
@@ -83,12 +85,17 @@ func (r *Redactor) Format(f fmt.State, _ rune) {
 
 // Redact returns text with secrets and personal data replaced by markers and
 // pre-existing marker-like text escaped. It fails closed on oversized input
-// (ErrTooLarge) and once the run's value map is full (ErrRunFull).
+// (ErrTooLarge), once the run's value map is full (ErrRunFull) and once the
+// context of a Redactor from NewWithContext is done.
 func (r *Redactor) Redact(text string) (string, error) {
 	if len(text) > MaxInputBytes {
 		return "", fmt.Errorf("redact %d bytes: %w", len(text), ErrTooLarge)
 	}
-	return r.finish(text, r.detect(text))
+	found := r.detect(text)
+	if err := r.stopped(); err != nil {
+		return "", err
+	}
+	return r.finish(text, found)
 }
 
 // finish adds the values known from earlier calls to the spans found in
@@ -195,12 +202,13 @@ type detectorSet struct {
 	rules    []secretRule
 	patterns []patternDetector
 	encoded  []secretRule // URL-shaped rules to run again on decoded separators
+	done     <-chan struct{}
 }
 
 // gated returns the detectors that apply to text. File gates on the whole
 // file, so a keyword or context in one chunk wakes a detector for every chunk.
 func (r *Redactor) gated(text string) detectorSet {
-	var set detectorSet
+	set := detectorSet{done: r.done()}
 	lower := strings.ToLower(text)
 	for _, rule := range r.rules {
 		if rule.applies(lower) {
@@ -218,10 +226,14 @@ func (r *Redactor) gated(text string) detectorSet {
 	return set
 }
 
-// find runs the gated detectors over text.
+// find runs the gated detectors over text. It stops between detectors once
+// the context is done; the caller then drops what it found.
 func (s detectorSet) find(text string) []span {
 	var found []span
 	for _, rule := range s.rules {
+		if s.stopped() {
+			return found
+		}
 		found = append(found, rule.find(text)...)
 	}
 	for _, d := range s.patterns {

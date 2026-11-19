@@ -40,6 +40,10 @@ type Gates struct {
 type Budget struct {
 	MaxTokens int `yaml:"max_tokens" desc:"Maximum model tokens per scan. The project file may only lower it."`
 	MaxCalls  int `yaml:"max_calls" desc:"Maximum model calls per scan. The project file may only lower it."`
+	// MaxSeconds is the scan deadline (#260). It starts after calibration,
+	// which reads no repository text, so a hostile repository cannot spend
+	// it there.
+	MaxSeconds int `yaml:"max_seconds" desc:"Seconds the scan of the repository may run, after calibration: static analysis, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it."`
 }
 
 type Report struct {
@@ -73,6 +77,8 @@ const (
 	maxCacheDays      = 365
 	minTimeoutSeconds = 1
 	maxTimeoutSeconds = 3600
+	minScanSeconds    = 1
+	maxScanSeconds    = 86400
 	minOutputBytes    = 1 << 10
 	maxOutputBytes    = 8 << 20
 )
@@ -125,10 +131,12 @@ var projectForbidden = map[string]bool{
 // project file may lower them but never raise them above what the layers
 // before it set (pentest P2, #62). Lowering cannot starve a scan into a
 // passing gate: work skipped for budget, a call refused by the gateway
-// budget and a timed-out model call each make the run incomplete (exit 4).
+// budget, a timed-out model call and a scan past its deadline each make the
+// run incomplete (exit 4).
 var projectLowerOnly = []string{
 	"budget.max_tokens",
 	"budget.max_calls",
+	"budget.max_seconds",
 	"model.timeout_seconds",
 	"model.max_output_bytes",
 	"calibration.cache_days",
@@ -145,7 +153,7 @@ func Defaults() Config {
 	return Config{
 		Model:       Model{Contract: "openai", Tier: "medium", Env: []string{}, TimeoutSeconds: 300, MaxOutputBytes: 1 << 20},
 		Gates:       Gates{PR: "probable:critical", Nightly: "verified:high"},
-		Budget:      Budget{MaxTokens: 2_000_000, MaxCalls: 500},
+		Budget:      Budget{MaxTokens: 2_000_000, MaxCalls: 500, MaxSeconds: 7200},
 		Report:      Report{Formats: []string{"json", "markdown", "sarif"}},
 		Scanners:    Scanners{Enabled: []string{}},
 		Sandbox:     Sandbox{Runtime: "docker"},

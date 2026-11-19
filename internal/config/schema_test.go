@@ -87,6 +87,8 @@ func leafSchema(f reflect.StructField, def any, key string) map[string]any {
 		s["minimum"], s["maximum"] = minCacheDays, maxCacheDays
 	case "model.timeout_seconds":
 		s["minimum"], s["maximum"] = minTimeoutSeconds, maxTimeoutSeconds
+	case "budget.max_seconds":
+		s["minimum"], s["maximum"] = minScanSeconds, maxScanSeconds
 	case "model.max_output_bytes":
 		s["minimum"], s["maximum"] = minOutputBytes, maxOutputBytes
 	}

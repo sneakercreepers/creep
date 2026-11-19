@@ -142,6 +142,9 @@ func (s detectorSet) findEncoded(text string) []span {
 	decoded, starts := decodeSeparators(text)
 	var out []span
 	for _, rule := range s.encoded {
+		if s.stopped() {
+			return out
+		}
 		for _, sp := range rule.find(decoded) {
 			sp.start, sp.end = starts[sp.start], starts[sp.end]
 			out = append(out, sp)
