@@ -75,7 +75,8 @@ func TestRealNetworkIsolated(t *testing.T) {
 		dbID := waitForContainer(t, st, LabelRun+"="+s.runID)
 		checkNoHostReach(t, st, s, dbID, probe)
 		if err := s.Close(); err != nil {
-			t.Fatal(err)
+			left, _ := cliCode(t, st, "ps", "--all", "--filter", "label="+LabelRun+"="+s.runID, "--format", "{{.ID}} {{.Image}} {{.Status}}")
+			t.Fatalf("Close: %v; left: %s", err, left)
 		}
 		if left, _ := cliCode(t, st, "network", "ls", "--quiet", "--filter", "label="+LabelRun+"="+s.runID); left != "" {
 			t.Errorf("Close left network %s", left)
