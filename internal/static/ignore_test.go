@@ -154,16 +154,17 @@ func BenchmarkIgnoreReason(b *testing.B) {
 
 // TestVendorEvidence (pentest P4, #213): a vendor directory is believed
 // only through its package manager's mark, for the mark's own language,
-// with exact case; everything else has no evidence and is read.
+// with exact case; Go and PHP vendor trees have none (static cannot check
+// them for routes); everything else has no evidence and is read.
 func TestVendorEvidence(t *testing.T) {
 	cases := map[string]string{ // "" means no evidence can vouch for it
 		".venv/lib/python3.12/site-packages/x.py": ".venv/pyvenv.cfg",
 		"services/api/venv/lib/x.py":              "services/api/venv/pyvenv.cfg",
 		"node_modules/app/app.js":                 "node_modules/app/package.json",
 		"web/node_modules/@scope/pkg/lib/i.ts":    "web/node_modules/@scope/pkg/package.json",
-		"vendor/github.com/x/y/z.go":              "vendor/modules.txt",
-		"lib/vendor/acme/a.php":                   "lib/composer.json",
-		"vendor/acme/a.php":                       "composer.json",
+		"vendor/github.com/x/y/z.go":              "",
+		"lib/vendor/acme/a.php":                   "",
+		"vendor/acme/a.php":                       "",
 		"node_modules/app.js":                     "",
 		"src/node_modules/app/app.py":             "",
 		"venv/app.js":                             "",

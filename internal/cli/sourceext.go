@@ -27,23 +27,21 @@ var otherSourceExts = map[string]bool{
 	".cfm": true,
 }
 
-// ungrammaredSource lists a source file static cannot parse: vendor code by
-// design when its package manager's mark exists (vendorProofs), a link or special file as not_regular, anything else as
-// unsupported_language. Files with other extensions are not source and are
-// not listed.
-func ungrammaredSource(rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReason, bool) {
+// ungrammaredSource lists a source file static cannot parse: a link or
+// special file as not_regular, anything else as unsupported_language, also
+// under a vendor directory. No package manager's mark vouches for it: a mark
+// only spares parsing a file that cannot hold a route, and static cannot
+// tell that for these languages (#213). Files with other extensions are not
+// source and are not listed.
+func ungrammaredSource(rel string, d fs.DirEntry) (report.SkipReason, bool) {
 	if !otherSourceExts[strings.ToLower(path.Ext(rel))] {
 		return "", false
 	}
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
 	}
-	why, err := static.IgnoreReason(rel, nil)
-	switch {
-	case err != nil:
+	if _, err := static.IgnoreReason(rel, nil); err != nil {
 		return report.SkipInvalidPath, true
-	case why == static.IgnoredVendor && proofs.proven(rel):
-		return report.SkipVendor, true
 	}
 	return report.SkipUnsupported, true
 }

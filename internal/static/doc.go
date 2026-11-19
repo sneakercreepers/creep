@@ -104,9 +104,11 @@
 // AddPython and AddJavaScript believe one only for a file that parsed
 // without errors and holds no route, and list it as File.Ignored with the
 // reason; a file with a route is extracted as usual. Callers may list a
-// vendor file with AddIgnored without reading it only when VendorEvidence
-// names a package-manager mark that exists. Ignored files are never
-// silently dropped.
+// vendor file with AddIgnored without parsing it only when VendorEvidence
+// names a package-manager mark that exists and MayHoldRoute, a byte test
+// that errs only toward true, says the file cannot hold a route; a mark is
+// a repository file too, so it never hides a route (#213). Ignored files
+// are never silently dropped.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

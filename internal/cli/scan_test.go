@@ -170,7 +170,8 @@ func TestScanFailsBeforeReport(t *testing.T) {
 // #205 audit M1a: a source file static has no grammar for (Go, PHP, ...)
 // is listed as unsupported_language and the run exits 4, never 0 with every
 // class covered; findings from the files static can read are still reported.
-// Vendor copies stay by design, and non-source files are not listed.
+// A vendor copy is a gap too: no mark vouches for a language static cannot
+// check for routes (#213). Non-source files are not listed.
 func TestScanListsUngrammaredSource(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -186,7 +187,7 @@ func TestScanListsUngrammaredSource(t *testing.T) {
 		{"vendor go without modules.txt", map[string]string{"app.py": "@flask", "vendor/x/y.go": "package y\n"},
 			exitcode.Incomplete, []string{"vendor/x/y.go  unsupported_language", "files not evaluated in full: 1"}, 4},
 		{"vendored go by design", map[string]string{"app.py": "@flask", "vendor/modules.txt": "# x\n", "vendor/x/y.go": "package y\n", "notes.txt": "x\n"},
-			exitcode.OK, []string{"vendor/x/y.go  vendor", "files not evaluated in full: 1"}, 4},
+			exitcode.Incomplete, []string{"vendor/x/y.go  unsupported_language", "files not evaluated in full: 1"}, 4},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

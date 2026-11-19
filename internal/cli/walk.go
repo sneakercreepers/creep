@@ -43,7 +43,7 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 		}
 		lang, ok := static.LanguageForPath(rel)
 		if !ok {
-			if reason, gap := ungrammaredSource(rel, d, proofs); gap {
+			if reason, gap := ungrammaredSource(rel, d); gap {
 				gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 			}
 			return nil
@@ -59,22 +59,37 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 	return repoScan{graph: ex.Graph(), locs: ex.Locations(), gaps: gaps}, nil
 }
 
-// addRepoFile reads one source file and hands it to addFile. A vendor file
-// whose package manager left its mark (vendorProofs) is listed from its
-// path alone, without reading it; any other is read like first-party code.
+// maxVendorFileBytes bounds a file of a proven dependency tree, which is
+// read for the route test but parsed only when it may hold a route, so it
+// may be larger than static.MaxFileBytes (bundled libraries often are).
+const maxVendorFileBytes = 32 << 20
+
+// addRepoFile reads one source file and hands it to addFile. A file of a
+// proven dependency tree (vendorProofs) that cannot hold a route
+// (static.MayHoldRoute) is listed as vendor without parsing, so a large or
+// unparseable library file is no gap. Any other file, a proven one that may
+// hold a route included, goes through addFile like first-party code: a mark
+// is a repository file the author can plant, so it never hides a route
+// (#213). static then lists the file as vendor only if it parsed cleanly
+// and holds no route.
 func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
 	}
-	if why, err := static.IgnoreReason(rel, nil); err == nil && why == static.IgnoredVendor && proofs.proven(rel) {
-		return addIgnored(ex, rel, why)
+	why, err := static.IgnoreReason(rel, nil)
+	proven := err == nil && why == static.IgnoredVendor && proofs.proven(rel)
+	limit := int64(static.MaxFileBytes)
+	if proven {
+		limit = maxVendorFileBytes
 	}
-	src, err := readInRoot(proofs.root, rel, static.MaxFileBytes)
+	src, err := readInRoot(proofs.root, rel, limit)
 	switch {
 	case errors.Is(err, errFileTooLarge):
 		return report.SkipTooLarge, true
 	case err != nil:
 		return report.SkipReadFailed, true
+	case proven && !static.MayHoldRoute(lang, src):
+		return addIgnored(ex, rel, why)
 	}
 	return addFile(ctx, ex, p, rel, lang, src)
 }
