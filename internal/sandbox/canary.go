@@ -26,7 +26,11 @@ const (
 
 // canaryCheck is one thing the canary tries from inside the run's network.
 // A control must succeed, so a canary whose tools or network are broken
-// never reads as "blocked"; every other check must fail.
+// never reads as "blocked"; every other check must fail. Names end in a
+// dot: BusyBox's nslookup tries the host's search domain first (CI runners
+// have one), and on an internal network that query fails before the bare
+// name is tried, so a control would fail and a probe could ask the wrong
+// name.
 type canaryCheck struct {
 	key     string
 	cmd     string // {alias} is the canary's own network alias
@@ -34,10 +38,10 @@ type canaryCheck struct {
 }
 
 var canaryChecks = []canaryCheck{
-	{"control-dns", "nslookup {alias}", true},              // the network's resolver answers
+	{"control-dns", "nslookup {alias}.", true},             // the network's resolver answers
 	{"control-tcp", "nc -w 3 {alias} " + canaryPort, true}, // a connection on the network works
-	{"dns", "nslookup example.com", false},                 // the resolver forwards public names
-	{"dns-direct", "nslookup example.com 1.1.1.1", false},  // UDP to a public resolver
+	{"dns", "nslookup example.com.", false},                // the resolver forwards public names
+	{"dns-direct", "nslookup example.com. 1.1.1.1", false}, // UDP to a public resolver
 	{"tcp-1.1.1.1", "nc -w 3 1.1.1.1 443", false},          // TCP to a public address
 	{"tcp-8.8.8.8", "nc -w 3 8.8.8.8 53", false},           // and to a second one
 }
