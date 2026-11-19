@@ -64,7 +64,7 @@ func extractPython(root *Node, src []byte, lim extractLimits) (routes []foundRou
 		}
 		return true
 	})
-	return routes, truncated
+	return routes, truncated || x.receiverEscapes(root, len(routes) > 0)
 }
 
 // decorated returns one route per route decorator on a function.
@@ -79,7 +79,7 @@ func (x *pyExtraction) decorated(n *Node) []foundRoute {
 		if d.Type != "decorator" || len(namedChildren(d)) == 0 {
 			continue
 		}
-		expr := namedChildren(d)[0]
+		expr := unwrapParens(namedChildren(d)[0]) // @(app.route(p)), Python 3.9+
 		if r, ok := x.routeDecorator(expr); ok {
 			routes = append(routes, r)
 			continue

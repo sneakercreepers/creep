@@ -61,7 +61,7 @@ func extractJavaScript(root *Node, src []byte, lim extractLimits) (routes []foun
 		}
 		return true
 	})
-	return routes, truncated
+	return routes, truncated || x.receiverEscapes(root)
 }
 
 // routeCall matches `recv.verb(path, ...middleware, handler)` and

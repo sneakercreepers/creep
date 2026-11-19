@@ -3,11 +3,12 @@ package static
 import "strings"
 
 // dynamicImports are the calls that import a module named by a string.
-var dynamicImports = map[string]bool{"__import__": true, "importlib.import_module": true}
+var dynamicImports = map[string]bool{"__import__": true, "builtins.__import__": true, "importlib.import_module": true, "importlib.__import__": true}
 
 // dynamicImport reports whether n calls __import__ or
 // importlib.import_module, and the module the result is when its name is a
 // literal (#255 tester I3). __import__("a.b") returns the top package a.
+// builtins.__import__ and importlib.__import__ are __import__.
 func (f *pyFile) dynamicImport(n *Node) (module string, literal, ok bool) {
 	if n == nil || n.Type != "call" || !plainCallee(field(n, "function")) {
 		return "", false, false
@@ -22,7 +23,7 @@ func (f *pyFile) dynamicImport(n *Node) (module string, literal, ok bool) {
 	}
 	raw, lit := f.literalString(pos[0])
 	module, plain := pyUnescape(raw)
-	if callee == "__import__" {
+	if callee != "importlib.import_module" {
 		module, _, _ = strings.Cut(module, ".")
 	}
 	return module, lit && plain && module != "", true

@@ -137,8 +137,10 @@ func TestScanForgedMarkRespelledRoute(t *testing.T) {
 
 // TestScanComputedVerb (#255 tester M4): first-party routes registered
 // through a literal computed member or getattr are evaluated like the dot
-// form; a computed name on a known app makes the route partial, so the run
-// is incomplete, never covered.
+// form; a computed name on a known app makes the route partial, and any
+// other use of a known app (a parenthesized callee, .call, builtins.getattr)
+// marks the file truncated, also under a forged mark: the run is
+// incomplete, never covered.
 func TestScanComputedVerb(t *testing.T) {
 	express, flask := testApp(t, "express"), testApp(t, "flask")
 	truncated := string(report.SkipTruncated)
@@ -146,6 +148,9 @@ func TestScanComputedVerb(t *testing.T) {
 		{name: "subscript verb", files: map[string]string{"app.js": strings.ReplaceAll(express, "app.get(", `app["g\x65t"](`)}, wantCode: exitcode.GateExceeded, want: []string{"probable  command_injection  app.js:"}},
 		{name: "computed verb", files: map[string]string{"app.js": strings.ReplaceAll(express, "app.get(", "app[process.env.VERB]("), "main.py": helloRoute}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.js  truncated"}},
 		{name: "getattr verb", files: map[string]string{"app.py": strings.ReplaceAll(flask, "@app.get(", `@getattr(app, "get")(`)}, wantCode: exitcode.GateExceeded, want: []string{"probable  sqli  app.py:"}},
+		{name: "parenthesized callee", files: map[string]string{"app.js": strings.ReplaceAll(express, "app.get(", "(app.get)(")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.js  truncated"}},
+		{name: "verb through call under a forged mark", files: map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": strings.ReplaceAll(express, "app.get(", "app.get.call(app, ")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"node_modules/app/app.js  truncated"}},
+		{name: "builtins.getattr", files: map[string]string{"app.py": "import builtins\n" + strings.ReplaceAll(flask, "@app.get(", `@builtins.getattr(app, "get")(`)}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.py  truncated"}},
 		{name: "computed getattr", files: map[string]string{"app.py": strings.ReplaceAll(flask, "@app.get(", "@getattr(app, VERB)(")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.py  truncated"}},
 	}
 	for _, tt := range tests {

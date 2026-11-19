@@ -123,7 +123,11 @@
 // literal name are the dot form; a name that is not a literal on a known
 // app or router makes the route partial, and so does a call through a
 // module imported by __import__ or importlib.import_module of a computed
-// name.
+// name. Any other use of a known app or router (passed, stored,
+// destructured, reached through .call or an aliased getattr), and in a
+// file with routes an unread dynamic import, marks the file truncated
+// (receiverEscapes in escape.go and pyescape.go, which list the benign
+// uses).
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The
