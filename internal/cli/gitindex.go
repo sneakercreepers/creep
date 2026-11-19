@@ -7,8 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 )
 
 // The git index (Documentation/gitformat-index.txt) lists every path git
@@ -195,43 +193,4 @@ func (r *gitIndexReader) extensions() error {
 		r.off += 8 + int(size)
 	}
 	return nil
-}
-
-// trackedPaths is the sorted, lowercased list of tracked paths. Paths are
-// compared without case: on a case-insensitive file system a directory on
-// disk may differ in case from the path git tracks, and folding only makes
-// more trees count as tracked.
-type trackedPaths []string
-
-func newTrackedPaths(paths []string) trackedPaths {
-	t := make(trackedPaths, len(paths))
-	for i, p := range paths {
-		t[i] = strings.ToLower(p)
-	}
-	slices.Sort(t)
-	return t
-}
-
-// touches reports whether git tracks dir itself (a gitlink, a link or a
-// file), anything under it, or a path above it. A path above it can only
-// be a gitlink or a link: a submodule's own commits may hold the tree.
-func (t trackedPaths) touches(dir string) bool {
-	dir = strings.ToLower(dir)
-	if i, ok := slices.BinarySearch(t, dir+"/"); ok || i < len(t) && strings.HasPrefix(t[i], dir+"/") {
-		return true
-	}
-	for p := dir; p != "."; p = parentDir(p) {
-		if _, ok := slices.BinarySearch(t, p); ok {
-			return true
-		}
-	}
-	return false
-}
-
-func parentDir(p string) string {
-	i := strings.LastIndexByte(p, '/')
-	if i < 0 {
-		return "."
-	}
-	return p[:i]
 }

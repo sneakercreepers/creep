@@ -217,37 +217,6 @@ func TestParseGitIndexHostileBytes(t *testing.T) {
 	}
 }
 
-// TestTrackedPathsTouches: a tree is tracked when git holds anything in it,
-// the tree itself, or a path above it (a submodule), compared without case;
-// a sibling with the same prefix does not count.
-func TestTrackedPathsTouches(t *testing.T) {
-	tracked := newTrackedPaths([]string{"src/app.py", "node_modules/evil/app.js", "Web", "Node_Modules/Up/x.js", "node_modules/gitlink", "node_modules/evil-two.js"})
-	tests := []struct {
-		dir  string
-		want bool
-	}{
-		{"node_modules/evil", true},
-		{"node_modules/up", true},
-		{"NODE_MODULES/EVIL", true},
-		{"web/node_modules/x", true},
-		{"node_modules/gitlink", true},
-		{"src", true},
-		{"node_modules/ev", false},
-		{"node_modules/evil-two", false},
-		{"node_modules/express", false},
-		{"venv", false},
-		{".venv", false},
-	}
-	for _, tt := range tests {
-		if got := tracked.touches(tt.dir); got != tt.want {
-			t.Errorf("touches(%q) = %v, want %v", tt.dir, got, tt.want)
-		}
-	}
-	if (trackedPaths{}).touches("node_modules/x") {
-		t.Error("an empty index tracks a tree")
-	}
-}
-
 // TestGitVarint checks the test's encoder against git's decoder on the
 // boundaries where it adds a byte.
 func TestGitVarint(t *testing.T) {

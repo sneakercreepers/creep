@@ -19,7 +19,9 @@ const gitIndexPath = ".git/index"
 //     in the repository with exactly that name;
 //   - git tracks nothing in the tree, and nothing above it that could hold
 //     it (a submodule): a package manager's install is never committed, and
-//     anything committed is the author's code, mark included (#213).
+//     anything committed is the author's code, mark included (#213). The
+//     check compares file identity, not names (trackedIndex), so a tracked
+//     name that the file system resolves into the tree counts.
 //
 // With no git index creep can read whole, no tree is proven, so every
 // vendor file is read like first-party code. Answers are kept per mark, so
@@ -28,7 +30,7 @@ const gitIndexPath = ".git/index"
 type vendorProofs struct {
 	root    *os.Root
 	seen    map[string]bool
-	tracked trackedPaths
+	tracked *trackedIndex
 	loaded  bool
 	indexOK bool
 }
@@ -50,9 +52,10 @@ func (v *vendorProofs) proven(rel string) bool {
 	return found
 }
 
-// installed reports whether git provably tracks nothing in tree. The tree
-// path must be ASCII: git and the file system may spell other names in
-// different Unicode forms (macOS), so a match could be missed.
+// installed reports whether git provably tracks nothing in tree. A tree
+// whose path is not ASCII never is: a cheap guard beside the identity
+// check, as git and the file system may spell such names in different
+// Unicode forms (macOS).
 func (v *vendorProofs) installed(tree string) bool {
 	if !isASCII(tree) {
 		return false
@@ -61,12 +64,12 @@ func (v *vendorProofs) installed(tree string) bool {
 		v.loaded = true
 		v.tracked, v.indexOK = readTracked(v.root)
 	}
-	return v.indexOK && !v.tracked.touches(tree)
+	return v.indexOK && !v.tracked.tracks(v.root, tree)
 }
 
 // readTracked reads the paths the repository's git index tracks; ok is
 // false when there is no index or it cannot be read whole.
-func readTracked(root *os.Root) (trackedPaths, bool) {
+func readTracked(root *os.Root) (*trackedIndex, bool) {
 	data, err := readInRoot(root, gitIndexPath, maxGitIndexBytes)
 	if err != nil {
 		return nil, false
@@ -75,7 +78,7 @@ func readTracked(root *os.Root) (trackedPaths, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return newTrackedPaths(paths), true
+	return newTrackedIndex(paths), true
 }
 
 // hasRegularEntry reports whether name's directory lists an entry spelled
