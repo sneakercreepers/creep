@@ -7,8 +7,8 @@ import (
 	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/planner"
-	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/repofile"
+	"github.com/sneakercreepers/creep/internal/report"
 )
 
 // With pendingKinds empty since #212, no real kind reaches the unmapped
@@ -99,6 +99,8 @@ func TestDiscoveryGaps(t *testing.T) {
 		{"never decided", discover.File{}, 0, false, report.SkipSendFailed},
 		{"generated, nothing found", full, repofile.IgnoredGenerated, false, report.SkipGenerated},
 		{"minified, nothing found", full, repofile.IgnoredMinified, false, report.SkipMinified},
+		{"vendor path, nothing found", full, repofile.IgnoredVendor, false, report.SkipVendor},
+		{"vendor path with a candidate", full, repofile.IgnoredVendor, true, ""},
 		{"generated with a candidate", full, repofile.IgnoredGenerated, true, ""},
 		{"generated, not read in full", discover.File{Coverage: discover.CoverageNotRead, Reason: discover.ReasonTooLarge}, repofile.IgnoredGenerated, false, report.SkipTooLarge},
 	}

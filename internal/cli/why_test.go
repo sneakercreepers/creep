@@ -25,9 +25,9 @@ func TestWhy(t *testing.T) {
 		want     []string // in stdout for exit 0, stderr otherwise
 		never    string   // must not appear in either stream
 	}{
-		{"probable finding", []string{"why", "sink-0"}, exitcode.OK,
-			[]string{"finding sink-0", "status:     probable", "class:      sqli", "app.py:44", "confidence: 80/100", "evidence:   lines 44"}, ""},
-		{"inconclusive finding", []string{"why", "sink-2"}, exitcode.OK, []string{"reason:     inconclusive", "evidence:   lines 61"}, ""},
+		{"probable finding", []string{"why", "sink-1"}, exitcode.OK,
+			[]string{"finding sink-1", "status:     probable", "class:      sqli", "app.py:44", "confidence: 80/100", "evidence:   lines 44"}, ""},
+		{"inconclusive finding", []string{"why", "sink-3"}, exitcode.OK, []string{"reason:     inconclusive", "evidence:   lines 61"}, ""},
 		{"unknown ID", []string{"why", "sink-99"}, exitcode.ConfigError, []string{"no finding sink-99"}, ""},
 		{"malformed ID", []string{"why", "sink\x1b[2J-0"}, exitcode.ConfigError, []string{`invalid finding ID "sink\x1b[2J-0"`}, "\x1b"},
 		{"path-like ID", []string{"why", "../../etc/passwd"}, exitcode.ConfigError, []string{"invalid finding ID"}, ""},

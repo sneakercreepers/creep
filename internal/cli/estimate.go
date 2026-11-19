@@ -135,7 +135,11 @@ func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {
 // plan over its candidates and each reader request the plan leads to.
 func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEstimate, error) {
 	t := tierEstimate{tier: tier, calibrated: est.cal.cached && est.cal.tier == tier, skipped: map[string]int{}}
-	rs, err := est.measureDiscovery(ctx, tier, &t)
+	red, err := redact.New()
+	if err != nil {
+		return t, err
+	}
+	rs, err := est.measureDiscovery(ctx, tier, red, &t)
 	if err != nil {
 		return t, err
 	}
@@ -158,7 +162,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	if err != nil {
 		return t, err
 	}
-	stop, err := est.measureReads(ctx, rtier, plan, rs, findings, &t)
+	stop, err := est.measureReads(ctx, red, rtier, plan, rs, findings, &t)
 	if err != nil {
 		return t, err
 	}
@@ -171,11 +175,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 // request each one becomes. A sliced finding is marked discarded only so
 // incompleteReason sees it as answered: the estimate predicts which sinks
 // cannot be evaluated, not what the model will say.
-func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, plan planner.Plan, rs repoScan, findings []report.Finding, t *tierEstimate) (string, error) {
-	red, err := redact.New()
-	if err != nil {
-		return "", err
-	}
+func (est *estimateRun) measureReads(ctx context.Context, red *redact.Redactor, rtier reader.Tier, plan planner.Plan, rs repoScan, findings []report.Finding, t *tierEstimate) (string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
 	slicer := reader.Slicer{Redactor: red, Tier: rtier, Read: readRepoFile(est.repo)}
 	rep, err := slicer.Build(targets)

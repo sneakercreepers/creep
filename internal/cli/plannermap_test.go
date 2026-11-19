@@ -166,4 +166,3 @@ func readerReportName(c reader.Class) string {
 	}
 	return c.String()
 }
-

@@ -46,6 +46,11 @@ func fakeCLI(mode string) int {
 			_ = os.WriteFile(m[1]+m[2], []byte("ready"), 0o600)
 		}
 	}
+	if answer, ok := promptAnswer(string(in), false); ok {
+		out, _ := json.Marshal(answer)
+		fmt.Print(string(out))
+		return 0
+	}
 	match := hypothesisLine.FindSubmatch(in)
 	if match == nil {
 		fmt.Print(`{"done":true}`)
@@ -150,21 +155,25 @@ func TestScanThroughCommandModel(t *testing.T) {
 		t.Fatalf("exit %d; stderr %s", code, stderr)
 	}
 	sent := savedPrompts(t, prompts)
-	reader := 0
+	reader, discovery := 0, 0
 	for _, p := range sent {
 		if strings.Contains(p, leakedToken) || strings.Contains(p, "alice.smith") {
 			t.Fatalf("the CLI received the raw secret: %q", p)
 		}
-		if !strings.Contains(p, "HYPOTHESIS") {
+		switch {
+		case strings.Contains(p, "HYPOTHESIS"):
+			reader++
+		case len(discoverySections(p)) > 0:
+			discovery++
+		default:
 			continue
 		}
-		reader++
 		if !strings.Contains(p, "FROM t WHERE k = ") {
-			t.Errorf("reader prompt lacks the line holding the secret, so redaction is untested: %q", p)
+			t.Errorf("prompt lacks the line holding the secret, so redaction is untested: %q", p)
 		}
 	}
-	if reader == 0 || len(sent) != reader+1 {
-		t.Fatalf("prompts = %d, reader prompts = %d; want the canary plus each reader call", len(sent), reader)
+	if reader == 0 || discovery != 1 || len(sent) != reader+discovery+1 {
+		t.Fatalf("prompts = %d, reader prompts = %d, discovery prompts = %d; want the tool canary, one discovery call and each reader call", len(sent), reader, discovery)
 	}
 	logs, _ := filepath.Glob(filepath.Join(".creep", "runs", "*", "egress.log"))
 	if len(logs) != 1 {

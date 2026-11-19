@@ -117,11 +117,31 @@ func discoverHere(t *testing.T, m *fakeModel, tier calibrate.Tier) repoScan {
 	return rs
 }
 
+// authEverywhere is a hostile auth list: every line of every repository
+// file in the request is claimed to be an auth check.
+func authEverywhere(body []byte) []any {
+	secs := discoverySections(userContent(body))
+	canary, _, _, _ := canaryAt(secs)
+	var auth []any
+	for _, s := range secs {
+		if s.num != canary && len(s.lines) > 0 {
+			auth = append(auth, map[string]any{"file": s.num, "start": 1, "end": len(s.lines)})
+		}
+	}
+	return auth
+}
+
 // discoveryAnswer answers a discovery request as a model that reports the
 // canary and nothing else (missCanary: not even that), so every real
 // candidate comes from the tripwire. ok is false for any other request.
-func discoveryAnswer(body []byte, missCanary bool) (answer map[string]any, ok bool) {
-	secs := discoverySections(userContent(body))
+func discoveryAnswer(body []byte, missCanary bool) (map[string]any, bool) {
+	return promptAnswer(userContent(body), missCanary)
+}
+
+// promptAnswer is discoveryAnswer for a prompt already out of its request
+// (a command model gets the prompt on stdin).
+func promptAnswer(prompt string, missCanary bool) (answer map[string]any, ok bool) {
+	secs := discoverySections(prompt)
 	if len(secs) == 0 {
 		return nil, false
 	}

@@ -52,7 +52,7 @@ func discoverRepoResult(res discover.Result, files repoFiles, marks map[string]r
 	return repoScan{res: res, paths: files.paths, gaps: gaps, disc: discoverySummary(res)}
 }
 
-// fileMarks records the generated or minified mark of every file
+// fileMarks records the vendor, generated or minified mark of every file
 // discovery reads, so it can be believed afterwards for a file read in
 // full with no candidate (ADR 0017), without reading the file again.
 type fileMarks struct {
@@ -65,7 +65,7 @@ func (m *fileMarks) readFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if why, err := repofile.IgnoreReason(path, data); err == nil && why != repofile.IgnoredVendor && why != 0 {
+	if why, err := repofile.IgnoreReason(path, data); err == nil && why != 0 {
 		m.marks[path] = why
 	}
 	return data, nil
@@ -133,9 +133,14 @@ var seedKey = func() state.Key {
 // discoverySeed returns the run's canary seed: 32 bytes from crypto/rand,
 // kept only in signed run state. A live run reuses a stored seed, so its
 // discovery requests can be served from the cache; --record always makes a
-// new one; --replay uses only the recorded one.
+// new one; --replay uses the recorded one, or without a valid one an
+// unstored seed, so every discovery request misses and the run ends
+// send_failed (exit 4) without a model call.
 func discoverySeed(store *state.Store, mode state.Mode) ([32]byte, error) {
 	b, err := store.Respond(mode, seedKey, newSeed)
+	if err != nil && mode == state.ModeReplay {
+		b, err = newSeed()
+	}
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("discovery seed: %w", err)
 	}

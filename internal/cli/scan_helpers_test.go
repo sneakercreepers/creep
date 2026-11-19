@@ -31,6 +31,7 @@ type fakeModel struct {
 	verdict    map[string]string // reader class or class@sink line -> verdict or "invalid"
 	fail       map[string]error  // reader class, or "discover" -> send error
 	missCanary bool              // discovery answers never report the canary
+	claimAuth  bool              // discovery answers mark every repository line as an auth check
 	calls      int
 	discovered int // discovery calls
 }
@@ -41,6 +42,9 @@ func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, err
 		m.discovered++
 		if err := m.fail["discover"]; err != nil {
 			return nil, err
+		}
+		if m.claimAuth {
+			answer["auth"] = authEverywhere(c.Payload)
 		}
 		body, err := chatReply(answer)
 		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err

@@ -39,6 +39,10 @@ func longHandler() string {
 	return b.String()
 }
 
+// tooLarge is a source file over one tier S, M or L discovery call, so it
+// is listed too_large, never sent.
+var tooLarge = "package big\n" + strings.Repeat("var x = 1 // padding that keeps the file over one call\n", 2600)
+
 // Acceptance (#175): through the CLI, an incomplete scan (run_full,
 // send_failed, budget, a planner skip, a gap) prints the incomplete mark and
 // exits 4, also when the gate is exceeded; a complete scan exits 0 within the
@@ -72,8 +76,10 @@ func TestScanExitCodes(t *testing.T) {
 		{"inconclusive answer", flask, "", calibrate.TierM, map[string]string{"ssrf": "inconclusive"}, nil, exitcode.Incomplete, "inconclusive"},
 		{"invalid answer", flask, "", calibrate.TierM, map[string]string{"ssrf": "invalid"}, nil, exitcode.Incomplete, "invalid_output"},
 		{"partial slice not vulnerable", map[string]string{"app.py": longHandler()}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "partial_slice"},
-		{"unsupported language", map[string]string{"app.py": "@flask", "legacy/main.go": "package main\n"}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "unsupported_language"},
-		{"syntax error", map[string]string{"app.py": "@flask", "broken.py": "def f(:\n"}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "syntax_error"},
+		{"go source is read, not listed", map[string]string{"app.py": "@flask", "legacy/main.go": "package main\n"}, "", calibrate.TierM, nil, nil, exitcode.OK, ""},
+		{"syntax error is read, not listed", map[string]string{"app.py": "@flask", "broken.py": "def f(:\n"}, "", calibrate.TierM, nil, nil, exitcode.OK, ""},
+		{"file over one discovery call", map[string]string{"app.py": "@flask", "big.go": tooLarge}, "", calibrate.TierM, nil, nil, exitcode.Incomplete, "too_large"},
+		{"discovery send failed", flask, "", calibrate.TierM, nil, map[string]error{"discover": errors.New("connection reset")}, exitcode.Incomplete, "send_failed"},
 		{"vendor listed by design", map[string]string{"app.py": "@flask", "vendor/lib.py": "import os\n"}, "", calibrate.TierM, nil, nil, exitcode.OK, ""},
 	}
 	for _, tt := range tests {
@@ -115,12 +121,12 @@ func checkJSONReport(t *testing.T, wantReason string) {
 // terminal; a run with one never reads as clean.
 func TestScanListsFilesEscaped(t *testing.T) {
 	hostile := "bidi\u202egnp.py"
-	cfg := scanRepo(t, map[string]string{"app.py": "@flask", hostile: "def f(:\n", "node_modules/x/index.js": "x()\n"}, "")
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", hostile: tooLarge, "node_modules/x/index.js": "x()\n"}, "")
 	code, out, _ := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--config", cfg)
 	if code != exitcode.Incomplete {
 		t.Fatalf("exit %d, want 4\n%s", code, out)
 	}
-	for _, want := range []string{`bidi\u202egnp.py  syntax_error`, "node_modules/x/index.js  vendor", "files not evaluated in full: 2"} {
+	for _, want := range []string{`bidi\u202egnp.py  too_large`, "node_modules/x/index.js  vendor", "files not evaluated in full: 2"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -163,53 +169,6 @@ func TestScanFailsBeforeReport(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(stateDir, "report.json")); !os.IsNotExist(err) {
 				t.Fatalf("a report was written: %v", err)
 			}
-		})
-	}
-}
-
-// #205 audit M1a: a source file static has no grammar for (Go, PHP, ...)
-// is listed as unsupported_language and the run exits 4, never 0 with every
-// class covered; findings from the files static can read are still reported.
-// A Go vendor tree is a gap too: modules.txt vouches for nothing (#213).
-// Non-source files are not listed.
-func TestScanListsUngrammaredSource(t *testing.T) {
-	tests := []struct {
-		name     string
-		files    map[string]string
-		wantCode int
-		listed   []string
-		findings int
-	}{
-		{"go only", map[string]string{"main.go": "package main\n", "internal/db/q.GO": "package db\n", "README.md": "# x\n"},
-			exitcode.Incomplete, []string{"main.go  unsupported_language", "internal/db/q.GO  unsupported_language", "files not evaluated in full: 2"}, 0},
-		{"flask plus php", map[string]string{"app.py": "@flask", "legacy/login.php": "<?php echo 1;\n"},
-			exitcode.Incomplete, []string{"legacy/login.php  unsupported_language", "files not evaluated in full: 1"}, 4},
-		{"vendor go without modules.txt", map[string]string{"app.py": "@flask", "vendor/x/y.go": "package y\n"},
-			exitcode.Incomplete, []string{"vendor/x/y.go  unsupported_language", "files not evaluated in full: 1"}, 4},
-		{"go vendor tree with modules.txt", withGitIndex(map[string]string{"app.py": "@flask", "vendor/modules.txt": "# x\n", "vendor/x/y.go": "package y\n", "notes.txt": "x\n"}, []string{"vendor"}),
-			exitcode.Incomplete, []string{"vendor/x/y.go  unsupported_language", "files not evaluated in full: 1"}, 4},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := scanRepo(t, tt.files, "")
-			code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--config", cfg)
-			if code != tt.wantCode {
-				t.Fatalf("exit %d, want %d\n%s\n%s", code, tt.wantCode, out, errOut)
-			}
-			for _, want := range tt.listed {
-				if !strings.Contains(out, want) {
-					t.Errorf("output lacks %q:\n%s", want, out)
-				}
-			}
-			rep, err := readLastReport()
-			if err != nil || len(rep.Findings) != tt.findings {
-				t.Fatalf("report: %v, %d findings, want %d", err, len(rep.Findings), tt.findings)
-			}
-			wantReason := ""
-			if tt.wantCode == exitcode.Incomplete {
-				wantReason = string(report.SkipUnsupported)
-			}
-			checkJSONReport(t, wantReason)
 		})
 	}
 }
@@ -270,9 +229,9 @@ func checkNoSQLFindings(t *testing.T, rep *report.Report, want map[int]report.St
 // With --format json the report itself goes to stdout and the incomplete
 // mark to stderr, so a redirected report never hides it.
 func TestScanFormatJSONMarksStderr(t *testing.T) {
-	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "legacy/main.go": "package main\n"}, "")
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "legacy/main.go": tooLarge}, "")
 	code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--format", "json", "--config", cfg)
-	if code != exitcode.Incomplete || !strings.Contains(errOut, "INCOMPLETE RUN (reason unsupported_language)") {
+	if code != exitcode.Incomplete || !strings.Contains(errOut, "INCOMPLETE RUN (reason too_large)") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 	if _, err := report.ReadJSON(strings.NewReader(out)); err != nil {

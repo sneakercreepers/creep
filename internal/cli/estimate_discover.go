@@ -18,18 +18,16 @@ var emptyDiscovery = []byte(`{"id":"estimate","object":"chat.completion","choice
 // the scan would send is built from the same redacted files, seed and
 // prompt, and measured, never sent (ADR 0017 D1, ADR 0011 option B). The
 // requests are measured in the OpenAI wire format, as calibration is, so
-// the meter can answer them.
+// the meter can answer them. red is the tier's redactor, shared with the
+// reader stage as the scan shares it, so placeholders number alike and the
+// slices match the scan's cached requests.
 //
 // The empty answers miss every canary. The estimate predicts what cannot
 // be evaluated, not what the model will say, so a batch whose only fault
 // is that is counted as read in full; the candidates are the tripwire's,
 // the reader's floor (the model may propose more).
-func (est *estimateRun) measureDiscovery(ctx context.Context, tier calibrate.Tier, t *tierEstimate) (repoScan, error) {
+func (est *estimateRun) measureDiscovery(ctx context.Context, tier calibrate.Tier, red *redact.Redactor, t *tierEstimate) (repoScan, error) {
 	dtier, err := discoverTier(tier)
-	if err != nil {
-		return repoScan{}, err
-	}
-	red, err := redact.New()
 	if err != nil {
 		return repoScan{}, err
 	}

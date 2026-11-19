@@ -11,7 +11,8 @@ import (
 
 // discoveryGaps lists every file discovery did not read in full, with its
 // report reason (ADR 0017 D2). A file read in full with no candidate keeps
-// the generated or minified mark it carries: listed by design, never a gap.
+// the vendor, generated or minified mark it carries: listed by design, never
+// a gap. A file with a candidate is evaluated whatever its mark (#213).
 func discoveryGaps(res discover.Result, paths []string, marks map[string]repofile.Ignored) []report.NotEvaluated {
 	touched := filesWithCandidates(res)
 	var gaps []report.NotEvaluated
@@ -42,6 +43,8 @@ func filesWithCandidates(res discover.Result) map[discover.FileID]bool {
 
 func markReason(why repofile.Ignored) report.SkipReason {
 	switch why {
+	case repofile.IgnoredVendor:
+		return report.SkipVendor
 	case repofile.IgnoredGenerated:
 		return report.SkipGenerated
 	case repofile.IgnoredMinified:

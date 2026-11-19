@@ -100,9 +100,9 @@ func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, find
 }
 
 // targetsFor turns hypotheses into reader targets. The route's first line
-// is the source (line 1 for a file-level route) and the sink's line the
-// sink; the path comes from the walk, by the sink's file ID. sinkOf maps a
-// hypothesis to its finding index.
+// is the source (the sink's own line for a file-level route) and the
+// sink's line the sink; the path comes from the walk, by the sink's file
+// ID. sinkOf maps a hypothesis to its finding index.
 func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]reader.Target, map[reader.HypothesisID]int) {
 	targets := make([]reader.Target, 0, len(plan.Hypotheses))
 	sinkOf := make(map[reader.HypothesisID]int, len(plan.Hypotheses))
@@ -114,10 +114,15 @@ func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]re
 			continue
 		}
 		sink, route := rs.res.Sinks[at], rs.res.Routes[sinkIndex(h.Route)]
+		source := int(route.Lines.Start)
+		if route.FileLevel {
+			// No entry point holds the sink: the slice starts from the sink
+			// and walks back, not from line 1 of the file.
+			source = int(sink.Line)
+		}
 		id := reader.HypothesisID(h.ID)
 		targets = append(targets, reader.Target{
-			Hypothesis: id, Class: class, Path: rs.paths[sink.File],
-			SourceLine: int(route.Lines.Start), SinkLine: int(sink.Line),
+			Hypothesis: id, Class: class, Path: rs.paths[sink.File], SourceLine: source, SinkLine: int(sink.Line),
 		})
 		sinkOf[id] = at
 	}
