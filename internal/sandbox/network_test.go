@@ -263,7 +263,7 @@ func TestCanaryScript(t *testing.T) {
 		t.Fatalf("script is not one plain line: %q", script)
 	}
 	for _, c := range canaryChecks {
-		if !strings.Contains(script, "echo "+c.key+"=$(t "+strings.ReplaceAll(c.cmd, "{alias}", "canary-7")+")") {
+		if !strings.Contains(script, "echo "+c.key+"=$("+c.probe+" "+strings.ReplaceAll(c.cmd, "{alias}", "canary-7")+")") {
 			t.Errorf("script lacks %s", c.key)
 		}
 	}

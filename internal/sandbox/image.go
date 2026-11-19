@@ -71,3 +71,9 @@ func Images(ctx context.Context, st Status) []PinnedImage {
 	}
 	return images
 }
+
+// PullArgs is the command that pulls ref to the same endpoint creep
+// checked (Docker's --host, Podman's local engine), after the runtime name.
+func PullArgs(st Status, ref string) []string {
+	return append(globalArgs(st), "pull", ref)
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/sandbox"
@@ -71,7 +72,8 @@ func reportImages(e env, best sandbox.Status) {
 			fmt.Fprintf(e.stdout, "sandbox image %s %s: present\n", img.Role, img.Ref)
 			continue
 		}
-		fmt.Fprintf(e.stdout, "sandbox image %s %s: missing; creep never pulls, run: %s pull %s\n", img.Role, img.Ref, best.Runtime, img.Ref)
+		pull := escapeControl(strings.Join(sandbox.PullArgs(best, img.Ref), " "))
+		fmt.Fprintf(e.stdout, "sandbox image %s %s: missing; creep never pulls, run: %s %s\n", img.Role, img.Ref, best.Runtime, pull)
 	}
 }
 

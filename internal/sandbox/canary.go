@@ -31,29 +31,45 @@ const (
 // have one), and on an internal network that query fails before the bare
 // name is tried, so a control would fail and a probe could ask the wrong
 // name.
+//
+// A check reads yes when its command succeeds (probe t) or, for a public
+// resolver asked directly (probe a), when any DNS reply comes back:
+// NXDOMAIN or SERVFAIL from 1.1.1.1 proves a packet left as surely as an
+// address does, so a failing upstream cannot hide the route. The
+// network's own resolver cannot be judged that way, because a resolver
+// that never forwards still answers locally (Docker's says SERVFAIL on an
+// internal network); the dns check only catches one that resolves, and
+// threat model X10 names that limit.
 type canaryCheck struct {
 	key     string
+	probe   string // t: the command succeeds; a: any DNS reply
 	cmd     string // {alias} is the canary's own network alias
 	control bool
 }
 
 var canaryChecks = []canaryCheck{
-	{"control-dns", "nslookup {alias}.", true},             // the network's resolver answers
-	{"control-tcp", "nc -w 3 {alias} " + canaryPort, true}, // a connection on the network works
-	{"dns", "nslookup example.com.", false},                // the resolver forwards public names
-	{"dns-direct", "nslookup example.com. 1.1.1.1", false}, // UDP to a public resolver
-	{"tcp-1.1.1.1", "nc -w 3 1.1.1.1 443", false},          // TCP to a public address
-	{"tcp-8.8.8.8", "nc -w 3 8.8.8.8 53", false},           // and to a second one
+	{"control-dns", "t", "nslookup {alias}.", true},             // the network's resolver answers
+	{"control-tcp", "t", "nc -w 3 {alias} " + canaryPort, true}, // a connection on the network works
+	{"dns", "t", "nslookup example.com.", false},                // the resolver forwards public names
+	{"dns-direct", "a", "nslookup example.com. 1.1.1.1", false}, // UDP to a public resolver
+	{"tcp-1.1.1.1", "t", "nc -w 3 1.1.1.1 443", false},          // TCP to a public address
+	{"tcp-8.8.8.8", "t", "nc -w 3 8.8.8.8 53", false},           // and to a second one
 }
+
+// canaryProbes defines t and a. a says yes on success or on BusyBox's
+// signs of a reply: an rcode, or "Non-authoritative" before an answer.
+const canaryProbes = `t() { if "$@" </dev/null >/dev/null 2>&1; then echo yes; else echo no; fi; }; ` +
+	`a() { o=$("$@" </dev/null 2>&1) && { echo yes; return; }; ` +
+	`case "$o" in *NXDOMAIN*|*SERVFAIL*|*REFUSED*|*Non-authoritative*) echo yes;; *) echo no;; esac; }; `
 
 // canaryScript listens on its own port, then runs each check and prints
 // key=yes or key=no, one per line. One line, so it passes plainValue.
 func canaryScript(alias string) string {
 	var b strings.Builder
 	b.WriteString("nc -l -p " + canaryPort + " </dev/null >/dev/null 2>&1 & sleep 1; ")
-	b.WriteString(`t() { if "$@" </dev/null >/dev/null 2>&1; then echo yes; else echo no; fi; }; `)
+	b.WriteString(canaryProbes)
 	for _, c := range canaryChecks {
-		b.WriteString("echo " + c.key + "=$(t " + strings.ReplaceAll(c.cmd, "{alias}", alias) + "); ")
+		b.WriteString("echo " + c.key + "=$(" + c.probe + " " + strings.ReplaceAll(c.cmd, "{alias}", alias) + "); ")
 	}
 	b.WriteString("exit 0")
 	return b.String()

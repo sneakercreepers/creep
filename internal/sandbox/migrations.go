@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"io/fs"
 	"path"
 	"slices"
 	"strings"
@@ -20,7 +21,11 @@ const prismaDir = "prisma/migrations"
 // order they apply: digit runs compare as numbers, so 2_x runs before
 // 10_x. Down migrations (*.down.sql, *_down.sql) are left out. One set
 // only: the first directory of migrationDirs that has any, else Prisma's.
+// A path that is not clean and inside the repository (absolute, with a
+// "." or ".." element, an empty element or a backslash) is never a
+// migration, and each file counts once.
 func MigrationPaths(paths []string) ([]string, error) {
+	paths = cleanPaths(paths)
 	for _, dir := range migrationDirs {
 		if found := sqlIn(paths, dir); len(found) > 0 {
 			return ordered(found)
@@ -28,12 +33,23 @@ func MigrationPaths(paths []string) ([]string, error) {
 	}
 	var prisma []string
 	for _, p := range paths {
-		parent, name := path.Split(p)
-		if name == "migration.sql" && path.Dir(strings.TrimSuffix(parent, "/")) == prismaDir {
+		if path.Base(p) == "migration.sql" && path.Dir(path.Dir(p)) == prismaDir {
 			prisma = append(prisma, p)
 		}
 	}
 	return ordered(prisma)
+}
+
+// cleanPaths keeps the clean, repository-relative paths, once each.
+func cleanPaths(paths []string) []string {
+	var keep []string
+	for _, p := range paths {
+		if fs.ValidPath(p) && p != "." && !strings.Contains(p, `\`) {
+			keep = append(keep, p)
+		}
+	}
+	slices.Sort(keep)
+	return slices.Compact(keep)
 }
 
 // sqlIn returns the up-migration .sql files directly in dir.
@@ -56,7 +72,7 @@ func ordered(found []string) ([]string, error) {
 		return nil, fmt.Errorf("%d migrations, at most %d: %w", len(found), maxMigrations, ErrSpec)
 	}
 	slices.SortFunc(found, naturalCompare)
-	return slices.Compact(found), nil
+	return found, nil
 }
 
 // naturalCompare orders strings with digit runs compared as numbers.

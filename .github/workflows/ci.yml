@@ -48,6 +48,11 @@ jobs:
           command -v make >/dev/null || make_bin=mingw32-make
           "$make_bin" check
           "$make_bin" build
+      # make check is quiet on success, so this names the runtimes (and
+      # their isolation) the sandbox tests ran on, and any one they skipped.
+      - name: Sandbox runtimes tested
+        if: runner.os == 'Linux'
+        run: go test -count=1 -v -run '^TestRealCleanRemovesNetworks$' ./internal/sandbox | grep -E 'isolation|not usable|--- (PASS|SKIP|FAIL)'
 
   lint:
     runs-on: ubuntu-latest

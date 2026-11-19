@@ -15,11 +15,13 @@ import (
 )
 
 var (
-	rootlessDocker = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Reachable: true, Rootless: true, Isolation: sandbox.IsolationRootless, Reason: sandbox.ReasonOK}
-	rootfulPodman  = sandbox.Status{Runtime: sandbox.Podman, Path: "/usr/bin/podman", Reachable: true, Isolation: sandbox.IsolationRootful, Reason: sandbox.ReasonOK}
-	missingDocker  = sandbox.Status{Runtime: sandbox.Docker, Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotFound}
-	missingPodman  = sandbox.Status{Runtime: sandbox.Podman, Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotFound}
-	downDocker     = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotRunning}
+	rootlessDocker  = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Reachable: true, Rootless: true, Isolation: sandbox.IsolationRootless, Reason: sandbox.ReasonOK}
+	endpointDocker  = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Host: "unix:///run/user/1000/docker.sock", Reachable: true, Rootless: true, Isolation: sandbox.IsolationRootless, Reason: sandbox.ReasonOK}
+	hostileEndpoint = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Host: "tcp://x\x1b[2J", Reachable: true, Rootless: true, Isolation: sandbox.IsolationRootless, Reason: sandbox.ReasonOK}
+	rootfulPodman   = sandbox.Status{Runtime: sandbox.Podman, Path: "/usr/bin/podman", Reachable: true, Isolation: sandbox.IsolationRootful, Reason: sandbox.ReasonOK}
+	missingDocker   = sandbox.Status{Runtime: sandbox.Docker, Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotFound}
+	missingPodman   = sandbox.Status{Runtime: sandbox.Podman, Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotFound}
+	downDocker      = sandbox.Status{Runtime: sandbox.Docker, Path: "/usr/bin/docker", Isolation: sandbox.IsolationNone, Reason: sandbox.ReasonNotRunning}
 )
 
 // withSandbox returns deps whose sandbox detector reports checked and
@@ -72,6 +74,13 @@ func TestDoctorReportsSandbox(t *testing.T) {
 			[]string{"sandbox image canary " + sandbox.CanaryImage + ": present",
 				"sandbox image database " + sandbox.DatabaseImage + ": missing; creep never pulls, run: docker pull " + sandbox.DatabaseImage},
 			nil},
+		// The pull goes to the endpoint creep checked, never a different daemon.
+		{"pull to the checked endpoint", []sandbox.Status{endpointDocker}, "",
+			[]string{"run: docker --host=unix:///run/user/1000/docker.sock pull " + sandbox.DatabaseImage}, []string{"\x1b"}},
+		{"podman pulls locally", []sandbox.Status{missingDocker, rootfulPodman}, "",
+			[]string{"run: podman --remote=false pull " + sandbox.DatabaseImage}, nil},
+		{"hostile endpoint escaped", []sandbox.Status{hostileEndpoint}, "",
+			[]string{`--host=tcp://x\x1b[2J pull`}, []string{"\x1b"}},
 		{"rootful only warns", []sandbox.Status{downDocker, rootfulPodman}, "",
 			[]string{"not usable (not_running)", "sandbox: runtime podman, rootless no, isolation rootful", "warning: the daemon runs as root", "sandbox.enabled is false"}, nil},
 		{"no runtime", []sandbox.Status{missingDocker, missingPodman}, "",

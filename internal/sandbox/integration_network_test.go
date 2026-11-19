@@ -243,3 +243,28 @@ func TestRealCleanRemovesNetworks(t *testing.T) {
 		}
 	})
 }
+
+// TestRealCanaryProbes runs the canary's probe functions in BusyBox's own
+// shell against stand-ins that print what BusyBox's nslookup prints: a
+// public resolver's NXDOMAIN or SERVFAIL counts as a reply, while an
+// unreachable network or a timeout does not.
+func TestRealCanaryProbes(t *testing.T) {
+	eachRuntime(t, func(t *testing.T, st Status) {
+		pullPinned(t, st)
+		s := openReal(t, st)
+		script := canaryProbes +
+			`nx() { echo "** server can't find example.com.: NXDOMAIN"; return 1; }; ` +
+			`sf() { echo "** server can't find example.com.: SERVFAIL"; return 1; }; ` +
+			`un() { echo "nslookup: can't connect to remote host (1.1.1.1): Network is unreachable"; return 1; }; ` +
+			`to() { echo ";; connection timed out; no servers could be reached"; return 1; }; ` +
+			`echo $(a true) $(a nx) $(a sf) $(a un) $(a to) $(t true) $(t nx)`
+		res, err := s.start(context.Background(), Spec{Image: CanaryImage, Cmd: []string{"sh", "-c", script}, Timeout: time.Minute})
+		if err != nil {
+			t.Fatal(err)
+		}
+		const want = "yes yes yes no no yes no"
+		if got := strings.TrimSpace(string(res.Output)); got != want {
+			t.Errorf("probes = %q, want %q", got, want)
+		}
+	})
+}

@@ -39,6 +39,20 @@ func TestMigrationPaths(t *testing.T) {
 			[]string{"prisma/migrations/20240101_a/migration.sql", "prisma/migrations/20240102_b/migration.sql"},
 		},
 		"none": {[]string{"app.py", "schema.sql"}, nil},
+		// Only clean paths inside the repository count, each once.
+		"prisma dot-dot": {[]string{"prisma/migrations/../migration.sql"}, nil},
+		"prisma behind a detour": {
+			[]string{"a/../prisma/migrations/x/migration.sql", "prisma/migrations/x/../a/migration.sql", "prisma/migrations/a/migration.sql"},
+			[]string{"prisma/migrations/a/migration.sql"},
+		},
+		"dot-dot in a flat dir": {[]string{"migrations/../1.sql", "x/../migrations/2.sql"}, nil},
+		"absolute":              {[]string{"/migrations/1.sql", "/etc/migrations/1.sql"}, nil},
+		"dot and empty elements": {
+			[]string{"./migrations/1.sql", "migrations/./2.sql", "migrations//3.sql", "migrations/4.sql/"},
+			nil,
+		},
+		"backslash":  {[]string{`migrations\1.sql`, `migrations/..\..\1.sql`}, nil},
+		"duplicates": {[]string{"migrations/1.sql", "migrations/1.sql"}, []string{"migrations/1.sql"}},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
