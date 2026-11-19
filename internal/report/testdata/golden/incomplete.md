@@ -24,9 +24,11 @@ Run `creep why <id>` for the evidence behind a finding.
 | `path_traversal` | `partial` | 3 / 6 | 0.188 – 0.812 |
 | `ssrf` | `not evaluated` | 0 / 0 | 0.000 – 1.000 |
 
+**No class covers the 3 files left out by design (vendor 2, generated 1)**, listed under Not evaluated.
+
 ## Not evaluated
 
-7 files were not evaluated in full; do not read this report as covering them.
+10 files were not evaluated in full; do not read this report as covering them.
 
 | File | Reason |
 |---|---|
@@ -35,6 +37,9 @@ Run `creep why <id>` for the evidence behind a finding.
 | `bidi\u202egnp.exe` | `read failed` |
 | `c1\x9b31mcsi.py` | `redact failed` |
 | `del\x7fete.py` | `read failed` |
+| `node_modules/pkg/index.js` | `vendor` |
+| `node_modules/pkg/lib.js` | `vendor` |
+| `api_pb2.py` | `generated` |
 | `lib/after.py` | `run full` |
 | `lib/later.py` | `run full` |
 

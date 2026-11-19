@@ -11,7 +11,10 @@
 //     or not evaluated. Every class is covered, partial or not evaluated.
 //   - Every file the gateway, the reader or static analysis did not evaluate
 //     in full is listed as not evaluated with its closed-enum reason. An
-//     unknown reason is an error, never dropped.
+//     unknown reason is an error, never dropped. Files left out by design
+//     (vendor, generated, minified: SkipReason.ByDesign) are also counted
+//     beside the class coverage in Markdown and SARIF (ByDesignSummary), so
+//     a covered class never reads as covering them (#213).
 //   - An incomplete run (the scan stopped, or the run state did not end
 //     complete) is marked incomplete in all three formats, and no class of
 //     it reads as covered: covered becomes partial. Callers map it to

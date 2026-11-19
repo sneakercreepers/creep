@@ -45,6 +45,15 @@
             },
             {
               "descriptor": {
+                "id": "creep/by-design"
+              },
+              "level": "note",
+              "message": {
+                "text": "no class covers the 3 files left out by design (vendor 2, generated 1)"
+              }
+            },
+            {
+              "descriptor": {
                 "id": "creep/not-evaluated/too_large"
               },
               "level": "warning",
@@ -132,6 +141,63 @@
                   "physicalLocation": {
                     "artifactLocation": {
                       "uri": "del%7Fete.py",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "descriptor": {
+                "id": "creep/not-evaluated/vendor"
+              },
+              "level": "warning",
+              "message": {
+                "text": "file not evaluated: vendor"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "node_modules/pkg/index.js",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "descriptor": {
+                "id": "creep/not-evaluated/vendor"
+              },
+              "level": "warning",
+              "message": {
+                "text": "file not evaluated: vendor"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "node_modules/pkg/lib.js",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "descriptor": {
+                "id": "creep/not-evaluated/generated"
+              },
+              "level": "warning",
+              "message": {
+                "text": "file not evaluated: generated"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "api_pb2.py",
                       "uriBaseId": "%SRCROOT%"
                     }
                   }
@@ -333,6 +399,18 @@
             {
               "path": "del\u007fete.py",
               "reason": "read_failed"
+            },
+            {
+              "path": "node_modules/pkg/index.js",
+              "reason": "vendor"
+            },
+            {
+              "path": "node_modules/pkg/lib.js",
+              "reason": "vendor"
+            },
+            {
+              "path": "api_pb2.py",
+              "reason": "generated"
             },
             {
               "path": "lib/after.py",
