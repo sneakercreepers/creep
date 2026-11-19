@@ -144,13 +144,12 @@
 // (wholeFileRules: the private-key rule, base64 JWTs wrapped over lines, the
 // two curl rules, whose continuation lines may be of any length, and the
 // freemius, kubernetes and nuget rules, which reach through a run of blanks
-// of any length). That can cost more than chunks on input crafted for those
-// rules, even with no format character, since a match and the restarts after
-// it can now run past 64 KiB: up to about 5.4 times for 1 MiB of curl -u
-// blocks in the #70 review (0.9 s to 4.8 s; curl -H blocks and freemius
-// blanks about 1.5 to 2 times). BenchmarkFileWholeFileRules measures 0.7 to
-// 2.6 s for its shapes on an i7-10510U. It stays linear and far under the
-// every-keyword worst case on MaxFileBytes. It runs every other detector on
+// of any length). A match and the restarts after it can now run past 64 KiB,
+// so on some input crafted for those rules, even with no format character, a
+// whole-file pass may cost more than chunks did. It stays linear, since the
+// restart budget scales with the text, and far under the every-keyword worst
+// case on MaxFileBytes (BenchmarkFileWholeFileRules times the crafted curl
+// and freemius shapes). It runs every other detector on
 // chunks of at most
 // MaxInputBytes that end at line ends, each
 // reaching chunkOverlap (4 KiB) to twice that back into the previous one; a

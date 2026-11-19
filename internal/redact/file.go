@@ -74,9 +74,9 @@ func (r *Redactor) File(content []byte) (string, error) {
 // wrapped lines (a base64 JWT, a private key). TestChunkOverlapBound derives
 // the list from each regex. File runs them over the whole file, so no chunk
 // cut can split one of their matches. On input crafted for them a match and
-// the restarts after it can run past 64 KiB, so they can cost several times
-// more than in chunks (about 5.4 times for curl -u blocks, see doc.go), still
-// linear: the restart budget scales with the text either way.
+// the restarts after it can run past 64 KiB, so they may cost more than in
+// chunks, still linear: the restart budget scales with the text either way
+// (BenchmarkFileWholeFileRules).
 var wholeFileRules = map[string]bool{
 	"private-key":            true,
 	"jwt-base64":             true,
