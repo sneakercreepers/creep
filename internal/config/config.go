@@ -43,7 +43,7 @@ type Budget struct {
 	// MaxSeconds is the scan deadline (#260). It starts after calibration,
 	// which reads no repository text, so a hostile repository cannot spend
 	// it there.
-	MaxSeconds int `yaml:"max_seconds" desc:"Seconds the scan of the repository may run, after calibration: static analysis, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it."`
+	MaxSeconds int `yaml:"max_seconds" desc:"Seconds the scan of the repository may run, after calibration: discovery, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it."`
 }
 
 type Report struct {

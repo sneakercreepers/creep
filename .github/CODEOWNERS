@@ -2,8 +2,7 @@
 *                        @Ludocius
 
 # Security-sensitive: two approvals once there are two or more maintainers (see GOVERNANCE.md)
-# egress.log lives in internal/gateway; sandbox and planner are listed before they exist
-# so their first PR already needs owner review.
+# egress.log lives in internal/gateway.
 /internal/gateway/       @Ludocius
 /internal/redact/        @Ludocius
 /internal/models/        @Ludocius

@@ -1,6 +1,6 @@
 # Design summary
 
-The short version of the design, as built at v0.1 (2026-11-16). [architecture.md](architecture.md) is the source of truth for layers, contracts and fitness functions; this page keeps the original design's outline and says where the system moved away from it. Decisions that change it go through an [ADR](adr/0000-template.md).
+The short version of the design, as built at v0.1 (2026-11-16) and kept current with `main` (v0.2 in progress). [architecture.md](architecture.md) is the source of truth for layers, contracts and fitness functions; this page keeps the original design's outline and says where the system moved away from it. Decisions that change it go through an [ADR](adr/0000-template.md).
 
 Main purpose: find real vulnerabilities in local source code, with any model, without code leaving the machine except redacted through the gateway, saying honestly what was not evaluated, and gating CI deterministically.
 
@@ -58,7 +58,7 @@ Each protection has a test that is proven able to fail, run by the required CI j
 
 - PR: `probable:critical` (no sandbox). Classes map to severities in ADR 0009; scanner findings are `high`.
 - Nightly: `verified:high` needs the sandbox and the nightly mode, both v0.2 (#21–#25, #28). Until then nothing is `verified`.
-- Exit codes: 0 ok · 1 gate · 2 usage, config or consent · 3 model, canary or calibration · 4 incomplete. An incomplete run never exits 0, even when the gate also trips.
+- Exit codes: 0 ok · 1 gate · 2 usage, config or consent · 3 model, canary, calibration or sandbox · 4 incomplete. An incomplete run never exits 0, even when the gate also trips.
 
 ## Dependencies
 

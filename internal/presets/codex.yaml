@@ -28,7 +28,8 @@
 # Unverified (medium confidence): --ignore-user-config and the -c overrides
 # are documented but not yet checked with the real CLI. A renamed key could
 # be ignored, leaving the shell on under the read-only sandbox. So
-# host_reads stays unbounded until the manual check confirms them (#229).
+# host_reads stays unbounded until a manual check with the real CLI confirms
+# them (threat model C6; #229 closed with this as an accepted residual).
 # Credentials: CODEX_API_KEY declared in model.env, or the login saved
 # under CODEX_HOME.
 version: 1
