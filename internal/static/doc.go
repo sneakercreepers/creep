@@ -107,10 +107,19 @@
 // vendor file with AddIgnored without parsing it only when VendorEvidence
 // names a package-manager mark that exists and MayHoldRoute, a byte test
 // that errs only toward true, says the file cannot hold a route; a mark is
-// a repository file too, so it never hides a route (#213). For a
+// a repository file too, so it never hides a route (#213). A mark also
+// vouches for the C, C++ and component sources its packages ship, which
+// callers list as vendor only when MayHoldAnyRoute is false (#261). For a
 // declaration file (.d.ts) of such a tree, AddDeclaration also lists it as
-// vendor when it holds no route but does not parse, since the grammar lags
-// TypeScript's type syntax. Ignored files are never silently dropped.
+// vendor when it does not parse, since the grammar lags TypeScript's type
+// syntax, but only when its code, comments aside, cannot hold a route
+// (#262). Ignored files are never silently dropped.
+//
+// Names are read as the runtime reads them (#259): Python identifiers are
+// folded with nfkcASCII, the code points whose NFKC form is ASCII, and
+// JavaScript escapes in identifiers and literals are decoded (cookJS), so
+// @app.ｒｏｕｔｅ and app.get spelled with escapes match. MayHoldRoute folds
+// and decodes the same way.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

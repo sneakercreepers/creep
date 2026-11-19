@@ -291,16 +291,34 @@ func (f *jsFile) writeFragments(b *strings.Builder, n *Node) bool {
 		switch c.Type {
 		case "template_substitution":
 			return false
-		case "string_fragment", "escape_sequence":
+		case "string_fragment":
 			if room := maxPathBytes - b.Len(); room > 0 {
 				b.WriteString(capText(f.text(c), room))
+			}
+		case "escape_sequence":
+			if room := maxPathBytes - b.Len(); room > 0 {
+				b.WriteString(capText(cookJS(f.text(c)), room))
 			}
 		}
 	}
 	return true
 }
 
-func (f *jsFile) text(n *Node) string { return nodeText(f.src, n) }
+// text returns n's source with identifier escapes decoded, so get spelled
+// with a \u escape reads as get, as JavaScript reads it (#259). Literal
+// text, whose escapes literalString decodes, stays as written.
+func (f *jsFile) text(n *Node) string {
+	s := nodeText(f.src, n)
+	if n == nil || jsLiteralTypes[n.Type] {
+		return s
+	}
+	return cookJS(s)
+}
+
+var jsLiteralTypes = map[string]bool{
+	"string": true, "string_fragment": true, "escape_sequence": true, "template_string": true,
+	"regex": true, "regex_pattern": true, "comment": true, "jsx_text": true,
+}
 
 // isFunction reports whether n is a function or arrow expression.
 func isFunction(n *Node) bool {

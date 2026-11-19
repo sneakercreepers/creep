@@ -100,6 +100,19 @@ func readFixture(t *testing.T, path string) []byte {
 	return src
 }
 
+// fixtureNamed returns the path of the fixture pinned by golden, so a test
+// does not depend on the order of fixtureFiles.
+func fixtureNamed(t *testing.T, golden string) string {
+	t.Helper()
+	for _, f := range fixtureFiles() {
+		if f.golden == golden {
+			return f.path
+		}
+	}
+	t.Fatalf("no fixture %q", golden)
+	return ""
+}
+
 func fixtureGraph(t *testing.T, app, file, variant string) (Graph, Locations) {
 	t.Helper()
 	return extractFile(t, file, readFixture(t, filepath.Join("..", "..", "testdata", "apps", app, variant, file)))

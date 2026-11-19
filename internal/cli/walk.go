@@ -43,7 +43,7 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 		}
 		lang, ok := static.LanguageForPath(rel)
 		if !ok {
-			if reason, gap := ungrammaredSource(rel, d); gap {
+			if reason, gap := ungrammaredSource(proofs, rel, d); gap {
 				gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 			}
 			return nil
@@ -71,7 +71,8 @@ const maxVendorFileBytes = 32 << 20
 // hold a route included, goes through addFile like first-party code: a mark
 // is a repository file the author can plant, so it never hides a route
 // (#213). static then lists the file as vendor only if it parsed cleanly
-// and holds no route; a proven declaration file only needs to hold no route.
+// and holds no route; a proven declaration file that does not
+// parse also needs code that cannot hold a route (#262).
 func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
@@ -99,7 +100,8 @@ func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, pr
 // reads as a drive letter) is listed, never dropped and never fatal. So is
 // a name report.New would refuse on a finding, such as a\b.py on Unix. A
 // declaration file of a proven tree (proven) goes to AddDeclaration, which
-// lists it as vendor when it holds no route even if it does not parse.
+// lists it as vendor when it does not parse only if its code cannot hold a
+// route.
 func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel string, lang static.Language, src []byte, proven bool) (report.SkipReason, bool) {
 	if !report.ValidPath(rel) {
 		return report.SkipInvalidPath, true

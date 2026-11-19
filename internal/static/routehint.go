@@ -16,32 +16,45 @@ import "bytes"
 //   - Every Python route is a decorator whose attribute is route or
 //     api_route, or an HTTP verb on a receiver the file builds or imports
 //     from flask or fastapi (pyroutes.go). Import names and attributes are
-//     identifiers, so the bytes hold the word "route", "flask" or "fastapi".
+//     identifiers, which the extractor folds as Python does (foldPython,
+//     #259), so the folded bytes hold the word "route", "flask" or
+//     "fastapi". The test folds the whole file the same way first.
 //   - Every Express route needs a receiver built by a callee named express,
 //     or a file importing the module "express" or "express.*" (jsscope.go,
 //     jsroutes.go). A callee is an identifier; a module name is a string
-//     literal or a "+" chain of them, with escape sequences kept as written
-//     (jsFile.literalString). So the bytes hold the word "express", or a
-//     string literal whose whole text is a first piece of "express" or
-//     "node:express" (`"ex" + "press"`). A literal's text ends at its quote,
-//     at a line break or at the end of the file (an unterminated literal the
-//     parser closes), and that is where a piece must end.
+//     literal or a "+" chain of them. The extractor decodes escapes in both
+//     (cookJS, #259), and the test decodes the whole file the same way
+//     first, from left to right as the tokenizer does. So the decoded bytes
+//     hold the word "express", or a string literal whose whole text is a
+//     first piece of "express" or "node:express" (`"ex" + "press"`). A
+//     literal's text ends at its quote, at a line break or at the end of the
+//     file (an unterminated literal the parser closes), and that is where a
+//     piece must end.
 //
 // A word ends at any byte that cannot continue an ASCII identifier, so
 // "expression" and "router" do not count; a non-ASCII byte counts as an
-// end, the safe side. An identifier spelled with a Unicode escape never
-// matches in the extractor either, since it compares the text as written.
+// end, the safe side. Decoding outside literals only adds matches.
 //
-// Cost: one pass per word and piece, so linear in len(src)
-// (BenchmarkMayHoldRoute).
+// Cost: one fold or decode pass, then one pass per word and piece, so
+// linear in len(src) (BenchmarkMayHoldRoute).
 func MayHoldRoute(lang Language, src []byte) bool {
 	switch lang {
 	case Python:
-		return containsWord(src, pythonRouteWords)
+		return containsWord([]byte(foldPython(string(src))), pythonRouteWords)
 	case JavaScript, TypeScript, TSX:
-		return containsWord(src, jsRouteWords) || containsPiece(src, jsFirstPieces)
+		cooked := []byte(cookJS(string(src)))
+		return containsWord(cooked, jsRouteWords) || containsPiece(cooked, jsFirstPieces)
 	}
 	return true
+}
+
+// MayHoldAnyRoute is MayHoldRoute for bytes static has no grammar for, such
+// as a C extension or a .vue component in a proven tree (#261): it is true
+// when Python or JavaScript code embedded anywhere in src could serve a
+// route, so a planted mark lists the file unread only when no route word is
+// in it at all.
+func MayHoldAnyRoute(src []byte) bool {
+	return MayHoldRoute(Python, src) || MayHoldRoute(JavaScript, src)
 }
 
 var (

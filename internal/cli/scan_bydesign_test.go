@@ -115,6 +115,26 @@ func TestScanForgedMarkHiddenRequire(t *testing.T) {
 	}
 }
 
+// TestScanForgedMarkRespelledRoute (#259): a route spelled as its runtime
+// reads it, with fullwidth Python identifiers or JavaScript escapes and no
+// ASCII route word left, is still read under a forged mark.
+func TestScanForgedMarkRespelledRoute(t *testing.T) {
+	flask := strings.ReplaceAll(testApp(t, "flask"), "from flask import", "from ｆｌａｓｋ import")
+	express := strings.Replace(testApp(t, "express"), `require("express")`, `require("\x65xpress")`, 1)
+	express = strings.ReplaceAll(express, "express()", "\\u0065xpress()")
+	express = strings.ReplaceAll(express, "express.json()", "\\u0065xpress.json()")
+	tests := []byDesignCase{
+		{name: "fullwidth flask", files: map[string]string{"main.py": helloRoute, "venv/pyvenv.cfg": "", "venv/app.py": flask}, wantCode: exitcode.GateExceeded, want: []string{"probable  sqli  venv/app.py:"}},
+		{name: "escaped express", files: map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": express}, wantCode: exitcode.GateExceeded, want: []string{"probable  command_injection  node_modules/app/app.js:"}},
+	}
+	if strings.Contains(flask, "flask") || strings.Contains(express, `"express"`) {
+		t.Fatal("respelling left the plain module name")
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { runByDesignCase(t, tt) })
+	}
+}
+
 // routerDeclaration is shaped like router 2.x's lib/route.d.ts, which real
 // Express 5 installs ship (#255 tester M3): "express" in a comment and call
 // signatures the pinned grammar does not parse.
@@ -126,16 +146,53 @@ const routerDeclaration = "declare namespace Route {\n" +
 	"  }\n" +
 	"}\nexport = Route\n"
 
-// TestScanVendorDeclarations: a route-free declaration file of a proven
-// tree stays vendor even when it does not parse, so a real Express 5 install
-// exits 0; a route in one is still evaluated; and the same broken file
-// anywhere else is a gap.
+// TestScanVendorDeclarations: a declaration file of a proven tree whose
+// code, comments aside, cannot hold a route stays vendor even when it does
+// not parse, so a real Express 5 install exits 0. One whose code might hold
+// a route is a gap when it does not parse (#262), a route in one is
+// evaluated, and the same broken file anywhere else is a gap.
 func TestScanVendorDeclarations(t *testing.T) {
 	tests := []byDesignCase{
 		{name: "router route.d.ts", files: map[string]string{"main.py": helloRoute, "node_modules/router/package.json": "{}", "node_modules/router/lib/route.d.ts": routerDeclaration}, wantCode: exitcode.OK, want: []string{"node_modules/router/lib/route.d.ts  vendor"}},
+		{name: "route code in a broken declaration", files: map[string]string{"main.py": helloRoute, "node_modules/router/package.json": "{}", "node_modules/router/lib/route.d.ts": routerDeclaration + "import express = require(\"express\")\n"}, wantCode: exitcode.Incomplete, wantReason: syntaxError, want: []string{"node_modules/router/lib/route.d.ts  syntax_error"}},
 		{name: "first-party copy", files: map[string]string{"main.py": helloRoute, "types/route.d.ts": routerDeclaration}, wantCode: exitcode.Incomplete, wantReason: syntaxError, want: []string{"types/route.d.ts  syntax_error"}},
 		{name: "unproven vendor copy", files: map[string]string{"main.py": helloRoute, "node_modules/router/lib/route.d.ts": routerDeclaration}, wantCode: exitcode.Incomplete, wantReason: syntaxError, want: []string{"node_modules/router/lib/route.d.ts  syntax_error"}},
 		{name: "route in a declaration", files: map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.d.ts": "@express"}, wantCode: exitcode.GateExceeded, want: []string{"probable  command_injection  node_modules/app/app.d.ts:"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { runByDesignCase(t, tt) })
+	}
+}
+
+// TestScanVendorNativeSources (#261): a proven tree's mark vouches for the C
+// and C++ sources and front-end components its packages ship, so a real
+// Flask venv or a node_modules with a native addon is no gap. It never
+// vouches for another server-side language, a file holding a route word, a
+// kind its package manager does not ship, or a file it cannot read.
+func TestScanVendorNativeSources(t *testing.T) {
+	venv := map[string]string{"main.py": helloRoute, "venv/pyvenv.cfg": "home = /usr\n"}
+	pkg := map[string]string{"main.py": helloRoute, "node_modules/addon/package.json": "{}"}
+	with := func(base map[string]string, name, content string) map[string]string {
+		out := map[string]string{name: content}
+		for k, v := range base {
+			out[k] = v
+		}
+		return out
+	}
+	cSource := "#include <Python.h>\nstatic PyObject *escape(PyObject *self) { return self; }\n"
+	tests := []byDesignCase{
+		{name: "C extension in a venv", files: with(venv, "venv/Lib/site-packages/markupsafe/_speedups.c", cSource), wantCode: exitcode.OK, want: []string{"venv/Lib/site-packages/markupsafe/_speedups.c  vendor"}},
+		{name: "header in a dot venv", files: with(map[string]string{"main.py": helloRoute, ".venv/pyvenv.cfg": ""}, ".venv/include/numpy/NDArray.H", "#define X 1\n"), wantCode: exitcode.OK, want: []string{".venv/include/numpy/NDArray.H  vendor"}},
+		{name: "native addon", files: with(with(pkg, "node_modules/addon/src/binding.cc", "int f() { return 1; }\n"), "node_modules/addon/src/binding.h", "int f();\n"), wantCode: exitcode.OK, want: []string{"node_modules/addon/src/binding.cc  vendor", "node_modules/addon/src/binding.h  vendor"}},
+		{name: "vue component", files: with(pkg, "node_modules/addon/Button.vue", "<template><button/></template>\n"), wantCode: exitcode.OK, want: []string{"node_modules/addon/Button.vue  vendor"}},
+		{name: "go beside pyvenv.cfg", files: with(venv, "venv/app/main.go", "package main\n"), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/app/main.go  unsupported_language"}},
+		{name: "php beside package.json", files: with(pkg, "node_modules/addon/index.php", "<?php echo 1;\n"), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"node_modules/addon/index.php  unsupported_language"}},
+		{name: "vue in a venv", files: with(venv, "venv/web/App.vue", "<template/>\n"), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/web/App.vue  unsupported_language"}},
+		{name: "C without pyvenv.cfg", files: map[string]string{"main.py": helloRoute, "venv/x.c": cSource}, wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/x.c  unsupported_language"}},
+		{name: "mixed-case PyVenv.CFG", files: map[string]string{"main.py": helloRoute, "venv/PyVenv.CFG": "", "venv/x.c": cSource}, wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/x.c  unsupported_language"}},
+		{name: "embedded flask code", files: with(venv, "venv/x.c", "PyRun_SimpleString(\"from flask import Flask\");\n"), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/x.c  unsupported_language"}},
+		{name: "vue holding express", files: with(pkg, "node_modules/addon/App.vue", "<script>const e = require('ex' + 'press')</script>\n"), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"node_modules/addon/App.vue  unsupported_language"}},
+		{name: "too large", files: with(venv, "venv/big.c", strings.Repeat("x", 33<<20)), wantCode: exitcode.Incomplete, wantReason: unsupported, want: []string{"venv/big.c  unsupported_language"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { runByDesignCase(t, tt) })
@@ -153,6 +210,12 @@ func TestScanDoesNotTrustLinkedSkips(t *testing.T) {
 			files: map[string]string{"pkg.json": "{}", "node_modules/app/broken.js": "function (\n", "main.py": helloRoute},
 			links: map[string]string{"node_modules/app/package.json": "pkg.json"}, wantCode: exitcode.Incomplete, wantReason: syntaxError,
 			want: []string{"node_modules/app/broken.js  syntax_error"},
+		},
+		{
+			name:  "linked C source in a proven venv",
+			files: map[string]string{"main.py": helloRoute, "venv/pyvenv.cfg": "", "src/app.c": "int main(void) { return 0; }\n"},
+			links: map[string]string{"venv/app.c": "src/app.c"}, wantCode: exitcode.Incomplete, wantReason: unsupported,
+			want: []string{"venv/app.c  not_regular", "src/app.c  unsupported_language"},
 		},
 		{
 			name:  "linked pyvenv.cfg",

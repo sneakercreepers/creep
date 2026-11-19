@@ -2,6 +2,7 @@ package static
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 // raw bytes never hold the word "express" while the extractor still reads it.
 func hiddenExpress(t *testing.T, require string) []byte {
 	t.Helper()
-	src := readFixture(t, fixtureFiles()[4].path) // express_vulnerable
+	src := readFixture(t, fixtureNamed(t, "express_vulnerable"))
 	out := bytes.Replace(src, []byte(`require("express")`), []byte(require), 1)
 	if bytes.Equal(out, src) {
 		t.Fatal(`fixture lost require("express")`)
@@ -54,11 +55,7 @@ func TestMayHoldRouteNeverMissesARoute(t *testing.T) {
 	}
 	var samples []sample
 	for _, f := range fixtureFiles() {
-		name := f.golden + map[bool]string{true: ".py", false: ".js"}[strings.HasPrefix(f.golden, "f")]
-		if f.golden == "express_ts" {
-			name = "app.ts"
-		}
-		samples = append(samples, sample{f.golden, name, readFixture(t, f.path)})
+		samples = append(samples, sample{f.golden, f.golden + filepath.Ext(f.path), readFixture(t, f.path)})
 	}
 	for name, require := range hiddenRequires {
 		samples = append(samples, sample{name, "app.js", hiddenExpress(t, require)}, sample{name + " in a declaration", "app.d.ts", hiddenExpress(t, require)})

@@ -144,7 +144,15 @@ func (f *pyFile) dotted(n *Node) string {
 	return strings.Join(parts, ".")
 }
 
-func (f *pyFile) text(n *Node) string { return nodeText(f.src, n) }
+// text returns n's source with identifiers spelled as Python reads them
+// (foldPython, #259). String content stays as written.
+func (f *pyFile) text(n *Node) string {
+	s := nodeText(f.src, n)
+	if n == nil || n.Type == "string_content" {
+		return s
+	}
+	return foldPython(s)
+}
 
 // nodeText returns the source of n, or "" when n is nil or out of range.
 func nodeText(src []byte, n *Node) string {
