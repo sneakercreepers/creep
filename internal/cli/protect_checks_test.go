@@ -20,7 +20,6 @@ import (
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/gateway/gatewaytest"
 	"github.com/sneakercreepers/creep/internal/planner"
-	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // runProblems checks every run under .creep/runs: no planted secret in
@@ -121,29 +120,16 @@ func walkText(v reflect.Value, path string) []string {
 }
 
 // repoPlannerInput builds the planner input from the repository in the
-// current directory exactly as scan does (walkRepo, plannerInput).
+// current directory exactly as scan does (walkRepo, discovery with a model
+// that reports the canary, plannerInput).
 func repoPlannerInput(t *testing.T) planner.Input {
 	t.Helper()
-	ctx := context.Background()
-	root, err := os.OpenRoot(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	p, err := static.NewParser(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer p.Close(ctx)
-	rs, err := walkRepo(ctx, root, p)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rs := discoverHere(t, &fakeModel{}, calibrate.TierM)
 	ptier, err := plannerTier(calibrate.TierM)
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, _ := plannerInput(rs.graph, ptier, planner.Budget{})
+	in, _ := plannerInput(rs.res, ptier, planner.Budget{})
 	if len(in.Sinks) == 0 {
 		t.Fatal("fixture has no sink; the planner check would be vacuous")
 	}

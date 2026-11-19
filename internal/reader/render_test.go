@@ -137,4 +137,3 @@ func splitAnySeparator(text string) []string {
 		return r == '\n' || r == '\r' || r == '\f' || r == '\v' || r == 0x85 || r == 0x2028 || r == 0x2029 || r == 0x1b
 	})
 }
-

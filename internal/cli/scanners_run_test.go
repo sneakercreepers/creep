@@ -10,9 +10,9 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/scanrun"
-	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // placeTool writes a file named like the scanner into a new directory

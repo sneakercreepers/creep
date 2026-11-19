@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
+	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/scanrun"
-	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // reasonScannerFailed marks a run incomplete because an enabled scanner

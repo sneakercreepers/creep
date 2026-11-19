@@ -9,8 +9,8 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
-	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/repofile"
+	"github.com/sneakercreepers/creep/internal/report"
 )
 
 const allScanners = "scanners:\n  enabled: [gitleaks, osv-scanner, semgrep]\n"

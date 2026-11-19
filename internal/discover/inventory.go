@@ -187,6 +187,28 @@ func (t inventoryTable) needsContent(name string) bool {
 	return !found && extensionless(base)
 }
 
+// MaybeSource reports whether Run could treat the file at name as source:
+// its name says so, or only its bytes can tell. A caller that cannot hand
+// such a file to Run (a link, an invalid name) lists it instead of
+// dropping it. A table that fails to load answers true: fail closed.
+func MaybeSource(name string) bool {
+	t, err := loadInventory()
+	if err != nil {
+		return true
+	}
+	return t.classify(name, nil).Language != 0 || t.needsContent(name)
+}
+
+// SourceName reports whether the name alone makes the file source. A
+// caller that never reads the file (a link) uses it: only a name can say.
+func SourceName(name string) bool {
+	t, err := loadInventory()
+	if err != nil {
+		return true
+	}
+	return t.classify(name, nil).Language != 0
+}
+
 // extensionless counts a dotfile with no other dot (".deploy") as having
 // no extension.
 func extensionless(base string) bool {

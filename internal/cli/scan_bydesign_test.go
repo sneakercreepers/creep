@@ -8,8 +8,11 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
-	"github.com/sneakercreepers/creep/internal/report"
 )
+
+// helloRoute is first-party Flask code with no sink: discovery reads it in
+// full, and it gives the tripwire nothing.
+const helloRoute = "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef index():\n    return \"ok\"\n"
 
 // withGitIndex adds a .git/index to files that tracks every file except
 // those at or under one of installed, plus extra paths git tracks that are
@@ -125,11 +128,11 @@ func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 		{"unreadable git index", map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express", gitIndexPath: "DIRC not an index"},
 			exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
 		{"go in a committed package", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/main.go": "package main\n"}, none),
-			exitcode.Incomplete, string(report.SkipUnsupported), []string{"node_modules/app/main.go  unsupported_language"}},
+			exitcode.OK, "", []string{"language go 1, language python 1"}},
 		{"go vendor tree, not committed", withGitIndex(map[string]string{"main.py": helloRoute, "vendor/modules.txt": "# x\n", "vendor/x/y.go": "package y\n"}, []string{"vendor"}),
-			exitcode.Incomplete, string(report.SkipUnsupported), []string{"vendor/x/y.go  unsupported_language"}},
+			exitcode.OK, "", []string{"language go 1, language python 1"}},
 		{"php vendor tree, not committed", withGitIndex(map[string]string{"main.py": helloRoute, "composer.json": "{}", "vendor/acme/a.php": "<?php echo 1;\n"}, []string{"vendor"}),
-			exitcode.Incomplete, string(report.SkipUnsupported), []string{"vendor/acme/a.php  unsupported_language"}},
+			exitcode.OK, "", []string{"language php 1, language python 1"}},
 	})
 }
 

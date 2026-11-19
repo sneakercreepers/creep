@@ -48,10 +48,15 @@ func plantedApp(rng *rand.Rand) (string, []string) {
 	return app, secrets
 }
 
-// endpointAnswer answers each reader request with verdict[class] (default
-// not_vulnerable), from the HYPOTHESIS line only, never from code.
+// endpointAnswer answers each discovery request with the canary only, and
+// each reader request with verdict[class] (default not_vulnerable), from
+// the HYPOTHESIS line only, never from code.
 func endpointAnswer(verdict map[string]string) func([]byte) []byte {
 	return func(body []byte) []byte {
+		if answer, ok := discoveryAnswer(body, false); ok {
+			reply, _ := chatReply(answer)
+			return reply
+		}
 		m := hypothesisLine.FindSubmatch(body)
 		if m == nil {
 			return []byte(`{}`)

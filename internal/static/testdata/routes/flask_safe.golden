@@ -1,8 +1,0 @@
-GET /notes/search flask auth=call params=0 dynamic=false handler=search_notes:41
-  sql .execute line=45 dynamic=false parameterized=true indirect=false
-GET /notes/<int:note_id> flask auth=call params=1 dynamic=false handler=get_note:50
-  sql .execute line=52 dynamic=false parameterized=true indirect=false
-POST /notes/preview flask auth=call params=0 dynamic=false handler=preview_link:61
-  http_client requests.get line=70 dynamic=true parameterized=false indirect=false
-GET /attachments/<path:name> flask auth=call params=1 dynamic=false handler=download_attachment:75
-  file flask.send_from_directory line=77 dynamic=true parameterized=false indirect=false

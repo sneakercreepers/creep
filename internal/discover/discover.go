@@ -65,6 +65,7 @@ type run struct {
 	work    []fileWork
 	pending []section
 	used    int
+	batches uint32   // discovery calls made so far
 	stopCov Coverage // set with stop once the model path stopped
 	stop    Reason
 	err     error

@@ -18,13 +18,9 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeRunStatus(bw, r.Run)
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
-<<<<<<< HEAD
 	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))
-	writeNotEvaluated(bw, r.Coverage.NotEvaluated, len(r.NoRoutesIn) > 0)
-=======
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
 	writeDiscovery(bw, r.Discovery)
->>>>>>> 7e335ed (wip: move neutral files to repofile)
 	writeScanners(bw, r.Coverage.Scanners)
 	writeDataHandling(bw, r.DataHandling, r.Discovery.WholeFiles)
 	if err := bw.Flush(); err != nil {
@@ -73,7 +69,6 @@ func writeClasses(w io.Writer, classes []ClassCoverage) {
 	fmt.Fprint(w, "\n")
 }
 
-<<<<<<< HEAD
 // writeByDesign says, under the class table, which files no class covers
 // although the run is complete: those left out by design (#213).
 func writeByDesign(w io.Writer, summary string) {
@@ -83,13 +78,8 @@ func writeByDesign(w io.Writer, summary string) {
 	fmt.Fprintf(w, "**No class covers the %s**, listed under Not evaluated.\n\n", summary)
 }
 
-// writeNotEvaluated lists the files not evaluated in full. A run with no
-// route evaluated nothing, so it never says every file was (#248).
-func writeNotEvaluated(w io.Writer, files []NotEvaluated, noRoutes bool) {
-=======
 // writeNotEvaluated lists the files not evaluated in full.
 func writeNotEvaluated(w io.Writer, files []NotEvaluated) {
->>>>>>> 7e335ed (wip: move neutral files to repofile)
 	fmt.Fprint(w, "## Not evaluated\n\n")
 	if len(files) == 0 {
 		fmt.Fprint(w, "Every file was evaluated.\n\n")
