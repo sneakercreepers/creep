@@ -67,8 +67,11 @@ func routeFree(proofs *vendorProofs, rel string) bool {
 // imported in place of a package static trusts with an app (uvicorn.run,
 // flask_cors.CORS): Python searches the script's own directory first, so
 // a repository uvicorn.py makes uvicorn.run(app) code static does not
-// read. A file under a vendor directory is the installed package.
-func shadowsTrustedModule(rel string) bool {
+// read. Only a file of a proven dependency tree (vendorProofs: a
+// verified pyvenv.cfg or package.json, not a vendor name alone) is the
+// installed package (#255 auditor A4).
+func shadowsTrustedModule(proofs *vendorProofs, rel string) bool {
 	why, err := static.IgnoreReason(rel, nil)
-	return err == nil && why != static.IgnoredVendor && static.ShadowsTrustedModule(rel)
+	installed := err == nil && why == static.IgnoredVendor && proofs.proven(rel)
+	return !installed && static.ShadowsTrustedModule(rel)
 }

@@ -49,7 +49,7 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 			return nil
 		}
 		reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d)
-		if !gap && lang == static.Python && shadowsTrustedModule(rel) {
+		if (!gap || reason.ByDesign()) && lang == static.Python && shadowsTrustedModule(proofs, rel) {
 			reason, gap = report.SkipTruncated, true
 		}
 		if gap {
