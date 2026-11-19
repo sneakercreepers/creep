@@ -86,7 +86,7 @@ Then, from the repository root:
 
 ```sh
 creep config explain   # every effective value and the layer it came from
-creep doctor           # runs the tool canary against the model CLI
+creep doctor           # runs the tool canary against the model CLI and reports the sandbox runtime
 creep estimate         # calls, tokens and time of a scan, without calling a model
 creep scan             # scans the current directory; reports in .creep/
 creep why <id>         # the evidence behind one finding of the last scan
@@ -134,11 +134,14 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep scan` | Scan the current directory; write `.creep/report.*` |
 | `creep estimate` | Build every request a scan would send and measure it; no model call, no network ([ADR 0011](docs/adr/0011-estimate-and-stats.md)) |
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
-| `creep doctor` | Check the model: a command model must pass the tool canary |
+| `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level |
+| `creep clean` | Remove every container creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
 | `creep config explain` | Show each effective config value and its source layer |
 | `creep version` | Print version, commit and Go version |
 
 `creep init` and continuing a run with `creep resume` are not implemented yet and fail closed.
+
+The sandbox is optional. `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint. Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. Without a usable runtime, scans run as before and findings stay `probable`. PoC verification is not built yet (#22).
 
 | Flag | Effect |
 |---|---|
@@ -193,7 +196,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), PoC verification (#22–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

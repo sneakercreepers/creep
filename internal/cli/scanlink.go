@@ -16,6 +16,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/reader"
+	"github.com/sneakercreepers/creep/internal/sandbox"
 	"github.com/sneakercreepers/creep/internal/scanrun"
 	"github.com/sneakercreepers/creep/internal/state"
 )
@@ -30,6 +31,7 @@ type scanDeps struct {
 	// runScanner runs one optional scanner; nil is scanrun.Run, the only
 	// code that starts a program (ADR 0013).
 	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result
+	sandbox    sandboxDeps
 }
 
 // scannerRunner is runScanner, or scanrun.Run when none is set.
@@ -49,7 +51,10 @@ type modelLink struct {
 }
 
 func productionDeps() scanDeps {
-	return scanDeps{connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now}
+	return scanDeps{
+		connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now,
+		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean},
+	}
 }
 
 // connectGateway is the only production transport: consent, budget,

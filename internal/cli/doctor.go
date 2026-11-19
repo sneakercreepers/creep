@@ -11,10 +11,11 @@ import (
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
-// runDoctor checks the configured model. For a command model it runs the
-// tool canary through the gateway (consent, budget and egress.log in a new
-// run directory) and exits 3 when the CLI has tools. HTTP APIs have no
-// tools to check. The sandbox runtime is checked once it exists (#21).
+// runDoctor checks the configured model, then the sandbox runtime. For a
+// command model it runs the tool canary through the gateway (consent,
+// budget and egress.log in a new run directory) and exits 3 when the CLI
+// has tools. HTTP APIs have no tools to check. The sandbox is optional, so
+// a missing runtime is reported, not an error.
 func runDoctor(e env, args []string) int {
 	if len(args) > 0 {
 		printError(e.stderr, "creep doctor", fmt.Errorf("unexpected arguments: %q", args))
@@ -30,7 +31,7 @@ func runDoctor(e env, args []string) int {
 	}
 	if r.Config.Model.Contract != "command" {
 		fmt.Fprintf(e.stdout, "model: %s HTTP contract; an HTTP API runs no tools, so there is no tool canary\n", r.Config.Model.Contract)
-		fmt.Fprintln(e.stdout, "sandbox: not checked; the sandbox arrives in v0.2 (#21)")
+		reportSandbox(e, r.Config.Sandbox)
 		return exitcode.OK
 	}
 	return doctorCommand(e, r)
@@ -61,7 +62,7 @@ func doctorCommand(e env, r *config.Resolved) int {
 	}
 	fmt.Fprintf(e.stdout, "model command %s: tool canary passed (no file was created and no command ran)\n", escapeControl(fmt.Sprintf("%q", link.command.Program())))
 	fmt.Fprintf(e.stdout, "consent key for a CI policy: %s\n", link.command.Endpoint())
-	fmt.Fprintln(e.stdout, "sandbox: not checked; the sandbox arrives in v0.2 (#21)")
+	reportSandbox(e, r.Config.Sandbox)
 	return exitcode.OK
 }
 
