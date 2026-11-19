@@ -3,35 +3,53 @@ package gateway
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 )
 
-// errUnsafeRunDir marks a model run directory parent that another user
-// could write to.
-var errUnsafeRunDir = errors.New("model command: run directory parent is writable by others")
+// errUnsafeRunDir marks a model run directory, or a directory above it,
+// that another user could write to or that is a link.
+var errUnsafeRunDir = errors.New("model command: run directory is not private")
 
-// userCacheDir is os.UserCacheDir; tests point it at a private directory.
-var userCacheDir = os.UserCacheDir
+// userCacheDir and userHomeDir are the os functions; tests point them at
+// private directories.
+var (
+	userCacheDir = os.UserCacheDir
+	userHomeDir  = os.UserHomeDir
+)
+
+// staleRunAge is how old a run directory must be before a later process
+// removes it as left behind by a crash: far past the longest model call.
+const staleRunAge = 24 * time.Hour
+
+var staleRunsOnce sync.Once
 
 // newRunRoot makes a fresh directory for one model call under
 // <user cache>/creep/model (0700), never under the system temp directory.
 // Model CLIs read files in parents of their working directory (Gemini CLI:
-// the first .env up the tree and GEMINI.md files up to a .git), and on a
-// shared machine any local user can plant those in /tmp. Here every parent
-// up to the user cache directory is the user's own and closed to others.
+// the first .env up the tree and GEMINI.md files up to a .git; Codex:
+// AGENTS.md), and on a shared machine any local user can plant those in
+// /tmp. checkRunPath proves every directory from the run directory up to
+// the home directory (or the volume root) is a real directory others
+// cannot write to.
 func newRunRoot() (string, error) {
-	cache, err := userCacheDir()
+	cache, home, err := userDirs()
 	if err != nil {
-		return "", fmt.Errorf("model command: user cache dir: %w", err)
+		return "", err
 	}
 	base := filepath.Join(cache, "creep", "model")
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return "", fmt.Errorf("model command: run dir: %w", err)
 	}
-	if err := checkRunParents(cache, base); err != nil {
+	if err := checkRunPath(base, home); err != nil {
 		return "", err
 	}
+	staleRunsOnce.Do(func() { removeStaleRuns(base, time.Now()) })
 	root, err := os.MkdirTemp(base, "run-")
 	if err != nil {
 		return "", fmt.Errorf("model command: run dir: %w", err)
@@ -39,31 +57,92 @@ func newRunRoot() (string, error) {
 	return root, nil
 }
 
-// checkRunParents refuses a cache or creep directory that others can write
-// to or that belongs to another user, and a model directory that is a link
-// or open to others. The cache directory itself may be a link the user set
-// up; the two creep directories below it may not.
-func checkRunParents(cache, base string) error {
-	checks := []struct {
-		path string
-		stat func(string) (os.FileInfo, error)
-		mask os.FileMode
-	}{
-		{cache, os.Stat, 0o022},
-		{filepath.Dir(base), os.Lstat, 0o022}, // shared with the calibration store
-		{base, os.Lstat, 0o077},
+// userDirs returns the user cache and home directories, both absolute: a
+// relative HOME or LocalAppData would put the run directory inside the
+// current directory, which during a scan is the repository.
+func userDirs() (cache, home string, err error) {
+	if cache, err = userCacheDir(); err != nil {
+		return "", "", fmt.Errorf("model command: user cache dir: %w", err)
 	}
-	for _, c := range checks {
-		info, err := c.stat(c.path)
-		if err != nil {
-			return fmt.Errorf("model command: run dir: %w", err)
+	if home, err = userHomeDir(); err != nil {
+		return "", "", fmt.Errorf("model command: home dir: %w", err)
+	}
+	for _, d := range []string{cache, home} {
+		if !filepath.IsAbs(d) {
+			return "", "", fmt.Errorf("model command: %q is not an absolute path: %w", d, errUnsafeRunDir)
 		}
-		if !info.IsDir() {
-			return fmt.Errorf("model command: %q is not a directory: %w", c.path, errUnsafeRunDir)
+	}
+	return filepath.Clean(cache), filepath.Clean(home), nil
+}
+
+// checkRunPath walks from base up to home, or to the volume root when base
+// is not under home. creep's own model and creep directories must also be
+// the user's and closed to group and others (model) or to writes by them
+// (creep, shared with the calibration store).
+func checkRunPath(base, home string) error {
+	if err := checkRunDir(base, 0o077, true); err != nil {
+		return err
+	}
+	if err := checkRunDir(filepath.Dir(base), 0o022, true); err != nil {
+		return err
+	}
+	for dir := filepath.Dir(filepath.Dir(base)); ; dir = filepath.Dir(dir) {
+		if err := checkRunDir(dir, 0o002, false); err != nil {
+			return err
 		}
-		if err := checkAccess(c.path, info, c.mask, errUnsafeRunDir); err != nil {
-			return fmt.Errorf("model command: %w", err)
+		if samePath(dir, home) || filepath.Dir(dir) == dir {
+			return nil
 		}
+	}
+}
+
+// checkRunDir refuses a link or a non-directory, mode bits in mask (Unix;
+// Windows reports no real modes, and LocalAppData under the profile is
+// private by its ACL), and, when owned is set, another user's directory.
+func checkRunDir(dir string, mask fs.FileMode, owned bool) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("model command: run dir: %w", err)
+	}
+	if info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0 || !info.IsDir() {
+		return fmt.Errorf("model command: %q is a link or not a directory: %w", dir, errUnsafeRunDir)
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	if info.Mode().Perm()&mask != 0 {
+		return fmt.Errorf("model command: %q has mode %v: %w", dir, info.Mode().Perm(), errUnsafeRunDir)
+	}
+	if owned && !ownedBySelf(info) {
+		return fmt.Errorf("model command: %q is owned by another user: %w", dir, errUnsafeRunDir)
 	}
 	return nil
+}
+
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// removeStaleRuns deletes run directories a crashed process left in base.
+// Only real directories named run-* are removed; os.RemoveAll removes a
+// link inside one without following it. Errors are ignored: a leftover
+// directory wastes space, it is never reused.
+func removeStaleRuns(base string, now time.Time) {
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "run-") || e.Type() != fs.ModeDir {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) < staleRunAge {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(base, e.Name()))
+	}
 }

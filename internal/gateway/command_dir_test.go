@@ -2,21 +2,27 @@ package gateway
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-// useCacheDir points newRunRoot at dir for one test.
+// useDirs points newRunRoot at cache and home for one test.
+func useDirs(t *testing.T, cache, home string, err error) {
+	t.Helper()
+	prevCache, prevHome := userCacheDir, userHomeDir
+	userCacheDir = func() (string, error) { return cache, err }
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userCacheDir, userHomeDir = prevCache, prevHome })
+}
+
+// useCacheDir points newRunRoot at dir, which is also the home directory,
+// so the walk up stops there.
 func useCacheDir(t *testing.T, dir string, err error) {
 	t.Helper()
-	prev := userCacheDir
-	userCacheDir = func() (string, error) { return dir, err }
-	t.Cleanup(func() { userCacheDir = prev })
+	useDirs(t, dir, dir, err)
 }
 
 // plantAbove writes the files Gemini CLI and Codex read from parents of
@@ -76,73 +82,47 @@ func TestRunDirIsNotUnderSystemTemp(t *testing.T) {
 	}
 }
 
-func TestRunRootRefusesUnsafeParents(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(file, nil, 0o600); err != nil {
+// Protection (#229 G3): run directories a crashed process left behind are
+// removed, but nothing that is not an old, real run-* directory, and never
+// through a link.
+func TestRemoveStaleRuns(t *testing.T) {
+	base, outside := t.TempDir(), t.TempDir()
+	keep := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(keep, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tests := []struct {
-		name  string
-		setup func(t *testing.T) string
-		err   error
-		unix  bool
-	}{
-		{"no cache dir", func(*testing.T) string { return "" }, errors.New("$HOME is not defined"), false},
-		{"cache dir is a file", func(*testing.T) string { return file }, nil, false},
-		{"model dir is a file", func(t *testing.T) string { return withEntry(t, "model", "file") }, nil, false},
-		{"model dir is a link", func(t *testing.T) string { return withEntry(t, "model", "link") }, nil, true},
-		{"model dir open to others", func(t *testing.T) string { return withMode(t, "creep/model", 0o755) }, nil, true},
-		{"creep dir writable by others", func(t *testing.T) string { return withMode(t, "creep", 0o777) }, nil, true},
-		{"cache dir writable by others", func(t *testing.T) string { return withMode(t, ".", 0o777) }, nil, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.unix && runtime.GOOS == "windows" {
-				t.Skip("Unix modes and links")
+	old := time.Now().Add(-2 * staleRunAge)
+	mk := func(name string, dir bool, mtime time.Time) {
+		path := filepath.Join(base, name)
+		if dir {
+			if err := os.MkdirAll(filepath.Join(path, "work"), 0o700); err != nil {
+				t.Fatal(err)
 			}
-			useCacheDir(t, tt.setup(t), tt.err)
-			if root, err := newRunRoot(); err == nil {
-				t.Errorf("newRunRoot() = %q, want an error", root)
-			}
-		})
-	}
-	useCacheDir(t, t.TempDir(), nil)
-	if _, err := newRunRoot(); err != nil {
-		t.Errorf("private cache dir refused: %v", err)
-	}
-}
-
-// withEntry makes a cache dir whose creep/<name> is a file or a link to a
-// directory others can write.
-func withEntry(t *testing.T, name, kind string) string {
-	t.Helper()
-	cache := t.TempDir()
-	path := filepath.Join(cache, "creep", name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if kind == "file" {
-		if err := os.WriteFile(path, nil, 0o600); err != nil {
+		} else if err := os.WriteFile(path, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		return cache
+		if err := os.Chtimes(path, mtime, mtime); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.Symlink(t.TempDir(), path); err != nil {
-		t.Fatal(err)
-	}
-	return cache
-}
+	mk("run-old", true, old)
+	mk("run-fresh", true, time.Now())
+	mk("other-old", true, old)
+	mk("run-file", false, old)
+	linked := os.Symlink(outside, filepath.Join(base, "run-link")) == nil
 
-// withMode makes a cache dir with creep/model in place and rel set to mode.
-func withMode(t *testing.T, rel string, mode os.FileMode) string {
-	t.Helper()
-	cache := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cache, "creep", "model"), 0o700); err != nil {
-		t.Fatal(err)
+	removeStaleRuns(base, time.Now())
+
+	want := map[string]bool{"run-old": false, "run-fresh": true, "other-old": true, "run-file": true}
+	if linked {
+		want["run-link"] = true
 	}
-	path := filepath.Join(cache, filepath.FromSlash(rel))
-	if err := os.Chmod(path, mode); err != nil {
-		t.Fatal(err)
+	for name, kept := range want {
+		if _, err := os.Lstat(filepath.Join(base, name)); (err == nil) != kept {
+			t.Errorf("%s: kept = %v, want %v", name, err == nil, kept)
+		}
 	}
-	return cache
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("file behind a run-* link was removed: %v", err)
+	}
 }

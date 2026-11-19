@@ -32,7 +32,10 @@ func runWithPrivateCache(m *testing.M) int {
 		return 1
 	}
 	defer os.RemoveAll(cache)
+	// The walk up from the run directory stops at "home", so it never reaches
+	// the system temp directory, which is world-writable on Linux.
 	userCacheDir = func() (string, error) { return cache, nil }
+	userHomeDir = userCacheDir
 	return m.Run()
 }
 
