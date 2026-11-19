@@ -171,9 +171,11 @@ Layers, later overriding earlier: built-in defaults → org policy (`CREEP_POLIC
 The project file comes from the repository being scanned, so it is untrusted. It **cannot**:
 
 - choose where code goes or what reads it: `model.contract`, `model.endpoint`, `model.name`, `model.preset`, `model.run`, `model.env`, `egress.allow`;
-- enable the sandbox (`sandbox.enabled`, `sandbox.runtime`) or a scanner (`scanners.enabled` may only remove);
+- choose the sandbox (`sandbox.enabled`, `sandbox.runtime`) or the scanners (`scanners.enabled`, not even to remove one);
 - loosen a gate (`gates.pr` and `gates.nightly` may only get stricter) or grant consent;
 - raise a limit: `budget.max_tokens`, `budget.max_calls`, `model.timeout_seconds`, `model.max_output_bytes` and `calibration.cache_days` may only be lowered.
+
+Any of these is a configuration error (exit `2`) that names the project file. A lower limit cannot make a pull request pass with less checked: work skipped for budget, a call refused by the budget and a timed-out model call each make the run incomplete (exit `4`). Removing a scanner would leave a complete run without its classes, so the project file cannot set `scanners.enabled` at all.
 
 ### Optional scanners
 
@@ -190,7 +192,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213, #214), config and redaction hardening (#62, #70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox and PoC verification (#21–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

@@ -216,7 +216,7 @@
       "properties": {
         "enabled": {
           "default": [],
-          "description": "Optional external scanners to run offline when installed (gitleaks, osv-scanner; semgrep is only detected). The project file may only remove them.",
+          "description": "Optional external scanners to run offline when installed (gitleaks, osv-scanner; semgrep is only detected). Cannot be set in the project file.",
           "items": {
             "enum": [
               "gitleaks",
