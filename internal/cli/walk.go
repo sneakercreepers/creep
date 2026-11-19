@@ -71,7 +71,7 @@ const maxVendorFileBytes = 32 << 20
 // hold a route included, goes through addFile like first-party code: a mark
 // is a repository file the author can plant, so it never hides a route
 // (#213). static then lists the file as vendor only if it parsed cleanly
-// and holds no route.
+// and holds no route; a proven declaration file only needs to hold no route.
 func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
@@ -91,21 +91,23 @@ func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, pr
 	case proven && !static.MayHoldRoute(lang, src):
 		return addIgnored(ex, rel, why)
 	}
-	return addFile(ctx, ex, p, rel, lang, src)
+	return addFile(ctx, ex, p, rel, lang, src, proven)
 }
 
 // addFile extracts one file into ex and says whether, and why, the file was
 // not evaluated in full. A name static refuses (such as a:b.py, which it
 // reads as a drive letter) is listed, never dropped and never fatal. So is
-// a name report.New would refuse on a finding, such as a\b.py on Unix.
-func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel string, lang static.Language, src []byte) (report.SkipReason, bool) {
+// a name report.New would refuse on a finding, such as a\b.py on Unix. A
+// declaration file of a proven tree (proven) goes to AddDeclaration, which
+// lists it as vendor when it holds no route even if it does not parse.
+func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel string, lang static.Language, src []byte, proven bool) (report.SkipReason, bool) {
 	if !report.ValidPath(rel) {
 		return report.SkipInvalidPath, true
 	}
 	if _, err := static.IgnoreReason(rel, src); err != nil {
 		return report.SkipInvalidPath, true
 	}
-	add, ok := extractorFor(ex, lang)
+	add, ok := extractorFor(ex, lang, proven && static.IsDeclaration(rel))
 	if !ok {
 		return report.SkipUnsupported, true
 	}
@@ -128,12 +130,16 @@ func addFile(ctx context.Context, ex *static.Extractor, p *static.Parser, rel st
 
 // extractorFor picks the extractor for a grammar: Flask and FastAPI for
 // Python, Express for JavaScript, TypeScript and TSX. A grammar with no
-// extractor is unsupported, never parsed and dropped.
-func extractorFor(ex *static.Extractor, lang static.Language) (func(string, *static.Tree, []byte) error, bool) {
-	switch lang {
-	case static.Python:
+// extractor is unsupported, never parsed and dropped. A TypeScript
+// declaration file of a proven tree (vendorDeclaration) goes to
+// AddDeclaration.
+func extractorFor(ex *static.Extractor, lang static.Language, vendorDeclaration bool) (func(string, *static.Tree, []byte) error, bool) {
+	switch {
+	case lang == static.Python:
 		return ex.AddPython, true
-	case static.JavaScript, static.TypeScript, static.TSX:
+	case lang == static.TypeScript && vendorDeclaration:
+		return ex.AddDeclaration, true
+	case lang == static.JavaScript || lang == static.TypeScript || lang == static.TSX:
 		return ex.AddJavaScript, true
 	}
 	return nil, false

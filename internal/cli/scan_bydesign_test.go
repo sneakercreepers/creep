@@ -100,6 +100,48 @@ func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 	}
 }
 
+// TestScanForgedMarkHiddenRequire (#255 tester M2): a module name split
+// around a line comment, ended by any line terminator JavaScript accepts,
+// is still read under a forged mark: the byte test counts comments as code.
+func TestScanForgedMarkHiddenRequire(t *testing.T) {
+	for name, terminator := range map[string]string{"LF": "\n", "CR": "\r", "CRLF": "\r\n", "U+2028": " ", "U+2029": " "} {
+		app := strings.Replace(testApp(t, "express"), `require("express")`, `require("ex" // x`+terminator+`+ "press")`, 1)
+		tt := byDesignCase{
+			name:     name,
+			files:    map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": app},
+			wantCode: exitcode.GateExceeded, want: []string{"probable  command_injection  node_modules/app/app.js:"},
+		}
+		t.Run(name, func(t *testing.T) { runByDesignCase(t, tt) })
+	}
+}
+
+// routerDeclaration is shaped like router 2.x's lib/route.d.ts, which real
+// Express 5 installs ship (#255 tester M3): "express" in a comment and call
+// signatures the pinned grammar does not parse.
+const routerDeclaration = "declare namespace Route {\n" +
+	"  // Follow the route parameter inference used by @types/express-serve-static-core.\n" +
+	"  type RouteMethod<T, DefaultParams = Params> = {\n" +
+	"    <F extends Handler<any> = RequestHandler<DefaultParams>>(handler: HandlerArg<F>, ...handlers: Array<HandlerArg<F>>): T\n" +
+	"    <P = DefaultParams>(handler: HandlerArg<RequestHandler<P>>, ...handlers: Array<HandlerArg<RequestHandler<P>>>): T\n" +
+	"  }\n" +
+	"}\nexport = Route\n"
+
+// TestScanVendorDeclarations: a route-free declaration file of a proven
+// tree stays vendor even when it does not parse, so a real Express 5 install
+// exits 0; a route in one is still evaluated; and the same broken file
+// anywhere else is a gap.
+func TestScanVendorDeclarations(t *testing.T) {
+	tests := []byDesignCase{
+		{name: "router route.d.ts", files: map[string]string{"main.py": helloRoute, "node_modules/router/package.json": "{}", "node_modules/router/lib/route.d.ts": routerDeclaration}, wantCode: exitcode.OK, want: []string{"node_modules/router/lib/route.d.ts  vendor"}},
+		{name: "first-party copy", files: map[string]string{"main.py": helloRoute, "types/route.d.ts": routerDeclaration}, wantCode: exitcode.Incomplete, wantReason: syntaxError, want: []string{"types/route.d.ts  syntax_error"}},
+		{name: "unproven vendor copy", files: map[string]string{"main.py": helloRoute, "node_modules/router/lib/route.d.ts": routerDeclaration}, wantCode: exitcode.Incomplete, wantReason: syntaxError, want: []string{"node_modules/router/lib/route.d.ts  syntax_error"}},
+		{name: "route in a declaration", files: map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.d.ts": "@express"}, wantCode: exitcode.GateExceeded, want: []string{"probable  command_injection  node_modules/app/app.d.ts:"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { runByDesignCase(t, tt) })
+	}
+}
+
 // TestScanDoesNotTrustLinkedSkips: a link never proves a vendor tree or
 // hides first-party code. A linked mark is no mark, a linked source file
 // in a proven tree is not_regular, and a linked directory is not walked,

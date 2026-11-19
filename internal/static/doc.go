@@ -107,8 +107,10 @@
 // vendor file with AddIgnored without parsing it only when VendorEvidence
 // names a package-manager mark that exists and MayHoldRoute, a byte test
 // that errs only toward true, says the file cannot hold a route; a mark is
-// a repository file too, so it never hides a route (#213). Ignored files
-// are never silently dropped.
+// a repository file too, so it never hides a route (#213). For a
+// declaration file (.d.ts) of such a tree, AddDeclaration also lists it as
+// vendor when it holds no route but does not parse, since the grammar lags
+// TypeScript's type syntax. Ignored files are never silently dropped.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

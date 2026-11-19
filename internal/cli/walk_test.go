@@ -53,7 +53,7 @@ func TestAddFile(t *testing.T) {
 	ex := static.NewExtractor()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gap := addFile(ctx, ex, p, tt.name, tt.lang, []byte(tt.src))
+			got, gap := addFile(ctx, ex, p, tt.name, tt.lang, []byte(tt.src), false)
 			if got != tt.want || gap != (tt.want != "") {
 				t.Fatalf("addFile = %q, %v; want %q", got, gap, tt.want)
 			}

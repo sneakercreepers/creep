@@ -60,7 +60,7 @@ func (e *Extractor) AddPython(path string, tree *Tree, src []byte) error {
 	if tree != nil && tree.Language != Python {
 		return fmt.Errorf("extract %s: %s tree is not python", path, tree.Language)
 	}
-	return e.addSource(path, tree, src, extractPython)
+	return e.addSource(path, tree, src, extractPython, false)
 }
 
 // AddJavaScript extracts Express routes, their sinks and middleware auth from
@@ -69,10 +69,10 @@ func (e *Extractor) AddJavaScript(path string, tree *Tree, src []byte) error {
 	if tree != nil && tree.Language != JavaScript && tree.Language != TypeScript && tree.Language != TSX {
 		return fmt.Errorf("extract %s: %s tree is not javascript or typescript", path, tree.Language)
 	}
-	return e.addSource(path, tree, src, extractJavaScript)
+	return e.addSource(path, tree, src, extractJavaScript, false)
 }
 
-func (e *Extractor) addSource(path string, tree *Tree, src []byte, extract extractFunc) error {
+func (e *Extractor) addSource(path string, tree *Tree, src []byte, extract extractFunc, lenient bool) error {
 	switch {
 	case tree == nil || tree.Root == nil:
 		return fmt.Errorf("extract %s: no tree", path)
@@ -91,8 +91,11 @@ func (e *Extractor) addSource(path string, tree *Tree, src []byte, extract extra
 	}
 	// A vendor path, generator header or minified shape is the author's
 	// say-so: it is believed only for a file that parsed cleanly and holds
-	// no route (pentest P4, #213). Anything else is extracted as usual.
-	if why != 0 && len(routes) == 0 && !truncated && !tree.HasError {
+	// no route (pentest P4, #213). Anything else is extracted as usual. A
+	// lenient caller (AddDeclaration) also lists a route-free vendor file
+	// whose parse has errors.
+	cleanEnough := !tree.HasError || lenient && why == IgnoredVendor
+	if why != 0 && len(routes) == 0 && !truncated && cleanEnough {
 		return e.AddIgnored(path, why)
 	}
 	if !fits(len(e.graph.Files)+1) || !fits(len(e.graph.Routes)+len(routes)) || !fits(len(e.graph.Sinks)+sinks) {
