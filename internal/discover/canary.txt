@@ -1,0 +1,7 @@
+"use strict";
+const fs = require("fs");
+const router{{token}} = require("express").Router();
+{{entry}}router{{token}}.get("/files/{{token}}", (req, res) => {
+{{sink}}  fs.readFile(String(req.query.name), (err, data) => res.send(err ? "" : data));
+});
+module.exports = router{{token}};
