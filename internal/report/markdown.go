@@ -19,7 +19,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeNoRoutes(bw, r.NoRoutesIn)
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
-	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
+	writeNotEvaluated(bw, r.Coverage.NotEvaluated, len(r.NoRoutesIn) > 0)
 	writeScanners(bw, r.Coverage.Scanners)
 	writeDataHandling(bw, r.DataHandling)
 	if err := bw.Flush(); err != nil {
@@ -79,10 +79,17 @@ func writeClasses(w io.Writer, classes []ClassCoverage) {
 	fmt.Fprint(w, "\n")
 }
 
-func writeNotEvaluated(w io.Writer, files []NotEvaluated) {
+// writeNotEvaluated lists the files not evaluated in full. A run with no
+// route evaluated nothing, so it never says every file was (#248).
+func writeNotEvaluated(w io.Writer, files []NotEvaluated, noRoutes bool) {
 	fmt.Fprint(w, "## Not evaluated\n\n")
-	if len(files) == 0 {
+	switch {
+	case noRoutes:
+		fmt.Fprint(w, "Static analysis found no route, so no file was evaluated for any class.\n\n")
+	case len(files) == 0:
 		fmt.Fprint(w, "Every file was evaluated.\n\n")
+	}
+	if len(files) == 0 {
 		return
 	}
 	fmt.Fprintf(w, "%d files were not evaluated in full; do not read this report as covering them.\n\n| File | Reason |\n|---|---|\n", len(files))

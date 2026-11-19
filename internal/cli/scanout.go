@@ -171,7 +171,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	w := e.stdout
 	fmt.Fprintf(w, "calibration: %s\n", escapeControl(cal.Header()))
 	printNoRoutes(w, rep.NoRoutesIn)
-	printFindings(w, rep.Findings)
+	printFindings(w, rep.Findings, len(rep.NoRoutesIn) > 0)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
 	printScanners(w, rep.Coverage.Scanners)
@@ -197,8 +197,13 @@ func (s *session) printStats(e env) {
 	s.stats.print(w, pricingFor(s.opts, s.cfg.Model.Contract))
 }
 
-// incompleteMark states the reason and how much was not evaluated.
+// incompleteMark states the reason and how much was not evaluated. With no
+// route nothing was, so a count of files and findings would understate it
+// (#248).
 func incompleteMark(rep *report.Report) string {
+	if len(rep.NoRoutesIn) > 0 {
+		return fmt.Sprintf("INCOMPLETE RUN (reason %s): static found no route, so no class was evaluated; this is not a clean result", rep.Run.Reason)
+	}
 	n := len(rep.Coverage.NotEvaluated)
 	for _, f := range rep.Findings {
 		if f.Status == report.StatusNotEvaluated {
@@ -216,14 +221,20 @@ func printNoRoutes(w io.Writer, frameworks []string) {
 }
 
 // printFindings counts findings by status and lists the probable and
-// verified ones; `creep why <id>` shows the rest of the evidence.
-func printFindings(w io.Writer, findings []report.Finding) {
+// verified ones; `creep why <id>` shows the rest of the evidence. With no
+// route there is no sink to leave undecided, and "0 not evaluated" would
+// read as full coverage (#248), so that count gives way to the reason.
+func printFindings(w io.Writer, findings []report.Finding, noRoutes bool) {
 	counts := map[report.Status]int{}
 	for _, f := range findings {
 		counts[f.Status]++
 	}
-	fmt.Fprintf(w, "findings: %d verified, %d probable, %d discarded, %d not evaluated\n",
-		counts[report.StatusVerified], counts[report.StatusProbable], counts[report.StatusDiscarded], counts[report.StatusNotEvaluated])
+	undecided := fmt.Sprintf("%d not evaluated", counts[report.StatusNotEvaluated])
+	if noRoutes {
+		undecided = "no sink to evaluate"
+	}
+	fmt.Fprintf(w, "findings: %d verified, %d probable, %d discarded, %s\n",
+		counts[report.StatusVerified], counts[report.StatusProbable], counts[report.StatusDiscarded], undecided)
 	for _, f := range findings {
 		if f.Status == report.StatusVerified || f.Status == report.StatusProbable {
 			fmt.Fprintf(w, "  %s  %s  %s  %s\n", f.ID, f.Status, f.Class, escapeControl(location(f)))
