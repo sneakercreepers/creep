@@ -66,23 +66,25 @@ func extractJavaScript(root *Node, src []byte, lim extractLimits) (routes []foun
 
 // routeCall matches `recv.verb(path, ...middleware, handler)` and
 // `recv.route(path).verb(...middleware, handler)`, one route per mount
-// chain of the receiver.
+// chain of the receiver. recv["verb"] counts as recv.verb (#255 tester
+// M4). A key that is not a literal on a known app or router could be any
+// verb, so its route matches every method and is partial, never dropped.
 func (x *jsExtraction) routeCall(call *Node) []foundRoute {
-	fn := field(call, "function")
-	if fn == nil || fn.Type != "member_expression" {
-		return nil
+	obj, verb, known, ok := x.memberKey(field(call, "function"))
+	methods, isVerb := verbMethods(verb)
+	if !known {
+		methods, isVerb = methodsAll, true
 	}
-	methods, ok := x.verbMethods(fn)
 	args := jsArgs(call)
-	if !ok || len(args) == 0 {
+	if !ok || !isVerb || len(args) == 0 {
 		return nil
 	}
-	base, stack := x.routeTarget(field(fn, "object"), args)
-	if !base.ok || len(stack) == 0 {
+	base, stack := x.routeTarget(obj, args)
+	if !base.ok || len(stack) == 0 || !known && base.recv == nil {
 		return nil
 	}
 	hi := x.handlerIndex(stack)
-	if !x.acceptReceiver(field(fn, "object"), base, stack[hi]) {
+	if !x.acceptReceiver(obj, base, stack[hi]) {
 		return nil
 	}
 	r := foundRoute{framework: Express, methods: methods}
@@ -90,7 +92,25 @@ func (x *jsExtraction) routeCall(call *Node) []foundRoute {
 		r.auth |= AuthMiddleware
 	}
 	x.addHandler(&r, stack, hi, call)
+	r.facts.partial = r.facts.partial || !known
 	return x.expandMounts(r, base, call.StartByte)
+}
+
+// memberKey splits a member access recv.name, or recv[key] with a literal
+// key read as the runtime reads it (escapes decoded), into its object and
+// name. known is false for a computed key that is not a literal; ok is
+// false when fn is no member access.
+func (x *jsExtraction) memberKey(fn *Node) (obj *Node, name string, known, ok bool) {
+	switch {
+	case fn == nil:
+		return nil, "", false, false
+	case fn.Type == "member_expression":
+		return field(fn, "object"), x.file.text(field(fn, "property")), true, true
+	case fn.Type == "subscript_expression":
+		key, literal := x.file.literalString(field(fn, "index"))
+		return field(fn, "object"), key, literal, true
+	}
+	return nil, "", false, false
 }
 
 // expandMounts emits r once per mount chain of its receiver, each with its
@@ -115,8 +135,7 @@ func (x *jsExtraction) expandMounts(r foundRoute, base routeBase, pos uint32) []
 	return out
 }
 
-func (x *jsExtraction) verbMethods(fn *Node) (Methods, bool) {
-	verb := x.file.text(field(fn, "property"))
+func verbMethods(verb string) (Methods, bool) {
 	if verb == "all" {
 		return methodsAll, true
 	}
@@ -155,27 +174,27 @@ func (x *jsExtraction) chainBase(obj *Node) routeBase {
 			base, found = b, true
 			break
 		}
-		fn := field(n, "function")
-		if fn == nil || fn.Type != "member_expression" {
+		obj, name, known, ok := x.memberKey(field(n, "function"))
+		if !ok || !known {
 			break
 		}
-		if x.file.text(field(fn, "property")) == "route" {
-			base, found = x.routeOf(n, fn), true
+		if name == "route" {
+			base, found = x.routeOf(n, obj), true
 			x.chains[n] = base
 			break
 		}
-		if _, ok := x.verbMethods(fn); !ok {
+		if _, ok := verbMethods(name); !ok {
 			break
 		}
 		links = append(links, n)
-		n = field(fn, "object")
+		n = obj
 	}
 	if !found {
 		base = routeBase{}
 	}
 	for i := len(links) - 1; i >= 0; i-- {
-		fn := field(links[i], "function")
-		if base.ok && x.file.text(field(fn, "property")) == "all" && x.anyAuth(flattenArgs(jsArgs(links[i]))) {
+		_, name, _, _ := x.memberKey(field(links[i], "function"))
+		if base.ok && name == "all" && x.anyAuth(flattenArgs(jsArgs(links[i]))) {
 			base.allAuth = true
 		}
 		x.chains[links[i]] = base
@@ -183,13 +202,13 @@ func (x *jsExtraction) chainBase(obj *Node) routeBase {
 	return base
 }
 
-func (x *jsExtraction) routeOf(call, fn *Node) routeBase {
+func (x *jsExtraction) routeOf(call, obj *Node) routeBase {
 	args := jsArgs(call)
 	if len(args) != 1 {
 		return routeBase{}
 	}
 	base := routeBase{path: args[0], ok: true}
-	x.setReceiver(&base, field(fn, "object"))
+	x.setReceiver(&base, obj)
 	return base
 }
 

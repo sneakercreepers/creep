@@ -96,7 +96,7 @@ func TestFoldIsLinear(t *testing.T) {
 	for name, in := range inputs {
 		start := time.Now()
 		cookJS(in)
-		foldPython(in)
+		foldPython(cookPython(in))
 		if d := time.Since(start); d > 5*time.Second {
 			t.Errorf("%s: %v for %d bytes", name, d, len(in))
 		}

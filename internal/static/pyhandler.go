@@ -52,6 +52,7 @@ func (x *pyExtraction) facts(def *Node) handlerFacts {
 	}
 	var h handlerFacts
 	h.add(x.helperSinks(def), false)
+	h.partial = h.partial || x.callsDynamicModule(def)
 	seen := map[*Node]bool{def: true}
 	for _, call := range x.scan(def).calls {
 		name, method := x.file.resolve(field(call, "function"))
@@ -65,6 +66,7 @@ func (x *pyExtraction) facts(def *Node) handlerFacts {
 		}
 		seen[helper] = true
 		h.add(x.helperSinks(helper), true)
+		h.partial = h.partial || x.callsDynamicModule(helper)
 	}
 	x.handlers[def] = h
 	return h

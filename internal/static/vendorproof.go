@@ -16,7 +16,7 @@ import (
 //     for JavaScript and TypeScript files, native addon sources (C and C++)
 //     and front-end components (.vue, .svelte);
 //   - venv/ or .venv/: pyvenv.cfg in that directory, for Python files and
-//     C extension sources.
+//     C extension sources, Cython (.pyx) included.
 //
 // The mark is a file too, so it proves only that a caller may skip parsing
 // a file that cannot hold a route (MayHoldRoute, MayHoldAnyRoute); a file
@@ -41,7 +41,7 @@ func VendorEvidence(name string) (evidence string, ok bool) {
 		case "node_modules":
 			return packageEvidence(segs, i, lang, ext)
 		case "venv", ".venv":
-			return strings.Join(segs[:i+1], "/") + "/pyvenv.cfg", lang == Python || nativeSourceExts[ext]
+			return strings.Join(segs[:i+1], "/") + "/pyvenv.cfg", lang == Python || nativeSourceExts[ext] || ext == ".pyx"
 		}
 	}
 	return "", false

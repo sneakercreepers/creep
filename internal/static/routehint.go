@@ -17,8 +17,9 @@ import "bytes"
 //     api_route, or an HTTP verb on a receiver the file builds or imports
 //     from flask or fastapi (pyroutes.go). Import names and attributes are
 //     identifiers, which the extractor folds as Python does (foldPython,
-//     #259), so the folded bytes hold the word "route", "flask" or
-//     "fastapi". The test folds the whole file the same way first.
+//     #259), or a getattr name, a string it unescapes (pyUnescape). So the
+//     unescaped, folded bytes hold the word "route", "flask" or "fastapi".
+//     The test unescapes (cookPython) and folds the whole file first.
 //   - Every Express route needs a receiver built by a callee named express,
 //     or a file importing the module "express" or "express.*" (jsscope.go,
 //     jsroutes.go). A callee is an identifier; a module name is a string
@@ -40,7 +41,7 @@ import "bytes"
 func MayHoldRoute(lang Language, src []byte) bool {
 	switch lang {
 	case Python:
-		return containsWord([]byte(foldPython(string(src))), pythonRouteWords)
+		return containsWord([]byte(foldPython(cookPython(string(src)))), pythonRouteWords)
 	case JavaScript, TypeScript, TSX:
 		cooked := []byte(cookJS(string(src)))
 		return containsWord(cooked, jsRouteWords) || containsPiece(cooked, jsFirstPieces)

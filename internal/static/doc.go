@@ -119,7 +119,11 @@
 // folded with nfkcASCII, the code points whose NFKC form is ASCII, and
 // JavaScript escapes in identifiers and literals are decoded (cookJS), so
 // @app.ｒｏｕｔｅ and app.get spelled with escapes match. MayHoldRoute folds
-// and decodes the same way.
+// and decodes the same way. app["get"] and getattr(app, "route") with a
+// literal name are the dot form; a name that is not a literal on a known
+// app or router makes the route partial, and so does a call through a
+// module imported by __import__ or importlib.import_module of a computed
+// name.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

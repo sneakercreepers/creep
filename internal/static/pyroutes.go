@@ -103,19 +103,25 @@ func (x *pyExtraction) decorated(n *Node) []foundRoute {
 		if r.framework == FastAPI && paramsAuth {
 			r.auth |= AuthDependency
 		}
+		partial := r.facts.partial
 		r.handler, r.line, r.facts = handler, line(def), facts
+		r.facts.partial = r.facts.partial || partial
 	}
 	return routes
 }
 
-// routeDecorator matches `@recv.route(...)`, `@recv.get(...)` and the like.
+// routeDecorator matches `@recv.route(...)`, `@recv.get(...)` and the
+// like, also spelled `@getattr(recv, "route")(...)`. A getattr name that
+// is not a literal, on a known app or router, could be any verb: its route
+// matches every method and is partial, never dropped.
 func (x *pyExtraction) routeDecorator(expr *Node) (foundRoute, bool) {
-	fn := field(expr, "function")
-	if expr.Type != "call" || fn == nil || fn.Type != "attribute" {
+	if expr.Type != "call" {
 		return foundRoute{}, false
 	}
-	verb := x.file.text(field(fn, "attribute"))
-	obj := field(fn, "object")
+	obj, verb, known, ok := x.attrKey(field(expr, "function"))
+	if !ok {
+		return foundRoute{}, false
+	}
 	recvName := ""
 	if obj != nil && obj.Type == "identifier" {
 		recvName = x.file.text(obj)
@@ -126,6 +132,9 @@ func (x *pyExtraction) routeDecorator(expr *Node) (foundRoute, bool) {
 		fw = recv.framework
 	}
 	methods, ok := x.routeMethods(fw, verb, expr)
+	if !known {
+		methods, ok = methodsAll, recv != nil
+	}
 	if !ok {
 		return foundRoute{}, false
 	}
@@ -135,6 +144,7 @@ func (x *pyExtraction) routeDecorator(expr *Node) (foundRoute, bool) {
 		return foundRoute{}, false
 	}
 	r := foundRoute{framework: fw, methods: methods}
+	r.facts.partial = !known
 	if x.depsAuth(keyword(x.file, kw, "dependencies")) {
 		r.auth |= AuthDependency
 	}

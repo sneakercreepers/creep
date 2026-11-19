@@ -12,12 +12,15 @@ type pyFile struct {
 	funcs map[string]*Node
 	// nonlocals holds names any nested function rebinds with `nonlocal`,
 	// so an enclosing function never treats them as constant.
-	nonlocals      map[string]bool
+	nonlocals map[string]bool
+	// dynamicModules holds module-level names bound by __import__ or
+	// importlib.import_module of a name that is not a literal.
+	dynamicModules map[string]bool
 	flask, fastapi bool // the file imports the framework
 }
 
 func newPyFile(root *Node, src []byte) *pyFile {
-	f := &pyFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}, nonlocals: map[string]bool{}}
+	f := &pyFile{src: src, imports: map[string]string{}, funcs: map[string]*Node{}, nonlocals: map[string]bool{}, dynamicModules: map[string]bool{}}
 	walk(root, func(n *Node) bool {
 		switch n.Type {
 		case "import_statement":
@@ -37,6 +40,7 @@ func newPyFile(root *Node, src []byte) *pyFile {
 		if def := functionDef(n); def != nil {
 			f.funcs[f.text(field(def, "name"))] = def
 		}
+		f.addDynamicImport(n)
 	}
 	for _, q := range f.imports {
 		f.flask = f.flask || q == "flask" || strings.HasPrefix(q, "flask.")
@@ -82,6 +86,9 @@ func (f *pyFile) resolve(n *Node) (name string, method bool) {
 		attrs = append(attrs, f.text(field(n, "attribute")))
 		n = field(n, "object")
 	}
+	if mod, literal, ok := f.dynamicImport(n); ok && literal && len(attrs) > 0 {
+		return joinAttrs(mod, attrs), false
+	}
 	if n == nil || n.Type != "identifier" {
 		if len(attrs) == 0 {
 			return "", false
@@ -96,10 +103,15 @@ func (f *pyFile) resolve(n *Node) (name string, method bool) {
 		}
 		return attrs[0], true
 	}
+	return joinAttrs(q, attrs), false
+}
+
+// joinAttrs appends attrs, collected innermost last, to a dotted name.
+func joinAttrs(q string, attrs []string) string {
 	for i := len(attrs) - 1; i >= 0; i-- {
 		q += "." + attrs[i]
 	}
-	return q, false
+	return q
 }
 
 // literalString returns the value of a string made only of literal parts.

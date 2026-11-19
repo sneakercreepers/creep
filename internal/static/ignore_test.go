@@ -167,6 +167,8 @@ func TestVendorEvidence(t *testing.T) {
 		"node_modules/bcrypt/src/bcrypt.cc":       "node_modules/bcrypt/package.json",
 		"node_modules/@ui/kit/Button.Vue":         "node_modules/@ui/kit/package.json",
 		"node_modules/ui/App.svelte":              "node_modules/ui/package.json",
+		"venv/lib/pkg/_fast.pyx":                  "venv/pyvenv.cfg",
+		"node_modules/app/x.pyx":                  "",
 		"venv/web/App.vue":                        "",
 		"venv/x.go":                               "",
 		"node_modules/app/main.go":                "",

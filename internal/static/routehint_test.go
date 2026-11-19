@@ -63,6 +63,8 @@ func TestMayHoldRouteNeverMissesARoute(t *testing.T) {
 	samples = append(samples,
 		sample{"imported blueprint", "views.py", []byte("from .bp import bp\n\n@bp.route(\"/x\")\ndef x():\n    return 'x'\n")},
 		sample{"imported fastapi verb", "api.py", []byte("from fastapi import APIRouter\nr = APIRouter()\n\n@r.get(\"/x\")\ndef x():\n    return 1\n")},
+		sample{"escaped getattr on an imported blueprint", "views.py", []byte("from .bp import bp\n\n@getattr(bp, \"r\\x6fute\")(\"/x\")\ndef x():\n    return 'x'\n")},
+		sample{"subscript verb", "app.js", []byte("const e = require(\"ex\" + \"press\")\nconst app = e()\napp[\"g\\x65t\"](\"/x\", (req, res) => res.send(1))\n")},
 		sample{"aliased flask", "a.py", []byte("import flask as f\napp = f.Flask(__name__)\n\n@app.get(\"/x\")\ndef x():\n    return 'x'\n")},
 	)
 	for _, s := range samples {

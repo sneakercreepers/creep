@@ -24,7 +24,7 @@ var otherSourceExts = map[string]bool{
 	".exs": true, ".erl": true, ".swift": true, ".dart": true, ".pl": true,
 	".pm": true, ".lua": true, ".c": true, ".h": true, ".cc": true,
 	".cpp": true, ".cxx": true, ".hpp": true, ".vue": true, ".svelte": true,
-	".cfm": true,
+	".cfm": true, ".pyx": true,
 }
 
 // ungrammaredSource lists a source file static cannot parse: a link or

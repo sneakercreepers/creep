@@ -21,6 +21,15 @@ var respellings = []struct {
 	{"fullwidth request", "flask_vulnerable", []string{"request.", "ｒｅｑｕｅｓｔ."}},
 	{"everything fullwidth", "flask_vulnerable", []string{"from flask import", "from ｆｌａｓｋ import", "@app.get(", "@ａｐｐ.ｇｅｔ(", "@app.post(", "@ａｐｐ.ｐｏｓｔ("}},
 	{"fastapi in math sans", "fastapi_vulnerable", []string{"from fastapi import", "from 𝖿𝖺𝗌𝗍𝖺𝗉𝗂 import"}},
+	{"getattr verb", "flask_vulnerable", []string{"@app.get(", `@getattr(app, "get")(`}},
+	{"escaped getattr verb", "flask_vulnerable", []string{"@app.get(", `@getattr(app, "g\x65t")(`, "@app.post(", `@getattr(app, "p\u006fst")(`}},
+	{"unicode subscript", "express_vulnerable", []string{"app.get(", `app["g\u0065t"](`}},
+	{"fullwidth getattr", "flask_vulnerable", []string{"@app.get(", `@ｇｅｔａｔｔｒ(app, "get", None)(`}},
+	{"fastapi getattr", "fastapi_vulnerable", []string{"@app.get(", `@getattr(app, "get")(`}},
+	{"subscript verb", "express_vulnerable", []string{"app.get(", `app["get"](`}},
+	{"template subscript", "express_vulnerable", []string{"app.post(", "app[`post`]("}},
+	{"hex subscript", "express_vulnerable", []string{"app.get(", `app["g\x65t"](`}},
+	{"concatenated subscript", "express_vulnerable", []string{"app.patch(", `app["pat" + "ch"](`}},
 	{"escaped verb", "express_vulnerable", []string{"app.get(", "app.g\\u0065t("}},
 	{"braced escape", "express_vulnerable", []string{"app.post(", "app.\\u{70}ost("}},
 	{"escaped query", "express_vulnerable", []string{"req.query", "req.\\u0071uery"}},
@@ -86,6 +95,68 @@ func TestRespelledWordsOnly(t *testing.T) {
 	for name, tt := range tests {
 		if !MayHoldRoute(tt.lang, []byte(tt.src)) {
 			t.Errorf("%s: MayHoldRoute = false", name)
+		}
+	}
+}
+
+// TestComputedVerbIsPartial (#255 tester M4): a verb whose name is not a
+// literal, on a known app or router, could be any route, so it is a
+// partial route matching every method, never dropped. On a receiver static
+// does not know, it is no route, as recv.anything is not.
+func TestComputedVerbIsPartial(t *testing.T) {
+	const express = "const express = require(\"express\")\nconst app = express()\nconst m = process.env.M\n"
+	const flask = "from flask import Flask\napp = Flask(__name__)\nm = 'get'\n"
+	tests := []struct {
+		name, file, src string
+		wantRoutes      int
+		wantPartial     bool
+	}{
+		{"js computed key", "app.js", express + "app[m](\"/x\", (req, res) => res.send(req.query.x))\n", 1, true},
+		{"js computed chain", "app.js", express + "app.route(\"/x\")[m]((req, res) => res.send(1))\n", 1, true},
+		{"js computed key, unknown receiver", "app.js", express + "other[m](\"/x\", (req, res) => res.send(1))\n", 0, false},
+		{"js literal key is not partial", "app.js", express + "app[\"get\"](\"/x\", (req, res) => res.send(1))\n", 1, false},
+		{"js computed key, no handler", "app.js", express + "app[m](3000)\n", 0, false},
+		{"py getattr name", "app.py", flask + "@getattr(app, m)(\"/x\")\ndef x():\n    return 'x'\n", 1, true},
+		{"py getattr named escape", "app.py", flask + "@getattr(app, \"\\N{LATIN SMALL LETTER G}et\")(\"/x\")\ndef x():\n    return 'x'\n", 1, true},
+		{"py getattr name, unknown receiver", "app.py", flask + "@getattr(bp, m)(\"/x\")\ndef x():\n    return 'x'\n", 0, false},
+		{"py getattr literal is not partial", "app.py", flask + "@getattr(app, \"route\")(\"/x\")\ndef x():\n    return 'x'\n", 1, false},
+		{"py getattr string is not folded", "app.py", flask + "@getattr(bp, \"ｒｏｕｔｅ\")(\"/x\")\ndef x():\n    return 'x'\n", 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g, _ := extractFile(t, tt.file, []byte(tt.src))
+			if len(g.Routes) != tt.wantRoutes {
+				t.Fatalf("%d routes, want %d", len(g.Routes), tt.wantRoutes)
+			}
+			for _, r := range g.Routes {
+				if r.Partial != tt.wantPartial || tt.wantPartial && r.Methods != methodsAll {
+					t.Errorf("route %+v; want partial %v (every method when partial)", r, tt.wantPartial)
+				}
+			}
+		})
+	}
+}
+
+func TestPyUnescape(t *testing.T) {
+	tests := map[string]struct {
+		in, want string
+		ok       bool
+	}{
+		"plain":        {"route", "route", true},
+		"hex":          {`r\x6fute`, "route", true},
+		"short u":      {`r\u006Fute`, "route", true},
+		"long u":       {`r\U0000006fute`, "route", true},
+		"octal":        {`r\157ute`, "route", true},
+		"continuation": {"ro\\\nute", "route", true},
+		"named":        {`r\N{LATIN SMALL LETTER O}ute`, "", false},
+		"short hex":    {`\x6`, "", false},
+		"too large":    {`\U00110000`, "", false},
+		"other escape": {`\q`, "", false},
+		"trailing":     {`a\`, "", false},
+	}
+	for name, tt := range tests {
+		if got, ok := pyUnescape(tt.in); got != tt.want || ok != tt.ok {
+			t.Errorf("%s: pyUnescape(%q) = %q, %v; want %q, %v", name, tt.in, got, ok, tt.want, tt.ok)
 		}
 	}
 }
