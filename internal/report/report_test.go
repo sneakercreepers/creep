@@ -183,19 +183,23 @@ func TestNoRoutesInMarkdownOnly(t *testing.T) {
 
 // #248: a run with no route evaluated nothing, so its Not evaluated
 // section never says every file was, and still lists the files it left
-// out; a run with a route and no gap still says every file was.
+// out; a run with a route and no gap still says every file was. One file
+// reads in the singular.
 func TestNotEvaluatedSectionWithoutRoutes(t *testing.T) {
 	const noRoute, every = "Static analysis found no route, so no file was evaluated", "Every file was evaluated."
+	const one, many = "1 file was not evaluated in full", "files were not evaluated in full"
 	tests := []struct {
 		name      string
 		noRoutes  bool
-		files     bool
+		files     int // files kept from the sample; -1 keeps them all
 		want, not string
 	}{
-		{"no route, no file listed", true, false, noRoute, every},
-		{"no route, files listed", true, true, noRoute, every},
-		{"route, no file listed", false, false, every, noRoute},
-		{"route, files listed", false, true, "files were not evaluated in full", every},
+		{"no route, no file listed", true, 0, noRoute, every},
+		{"no route, files listed", true, -1, noRoute, every},
+		{"route, no file listed", false, 0, every, noRoute},
+		{"route, files listed", false, -1, many, every},
+		{"route, one file listed", false, 1, one, many},
+		{"no route, one file listed", true, 1, one, every},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -203,8 +207,8 @@ func TestNotEvaluatedSectionWithoutRoutes(t *testing.T) {
 			if tt.noRoutes {
 				in.NoRoutesIn = []string{"Flask"}
 			}
-			if !tt.files {
-				in.NotEvaluated = nil
+			if tt.files >= 0 {
+				in.NotEvaluated = in.NotEvaluated[:tt.files]
 			}
 			md := string(render(t, newTestReport(t, in))["md"])
 			if !strings.Contains(md, tt.want) || strings.Contains(md, tt.not) {

@@ -92,7 +92,11 @@ func writeNotEvaluated(w io.Writer, files []NotEvaluated, noRoutes bool) {
 	if len(files) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "%d files were not evaluated in full; do not read this report as covering them.\n\n| File | Reason |\n|---|---|\n", len(files))
+	count := fmt.Sprintf("%d files were", len(files))
+	if len(files) == 1 {
+		count = "1 file was"
+	}
+	fmt.Fprintf(w, "%s not evaluated in full; do not read this report as covering them.\n\n| File | Reason |\n|---|---|\n", count)
 	for _, n := range files {
 		fmt.Fprintf(w, "| %s | %s |\n", codeSpan(n.Path), statusText(string(n.Reason)))
 	}
