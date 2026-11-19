@@ -10,16 +10,13 @@ Main purpose: find real vulnerabilities in local source code, with any model, wi
 creep scan .
   1 Calibration     measure the model per vulnerability class (seeded tasks, Wilson score, tier S/M/L;
                     cached per model, endpoint and task set for 30 days; --recalibrate)
-  2 Static          tree-sitter (WASM in wazero, ADR 0008): routes, sinks and auth for Flask, FastAPI and
-                    Express (JS/TS); unresolved bindings fail closed; other source languages are listed as
-                    unsupported_language. Optional scanners: gitleaks and osv-scanner run offline (ADR 0013);
-                    semgrep is detected only (ADR 0010).
-                    Planned (ADR 0017, #265): language-agnostic. An inventory by file name and bytes, a
-                    lexical tripwire (one cross-language sink table matched on bytes) and model discovery
-                    (whole redacted files through the gateway, closed schema of line spans and enums, one
-                    canary per batch), combined by union only with worst-case planner flags. Static stays
-                    in the union until a 100% recall gate on testdata/apps with recorded model runs (after
-                    #204 and #35), then goes; wazero last
+  2 Discovery       language-agnostic (ADR 0017, #265): an inventory by file name and bytes, a lexical
+                    tripwire (one cross-language sink table matched on redacted bytes) and model
+                    discovery (whole redacted files through the gateway, closed schema of line spans and
+                    enums, one canary per batch; a missed canary makes the batch parse_failed), combined
+                    by union only with worst-case planner flags. A stderr notice names the endpoint and
+                    the number of whole files before the first call. Optional scanners: gitleaks and
+                    osv-scanner run offline (ADR 0013); semgrep is detected only (ADR 0010).
   3 Planner         sees only IDs, enums and booleans → deterministic ranking, no model call, tier step caps
   4 Reader          reads redacted slices (quarantined), answers in a closed schema
   5 Sandbox  v0.2   optional Docker/Podman through their CLI (ADR 0016): runtime detection, hardened
@@ -65,7 +62,7 @@ Each protection has a test that is proven able to fail, run by the required CI j
 
 ## Dependencies
 
-Two direct dependencies, each with an ADR: `go.yaml.in/yaml/v3` (ADR 0001) and `wazero` (ADR 0008; removed at #265 step F, ADR 0017). JSON Schema is validated in tests only, not in the binary. State is JSONL files. External scanners are optional programs on `PATH`; when missing, refused or not run, the report lists them and the classes they would cover.
+One direct dependency, with an ADR: `go.yaml.in/yaml/v3` (ADR 0001). `wazero` (ADR 0008) and, with it, `golang.org/x/sys` were removed at #265 (ADR 0017). JSON Schema is validated in tests only, not in the binary. State is JSONL files. External scanners are optional programs on `PATH`; when missing, refused or not run, the report lists them and the classes they would cover.
 
 ## Changes since the original design
 
@@ -74,7 +71,7 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Original decision | Built at v0.1 | Drift | Main purpose |
 |---|---|---|---|
 | Calibration per model, cached 30 days | As designed; one model per run picks the tier. Routing each task to the cheapest model that solves it is not built | None for calibration; routing across models not scheduled | Kept |
-| Static: tree-sitter routes, sinks, auth | Flask, FastAPI, Express in Go code; parser ~0.1 MB/s (#170, #171). Kits as data ([ADR 0012](adr/0012-language-kits.md), #217) are superseded: language-agnostic inventory, tripwire and model discovery replace per-language code ([ADR 0017](adr/0017-language-agnostic-analysis.md), #265, planned for v0.2) | Changed by ADR 0017 (supersedes ADR 0012); not built yet | Kept for Python and JS/TS; other languages are reported as not evaluated until #265 step D, which also sends whole redacted files to the model (ADR 0017 D1) |
+| Static: tree-sitter routes, sinks, auth | v0.1: Flask, FastAPI, Express in Go code. v0.2: replaced by language-agnostic inventory, tripwire and model discovery ([ADR 0017](adr/0017-language-agnostic-analysis.md), #265); kits as data ([ADR 0012](adr/0012-language-kits.md), #217) and tree-sitter in wazero ([ADR 0008](adr/0008-wazero-tree-sitter.md)) are superseded | Changed by ADR 0017 (supersedes ADR 0008 and 0012) | Widened: every language is read, at the cost of whole redacted files sent to the model (ADR 0017 D1) and quality not yet measured outside the Python and JS test apps (#35) |
 | Optional scanners "used when installed" | gitleaks and osv-scanner run offline with fixed arguments; semgrep detected only ([ADR 0010](adr/0010-optional-scanners-detect-only.md), [ADR 0013](adr/0013-scanner-runner.md)) | Changed by ADR 0010, 0013 | Kept; a failed scanner makes the run incomplete |
 | Planner sees only IDs and enums | As designed, reflection-guarded; NoSQL sinks planned and read since v0.2 (#212) | None; NoSQL moved to v0.2 | Kept |
 | Sandbox and verification | Runtime detection, hardened profile, cleanup and `creep clean` (#21, [ADR 0016](adr/0016-sandbox-runtime.md)); run network, canary and synthetic database (#22, ADR 0016 amendment); PoC verification not built | Changed by ADR 0016 (CLI, not the API socket; creep never pulls the pinned images); verification moved to v0.2 (#23–#25) | Partly: findings are `probable`, never `verified` |
@@ -85,6 +82,6 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Reports SARIF, JSON, Markdown, HTML | SARIF, JSON v1, Markdown; HTML in v1.0 | None | Kept |
 | CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; Action, `--diff`, baseline, nightly mode in v0.2 (#26–#29) | Moved to v0.2 | Kept for full scans |
 | Recorded model replies for tests | Reader fixtures are synthesized from `expected.json`; no real-model recording or public bench yet (#204, #35) | Moved (bench in v0.3) | Unproven: quality with a real small model is not measured yet |
-| ~3 dependencies (YAML, wazero, JSON Schema) | 2; no schema validator in the binary | Changed (smaller) | Kept |
+| ~3 dependencies (YAML, wazero, JSON Schema) | 1 (YAML) since #265; no schema validator in the binary | Changed (smaller) | Kept |
 | Privacy modes, `creep clean`, `init` | `creep clean` removes creep's containers (#21); privacy modes and `init` not built; redacted mode always on | Moved to v0.2 or later | Kept |
 | Security follow-ups from reviews | Review follow-ups moved to v0.2, including redaction and config fixes (#62, #63, #70, #102) | Moved by maintainer decision (2026-11-16) | Kept for v0.1; #70 narrows redaction |

@@ -19,36 +19,46 @@
 </div>
 
 > [!NOTE]
-> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only. There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
+> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
 
 ---
 
 ## What it does
 
-`creep scan` runs, in order: **calibration** (measures your model per vulnerability class and picks a tier), **static analysis** (tree-sitter routes, sinks and auth), the **planner** (deterministic ranking, no model call), the **reader** (the model reads redacted code slices and answers in a closed schema) and the **report**.
+`creep scan` runs, in order: **calibration** (measures your model per vulnerability class and picks a tier), **discovery** (an inventory by file name and bytes, a lexical tripwire of known sink calls, and the model reading whole redacted source files for entry points and sinks; see [Languages](#languages)), the **planner** (deterministic ranking, no model call), the **reader** (the model reads redacted code slices and answers in a closed schema) and the **report**.
 
 **Guarantees** (fixed; no config key can turn them off — except that the `codex` and `gemini` presets can read host files outside redaction, `egress.log` and `egress.allow`; see Limits):
 
 - **Redaction through the gateway.** Every model call goes through one package that redacts secrets from the whole file before fragmenting it, checks consent and the token budget, and only then sends.
 - **`egress.log`.** Every request is written and fsynced before a byte is sent, then its result, with a payload file (mode `0600`).
 - **The planner never reads code.** It receives only IDs, enums and booleans, so text in the scanned repository cannot steer it.
-- **Honest incompleteness.** Anything not evaluated (unsupported language, unresolved route, skipped sink, failed scanner, budget hit, a file name that is not a clean relative path) is listed and the run exits `4`, never `0`.
+- **Honest incompleteness.** Anything not evaluated (a file discovery did not read in full, a batch whose discovery canary the model missed, skipped sink, failed scanner, budget hit, a file name that is not a clean relative path) is listed and the run exits `4`, never `0`.
 - **Model output is never executed** on your machine.
 - No telemetry; no network except the model endpoints you configure.
 
 **Limits:**
 
-- Languages: Python (Flask, FastAPI) and JS/TS (Express). Source files in other languages are listed as `unsupported_language` and make the run incomplete. A repository where static finds no Flask, FastAPI or Express route (Django only, no web code, empty) reports every class not evaluated and exits `4` (`no_routes`).
+- Languages: any. Quality is measured only on the Python and JavaScript test apps; on other languages it is not measured yet ([#35](https://github.com/sneakercreepers/creep/issues/35)), and the model can miss an entry point or sink that the tripwire has no signature for. See [Languages](#languages).
+- Discovery sends **whole redacted source files** to your model endpoint (the scan says how many on stderr before the first call; `creep estimate` shows the volume). A file whose numbered lines do not fit one discovery call (8 KiB at tier S, 32 KiB at M, 128 KiB at L, less a small canary file and the line numbers) is listed `too_large`, never split, and makes the run incomplete.
 - Redaction masks secrets by their shape and context. It does not mask a token built by concatenation (`"ghp_" + "..."`), a value under 8 bytes that shows up again without its key, a bare AWS secret key whose key id only appears in a later file, a token disguised with look-alike or invisible characters outside Unicode category Cf (variation selectors, combining marks, Hangul fillers, the braille blank), or a key id that has a format character inside it and is glued to a word by another one. Zero-width and other format characters inside a token are otherwise handled. Full list: [`internal/redact/doc.go`](internal/redact/doc.go) (Detection limits).
 - The `codex` and `gemini` presets can read host files outside redaction and `egress.log` (see [Presets](#presets), [ADR 0015](docs/adr/0015-model-presets.md)).
-- Dependency trees: files under `node_modules/<pkg>/`, `venv/` or `.venv/` are listed as `vendor` without being read only when the tree's `package.json` or `pyvenv.cfg` exists with exact case and the repository's git index tracks nothing in the tree. Committed vendor code is read like your own, under whatever name git tracks it. A package installed from a `file:` or git dependency counts as installed. Without a readable `.git/index` at the scan root (a subdirectory or a tarball, a split or sparse index, `index.skipHash`), every vendor file is read, which can make the run incomplete. Go and PHP `vendor/` trees are always `unsupported_language`. A complete run prints how many files it left out by design.
+- Dependency trees: files under `node_modules/<pkg>/`, `venv/` or `.venv/` are listed as `vendor` without being read only when the tree's `package.json` or `pyvenv.cfg` exists with exact case and the repository's git index tracks nothing in the tree. Committed vendor code is read like your own, under whatever name git tracks it. A package installed from a `file:` or git dependency counts as installed. Without a readable `.git/index` at the scan root (a subdirectory or a tarball, a split or sparse index, `index.skipHash`), every vendor file is read, which can make the run incomplete. Go and PHP `vendor/` trees are always read like your own code. A complete run prints how many files it left out by design.
 - A known gap that can let a run read as covered is tracked for v0.2: [#214](https://github.com/sneakercreepers/creep/issues/214).
 
 Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md).
 
-## Languages: moving to language-agnostic analysis
+## Languages
 
-Today creep analyses **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only, and that stays true until [#265](https://github.com/sneakercreepers/creep/issues/265) lands. creep is moving to language-agnostic analysis ([ADR 0017](docs/adr/0017-language-agnostic-analysis.md)): an inventory of the repository by file name and bytes, a lexical tripwire of known sink calls, and model discovery of entry points and sinks, combined so the model can add candidates but never remove one or lower its risk. Discovery will send **whole redacted source files** to your model endpoint, through the same redaction, consent and `egress.log`; for sensitive code, use a local model. Quality on other languages is not measured until [#35](https://github.com/sneakercreepers/creep/issues/35), and an injected file can still hide a route that has no known sink signature ([threat model R19](docs/threat-model.md)).
+Since [#265](https://github.com/sneakercreepers/creep/issues/265) creep has no per-language code ([ADR 0017](docs/adr/0017-language-agnostic-analysis.md)). Every file is classified by an inventory of file names and bytes; every source file is redacted whole, matched against a lexical tripwire of known sink calls, and sent with a few others to your model, which proposes entry points and sinks. The two are combined by union only: the model can add candidates, never remove one or lower its risk, and every candidate is planned at full risk (input-dependent, not parameterized, not authenticated, every HTTP method). Each discovery call carries a synthetic canary file; a reply that misses it is not believed, its files are listed `parse_failed` and the run exits `4`, and the text and Markdown reports name the canary rather than a syntax error. The inventory and the number of whole files sent are in the text and Markdown reports (JSON v1 is unchanged).
+
+Limits:
+
+- **Whole-file egress.** Every source file is sent whole, redacted, through the same consent, allowlist, budget and `egress.log`; a consent given before #265 carries over. For sensitive code, use a local model.
+- **Quality is not measured on other languages** until [#35](https://github.com/sneakercreepers/creep/issues/35): the tripwire alone finds every expected sink in the test apps, but entry points and sinks it has no signature for depend on the model.
+- **Injection** in one file can steer the model for every file in its batch and hide an entry point or sink with no tripwire signature, while still reporting the canary ([threat model R19](docs/threat-model.md)).
+- **More incomplete runs at low tiers.** Every candidate ranks at full risk, so runs hit the tier's step cap more often, above all at tier S.
+- **Live runs can differ.** Two live runs can propose different candidates; `--record`/`--replay` and the run-state cache keep repeated runs stable.
+- Calibration still uses Python and JavaScript tasks, so the tier is measured on those languages.
 
 ## Install
 
@@ -200,7 +210,7 @@ The project file comes from the repository being scanned, so it is untrusted. It
 
 Any of these is a configuration error (exit `2`) that names the project file and, for a gate or a limit, the layer that set the value it would loosen. A lower limit cannot make a pull request pass with less checked: work skipped for budget, a call refused by the budget, a timed-out model call and a scan past its deadline each make the run incomplete (exit `4`).
 
-`budget.max_seconds` (default 7200, 1 to 86400) is the scan deadline. It starts after calibration, which reads no repository text, and covers static analysis, redaction and model reads (and discovery, once ADR 0017 step D lands). A crafted file can make redaction or parsing take minutes; past the deadline creep stops inside the file it is on, lists that file and every file and sink it did not reach as not evaluated, writes its reports and exits `4` with reason `budget`, so a CI job ends with an incomplete report instead of a runner timeout. Files it never reached are not read. `creep estimate` is bounded the same way and exits `4` with `PARTIAL ESTIMATE` when cut. Removing a scanner would leave a complete run without its classes, so the project file cannot set `scanners.enabled` at all.
+`budget.max_seconds` (default 7200, 1 to 86400) is the scan deadline. It starts after calibration, which reads no repository text, and covers discovery, redaction and model reads. A crafted file can make redaction take minutes; past the deadline creep stops inside the file it is on, lists that file and every file and sink it did not reach as not evaluated, writes its reports and exits `4` with reason `budget`, so a CI job ends with an incomplete report instead of a runner timeout. Files it never reached are not read. `creep estimate` is bounded the same way and exits `4` with `PARTIAL ESTIMATE` when cut. Removing a scanner would leave a complete run without its classes, so the project file cannot set `scanners.enabled` at all.
 
 ### Optional scanners
 
@@ -216,8 +226,8 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 
 | Version | Scope |
 |---|---|
-| **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217) |
+| **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
+| v0.2 | Language-agnostic analysis (#265 ✅), coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
