@@ -73,6 +73,8 @@ ext     .jsp                 language  java
 ext     .jspx                language  java
 ext     .jspf                language  java
 ext     .ftl                 language  java
+ext     .xhtml               language  java
+ext     .tag                 language  java
 ext     .vm                  language  java
 ext     .kt                  language  kotlin
 ext     .kts                 language  kotlin
@@ -111,6 +113,8 @@ ext     .swift               language  swift
 ext     .dart                language  dart
 ext     .pl                  language  perl
 ext     .pm                  language  perl
+ext     .cgi                 language  perl
+ext     .psgi                language  perl
 ext     .lua                 language  lua
 ext     .c                   language  c
 ext     .h                   language  c
@@ -122,6 +126,7 @@ ext     .vue                 language  vue
 ext     .svelte              language  svelte
 ext     .cfm                 language  coldfusion
 ext     .cfc                 language  coldfusion
+ext     .cfml                language  coldfusion
 # Templates whose host language varies.
 ext     .hbs                 language  template
 ext     .handlebars          language  template

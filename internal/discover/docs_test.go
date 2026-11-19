@@ -37,26 +37,53 @@ func TestDocsListInventory(t *testing.T) {
 	}
 }
 
-// readmeExtensions returns the sorted extensions of the README's "Files
-// read" and "Not read and not listed" bullets.
-func readmeExtensions(t *testing.T) (read, notRead []string) {
+// The README's list of #! interpreters equals the inventory's shebang
+// rows, so an extensionless script is read exactly when the docs say so.
+func TestDocsListShebangs(t *testing.T) {
+	inv, err := loadInventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := slices.Sorted(maps.Keys(inv.exact[matchShebang]))
+	line := readmeLine(t, "- **Files read.**")
+	_, after, ok := strings.Cut(line, "`#!` line runs ")
+	list, _, ok2 := strings.Cut(after, " (directly")
+	if !ok || !ok2 {
+		t.Fatalf("README \"Files read\" bullet has no interpreter list: %s", line)
+	}
+	var docs []string
+	for _, m := range codeToken.FindAllStringSubmatch(list, -1) {
+		docs = append(docs, m[1])
+	}
+	slices.Sort(docs)
+	if !slices.Equal(docs, table) {
+		t.Errorf("README lists interpreters %v, inventory.txt has %v", docs, table)
+	}
+}
+
+var codeToken = regexp.MustCompile("`([^`]+)`")
+
+// readmeLine returns the README line that starts with prefix.
+func readmeLine(t *testing.T, prefix string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, line := range strings.Split(string(b), "\n") {
-		switch {
-		case strings.HasPrefix(line, "- **Files read.**"):
-			read = extensions(line)
-		case strings.HasPrefix(line, "- **Not read and not listed.**"):
-			notRead = extensions(line)
+		if strings.HasPrefix(line, prefix) {
+			return line
 		}
 	}
-	if read == nil {
-		t.Fatal("README has no \"- **Files read.**\" bullet")
-	}
-	return read, notRead
+	t.Fatalf("README has no line starting %q", prefix)
+	return ""
+}
+
+// readmeExtensions returns the sorted extensions of the README's "Files
+// read" and "Not read and not listed" bullets.
+func readmeExtensions(t *testing.T) (read, notRead []string) {
+	t.Helper()
+	return extensions(readmeLine(t, "- **Files read.**")), extensions(readmeLine(t, "- **Not read and not listed.**"))
 }
 
 func extensions(line string) []string {
