@@ -148,11 +148,8 @@ func checkModelConfig(m config.Model) error {
 }
 
 func (s *session) openState() error {
-	secret, err := state.UserSecret()
-	if err != nil {
-		return err
-	}
-	if s.store, err = state.Open(stateDir, secret); err != nil {
+	var err error
+	if s.store, err = state.OpenUser(stateDir); err != nil {
 		return err
 	}
 	// The run holds the state lock: a second scan must fail on it before

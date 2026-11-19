@@ -22,7 +22,7 @@ func TestCacheKeyBindsEndpoint(t *testing.T) {
 	if again := cacheKey(call("command://claude-0123456789abcdef")); again != a {
 		t.Fatalf("same call, different keys: %+v %+v", a, again)
 	}
-	store, err := state.Open(filepath.Join(t.TempDir(), ".creep"), make([]byte, state.SecretBytes))
+	store, err := state.OpenWithSecret(filepath.Join(t.TempDir(), ".creep"), make([]byte, state.SecretBytes))
 	if err != nil {
 		t.Fatal(err)
 	}

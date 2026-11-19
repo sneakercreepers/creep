@@ -63,18 +63,18 @@ func (s *Store) LoadCalibration(key string) (Calibration, bool, error) {
 	if err != nil {
 		return Calibration{}, false, fmt.Errorf("calibration: %w", err)
 	}
-	c, err := decodeCalibration(data, key, s.secret)
+	c, err := decodeCalibration(data, key, s.key)
 	if err != nil {
 		return Calibration{}, false, fmt.Errorf("calibration %s: %w", name, err)
 	}
 	return c, true, nil
 }
 
-func decodeCalibration(data []byte, key string, secret []byte) (Calibration, error) {
+func decodeCalibration(data []byte, key string, mk macKey) (Calibration, error) {
 	if len(data) == 0 || data[len(data)-1] != '\n' || bytes.Count(data, []byte("\n")) != 1 {
 		return Calibration{}, fmt.Errorf("not one complete line: %w", ErrCorrupt)
 	}
-	body, err := verify(secret, calibrationDomain, data[:len(data)-1])
+	body, err := verify(mk, calibrationDomain, data[:len(data)-1])
 	if err != nil {
 		return Calibration{}, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
@@ -105,7 +105,11 @@ func (s *Store) SaveCalibration(key string, c Calibration) error {
 	if err != nil {
 		return fmt.Errorf("calibration: %w", err)
 	}
-	line := append(sign(s.secret, calibrationDomain, body), '\n')
+	signed, err := sign(s.key, calibrationDomain, body)
+	if err != nil {
+		return fmt.Errorf("calibration: %w", err)
+	}
+	line := append(signed, '\n')
 	if len(line) > MaxCalibrationBytes {
 		return fmt.Errorf("calibration: %d bytes: %w", len(line), ErrTooLarge)
 	}

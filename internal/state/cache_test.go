@@ -34,7 +34,7 @@ func countingCall(resp string, calls *int) func() ([]byte, error) {
 // model call: the basis for byte-identical reports.
 func TestReplayIsByteIdenticalWithoutCalls(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), ".creep")
-	recorder, err := Open(dir, testSecret)
+	recorder, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestReplayIsByteIdenticalWithoutCalls(t *testing.T) {
 	}
 	_ = recorder.Close()
 
-	replayer, err := Open(dir, testSecret)
+	replayer, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

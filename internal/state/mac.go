@@ -33,21 +33,41 @@ func runDomain(id string) []byte { return []byte("creep run v1\x00" + id + "\x00
 
 var cacheDomain = []byte("creep cache v1\x00")
 
+// errNoKey means a store opened without a MAC key (the key store itself)
+// tried to sign a line.
+var errNoKey = errors.New("state store has no MAC key")
+
+// macKey is the secret every line is signed with. Its field is unexported
+// and only newMACKey sets it, and only open calls newMACKey, so a key can
+// come only from OpenUser or (in tests) OpenWithSecret
+// (TestProductionUsesOnlyOpenUser).
+type macKey struct{ b []byte }
+
+func newMACKey(secret []byte) macKey { return macKey{b: bytes.Clone(secret)} }
+
+func (k macKey) set() bool { return len(k.b) == SecretBytes }
+
 // sign appends a MAC over domain and body as the last field of the JSON
 // object body.
-func sign(secret, domain, body []byte) []byte {
-	m := hmac.New(sha256.New, secret)
+func sign(k macKey, domain, body []byte) ([]byte, error) {
+	if !k.set() {
+		return nil, errNoKey
+	}
+	m := hmac.New(sha256.New, k.b)
 	m.Write(domain)
 	m.Write(body)
 	line := append(bytes.Clone(body[:len(body)-1]), macField...)
 	line = hex.AppendEncode(line, m.Sum(nil))
-	return append(line, `"}`...)
+	return append(line, `"}`...), nil
 }
 
 // verify checks a line written by sign and returns its body without the MAC.
 // The MAC covers the raw bytes, so fields added by a later version stay
-// authenticated without re-encoding.
-func verify(secret, domain, line []byte) ([]byte, error) {
+// authenticated without re-encoding. Nothing verifies without a key.
+func verify(k macKey, domain, line []byte) ([]byte, error) {
+	if !k.set() {
+		return nil, fmt.Errorf("%w: %w", errNoKey, ErrUnauthenticated)
+	}
 	n := len(line) - macLen
 	if n < 2 || !bytes.Equal(line[n:n+len(macField)], []byte(macField)) || !bytes.HasSuffix(line, []byte(`"}`)) {
 		return nil, fmt.Errorf("no mac: %w", ErrUnauthenticated)
@@ -57,7 +77,7 @@ func verify(secret, domain, line []byte) ([]byte, error) {
 		return nil, fmt.Errorf("bad mac: %w", ErrUnauthenticated)
 	}
 	body := append(bytes.Clone(line[:n]), '}')
-	m := hmac.New(sha256.New, secret)
+	m := hmac.New(sha256.New, k.b)
 	m.Write(domain)
 	m.Write(body)
 	if !hmac.Equal(got, m.Sum(nil)) {
@@ -66,13 +86,12 @@ func verify(secret, domain, line []byte) ([]byte, error) {
 	return body, nil
 }
 
-// UserSecret returns the per-user state secret from
+// userSecret returns the per-user state secret from
 // <os.UserConfigDir>/creep/state.key, creating it (0600, in a 0700
 // directory) on first use. It lives outside every repository, so state
-// shipped inside a scanned repo can never carry a valid MAC. It is the only
-// secret production code passes to Open (TestOnlyUserSecretOpensStores), and
-// a key file holding a fixed pattern such as the public test key is refused.
-func UserSecret() ([]byte, error) {
+// shipped inside a scanned repo can never carry a valid MAC. A key file
+// holding a fixed pattern such as the public test key is refused.
+func userSecret() ([]byte, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("state secret: %w", err)
@@ -81,7 +100,7 @@ func UserSecret() ([]byte, error) {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return nil, fmt.Errorf("state secret: %w", err)
 	}
-	s, err := Open(dir, make([]byte, SecretBytes))
+	s, err := openDir(dir) // the key store holds the key; it signs nothing
 	if err != nil {
 		return nil, fmt.Errorf("state secret: %w", err)
 	}
@@ -138,7 +157,7 @@ const minDistinctBytes = 8
 
 // fixedSecret reports a secret that is a pattern, not random. Copying the
 // public test key into state.key would make every fixture or planted entry
-// signed with it verify, so UserSecret refuses it.
+// signed with it verify, so userSecret (and so OpenUser) refuses it.
 func fixedSecret(secret []byte) bool {
 	var seen [256]bool
 	n := 0

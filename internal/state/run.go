@@ -22,9 +22,9 @@ var (
 // use. An open Run holds the state directory's lock until Close, so no other
 // run, in this process or another, appends at the same time (ErrLocked).
 type Run struct {
-	id     string
-	dir    string
-	secret []byte
+	id  string
+	dir string
+	key macKey
 
 	mu     sync.Mutex
 	f      logFile
@@ -143,7 +143,7 @@ func (s *Store) openEvents(id string, appendMode bool) (*os.File, error) {
 }
 
 func (s *Store) readSummary(id string, f *os.File) (Summary, error) {
-	sum, err := decodeEvents(f, s.secret, id)
+	sum, err := decodeEvents(f, s.key, id)
 	if err != nil {
 		return Summary{}, fmt.Errorf("run %s: %w", id, err)
 	}
@@ -156,7 +156,7 @@ func (s *Store) newRun(id string, f, lock *os.File, sum Summary) *Run {
 	for _, step := range sum.Steps {
 		done[step] = true
 	}
-	return &Run{id: id, dir: filepath.Join(s.dir, runsDir, id), secret: s.secret, f: f, lock: lock, sum: sum, done: done}
+	return &Run{id: id, dir: filepath.Join(s.dir, runsDir, id), key: s.key, f: f, lock: lock, sum: sum, done: done}
 }
 
 // ID returns the run ID, as accepted by Store.Resume.
@@ -253,7 +253,11 @@ func (r *Run) append(ev Event) error {
 	if err != nil {
 		return fmt.Errorf("run %s: %w", r.id, err)
 	}
-	_, err = r.f.Write(append(sign(r.secret, runDomain(r.id), body), '\n'))
+	line, err := sign(r.key, runDomain(r.id), body)
+	if err != nil {
+		return fmt.Errorf("run %s: %w", r.id, err)
+	}
+	_, err = r.f.Write(append(line, '\n'))
 	if err == nil {
 		err = r.f.Sync()
 	}

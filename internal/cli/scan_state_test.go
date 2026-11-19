@@ -62,11 +62,7 @@ func TestResumeRefusesHeldState(t *testing.T) {
 // still loads with its step.
 func holdState(t *testing.T) string {
 	t.Helper()
-	secret, err := state.UserSecret()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := state.Open(stateDir, secret)
+	s, err := state.OpenUser(stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +88,8 @@ func holdState(t *testing.T) string {
 // never stand in for the model. Replay fails closed: the run is incomplete
 // (exit 4), never clean. Live treats each as a miss, so the scan reaches
 // the real verdicts (here a gate-exceeding finding) and records them over
-// every regular file; a directory is left alone and stays unrecorded.
+// every regular file; a directory or link is left alone and stays
+// unrecorded, even a link to an entry this user signed.
 func TestScanPlantedCacheEntries(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -102,11 +99,24 @@ func TestScanPlantedCacheEntries(t *testing.T) {
 		{"no newline", func(t *testing.T, e string, d []byte) { writeRepoFile(t, e, string(bytes.TrimSuffix(d, []byte("\n")))) }, true},
 		{"two lines", func(t *testing.T, e string, d []byte) { writeRepoFile(t, e, string(d)+string(d)) }, true},
 		{"unsigned clean answer", func(t *testing.T, e string, _ []byte) { writeRepoFile(t, e, `{"v":1,"response":"e30="}`+"\n") }, true},
+		{"oversized", func(t *testing.T, e string, _ []byte) {
+			writeRepoFile(t, e, strings.Repeat(" ", 2*state.MaxResponseBytes))
+		}, true},
 		{"directory", func(t *testing.T, e string, _ []byte) {
 			if err := os.Remove(e); err != nil {
 				t.Fatal(err)
 			}
 			mkdirRepo(t, filepath.Join(e, "inner"))
+		}, false},
+		{"link to a signed entry", func(t *testing.T, e string, d []byte) {
+			outside := filepath.Join(t.TempDir(), "entry.json")
+			writeRepoFile(t, outside, string(d))
+			if err := os.Remove(e); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, e); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
 		}, false},
 	}
 	for _, tt := range tests {

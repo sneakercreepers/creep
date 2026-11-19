@@ -47,7 +47,7 @@ func TestV1FixtureMeaning(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	sum, err := decodeEvents(f, testSecret, fixtureRunID)
+	sum, err := decodeEvents(f, testMAC, fixtureRunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestV1FixtureMeaning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := decodeEntry(data, testKey("x"), testSecret)
+	resp, err := decodeEntry(data, testKey("x"), testMAC)
 	if err != nil || string(resp) != "{\"finding\":1}\n" {
 		t.Fatalf("v1 cache entry = %q, %v", resp, err)
 	}
@@ -72,7 +72,7 @@ func TestV1FixtureMeaning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := decodeCalibration(data, calKeyA, testSecret)
+	c, err := decodeCalibration(data, calKeyA, testMAC)
 	if err != nil || !c.At.Equal(calAt) || string(c.Result) != `{"seed":1,"tier":"M"}` {
 		t.Fatalf("v1 calibration = %+v, %v", c, err)
 	}

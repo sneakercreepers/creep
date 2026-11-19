@@ -11,6 +11,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,12 +22,13 @@ const statePkg = "github.com/sneakercreepers/creep/internal/state"
 
 // The public test key signs committed fixtures (testdata/v1, the reader's
 // replay fixtures), so a store opened with it would trust anything a
-// repository plants. Production code must never reach it: every non-test
-// Open in the module takes a secret straight from UserSecret (UserSecret
-// opens the key store itself with a zero key, which signs nothing), and no
-// non-test file holds the key in any encoding. _test.go files never build
-// into the binary, so the key cannot ship.
-func TestOnlyUserSecretOpensStores(t *testing.T) {
+// repository plants. It cannot reach production: outside this package,
+// non-test code can only call OpenUser, which takes the key from the user's
+// state.key (OpenWithSecret, Store and Run literals, and dot imports are
+// refused here); inside it, keys come only from open (structuralProblems);
+// and no non-test file holds the key in any common encoding. _test.go files
+// never build into the binary.
+func TestProductionUsesOnlyOpenUser(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -41,27 +44,41 @@ func TestOnlyUserSecretOpensStores(t *testing.T) {
 	}
 }
 
-// The checker itself catches each way the test key could reach Open.
+// The checker catches each way a fixed key could reach a store.
 func TestSecretProblemsCatchesBypasses(t *testing.T) {
-	head := "package cli\n\nimport (\n\t\"bytes\"\n\t\"github.com/sneakercreepers/creep/internal/state\"\n)\n\n"
+	cli := func(body string) string {
+		return "package cli\n\nimport \"github.com/sneakercreepers/creep/internal/state\"\n\n" + body
+	}
+	st := func(body string) string { return "package state\n\n" + body }
+	z := strings.Repeat("Z", SecretBytes)
 	tests := []struct {
-		name, file, src string
-		want            string
+		name, file, src, want string
 	}{
-		{"user secret", "internal/cli/a.go", head + "func f(d string) { s, _ := state.UserSecret(); state.Open(d, s) }", ""},
-		{"user secret in a closure", "internal/cli/a.go", head + "func f(d string) { s, _ := state.UserSecret(); _ = func() { state.Open(d, s) } }", ""},
-		{"fixed key", "internal/cli/a.go", head + "func f(d string) { state.Open(d, bytes.Repeat([]byte{0x5a}, 32)) }", "not from UserSecret"},
-		{"parameter", "internal/cli/a.go", head + "func f(d string, k []byte) { state.Open(d, k) }", "not from UserSecret"},
-		{"reassigned", "internal/cli/a.go", head + "func f(d string, k []byte) { s, _ := state.UserSecret(); s = k; state.Open(d, s) }", "not from UserSecret"},
-		{"other source", "internal/cli/a.go", head + "func g() ([]byte, error) { return nil, nil }\nfunc f(d string) { s, _ := g(); state.Open(d, s) }", "not from UserSecret"},
-		{"open as a value", "internal/cli/a.go", head + "var open = state.Open", "used as a value"},
-		{"alias", "internal/cli/a.go", "package cli\n\nimport st \"github.com/sneakercreepers/creep/internal/state\"\n\nfunc f(d string, k []byte) { st.Open(d, k) }", "not from UserSecret"},
+		{"OpenUser", "internal/cli/a.go", cli("func f(d string) { state.OpenUser(d) }"), ""},
+		{"OpenWithSecret call", "internal/cli/a.go", cli("func f(d string, k []byte) { state.OpenWithSecret(d, k) }"), "OpenWithSecret"},
+		{"OpenWithSecret value", "internal/cli/a.go", cli("var open = state.OpenWithSecret"), "OpenWithSecret"},
+		{"alias", "internal/cli/a.go", "package cli\n\nimport s \"github.com/sneakercreepers/creep/internal/state\"\n\nvar _ = s.OpenWithSecret", "OpenWithSecret"},
 		{"dot import", "internal/cli/a.go", "package cli\n\nimport . \"github.com/sneakercreepers/creep/internal/state\"\n\nvar _ = SecretBytes", "dot import"},
-		{"hex key", "internal/cli/a.go", "package cli\n\nconst k = \"" + hex.EncodeToString(testSecret) + "\"", "public test key"},
-		{"base64 key", "internal/cli/a.go", "package cli\n\nconst k = \"" + base64.StdEncoding.EncodeToString(testSecret) + "\"", "public test key"},
-		{"zero key in UserSecret", "internal/state/a.go", "package state\n\nfunc UserSecret() { Open(\"d\", make([]byte, SecretBytes)) }", ""},
-		{"zero key elsewhere", "internal/state/a.go", "package state\n\nfunc Other() { Open(\"d\", make([]byte, SecretBytes)) }", "not from UserSecret"},
-		{"inside state", "internal/state/a.go", "package state\n\nfunc f(k []byte) { s, _ := UserSecret(); Open(\"d\", s); Open(\"d\", k) }", "not from UserSecret"},
+		{"Store literal", "internal/cli/a.go", cli("var _ = &state.Store{}"), "literal"},
+		{"new Run", "internal/cli/a.go", cli("var _ = new(state.Run)"), "literal"},
+		{"raw key", "internal/cli/a.go", "package cli\n\nconst k = \"" + z + "\"", "public test key"},
+		{"hex key", "internal/cli/a.go", "package cli\n\nconst k = \"" + strings.ToUpper(hex.EncodeToString(testSecret)) + "\"", "public test key"},
+		{"base64 key", "internal/cli/a.go", "package cli\n\nconst k = \"" + base64.RawURLEncoding.EncodeToString(testSecret) + "\"", "public test key"},
+		{"escaped key", "internal/cli/a.go", "package cli\n\nconst k = \"" + strings.Repeat(`\x5A`, SecretBytes) + "\"", "public test key"},
+		{"byte list", "internal/cli/a.go", "package cli\n\nvar k = []byte{" + strings.Repeat("0x5a, ", SecretBytes) + "}", "public test key"},
+		{"decimal list", "internal/cli/a.go", "package cli\n\nvar k = []byte{" + strings.Repeat("90,", SecretBytes) + "}", "public test key"},
+		{"repeat", "internal/cli/a.go", "package cli\n\nimport \"bytes\"\n\nvar k = bytes.Repeat([]byte{'Z'}, 32)", "public test key"},
+		{"repeat string", "internal/cli/a.go", "package cli\n\nimport \"strings\"\n\nvar k = strings.Repeat( \"Z\", 32)", "public test key"},
+		{"open from OpenUser", "internal/state/a.go", st("func OpenUser(d string) { open(d, nil) }"), ""},
+		{"open elsewhere", "internal/state/a.go", st("func Other(d string) { open(d, nil) }"), "open used in Other"},
+		{"open as a value", "internal/state/a.go", st("func OpenUser() { f := open; _ = f }"), "open used in OpenUser"},
+		{"package-level key", "internal/state/a.go", st("var k = newMACKey(nil)"), "newMACKey used outside a function"},
+		{"newMACKey elsewhere", "internal/state/a.go", st("func record() { _ = newMACKey(nil) }"), "newMACKey used in record"},
+		{"key literal", "internal/state/a.go", st("func record() { _ = macKey{b: nil} }"), "macKey literal in record"},
+		{"store literal", "internal/state/a.go", st("func record() { _ = &Store{} }"), "Store literal in record"},
+		{"new store", "internal/state/a.go", st("func record() { _ = new(Store) }"), "Store literal in record"},
+		{"key assigned", "internal/state/a.go", st("func record(s *Store, k macKey) { s.key = k }"), "key assigned in record"},
+		{"key bytes assigned", "internal/state/a.go", st("func record(k *macKey) { k.b = nil }"), "b assigned in record"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,8 +135,8 @@ func skipDir(fsys fs.FS, p string) error {
 	return nil
 }
 
-// secretProblems reports how the non-test file name could open a store with
-// anything but UserSecret's result.
+// secretProblems reports how the non-test file name could hold the test key
+// or build a store with a key that did not come from OpenUser.
 func secretProblems(name, src string) []string {
 	var problems []string
 	if keyEncoded(src) {
@@ -130,47 +147,39 @@ func secretProblems(name, src string) []string {
 	if err != nil {
 		return append(problems, fmt.Sprintf("%s: %v", name, err))
 	}
-	pkg, ok := stateName(f, strings.HasPrefix(name, "internal/state/"))
-	if !ok {
-		return append(problems, name+": dot import of internal/state hides Open from this check")
+	var found []problem
+	if strings.HasPrefix(name, "internal/state/") && f.Name.Name == "state" {
+		found = structuralProblems(f)
+	} else {
+		found = importerProblems(f)
 	}
-	if pkg == "" {
-		return problems
-	}
-	for _, decl := range f.Decls {
-		for _, p := range openProblems(decl, pkg) {
-			problems = append(problems, fmt.Sprintf("%s:%d: %s", name, fset.Position(p.pos).Line, p.why))
-		}
+	for _, p := range found {
+		problems = append(problems, fmt.Sprintf("%s:%d: %s", name, fset.Position(p.pos).Line, p.why))
 	}
 	return problems
 }
 
+var keyPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(\\x5a){32}`),
+	regexp.MustCompile(`(?i)(0x5a\s*,\s*){31}0x5a`),
+	regexp.MustCompile(`(\b90\s*,\s*){31}90\b`),
+	regexp.MustCompile(`(?i)repeat\(\s*(\[\]byte\{\s*(0x5a|90|'Z')\s*\}|"Z"|'Z')`),
+}
+
+// keyEncoded reports the test key (32 bytes of 0x5a, "Z") as raw text, hex,
+// base64, escapes, a byte list or a Repeat call.
 func keyEncoded(src string) bool {
 	h := hex.EncodeToString(testSecret)
-	for _, enc := range []string{h, strings.ToUpper(h), base64.StdEncoding.EncodeToString(testSecret), base64.RawURLEncoding.EncodeToString(testSecret)} {
-		if strings.Contains(src, enc) {
+	forms := []string{string(testSecret), h, strings.ToUpper(h)}
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		forms = append(forms, enc.EncodeToString(testSecret))
+	}
+	for _, form := range forms {
+		if strings.Contains(src, form) {
 			return true
 		}
 	}
-	return false
-}
-
-// stateName is how f names package state: "." inside it, its import name
-// elsewhere, "" when f does not import it, and !ok for a dot import.
-func stateName(f *ast.File, inState bool) (string, bool) {
-	if inState && f.Name.Name == "state" {
-		return ".", true
-	}
-	for _, spec := range f.Imports {
-		if p, _ := strconv.Unquote(spec.Path.Value); p != statePkg {
-			continue
-		}
-		if spec.Name == nil {
-			return "state", true
-		}
-		return spec.Name.Name, spec.Name.Name != "."
-	}
-	return "", true
+	return slices.ContainsFunc(keyPatterns, func(re *regexp.Regexp) bool { return re.MatchString(src) })
 }
 
 type problem struct {
@@ -178,92 +187,53 @@ type problem struct {
 	why string
 }
 
-// openProblems checks one declaration: each Open call's secret must be a
-// variable every assignment of which is a UserSecret call, and Open is never
-// taken as a value.
-func openProblems(decl ast.Decl, pkg string) []problem {
-	fromUser := userSecretVars(decl, pkg)
-	calls := map[ast.Expr]bool{} // Open references that are calls, or Open's own declaration
-	if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil {
-		calls[fn.Name] = true
+// importerProblems checks a file outside package state: it may not reach
+// OpenWithSecret, build a Store or Run itself, or hide either behind a dot
+// import.
+func importerProblems(f *ast.File) []problem {
+	pkg := ""
+	for _, spec := range f.Imports {
+		if p, _ := strconv.Unquote(spec.Path.Value); p != statePkg {
+			continue
+		}
+		pkg = "state"
+		if spec.Name != nil {
+			pkg = spec.Name.Name
+		}
+		if pkg == "." {
+			return []problem{{spec.Pos(), "dot import of internal/state hides its names from this check"}}
+		}
+	}
+	if pkg == "" {
+		return nil
 	}
 	var problems []problem
-	ast.Inspect(decl, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || !refersTo(call.Fun, pkg, "Open") {
-			return true
-		}
-		calls[call.Fun] = true
-		if len(call.Args) != 2 || !trustedSecret(call.Args[1], decl, fromUser) {
-			problems = append(problems, problem{call.Pos(), "Open with a secret not from UserSecret"})
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.SelectorExpr:
+			if isPkgName(x, pkg, "OpenWithSecret") {
+				problems = append(problems, problem{x.Pos(), "OpenWithSecret outside tests: use state.OpenUser"})
+			}
+		case *ast.CompositeLit:
+			if isPkgName(x.Type, pkg, "Store") || isPkgName(x.Type, pkg, "Run") {
+				problems = append(problems, problem{x.Pos(), "state literal outside the package"})
+			}
+		case *ast.CallExpr:
+			if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "new" && len(x.Args) == 1 &&
+				(isPkgName(x.Args[0], pkg, "Store") || isPkgName(x.Args[0], pkg, "Run")) {
+				problems = append(problems, problem{x.Pos(), "state literal outside the package"})
+			}
 		}
 		return true
 	})
-	var values func(n ast.Node) bool
-	values = func(n ast.Node) bool {
-		e, ok := n.(ast.Expr)
-		if ok && refersTo(e, pkg, "Open") && !calls[e] {
-			problems = append(problems, problem{e.Pos(), "Open used as a value"})
-			return false
-		}
-		if sel, ok := n.(*ast.SelectorExpr); ok {
-			ast.Inspect(sel.X, values) // sel.Sel is a field or method name, never package state's Open
-			return false
-		}
-		return true
-	}
-	ast.Inspect(decl, values)
 	return problems
 }
 
-// trustedSecret accepts a variable bound only to UserSecret's result, and
-// UserSecret's own zero key for the key store.
-func trustedSecret(arg ast.Expr, decl ast.Decl, fromUser map[string]bool) bool {
-	if id, ok := arg.(*ast.Ident); ok {
-		return fromUser[id.Name]
+func isPkgName(e ast.Expr, pkg, name string) bool {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok {
+		return false
 	}
-	fn, ok := decl.(*ast.FuncDecl)
-	call, isCall := arg.(*ast.CallExpr)
-	return ok && fn.Recv == nil && fn.Name.Name == "UserSecret" && isCall && refersTo(call.Fun, "", "make")
-}
-
-// userSecretVars returns the variables of decl that are only ever assigned
-// the first result of a UserSecret call.
-func userSecretVars(decl ast.Decl, pkg string) map[string]bool {
-	trusted := map[string]bool{}
-	ast.Inspect(decl, func(n ast.Node) bool {
-		a, ok := n.(*ast.AssignStmt)
-		if !ok {
-			return true
-		}
-		for i, lhs := range a.Lhs {
-			id, ok := lhs.(*ast.Ident)
-			if !ok || id.Name == "_" {
-				continue
-			}
-			fromUser := i == 0 && len(a.Rhs) == 1 && isUserSecretCall(a.Rhs[0], pkg)
-			prev, seen := trusted[id.Name]
-			trusted[id.Name] = fromUser && (!seen || prev)
-		}
-		return true
-	})
-	return trusted
-}
-
-func isUserSecretCall(e ast.Expr, pkg string) bool {
-	call, ok := e.(*ast.CallExpr)
-	return ok && refersTo(call.Fun, pkg, "UserSecret")
-}
-
-// refersTo reports whether e names pkg.name, or the bare name when pkg is
-// "." (inside package state) or "" (a builtin).
-func refersTo(e ast.Expr, pkg, name string) bool {
-	switch x := e.(type) {
-	case *ast.Ident:
-		return (pkg == "." || pkg == "") && x.Name == name
-	case *ast.SelectorExpr:
-		id, ok := x.X.(*ast.Ident)
-		return ok && pkg != "." && pkg != "" && id.Name == pkg && x.Sel.Name == name
-	}
-	return false
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == pkg && sel.Sel.Name == name
 }

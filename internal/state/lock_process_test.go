@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 // lockChild "hold"s a new run (one step, then a second step once stdin
 // closes) or "try"s to open one and prints what happened.
 func lockChild(mode, dir, id string) int {
-	s, err := Open(dir, testSecret)
+	s, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		fmt.Println("open:", err)
 		return 1
@@ -111,7 +111,7 @@ func childCmd(t *testing.T, mode, dir, id string) *exec.Cmd {
 // loads with every line it wrote.
 func TestLockAcrossProcesses(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), ".creep")
-	s, err := Open(dir, testSecret)
+	s, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestLockReleasedWhenHolderDies(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = h.cmd.Wait()
-	s, err := Open(dir, testSecret)
+	s, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

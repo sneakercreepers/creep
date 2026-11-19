@@ -152,7 +152,7 @@ func interruptedRun(t *testing.T, s *Store) string {
 // reopen opens a second store on s's directory.
 func reopen(t *testing.T, s *Store) *Store {
 	t.Helper()
-	other, err := Open(s.dir, testSecret)
+	other, err := OpenWithSecret(s.dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

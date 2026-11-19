@@ -83,18 +83,18 @@ func (s *Store) Lookup(k Key) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("cache: %w", err)
 	}
-	resp, err := decodeEntry(data, k, s.secret)
+	resp, err := decodeEntry(data, k, s.key)
 	if err != nil {
 		return nil, false, fmt.Errorf("cache %s: %w", name, err)
 	}
 	return resp, true, nil
 }
 
-func decodeEntry(data []byte, k Key, secret []byte) ([]byte, error) {
+func decodeEntry(data []byte, k Key, mk macKey) ([]byte, error) {
 	if len(data) == 0 || data[len(data)-1] != '\n' || bytes.Count(data, []byte("\n")) != 1 {
 		return nil, fmt.Errorf("not one complete line: %w", ErrCorrupt)
 	}
-	body, err := verify(secret, cacheDomain, data[:len(data)-1])
+	body, err := verify(mk, cacheDomain, data[:len(data)-1])
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCorrupt, err) // ErrUnauthenticated: live treats it as a miss
 	}
@@ -130,10 +130,14 @@ func (s *Store) Record(k Key, resp []byte) error {
 	if err != nil {
 		return fmt.Errorf("cache: %w", err)
 	}
+	line, err := sign(s.key, cacheDomain, body)
+	if err != nil {
+		return fmt.Errorf("cache: %w", err)
+	}
 	if err := s.ensureDir(cacheDir); err != nil {
 		return err
 	}
-	return s.writeAtomic(k.fileName(), append(sign(s.secret, cacheDomain, body), '\n'))
+	return s.writeAtomic(k.fileName(), append(line, '\n'))
 }
 
 // Respond returns the response for k according to mode: replay serves only

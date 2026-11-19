@@ -8,6 +8,9 @@ import (
 // testSecret is a fixed, public test value; the v1 fixtures are signed with it.
 var testSecret = bytes.Repeat([]byte{0x5a}, SecretBytes)
 
+// testMAC is testSecret as the key open derives from it.
+var testMAC = newMACKey(testSecret)
+
 // signedLog signs every complete JSON-object line of log for run id, leaving
 // anything else (a torn tail, garbage, a blank line) as written, so a test
 // fails on the check it targets and not on the MAC.
@@ -21,7 +24,8 @@ func signLines(text string, domain []byte) []byte {
 	for i, p := range parts {
 		last := i == len(parts)-1
 		if !last && strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
-			out.Write(sign(testSecret, domain, []byte(p)))
+			line, _ := sign(testMAC, domain, []byte(p)) // testMAC is always set
+			out.Write(line)
 		} else {
 			out.WriteString(p)
 		}

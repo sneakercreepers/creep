@@ -102,11 +102,7 @@ func openCacheReadOnly() (*state.Store, error) {
 	if _, err := os.Lstat(stateDir); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	secret, err := state.UserSecret()
-	if err != nil {
-		return nil, err
-	}
-	return state.Open(stateDir, secret)
+	return state.OpenUser(stateDir)
 }
 
 func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {

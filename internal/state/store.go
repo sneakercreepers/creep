@@ -1,7 +1,6 @@
 package state
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -36,18 +35,47 @@ var (
 // Store is a state directory. Every file access goes through an os.Root, so
 // no name can escape it.
 type Store struct {
-	dir    string
-	root   *os.Root
-	secret []byte
+	dir  string
+	root *os.Root
+	key  macKey // set only by open; the zero key signs nothing and verifies nothing
 }
 
-// Open opens the state directory dir, creating it with mode 0700 if missing.
-// secret (normally UserSecret) authenticates every line written and read,
-// so state that did not come from this user's creep is never trusted.
-func Open(dir string, secret []byte) (*Store, error) {
+// OpenUser opens the state directory dir, creating it with mode 0700 if
+// missing. Every line written and read is authenticated with this user's
+// secret (<os.UserConfigDir>/creep/state.key), so state that did not come
+// from this user's creep is never trusted. It is the only way production
+// code opens a store.
+func OpenUser(dir string) (*Store, error) {
+	secret, err := userSecret()
+	if err != nil {
+		return nil, err
+	}
+	return open(dir, secret)
+}
+
+// OpenWithSecret opens dir with a fixed secret, such as the public test key
+// that signs committed fixtures. It is for _test.go files only:
+// TestProductionUsesOnlyOpenUser fails on any other reference outside this
+// package, so a fixed key never reaches a production code path.
+func OpenWithSecret(dir string, secret []byte) (*Store, error) {
+	return open(dir, secret)
+}
+
+func open(dir string, secret []byte) (*Store, error) {
 	if len(secret) != SecretBytes {
 		return nil, fmt.Errorf("state dir: secret must be %d bytes", SecretBytes)
 	}
+	s, err := openDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	s.key = newMACKey(secret)
+	return s, nil
+}
+
+// openDir opens dir as a store with no MAC key: it can hold files (the key
+// store in userSecret) but every line it signs or verifies fails.
+func openDir(dir string) (*Store, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("state dir: %w", err)
@@ -72,7 +100,7 @@ func Open(dir string, secret []byte) (*Store, error) {
 		_ = root.Close()
 		return nil, err
 	}
-	return &Store{dir: abs, root: root, secret: bytes.Clone(secret)}, nil
+	return &Store{dir: abs, root: root}, nil
 }
 
 // Close releases the directory handle.

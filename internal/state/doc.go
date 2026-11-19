@@ -21,7 +21,8 @@
 //   - State is never trusted because of where it sits: .creep may arrive
 //     inside the scanned repository. Every line ends with an HMAC-SHA256
 //     ("mac") keyed by a per-user secret kept outside every repository
-//     (UserSecret, in os.UserConfigDir). A run line's MAC also covers its
+//     (state.key in os.UserConfigDir, read by OpenUser). A run line's MAC
+//     also covers its
 //     run ID. A line without a valid MAC is ErrUnauthenticated (and
 //     ErrCorrupt); replay, Load and Resume fail on it. A planted response
 //     or a planted "complete" run is therefore never served or believed.
@@ -33,11 +34,14 @@
 //     the caller marks the run incomplete. Only an entry a newer creep signed
 //     (ErrUnsupportedVersion) is an error in live.
 //   - Committed fixtures (testdata/v1, the reader's testdata/replay) are
-//     signed with a fixed, public test key that only _test.go files pass to
-//     Open, so go test ./... replays them with no user key. Production code
-//     passes only UserSecret's result (TestOnlyUserSecretOpensStores), and
-//     UserSecret refuses a state.key holding a fixed pattern, so the test key
-//     can never make planted state verify.
+//     signed with a fixed, public test key that _test.go files pass to
+//     OpenWithSecret, so go test ./... replays them with no user key.
+//     Production code can only call OpenUser, which takes no secret:
+//     TestProductionUsesOnlyOpenUser fails on any non-test reference to
+//     OpenWithSecret or Store and Run literals outside this package, on any
+//     key inside it that does not come from open, and on the test key in any
+//     common encoding in a non-test file. OpenUser refuses a state.key
+//     holding a fixed pattern, so copying the test key there fails closed.
 //   - One run at a time per state directory: NewRun and Resume take an
 //     exclusive OS lock (flock on Unix, an unshared handle on Windows) held
 //     until Run.Close, and fail at once with ErrLocked instead of waiting, so
