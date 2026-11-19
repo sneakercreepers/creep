@@ -24,7 +24,7 @@ var (
 
 // withSandbox returns deps whose sandbox detector reports checked and
 // whose cleaner counts per runtime, failing for fail.
-func withSandbox(deps scanDeps, checked []sandbox.Status, removed map[sandbox.Runtime]int, fail error) scanDeps {
+func withSandbox(deps scanDeps, checked []sandbox.Status, removed map[sandbox.Runtime]sandbox.Removed, fail error) scanDeps {
 	deps.sandbox = sandboxDeps{
 		detect: func(_ context.Context, env sandbox.Env) sandbox.Report {
 			if env.Repo == "" || env.Getenv == nil {
@@ -32,8 +32,14 @@ func withSandbox(deps scanDeps, checked []sandbox.Status, removed map[sandbox.Ru
 			}
 			return sandbox.Report{Checked: checked}
 		},
-		clean: func(_ context.Context, st sandbox.Status) (int, error) {
+		clean: func(_ context.Context, st sandbox.Status) (sandbox.Removed, error) {
 			return removed[st.Runtime], fail
+		},
+		images: func(_ context.Context, st sandbox.Status) []sandbox.PinnedImage {
+			return []sandbox.PinnedImage{
+				{Role: "canary", Ref: sandbox.CanaryImage, Present: true},
+				{Role: "database", Ref: sandbox.DatabaseImage},
+			}
 		},
 	}
 	return deps
@@ -41,7 +47,7 @@ func withSandbox(deps scanDeps, checked []sandbox.Status, removed map[sandbox.Ru
 
 func TestProductionWiresSandbox(t *testing.T) {
 	d := productionDeps().sandbox
-	if d.detect == nil || d.clean == nil {
+	if d.detect == nil || d.clean == nil || d.images == nil {
 		t.Fatal("production deps leave the sandbox unchecked")
 	}
 }
@@ -61,10 +67,15 @@ func TestDoctorReportsSandbox(t *testing.T) {
 		{"rootless docker", []sandbox.Status{rootlessDocker, missingPodman}, "sandbox:\n  enabled: true\n",
 			[]string{"sandbox runtime docker \"/usr/bin/docker\": usable, rootless yes, isolation rootless", "sandbox runtime podman: not usable (not_found)", "sandbox: runtime docker, rootless yes, isolation rootless", "findings stay probable"},
 			[]string{"warning", "sandbox.enabled is false"}},
+		// creep never pulls: a missing pinned image comes with the exact pull command.
+		{"pinned images", []sandbox.Status{rootlessDocker}, "",
+			[]string{"sandbox image canary " + sandbox.CanaryImage + ": present",
+				"sandbox image database " + sandbox.DatabaseImage + ": missing; creep never pulls, run: docker pull " + sandbox.DatabaseImage},
+			nil},
 		{"rootful only warns", []sandbox.Status{downDocker, rootfulPodman}, "",
 			[]string{"not usable (not_running)", "sandbox: runtime podman, rootless no, isolation rootful", "warning: the daemon runs as root", "sandbox.enabled is false"}, nil},
 		{"no runtime", []sandbox.Status{missingDocker, missingPodman}, "",
-			[]string{"sandbox: unavailable: no usable docker or podman; scans still run and findings stay probable"}, []string{"isolation rootless"}},
+			[]string{"sandbox: unavailable: no usable docker or podman; scans still run and findings stay probable"}, []string{"isolation rootless", "sandbox image"}},
 		{"path escaped", []sandbox.Status{hostile}, "", []string{`\x1b[2Jdocker`}, []string{"\x1b"}},
 	}
 	for _, tt := range tests {
@@ -106,7 +117,7 @@ func TestClean(t *testing.T) {
 		want     []string
 	}{
 		{"removes orphans", []sandbox.Status{rootlessDocker, rootfulPodman}, nil, nil, nil, exitcode.OK,
-			[]string{"docker: removed 3 creep container(s)", "podman: removed 1 creep container(s)"}},
+			[]string{"docker: removed 3 creep container(s) and 2 network(s)", "podman: removed 1 creep container(s) and 0 network(s)"}},
 		{"unreachable runtime", []sandbox.Status{downDocker, missingPodman}, nil, nil, nil, exitcode.OK,
 			[]string{"docker: not reachable (not_running); nothing removed", "podman: not reachable (not_found)"}},
 		{"removal fails", []sandbox.Status{rootlessDocker}, errors.New("rm: \x1b[31mdenied"), nil, nil, exitcode.ModelOrSandbox,
@@ -118,7 +129,7 @@ func TestClean(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := scanRepo(t, nil, "")
-			deps := withSandbox(noModelDeps, tt.checked, map[sandbox.Runtime]int{sandbox.Docker: 3, sandbox.Podman: 1}, tt.fail)
+			deps := withSandbox(noModelDeps, tt.checked, map[sandbox.Runtime]sandbox.Removed{sandbox.Docker: {Containers: 3, Networks: 2}, sandbox.Podman: {Containers: 1}}, tt.fail)
 			if tt.deps != nil {
 				deps = tt.deps(deps)
 			}

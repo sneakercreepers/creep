@@ -11,11 +11,26 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "sleep" {
+	mode := ""
+	if len(os.Args) > 1 {
+		mode = os.Args[1]
+	}
+	switch mode {
+	case "sleep":
 		time.Sleep(10 * time.Minute)
 		return
+	case "dial":
+		fmt.Print(dial(os.Args[2]))
+		return
 	}
-	problems := check()
+	problems := check
+	if mode == "internet" {
+		problems = internet
+	}
+	report(problems())
+}
+
+func report(problems []string) {
 	if len(problems) > 0 {
 		fmt.Println(strings.Join(problems, "; "))
 		os.Exit(1)

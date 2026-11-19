@@ -11,12 +11,13 @@ import (
 )
 
 // sandboxDeps finds the container runtime and removes creep's containers.
-// productionDeps sets sandbox.Detect and sandbox.Clean (ADR 0016); a nil
-// detect reports the sandbox as not checked, so tests never run a real
-// runtime.
+// productionDeps sets sandbox.Detect, sandbox.Clean and sandbox.Images
+// (ADR 0016); a nil detect reports the sandbox as not checked, so tests
+// never run a real runtime.
 type sandboxDeps struct {
 	detect func(context.Context, sandbox.Env) sandbox.Report
-	clean  func(context.Context, sandbox.Status) (int, error)
+	clean  func(context.Context, sandbox.Status) (sandbox.Removed, error)
+	images func(context.Context, sandbox.Status) []sandbox.PinnedImage
 }
 
 // detectSandbox checks both runtimes from the current directory, the
@@ -54,7 +55,24 @@ func reportSandbox(e env, cfg config.Sandbox) {
 	if !cfg.Enabled {
 		fmt.Fprintln(e.stdout, "sandbox: sandbox.enabled is false, so scans do not use it")
 	}
-	fmt.Fprintln(e.stdout, "sandbox: PoC verification is not built yet (#22); findings stay probable")
+	reportImages(e, best)
+	fmt.Fprintln(e.stdout, "sandbox: PoC verification is not built yet (#23-#25); findings stay probable")
+}
+
+// reportImages lists the digest-pinned images the run network needs
+// (canary, database). creep never pulls, so a missing one comes with the
+// command that pulls exactly that digest.
+func reportImages(e env, best sandbox.Status) {
+	if e.deps.sandbox.images == nil {
+		return
+	}
+	for _, img := range e.deps.sandbox.images(context.Background(), best) {
+		if img.Present {
+			fmt.Fprintf(e.stdout, "sandbox image %s %s: present\n", img.Role, img.Ref)
+			continue
+		}
+		fmt.Fprintf(e.stdout, "sandbox image %s %s: missing; creep never pulls, run: %s pull %s\n", img.Role, img.Ref, best.Runtime, img.Ref)
+	}
 }
 
 // describeRuntime is one runtime's line. Runtime, reason and isolation are
@@ -91,6 +109,6 @@ func noteSandbox(ctx context.Context, w io.Writer, d sandboxDeps, cfg config.San
 	case !ok:
 		fmt.Fprintln(w, "sandbox: unavailable (no usable docker or podman; see creep doctor); verification is off and findings stay probable")
 	default:
-		fmt.Fprintf(w, "sandbox: %s found (isolation %s); PoC verification is not built yet (#22), so findings stay probable\n", best.Runtime, best.Isolation)
+		fmt.Fprintf(w, "sandbox: %s found (isolation %s); PoC verification is not built yet (#23-#25), so findings stay probable\n", best.Runtime, best.Isolation)
 	}
 }

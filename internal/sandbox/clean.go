@@ -19,17 +19,30 @@ var ErrNotReachable = errors.New("sandbox runtime not reachable")
 
 var containerID = regexp.MustCompile(`^[0-9a-f]{12,64}$`)
 
+// Removed counts what Clean removed.
+type Removed struct {
+	Containers int
+	Networks   int
+}
+
 // Clean removes every container labeled as creep's on st, running or not,
-// from this run or one that was killed, and returns how many it removed.
-// Do not run it while another creep run uses the sandbox: it removes that
-// run's containers too.
-func Clean(ctx context.Context, st Status) (int, error) {
+// from this run or one that was killed, then every creep network, and
+// returns how many of each it removed. Do not run it while another creep
+// run uses the sandbox: it removes that run's containers and network too.
+func Clean(ctx context.Context, st Status) (Removed, error) {
 	if !st.Reachable || st.Path == "" {
-		return 0, fmt.Errorf("clean %s (%s): %w", st.Runtime, st.Reason, ErrNotReachable)
+		return Removed{}, fmt.Errorf("clean %s (%s): %w", st.Runtime, st.Reason, ErrNotReachable)
 	}
 	ctx, cancel := context.WithTimeout(ctx, cleanupTimeout)
 	defer cancel()
-	return removeLabeled(ctx, newExecRunner(st.Path, st.env), st, LabelManaged+"=true")
+	run := newExecRunner(st.Path, st.env)
+	var r Removed
+	var err error
+	if r.Containers, err = removeLabeled(ctx, run, st, LabelManaged+"=true"); err != nil {
+		return r, err
+	}
+	r.Networks, err = removeNetworks(ctx, run, st, LabelManaged+"=true")
+	return r, err
 }
 
 // removeLabeled lists the containers carrying every label (key=value; the
