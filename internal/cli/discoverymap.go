@@ -16,13 +16,17 @@ import (
 func discoveryGaps(res discover.Result, paths []string, marks map[string]repofile.Ignored) []report.NotEvaluated {
 	touched := filesWithCandidates(res)
 	var gaps []report.NotEvaluated
-	for i, f := range res.Files {
+	for i, path := range paths {
+		if i >= len(res.Files) {
+			break // discoverRepo refuses a Result of another length
+		}
+		f := res.Files[i]
 		reason := fileReason(f)
 		if reason == "" && f.Coverage == discover.CoverageReadFull && !touched[f.ID] {
-			reason = markReason(marks[paths[i]])
+			reason = markReason(marks[path])
 		}
 		if reason != "" {
-			gaps = append(gaps, report.NotEvaluated{Path: paths[i], Reason: reason})
+			gaps = append(gaps, report.NotEvaluated{Path: path, Reason: reason})
 		}
 	}
 	return gaps
