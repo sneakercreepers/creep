@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -173,6 +174,11 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Coverage      Coverage     `json:"coverage"`
 	DataHandling  DataHandling `json:"data_handling"`
+	// NoRoutesIn names the frameworks static looked in when it found no
+	// route at all, for Markdown to state (ADR 0009 amendment, #207). The
+	// JSON says it with run.reason no_routes; this is not part of the
+	// contract, so a report read back has none.
+	NoRoutesIn []string `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -186,6 +192,7 @@ type Input struct {
 	NotEvaluated   []NotEvaluated
 	Scanners       []ScannerCoverage // in the caller's fixed order
 	DataHandling   DataHandling
+	NoRoutesIn     []string // framework names (IDs); empty when a route was found
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -208,6 +215,9 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkFrameworks(in.NoRoutesIn); err != nil {
+		return nil, err
+	}
 	info := buildinfo.Get()
 	return &Report{
 		SchemaVersion: SchemaVersion,
@@ -216,7 +226,19 @@ func New(in Input) (*Report, error) {
 		Findings:      findings,
 		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners},
 		DataHandling:  in.DataHandling.normalized(),
+		NoRoutesIn:    slices.Clone(in.NoRoutesIn),
 	}, nil
+}
+
+// checkFrameworks keeps framework names to IDs, so Markdown can print them
+// as they are.
+func checkFrameworks(names []string) error {
+	for _, n := range names {
+		if !idPattern.MatchString(n) {
+			return fmt.Errorf("%w: framework %q", ErrInvalid, n)
+		}
+	}
+	return nil
 }
 
 // runInfo is incomplete unless the run state ended complete and the scan

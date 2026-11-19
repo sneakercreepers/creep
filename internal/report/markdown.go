@@ -16,6 +16,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	fmt.Fprintf(bw, "# creep report\n\n%s %s (commit %s) · report schema %d\n\n",
 		r.Tool.Name, codeSpan(r.Tool.Version), codeSpan(r.Tool.Commit), r.SchemaVersion)
 	writeRunStatus(bw, r.Run)
+	writeNoRoutes(bw, r.NoRoutesIn)
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
@@ -34,6 +35,17 @@ func writeRunStatus(w io.Writer, run RunInfo) {
 	}
 	fmt.Fprintf(w, "> **INCOMPLETE RUN** (reason %s): not everything was evaluated. This is not a clean result, whatever the findings below say.\n\n",
 		codeSpan(run.Reason))
+}
+
+// writeNoRoutes says where static looked when it found no route, so a
+// Django-only or empty repository never reads as covered (#207). The names
+// are IDs New checked.
+func writeNoRoutes(w io.Writer, frameworks []string) {
+	if len(frameworks) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "**No %s routes found.** Static analysis extracted no route, so no class was evaluated.\n\n",
+		strings.Join(frameworks, "/"))
 }
 
 func writeFindings(w io.Writer, findings []Finding) {

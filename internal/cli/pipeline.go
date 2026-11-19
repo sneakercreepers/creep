@@ -26,6 +26,9 @@ const (
 	reasonInvalidOutput   = "invalid_output"
 	reasonNotEvaluated    = "not_evaluated"
 	reasonPartialSlice    = "partial_slice"
+	// reasonNoRoutes: static extracted no route at all (a Django-only or
+	// empty repository), so nothing was evaluated for any class (#207).
+	reasonNoRoutes = "no_routes"
 )
 
 // baseFindings has one finding per sink, indexed by sink ID, each not

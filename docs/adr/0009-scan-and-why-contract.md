@@ -62,3 +62,17 @@ The repository's author decides where files sit, what their first comment says a
 - A Go, PHP or other ungrammared file under `vendor/` without the mark is listed as `unsupported_language` and makes the run incomplete.
 
 The report reasons and schema do not change, and every left-out file is still listed (#88). Residual: the evidence files are themselves in the repository, so an author can plant a `pyvenv.cfg` or `package.json` next to code that its language never imports from there; the file is still listed, and the planted marker shows in the pull request diff. Still open in #213 for v0.2: a by-design count next to "covered" in the summaries.
+
+## Amendment: a run with no route is incomplete (#207)
+
+Before #207, a repository where static extracted no route (and so no sink, since every sink belongs to a route) read as complete with every readable class `covered` and exited 0: a Django-only `views.py` with string-built SQL, Python or JavaScript without Flask, FastAPI or Express routes, or an empty repository. Every file was parsed, so nothing was listed, yet nothing was evaluated for any class.
+
+| Option | Pros | Cons |
+|---|---|---|
+| A. Each class `not_evaluated`, run incomplete with reason `no_routes` (exit 4) | Reuses the incompleteness rules and exit code 4 (ADR 0007); the class status says exactly what happened; no schema or exit-code change | A repository with no web code at all (a library, a CLI tool) never exits 0 |
+| B. Each readable class `partial` with a closed reason | Keeps `not_evaluated` for classes the pipeline cannot read | `partial` claims some evaluation took place; a class row has no reason field, so it needs a schema change |
+| C. A new exit code | Separates "nothing to scan" from "scan cut short" | Changes the exit-code meaning (a new ADR); CI gates already treat 4 as not clean |
+
+**Decision:** option A. When static extracts no route from the analysed files (or there is no analysable file), the scan neither plans nor calls the reader; every class is `not_evaluated`, and the run is incomplete with reason `no_routes`. The reason comes after the early stops, finding gaps and file gaps above (a Go-only repository still reads `unsupported_language`, with every class not evaluated), and before a failed scanner. The text summary prints `routes: no Flask/FastAPI/Express routes found; no class was evaluated` and the Markdown report a bold line with the same names, both from `static.FrameworkNames`, so a framework added to static is named without touching the CLI or the report. The JSON report states it through `run.reason`; the framework names are not a report field (`Report.NoRoutesIn` is `json:"-"`), so report v1 does not change. A repository with at least one route is unchanged: a Flask route without sinks, or a Flask app whose sinks are all discarded, exits 0 with its classes covered.
+
+Residual: routes of a framework static does not recognise next to one it does (Django views beside one Flask route) are still not flagged; new frameworks land with the language kits (ADR 0012, #217).

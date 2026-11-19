@@ -41,6 +41,8 @@ func TestNewRejectsInvalidInput(t *testing.T) {
 		{"unknown scanner status", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: "ran", Classes: []string{"xss"}}}}},
 		{"scanner without classes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing}}}},
 		{"scanner class with escapes", Input{Scanners: []ScannerCoverage{{Name: "semgrep", Status: ScannerMissing, Classes: []string{"x\x1b[2J"}}}}},
+		{"framework with markup", Input{NoRoutesIn: []string{"Flask", "**Django**"}}},
+		{"empty framework name", Input{NoRoutesIn: []string{""}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -157,6 +159,25 @@ func TestIncompleteMarkedInEveryFormat(t *testing.T) {
 	clean := render(t, newTestReport(t, sampleInput(t, false)))
 	if bytes.Contains(clean["md"], []byte("INCOMPLETE")) || !bytes.Contains(clean["sarif"], []byte(`"executionSuccessful": true`)) {
 		t.Error("complete run reported as incomplete")
+	}
+}
+
+// #207: Markdown names the frameworks static looked in only when it found
+// no route; the names stay out of the JSON contract (run.reason says it).
+func TestNoRoutesInMarkdownOnly(t *testing.T) {
+	const line = "**No Flask/FastAPI/Express routes found.**"
+	in := sampleInput(t, true)
+	in.NoRoutesIn = []string{"Flask", "FastAPI", "Express"}
+	out := render(t, newTestReport(t, in))
+	if !bytes.Contains(out["md"], []byte(line)) {
+		t.Errorf("Markdown lacks %q:\n%s", line, out["md"])
+	}
+	if bytes.Contains(out["json"], []byte("FastAPI")) {
+		t.Errorf("JSON carries the framework names:\n%s", out["json"])
+	}
+	routed := render(t, newTestReport(t, sampleInput(t, true)))
+	if bytes.Contains(routed["md"], []byte("routes found")) {
+		t.Error("Markdown claims no routes for a run that found some")
 	}
 }
 

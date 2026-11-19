@@ -47,7 +47,8 @@ type scanResult struct {
 	findings []report.Finding
 	gaps     []report.NotEvaluated
 	stop     string // why the run stopped early, or ""
-	planned  bool   // false when the planner refused the input
+	planned  bool   // false when the planner refused the input or never ran
+	noRoutes bool   // static extracted no route: no class was evaluated
 	scanners scannerRun
 }
 
@@ -244,6 +245,10 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	done()
 	if err != nil {
 		return scanResult{}, err
+	}
+	if len(rs.graph.Routes) == 0 {
+		// No route means no sink either: there is nothing to plan or read.
+		return scanResult{gaps: rs.gaps, noRoutes: true}, nil
 	}
 	findings := baseFindings(rs)
 	done = s.stats.start(phasePlan)
