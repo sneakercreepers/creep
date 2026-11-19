@@ -77,6 +77,12 @@ Before #207, a repository where static extracted no route (and so no sink, since
 
 Residual: routes of a framework static does not recognise next to one it does (Django views beside one Flask route) are still not flagged; new frameworks land with the language kits (ADR 0012, #217).
 
+## Amendment: the scan deadline (#260)
+
+Nothing bounded a whole scan: a file crafted to wake every redaction rule takes minutes (`redact.MaxFileBytes`), a parse up to 30 s, and a hostile repository can hold many of them, so a CI job hung until its runner killed it, with no report.
+
+**Decision:** `budget.max_seconds` (default 7200, 1 to 86400; the project file may only lower it, like the other limits) is the scan deadline. It starts after the tool canary and calibration, which read no repository text, and covers static analysis, redaction, the reader's model calls and the optional scanners (and discovery from ADR 0017 step D). When it passes, the redactor and the parser stop inside the file they are on and return no partial output; every source file the walk had not reached is listed as `budget`; the file being redacted is listed by the reader as `redact_failed` and its hypotheses `file_not_scanned`; every hypothesis not yet answered is `budget`. The reports are written, stderr names the deadline, and the run is incomplete with reason `budget` (an early stop), exit 4. Report v1 does not change: the deadline is the run's time budget, so it reuses `budget` rather than adding a reason.
+
 ## Note: amended by ADR 0017 (planned, #265)
 
 [ADR 0017](0017-language-agnostic-analysis.md) (accepted 2026-11-19) makes analysis language-agnostic. Nothing above changes until its code lands; the step that changes behaviour amends this ADR's text in the same PR.

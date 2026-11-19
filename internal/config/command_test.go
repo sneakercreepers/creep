@@ -59,6 +59,8 @@ func TestModelCommandValidation(t *testing.T) {
 		"model:\n  timeout_seconds: 3601\n",
 		"model:\n  max_output_bytes: 100\n",
 		"model:\n  max_output_bytes: 8388609\n",
+		"budget:\n  max_seconds: 0\n",
+		"budget:\n  max_seconds: 86401\n",
 	}
 	for _, yaml := range bad {
 		if _, err := Load(Inputs{User: file("u", yaml)}); err == nil {

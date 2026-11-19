@@ -27,7 +27,8 @@ type repoScan struct {
 // walkRepo extracts every source file under root in lexical order, so the
 // same tree gives the same graph. Paths are repo-relative and slash-separated.
 // A file static cannot take is listed with its reason and the walk goes on;
-// only a walk or context error stops it.
+// only a walk error stops it. Past the scan deadline every source file left
+// is listed, not parsed (walkFile).
 func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, error) {
 	ex, proofs := static.NewExtractor(), newVendorProofs(root)
 	var gaps []report.NotEvaluated
@@ -48,10 +49,10 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 			}
 			return nil
 		}
-		if reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d); gap {
+		if reason, gap := walkFile(ctx, ex, p, proofs, rel, lang, d); gap {
 			gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 		}
-		return ctx.Err()
+		return nil
 	})
 	if err != nil {
 		return repoScan{}, fmt.Errorf("walk repository: %w", err)

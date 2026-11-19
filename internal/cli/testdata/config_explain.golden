@@ -13,6 +13,7 @@ gates.pr                "probable:medium"                 project "creep.yaml"
 gates.nightly           "verified:high"                   default
 budget.max_tokens       2000000                           default
 budget.max_calls        500                               default
+budget.max_seconds      7200                              default
 report.formats          ["sarif"]                         user "~/.creep/config.yaml"
 scanners.enabled        ["gitleaks", "semgrep"]           user "~/.creep/config.yaml"
 sandbox.enabled         false                             default

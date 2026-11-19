@@ -66,8 +66,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
-	ctx := context.Background()
-	s, err := openSession(e, resolved)
+	// Only the scan deadline cancels the run's context (#260); it starts
+	// after calibration, and the redactor stops with it.
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	s, err := openSession(ctx, e, resolved)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
@@ -85,13 +88,12 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan: calibration", err)
 		return failureCode(err)
 	}
-	res, err := s.scan(ctx, cal.Tier)
+	res, err := s.scanWithin(ctx, cancel, cal.Tier, e.stderr)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
-	res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), e.stderr)
-	noteSandbox(ctx, e.stderr, s.deps.sandbox, s.cfg.Sandbox)
+	noteSandbox(context.WithoutCancel(ctx), e.stderr, s.deps.sandbox, s.cfg.Sandbox)
 	return s.finish(e, cal, res)
 }
 
@@ -107,7 +109,8 @@ func failureCode(err error) int {
 
 // openSession checks the model settings before touching the disk, then
 // opens the state store, a new run, the model link and the repository.
-func openSession(e env, r *config.Resolved) (*session, error) {
+// The redactor stops with ctx.
+func openSession(ctx context.Context, e env, r *config.Resolved) (*session, error) {
 	if err := checkModelConfig(r.Config.Model); err != nil {
 		return nil, err
 	}
@@ -122,7 +125,7 @@ func openSession(e env, r *config.Resolved) (*session, error) {
 		return nil, err
 	}
 	s.link = link
-	if err := s.openModel(); err != nil {
+	if err := s.openModel(ctx); err != nil {
 		s.close()
 		return nil, err
 	}
@@ -170,7 +173,7 @@ func (s *session) mode() state.Mode {
 	return state.ModeLive
 }
 
-func (s *session) openModel() error {
+func (s *session) openModel(ctx context.Context) error {
 	send := s.stats.countRequests(recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send)))
 	opts, err := sessionModelOptions(s.cfg.Model, s.link.command, send)
 	if err != nil {
@@ -179,7 +182,7 @@ func (s *session) openModel() error {
 	if s.model, err = models.NewHTTP(opts); err != nil {
 		return err
 	}
-	s.red, err = redact.New()
+	s.red, err = redact.NewWithContext(ctx)
 	return err
 }
 
@@ -279,12 +282,16 @@ func rejectedScan(findings []report.Finding, gaps []report.NotEvaluated) scanRes
 	return scanResult{findings: findings, gaps: gaps, stop: reasonPlannerRejected}
 }
 
+// walk starts the parser without the deadline, so a deadline that passes
+// while the runtime starts cannot fail the run before a report exists; each
+// parse still stops with ctx.
 func (s *session) walk(ctx context.Context) (repoScan, error) {
-	p, err := static.NewParser(ctx)
+	setup := context.WithoutCancel(ctx)
+	p, err := static.NewParser(setup)
 	if err != nil {
 		return repoScan{}, err
 	}
-	defer p.Close(ctx)
+	defer p.Close(setup)
 	return walkRepo(ctx, s.repo, p)
 }
 

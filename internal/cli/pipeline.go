@@ -85,6 +85,13 @@ type readStage struct {
 // slicer could not use and the reason the run stopped early, if it did.
 func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, findings []report.Finding) ([]report.NotEvaluated, string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
+	if ctx.Err() != nil {
+		// Past the deadline: nothing is redacted or sent.
+		for _, t := range targets {
+			findings[sinkOf[t.Hypothesis]].Reason = reasonDeadline
+		}
+		return nil, reasonDeadline, nil
+	}
 	rep, err := r.slicer.Build(targets)
 	if err != nil && !rep.Incomplete {
 		return nil, "", err
@@ -123,19 +130,12 @@ func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]re
 }
 
 // evaluate asks the model about each slice in plan order. A failure that
-// ends the run (budget, run_full, transport) marks this and every later
-// hypothesis with its reason and returns it; a bad answer marks only its
-// own hypothesis.
+// ends the run (budget, the scan deadline, run_full, transport) marks this
+// and every later hypothesis with its reason and returns it; a bad answer
+// marks only its own hypothesis.
 func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf map[reader.HypothesisID]static.SinkID, findings []report.Finding) string {
 	for i, s := range slices {
-		f := &findings[sinkOf[s.Hypothesis]]
-		sig, err := reader.Evaluate(ctx, r.model, r.tier, s)
-		if err == nil {
-			applySignal(f, sig)
-			continue
-		}
-		reason, stop := evalFailure(err)
-		f.Reason = reason
+		reason, stop := r.evaluateOne(ctx, s, &findings[sinkOf[s.Hypothesis]])
 		if !stop {
 			continue
 		}
@@ -145,6 +145,26 @@ func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf m
 		return reason
 	}
 	return ""
+}
+
+// evaluateOne asks about one slice and reports whether the run must stop.
+// Past the deadline no call is made, and a call the deadline cut is named
+// for it rather than for the transport error it surfaced as.
+func (r readStage) evaluateOne(ctx context.Context, s reader.Slice, f *report.Finding) (reason string, stop bool) {
+	if pastDeadline(ctx, f) {
+		return f.Reason, true
+	}
+	sig, err := reader.Evaluate(ctx, r.model, r.tier, s)
+	if err == nil {
+		applySignal(f, sig)
+		return "", false
+	}
+	if pastDeadline(ctx, f) {
+		return f.Reason, true
+	}
+	reason, stop = evalFailure(err)
+	f.Reason = reason
+	return reason, stop
 }
 
 func applySignal(f *report.Finding, sig reader.Signal) {
