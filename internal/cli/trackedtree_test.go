@@ -58,7 +58,7 @@ func TestTrackedIndexComparesIdentity(t *testing.T) {
 	mkdirTree(t, repo, "node_modules/ok")
 	outside := t.TempDir()
 	links := map[string]string{
-		"alias":  filepath.Join(repo, "node_modules"),
+		"alias":  "node_modules", // relative: os.Root refuses absolute link targets
 		"escape": outside,
 	}
 	for name, target := range links {
@@ -74,6 +74,10 @@ func TestTrackedIndexComparesIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
+	// The alias must resolve, or the rows below would pass by failing closed.
+	if _, err := root.Lstat("alias/evil"); err != nil {
+		t.Fatalf("alias does not resolve inside the root: %v", err)
+	}
 	tests := []struct {
 		name    string
 		tracked []string
