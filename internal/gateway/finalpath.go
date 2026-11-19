@@ -10,9 +10,10 @@ import (
 	"strings"
 )
 
-// The program-path checks mirror internal/static's finalpath.go (ADR 0013):
-// the layer table keeps the gateway from importing static, and the rule is
-// small enough to hold twice.
+// The program-path checks mirror internal/repofile's finalpath.go (ADR 0013)
+// and add the device and UNC refusal. The gateway keeps its own copy so its
+// imports stay limited to what its row in the layer table names, and the
+// rule is small enough to hold twice.
 
 // maxLinkHops bounds link resolution, so a link cycle fails instead of
 // looping.

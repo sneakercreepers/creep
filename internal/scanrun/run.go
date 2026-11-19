@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // Outcome is what running one scanner gave.
@@ -82,10 +82,10 @@ func DefaultLimits() Limits {
 }
 
 // Job is one scanner to run. Bin is the final path from
-// static.DetectScanners; Repo the absolute repository root; OSVDB the
+// repofile.DetectScanners; Repo the absolute repository root; OSVDB the
 // user's offline osv-scanner database directory, empty when none.
 type Job struct {
-	Scanner static.Scanner
+	Scanner repofile.Scanner
 	Bin     string
 	Repo    string
 	OSVDB   string
@@ -98,12 +98,12 @@ func Run(ctx context.Context, job Job) Result {
 	if !ok {
 		return Result{Outcome: NotRun}
 	}
-	bin, ok := static.OutsideRepo(job.Bin, job.Repo)
+	bin, ok := repofile.OutsideRepo(job.Bin, job.Repo)
 	if !ok || !runnableName(bin) {
 		return Result{Outcome: Refused}
 	}
-	if job.Scanner == static.ScannerOSV {
-		if _, ok := static.OutsideRepo(job.OSVDB, job.Repo); !ok {
+	if job.Scanner == repofile.ScannerOSV {
+		if _, ok := repofile.OutsideRepo(job.OSVDB, job.Repo); !ok {
 			return Result{Outcome: Refused}
 		}
 	}
@@ -117,9 +117,9 @@ func Run(ctx context.Context, job Job) Result {
 // without a usable local database, have no offline mode creep can use.
 func toolFor(job Job) (tool, bool) {
 	switch job.Scanner {
-	case static.ScannerGitleaks:
+	case repofile.ScannerGitleaks:
 		return gitleaks, true
-	case static.ScannerOSV:
+	case repofile.ScannerOSV:
 		return osvScanner, usableOSVDB(job.OSVDB)
 	}
 	return tool{}, false
@@ -275,7 +275,7 @@ func environment(w workspace, job Job) []string {
 	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
 		env = append(env, k+"="+w.tmp)
 	}
-	if job.Scanner == static.ScannerOSV {
+	if job.Scanner == repofile.ScannerOSV {
 		env = append(env, "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="+job.OSVDB)
 	}
 	return env

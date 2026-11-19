@@ -6,8 +6,8 @@
 // program (ADR 0013, the execAllowed entry in internal/tools/budget).
 // Everything that makes that safe lives here:
 //
-//   - The binary is the final path static.DetectScanners resolved, checked
-//     again with static.OutsideRepo right before the start, so a link or
+//   - The binary is the final path repofile.DetectScanners resolved, checked
+//     again with repofile.OutsideRepo right before the start, so a link or
 //     junction into the repository or the working directory never runs. On
 //     Windows only an .exe runs: a .bat or .cmd would start cmd.exe.
 //   - Arguments are fixed per scanner; the repository path is the only

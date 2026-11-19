@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // TestRunRefusesJunctionIntoRepo covers PR #218 tester finding 1: a
@@ -30,13 +30,13 @@ func TestRunRefusesJunctionIntoRepo(t *testing.T) {
 	}
 	viaJunction := filepath.Join(junction, filepath.Base(bin))
 	for _, b := range []string{viaJunction, `\\?\` + viaJunction} {
-		got := Run(context.Background(), Job{Scanner: static.ScannerGitleaks, Bin: b, Repo: repo, Limits: testLimits()})
+		got := Run(context.Background(), Job{Scanner: repofile.ScannerGitleaks, Bin: b, Repo: repo, Limits: testLimits()})
 		if got.Outcome != Refused {
 			t.Errorf("Run(%q) = %+v, want refused", b, got)
 		}
 	}
-	checks := static.DetectScanners([]string{"gitleaks"}, static.ScannerEnv{Path: junction, Repo: repo})
-	if checks[0].State != static.ScannerRefused {
+	checks := repofile.DetectScanners([]string{"gitleaks"}, repofile.ScannerEnv{Path: junction, Repo: repo})
+	if checks[0].State != repofile.ScannerRefused {
 		t.Errorf("detection through the junction = %+v, want refused", checks[0])
 	}
 	if ran(bin) {
@@ -54,7 +54,7 @@ func TestRunRefusesNonExe(t *testing.T) {
 	if err := os.WriteFile(script, []byte("@echo off\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := Run(context.Background(), Job{Scanner: static.ScannerGitleaks, Bin: script, Repo: repo, Limits: testLimits()})
+	got := Run(context.Background(), Job{Scanner: repofile.ScannerGitleaks, Bin: script, Repo: repo, Limits: testLimits()})
 	if got.Outcome != Refused {
 		t.Fatalf("Run(.cmd) = %+v, want refused", got)
 	}

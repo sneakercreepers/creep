@@ -1,4 +1,4 @@
-package static
+package repofile
 
 import (
 	"bytes"
@@ -60,23 +60,23 @@ const (
 	minifiedMinBytes  = 1024
 )
 
-// IgnoreReason reports why the file with contents src should not be parsed,
-// or 0 when it should. name must be relative to the repository root
-// (slash- or backslash-separated): directories above the root must not
-// decide what is skipped, so an absolute or escaping name is an error.
-// Callers check it before parsing and record a non-zero reason with
-// Extractor.AddIgnored, so the file is listed as not evaluated rather than
-// dropped.
+// IgnoreReason reports the mark the file with contents src carries, or 0.
+// name must be relative to the repository root (slash- or
+// backslash-separated): directories above the root must not decide what is
+// left out, so an absolute or escaping name is an error. A mark is only the
+// author's say-so: the caller believes a vendor path only with
+// VendorEvidence, and a generated or minified mark only for a file read in
+// full with no candidate (ADR 0017).
 func IgnoreReason(name string, src []byte) (Ignored, error) {
 	rel, err := repoRelative(name)
 	if err != nil {
 		return 0, err
 	}
-	lang, _ := LanguageForPath(rel)
+	fam := familyOf(rel)
 	switch {
 	case inVendorDir(rel):
 		return IgnoredVendor, nil
-	case hasGeneratedMarker(lang, src):
+	case hasGeneratedMarker(fam, src):
 		return IgnoredGenerated, nil
 	case minified(rel, src):
 		return IgnoredMinified, nil
@@ -116,8 +116,8 @@ var goGenerated = regexp.MustCompile(`^Code generated .* DO NOT EDIT\.$`)
 // "Code generated ... DO NOT EDIT.", "@generated" as the first word, or
 // protoc's header. Strings, docstrings and comments after the first line of
 // code never count, so a loose mention cannot hide a file.
-func hasGeneratedMarker(lang Language, src []byte) bool {
-	for _, c := range leadingComments(lang, src) {
+func hasGeneratedMarker(fam family, src []byte) bool {
+	for _, c := range leadingComments(fam, src) {
 		switch {
 		case goGenerated.MatchString(c),
 			c == "@generated" || strings.HasPrefix(c, "@generated "),
@@ -132,7 +132,7 @@ func hasGeneratedMarker(lang Language, src []byte) bool {
 // code in the first generatedHeadBytes, without comment syntax. Python
 // comments start with '#'; other files use '//', '/* ... */' and a '#!'
 // first line.
-func leadingComments(lang Language, src []byte) []string {
+func leadingComments(fam family, src []byte) []string {
 	head := bytes.TrimPrefix(src[:min(len(src), generatedHeadBytes)], []byte{0xef, 0xbb, 0xbf}) // UTF-8 BOM
 	var out []string
 	inBlock := false
@@ -142,7 +142,7 @@ func leadingComments(lang Language, src []byte) []string {
 		case inBlock:
 		case line == "":
 			continue
-		case lang == Python || (i == 0 && strings.HasPrefix(line, "#!")):
+		case fam == familyPython || (i == 0 && strings.HasPrefix(line, "#!")):
 			if !strings.HasPrefix(line, "#") {
 				return out
 			}
@@ -168,13 +168,13 @@ func leadingComments(lang Language, src []byte) []string {
 	return out
 }
 
-// minified applies only to scripts: Python is never minified in practice,
-// so a long Python line is parsed, not skipped. The whole file must be
-// dense: nine tenths of its bytes on lines longer than minifiedLineBytes, so
-// one long line padding readable code is not enough (pentest P4).
+// minified applies only to JavaScript and TypeScript: other code is never
+// minified in practice, so a long line elsewhere is read, not believed. The
+// whole file must be dense: nine tenths of its bytes on lines longer than
+// minifiedLineBytes, so one long line padding readable code is not enough
+// (pentest P4).
 func minified(name string, src []byte) bool {
-	lang, ok := LanguageForPath(name)
-	if !ok || lang == Python || len(src) < minifiedMinBytes {
+	if familyOf(name) != familyScript || len(src) < minifiedMinBytes {
 		return false
 	}
 	long := 0
@@ -186,22 +186,21 @@ func minified(name string, src []byte) bool {
 	return long*10 >= len(src)*9
 }
 
-// AddIgnored lists a file that was not evaluated, with the reason, so the
-// report can show it as not covered. path is kept only in Locations.
-func (e *Extractor) AddIgnored(name string, why Ignored) error {
-	if why == 0 || why > IgnoredMinified {
-		return fmt.Errorf("ignore %s: invalid reason %d", name, why)
-	}
-	if !fits(len(e.graph.Files) + 1) {
-		return fmt.Errorf("ignore %s: %w", name, ErrGraphFull)
-	}
-	rel, err := repoRelative(name)
-	if err != nil {
-		return fmt.Errorf("ignore: %w", err)
-	}
-	lang, _ := LanguageForPath(rel)
-	id := FileID(len(e.graph.Files)) //nolint:gosec // G115: fits checked above
-	e.graph.Files = append(e.graph.Files, File{ID: id, Language: lang, Ignored: why})
-	e.locs.Files = append(e.locs.Files, name)
-	return nil
+// family is a file's comment and minification style, from its extension.
+// It only decides how a mark is read, never whether a file is source:
+// that is the discover inventory's job.
+type family uint8
+
+const (
+	familyOther  family = iota
+	familyPython        // '#' comments; venv marks
+	familyScript        // JavaScript and TypeScript: minified bundles; node_modules marks
+)
+
+var familyExts = map[string]family{
+	".py": familyPython, ".pyi": familyPython, ".pyw": familyPython,
+	".js": familyScript, ".mjs": familyScript, ".cjs": familyScript, ".jsx": familyScript,
+	".ts": familyScript, ".mts": familyScript, ".cts": familyScript, ".tsx": familyScript,
 }
+
+func familyOf(name string) family { return familyExts[strings.ToLower(path.Ext(name))] }

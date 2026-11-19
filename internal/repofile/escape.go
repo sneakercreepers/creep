@@ -1,4 +1,4 @@
-package reader
+package repofile
 
 import (
 	"fmt"
@@ -7,14 +7,15 @@ import (
 	"unicode/utf8"
 )
 
-// escapeLines makes every slice line inert before it is costed or shown.
+// EscapeLines makes every repository line inert, in place, before a prompt
+// costs or shows it; reader slices and discover batches share this rule.
 // A carriage return, form feed, vertical tab, NEL, line or paragraph
 // separator, terminal escape or bidi control could make a repository line
 // render as a second line, so it could pass for a "N| " code line or a
-// HYPOTHESIS header. Each such rune becomes a visible escape: \xNN below
-// U+0100, otherwise a backslash, "u" and four hex digits. Tabs stay, since
-// they carry indentation. Bytes that are not UTF-8 become \xNN.
-func escapeLines(lines []string) []string {
+// HYPOTHESIS or FILE header. Each such rune becomes a visible escape: \xNN
+// below U+0100, otherwise a backslash, "u" and four hex digits. Tabs stay,
+// since they carry indentation. Bytes that are not UTF-8 become \xNN.
+func EscapeLines(lines []string) []string {
 	for i, l := range lines {
 		lines[i] = escapeLine(l)
 	}

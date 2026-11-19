@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // Runtime is a container runtime, named as in config sandbox.runtime.
@@ -177,7 +177,7 @@ func (p prober) locate(name, repo string) (string, Reason) {
 	if _, err := os.Stat(found); err != nil {
 		return "", ReasonNotFound
 	}
-	final, ok := static.OutsideRepo(found, repo)
+	final, ok := repofile.OutsideRepo(found, repo)
 	if !ok {
 		return "", ReasonInRepository
 	}

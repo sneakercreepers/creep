@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // TestTimeoutKillsProcessTree: a helper the scanner started dies with it
@@ -23,7 +23,7 @@ func TestTimeoutKillsProcessTree(t *testing.T) {
 	bin := installFake(t, base, "tree", "gitleaks")
 	limits := testLimits()
 	limits.Timeout = time.Second
-	got := Run(context.Background(), Job{Scanner: static.ScannerGitleaks, Bin: bin, Repo: repo, Limits: limits})
+	got := Run(context.Background(), Job{Scanner: repofile.ScannerGitleaks, Bin: bin, Repo: repo, Limits: limits})
 	if got.Outcome != Failed || got.Failure != FailTimeout {
 		t.Fatalf("Run = %+v, want a timeout", got)
 	}

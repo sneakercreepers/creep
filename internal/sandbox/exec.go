@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // cliResult is one finished runtime CLI call.
@@ -103,7 +103,7 @@ func safePath(path, repo string) string {
 		if dir == "" || !filepath.IsAbs(dir) {
 			continue
 		}
-		if _, ok := static.OutsideRepo(dir, repo); ok {
+		if _, ok := repofile.OutsideRepo(dir, repo); ok {
 			keep = append(keep, dir)
 		}
 	}

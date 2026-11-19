@@ -8,6 +8,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/redact"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // Class is the vulnerability class a hypothesis names. The caller maps the
@@ -190,7 +191,7 @@ func (s Slicer) buildFile(f fileTargets, budget int, rep *SliceReport) error {
 		rep.skipFile(f, FileLinesShifted, SkipLinesShifted)
 		return nil
 	}
-	lines := escapeLines(splitLines(text))
+	lines := repofile.EscapeLines(splitLines(text))
 	for _, t := range f.targets {
 		s.buildTarget(t, lines, budget, rep)
 	}

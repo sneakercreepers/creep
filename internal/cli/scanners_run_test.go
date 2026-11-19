@@ -12,7 +12,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/scanrun"
-	"github.com/sneakercreepers/creep/internal/static"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // placeTool writes a file named like the scanner into a new directory
@@ -69,7 +69,7 @@ func TestScanRunsOptionalScanners(t *testing.T) {
 			if code != tt.wantCode || !strings.Contains(out, tt.line) {
 				t.Fatalf("exit %d (want %d), stdout lacks %q\nstdout:\n%s\nstderr:\n%s", code, tt.wantCode, tt.line, out, errOut)
 			}
-			if len(jobs) != 1 || jobs[0].Scanner != static.ScannerGitleaks || !filepath.IsAbs(jobs[0].Bin) || jobs[0].Repo != repo {
+			if len(jobs) != 1 || jobs[0].Scanner != repofile.ScannerGitleaks || !filepath.IsAbs(jobs[0].Bin) || jobs[0].Repo != repo {
 				t.Fatalf("jobs = %+v, want one gitleaks job with a final path in repository %s", jobs, repo)
 			}
 			checkScannerReport(t, tt.status, tt.findings, tt.wantCode == exitcode.Incomplete)
@@ -114,7 +114,7 @@ func TestRunStatusIsExhaustive(t *testing.T) {
 			t.Errorf("runStatus(%d) = %s, want %s", o, got, w)
 		}
 	}
-	for _, s := range []static.Scanner{static.ScannerGitleaks, static.ScannerOSV} {
+	for _, s := range []repofile.Scanner{repofile.ScannerGitleaks, repofile.ScannerOSV} {
 		class, _ := scannerFindingClass(s)
 		if _, ok := classSeverity[class]; !ok || !strings.Contains(strings.Join(scannerClasses(s), ","), class) {
 			t.Errorf("scanner %s finding class %q has no severity or is not one of its classes", s, class)

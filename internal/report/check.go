@@ -7,17 +7,6 @@ import (
 	"strings"
 )
 
-// checkFrameworks keeps framework names to IDs, so Markdown can print them
-// as they are.
-func checkFrameworks(names []string) error {
-	for _, n := range names {
-		if !idPattern.MatchString(n) {
-			return fmt.Errorf("%w: framework %q", ErrInvalid, n)
-		}
-	}
-	return nil
-}
-
 func checkFindings(in []Finding) ([]Finding, error) {
 	out := make([]Finding, len(in))
 	seen := make(map[string]bool, len(in))

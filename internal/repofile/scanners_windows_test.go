@@ -1,6 +1,6 @@
 //go:build windows
 
-package static
+package repofile
 
 import (
 	"path/filepath"

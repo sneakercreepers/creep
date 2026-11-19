@@ -170,11 +170,10 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	Coverage      Coverage     `json:"coverage"`
 	DataHandling  DataHandling `json:"data_handling"`
-	// NoRoutesIn names the frameworks static looked in when it found no
-	// route at all, for Markdown to state (ADR 0009 amendment, #207). The
-	// JSON says it with run.reason no_routes; this is not part of the
-	// contract, so a report read back has none.
-	NoRoutesIn []string `json:"-"`
+	// Discovery is the inventory, the whole-file egress and the failed
+	// discovery batches, for Markdown and the text summary (ADR 0017 D3).
+	// It is not part of the contract, so a report read back has none.
+	Discovery Discovery `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -188,7 +187,7 @@ type Input struct {
 	NotEvaluated   []NotEvaluated
 	Scanners       []ScannerCoverage // in the caller's fixed order
 	DataHandling   DataHandling
-	NoRoutesIn     []string // framework names (IDs); empty when a route was found
+	Discovery      Discovery
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -211,7 +210,7 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkFrameworks(in.NoRoutesIn); err != nil {
+	if err := checkDiscovery(in.Discovery); err != nil {
 		return nil, err
 	}
 	info := buildinfo.Get()
@@ -222,7 +221,10 @@ func New(in Input) (*Report, error) {
 		Findings:      findings,
 		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners},
 		DataHandling:  in.DataHandling.normalized(),
-		NoRoutesIn:    slices.Clone(in.NoRoutesIn),
+		Discovery: Discovery{
+			WholeFiles: in.Discovery.WholeFiles,
+			Inventory:  slices.Clone(in.Discovery.Inventory), Batches: slices.Clone(in.Discovery.Batches),
+		},
 	}, nil
 }
 

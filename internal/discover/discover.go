@@ -10,6 +10,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/redact"
+	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
 // purpose labels discovery calls in egress.log.
@@ -167,7 +168,7 @@ func (r *run) addSource(ctx context.Context, i int, content []byte) {
 	case text == "":
 		w.file.Coverage = CoverageReadFull // nothing to read
 	default:
-		r.queue(ctx, section{work: i, lang: w.file.Language, lines: escapeLines(splitLines(text))})
+		r.queue(ctx, section{work: i, lang: w.file.Language, lines: repofile.EscapeLines(splitLines(text))})
 	}
 }
 
