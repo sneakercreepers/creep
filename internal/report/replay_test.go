@@ -20,7 +20,7 @@ const recordedVerdicts = `[{"id":"f1","class":"sqli","status":"verified","path":
 // its report in all three formats.
 func runAndRender(t *testing.T, dir string, secret []byte, mode state.Mode, call func() ([]byte, error)) map[string][]byte {
 	t.Helper()
-	store, err := state.Open(dir, secret)
+	store, err := state.OpenWithSecret(dir, secret)
 	if err != nil {
 		t.Fatal(err)
 	}

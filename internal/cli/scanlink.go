@@ -114,11 +114,7 @@ func calibrateWithUserCache(ctx context.Context, opts calibrate.CacheOptions) (c
 	if err != nil {
 		return calibrate.Calibration{}, fmt.Errorf("calibration cache: %w", err)
 	}
-	secret, err := state.UserSecret()
-	if err != nil {
-		return calibrate.Calibration{}, err
-	}
-	store, err := state.Open(filepath.Join(base, "creep"), secret)
+	store, err := state.OpenUser(filepath.Join(base, "creep"))
 	if err != nil {
 		return calibrate.Calibration{}, err
 	}

@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ func TestFailedWriteStopsAppends(t *testing.T) {
 // repository: plausible, well formed, and signed by someone else.
 func plantedStore(t *testing.T, dir string) *Store {
 	t.Helper()
-	s, err := Open(dir, bytes.Repeat([]byte{0x01}, SecretBytes))
+	s, err := OpenWithSecret(dir, bytes.Repeat([]byte{0x01}, SecretBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestPlantedCacheEntryNeverServed(t *testing.T) {
 	if err := plantedStore(t, dir).Record(k, []byte(`{"findings":[]}`)); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(dir, testSecret)
+	s, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestPlantedRunLogNeverTrusted(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = planted.Close()
-	s, err := Open(dir, testSecret)
+	s, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +149,7 @@ func TestRunLinesBoundToTheirRun(t *testing.T) {
 	if err := done.Finish(OutcomeComplete, ""); err != nil {
 		t.Fatal(err)
 	}
+	_ = done.Close()
 	open := newRun(t, s)
 	_ = open.Close()
 	log, err := os.ReadFile(filepath.Join(done.Dir(), eventsFile))
@@ -211,11 +213,11 @@ func isolateUserConfig(t *testing.T) string {
 
 func TestUserSecret(t *testing.T) {
 	keyFile := isolateUserConfig(t)
-	first, err := UserSecret()
+	first, err := userSecret()
 	if err != nil || len(first) != SecretBytes {
 		t.Fatalf("UserSecret = %d bytes, %v", len(first), err)
 	}
-	second, err := UserSecret()
+	second, err := userSecret()
 	if err != nil || !bytes.Equal(first, second) {
 		t.Fatalf("second UserSecret differs or failed: %v", err)
 	}
@@ -227,7 +229,7 @@ func TestUserSecret(t *testing.T) {
 		if err := os.Chmod(keyFile, 0o644); err != nil { //nolint:gosec // G302: the test needs a readable secret to prove UserSecret refuses it
 			t.Fatal(err)
 		}
-		if _, err := UserSecret(); !errors.Is(err, ErrUnsafePath) {
+		if _, err := userSecret(); !errors.Is(err, ErrUnsafePath) {
 			t.Fatalf("0644 secret err = %v; want ErrUnsafePath", err)
 		}
 		if err := os.Chmod(keyFile, 0o600); err != nil {
@@ -237,13 +239,64 @@ func TestUserSecret(t *testing.T) {
 	if err := os.WriteFile(keyFile, []byte("short"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := UserSecret(); !errors.Is(err, ErrCorrupt) {
+	if _, err := userSecret(); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("short secret err = %v; want ErrCorrupt", err)
 	}
 }
 
+// Copying the public test key (or any fixed pattern) into state.key would
+// make every committed fixture and anything a repository signs with that
+// key verify, so UserSecret refuses it instead of using it.
+func TestUserSecretRefusesFixedKey(t *testing.T) {
+	keyFile := isolateUserConfig(t)
+	if _, err := userSecret(); err != nil {
+		t.Fatal(err)
+	}
+	pattern := make([]byte, SecretBytes)
+	for i := range pattern {
+		pattern[i] = byte(i % (minDistinctBytes - 1))
+	}
+	for _, key := range [][]byte{testSecret, make([]byte, SecretBytes), pattern} {
+		if err := os.WriteFile(keyFile, []byte(hex.EncodeToString(key)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := userSecret(); !errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), "fixed test key") {
+			t.Errorf("state.key %x err = %v; want ErrCorrupt naming a fixed key", key[:4], err)
+		}
+	}
+	if err := os.Remove(keyFile); err != nil {
+		t.Fatal(err)
+	}
+	if fresh, err := userSecret(); err != nil || fixedSecret(fresh) {
+		t.Fatalf("new secret after removing a fixed one: %v", err)
+	}
+}
+
 func TestOpenRejectsBadSecret(t *testing.T) {
-	if _, err := Open(t.TempDir(), make([]byte, SecretBytes-1)); err == nil {
-		t.Fatal("Open with a short secret succeeded")
+	for _, secret := range [][]byte{nil, make([]byte, SecretBytes-1), make([]byte, SecretBytes+1)} {
+		if _, err := OpenWithSecret(t.TempDir(), secret); err == nil {
+			t.Errorf("Open with a %d-byte secret succeeded", len(secret))
+		}
+	}
+}
+
+// A store without a key (the key store, or a zero Store) signs nothing and
+// verifies nothing, so it can never record state or trust a planted line.
+func TestKeylessStoreSignsAndVerifiesNothing(t *testing.T) {
+	s, err := openDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	k := testKey("x")
+	if err := s.Record(k, []byte("r")); !errors.Is(err, errNoKey) {
+		t.Errorf("Record err = %v; want errNoKey", err)
+	}
+	if _, err := s.NewRun(ModeLive); !errors.Is(err, errNoKey) {
+		t.Errorf("NewRun err = %v; want errNoKey", err)
+	}
+	line, _ := sign(testMAC, cacheDomain, []byte(`{"v":1}`))
+	if _, err := verify(macKey{}, cacheDomain, line); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("verify with no key err = %v; want ErrUnauthenticated", err)
 	}
 }

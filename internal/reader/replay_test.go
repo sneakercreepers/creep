@@ -109,7 +109,7 @@ func fixtureStore(t *testing.T, app string) (*state.Store, state.Mode) {
 	} else {
 		dir = copyFixtures(t, dir)
 	}
-	store, err := state.Open(dir, fixtureSecret)
+	store, err := state.OpenWithSecret(dir, fixtureSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

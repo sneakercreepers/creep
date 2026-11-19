@@ -19,14 +19,16 @@ var (
 )
 
 // Run is an open, append-only run log. Its methods are safe for concurrent
-// use.
+// use. An open Run holds the state directory's lock until Close, so no other
+// run, in this process or another, appends at the same time (ErrLocked).
 type Run struct {
-	id     string
-	dir    string
-	secret []byte
+	id  string
+	dir string
+	key macKey
 
 	mu     sync.Mutex
 	f      logFile
+	lock   *os.File // nil once released
 	sum    Summary
 	done   map[string]bool
 	broken error // a failed write may have left a partial line; append no more
@@ -39,12 +41,27 @@ type logFile interface {
 	Close() error
 }
 
-// NewRun creates runs/<id>/events.jsonl with a fresh ID and writes its start
-// line.
+// NewRun takes the state directory's lock, creates runs/<id>/events.jsonl
+// with a fresh ID and writes its start line. While another run is open on
+// the directory it fails with ErrLocked (on Windows after about 200 ms of
+// retries).
 func (s *Store) NewRun(mode Mode) (*Run, error) {
 	if !validMode(mode) {
 		return nil, fmt.Errorf("new run: mode %q: %w", mode, ErrInvalidID)
 	}
+	lock, err := s.lock()
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.createRun(mode, lock)
+	if err != nil {
+		_ = lock.Close()
+		return nil, err
+	}
+	return r, nil
+}
+
+func (s *Store) createRun(mode Mode, lock *os.File) (*Run, error) {
 	if err := s.ensureDir(runsDir); err != nil {
 		return nil, err
 	}
@@ -57,7 +74,7 @@ func (s *Store) NewRun(mode Mode) (*Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new run %s: %w", id, err)
 	}
-	r := s.newRun(id, f, Summary{ID: id, Mode: mode, Outcome: OutcomeIncomplete})
+	r := s.newRun(id, f, lock, Summary{ID: id, Mode: mode, Outcome: OutcomeIncomplete})
 	if err := r.append(Event{Kind: KindStart, Mode: mode}); err != nil {
 		_ = f.Close()
 		return nil, err
@@ -65,7 +82,9 @@ func (s *Store) NewRun(mode Mode) (*Run, error) {
 	return r, nil
 }
 
-// Load reads a run's log without opening it for writing.
+// Load reads a run's log without opening it for writing. It does not take
+// the lock, so a log another process is still appending to can end in a
+// line being written and load as ErrCorrupt; Resume reads under the lock.
 func (s *Store) Load(id string) (Summary, error) {
 	f, err := s.openEvents(id, false)
 	if err != nil {
@@ -75,9 +94,26 @@ func (s *Store) Load(id string) (Summary, error) {
 	return s.readSummary(id, f)
 }
 
-// Resume reopens an interrupted run for appending. A run that already ended
-// is refused, and so is any log that does not decode.
+// Resume takes the state directory's lock and reopens an interrupted run
+// for appending. A run that already ended is refused, and so is any log
+// that does not decode; ErrLocked means another run is open.
 func (s *Store) Resume(id string) (*Run, error) {
+	if !validRunID(id) {
+		return nil, fmt.Errorf("run %q: %w", id, ErrInvalidID)
+	}
+	lock, err := s.lock()
+	if err != nil {
+		return nil, err
+	}
+	r, err := s.reopenRun(id, lock)
+	if err != nil {
+		_ = lock.Close()
+		return nil, err
+	}
+	return r, nil
+}
+
+func (s *Store) reopenRun(id string, lock *os.File) (*Run, error) {
 	f, err := s.openEvents(id, true)
 	if err != nil {
 		return nil, err
@@ -90,7 +126,7 @@ func (s *Store) Resume(id string) (*Run, error) {
 		_ = f.Close()
 		return nil, err
 	}
-	return s.newRun(id, f, sum), nil
+	return s.newRun(id, f, lock, sum), nil
 }
 
 func (s *Store) openEvents(id string, appendMode bool) (*os.File, error) {
@@ -108,7 +144,7 @@ func (s *Store) openEvents(id string, appendMode bool) (*os.File, error) {
 }
 
 func (s *Store) readSummary(id string, f *os.File) (Summary, error) {
-	sum, err := decodeEvents(f, s.secret, id)
+	sum, err := decodeEvents(f, s.key, id)
 	if err != nil {
 		return Summary{}, fmt.Errorf("run %s: %w", id, err)
 	}
@@ -116,12 +152,12 @@ func (s *Store) readSummary(id string, f *os.File) (Summary, error) {
 	return sum, nil
 }
 
-func (s *Store) newRun(id string, f *os.File, sum Summary) *Run {
+func (s *Store) newRun(id string, f, lock *os.File, sum Summary) *Run {
 	done := make(map[string]bool, len(sum.Steps))
 	for _, step := range sum.Steps {
 		done[step] = true
 	}
-	return &Run{id: id, dir: filepath.Join(s.dir, runsDir, id), secret: s.secret, f: f, sum: sum, done: done}
+	return &Run{id: id, dir: filepath.Join(s.dir, runsDir, id), key: s.key, f: f, lock: lock, sum: sum, done: done}
 }
 
 // ID returns the run ID, as accepted by Store.Resume.
@@ -186,12 +222,18 @@ func (r *Run) Summary() Summary {
 	return sum
 }
 
-// Close closes the log. It does not write an end line: a run closed without
-// Finish stays incomplete and can be resumed.
+// Close closes the log and releases the state directory's lock. It does not
+// write an end line: a run closed without Finish stays incomplete and can be
+// resumed.
 func (r *Run) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.f.Close()
+	err := r.f.Close()
+	if r.lock != nil {
+		_ = r.lock.Close() // closing the handle drops the OS lock
+		r.lock = nil
+	}
+	return err
 }
 
 // append writes ev as one line with a single write and syncs it. r.mu must
@@ -212,7 +254,11 @@ func (r *Run) append(ev Event) error {
 	if err != nil {
 		return fmt.Errorf("run %s: %w", r.id, err)
 	}
-	_, err = r.f.Write(append(sign(r.secret, runDomain(r.id), body), '\n'))
+	line, err := sign(r.key, runDomain(r.id), body)
+	if err != nil {
+		return fmt.Errorf("run %s: %w", r.id, err)
+	}
+	_, err = r.f.Write(append(line, '\n'))
 	if err == nil {
 		err = r.f.Sync()
 	}

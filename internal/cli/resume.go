@@ -29,28 +29,24 @@ func runResume(e env, args []string) int {
 	return exitcode.ConfigError
 }
 
-// loadResumable reads the run read-only and refuses one that already ended.
-// It never creates the state directory: resuming in the wrong folder must
-// not leave one behind.
+// loadResumable reopens the run under the state lock, so a scan still
+// writing to it fails the resume (state.ErrLocked) instead of reading a log
+// mid-append, and refuses a run that already ended. It appends nothing and
+// never creates the state directory: resuming in the wrong folder must not
+// leave one behind.
 func loadResumable(id string) (state.Summary, error) {
 	if _, err := os.Lstat(stateDir); err != nil {
 		return state.Summary{}, fmt.Errorf("no run state in this directory: %w", err)
 	}
-	secret, err := state.UserSecret()
-	if err != nil {
-		return state.Summary{}, err
-	}
-	store, err := state.Open(stateDir, secret)
+	store, err := state.OpenUser(stateDir)
 	if err != nil {
 		return state.Summary{}, err
 	}
 	defer store.Close()
-	sum, err := store.Load(id)
+	run, err := store.Resume(id)
 	if err != nil {
 		return state.Summary{}, err
 	}
-	if sum.Ended {
-		return state.Summary{}, fmt.Errorf("run %s: %w", sum.ID, state.ErrRunEnded)
-	}
-	return sum, nil
+	defer run.Close()
+	return run.Summary(), nil
 }

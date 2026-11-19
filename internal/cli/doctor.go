@@ -67,11 +67,7 @@ func doctorCommand(e env, r *config.Resolved) int {
 }
 
 func openDoctorRun() (*state.Run, func(), error) {
-	secret, err := state.UserSecret()
-	if err != nil {
-		return nil, nil, err
-	}
-	store, err := state.Open(stateDir, secret)
+	store, err := state.OpenUser(stateDir)
 	if err != nil {
 		return nil, nil, err
 	}

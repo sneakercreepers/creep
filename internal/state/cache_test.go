@@ -34,7 +34,7 @@ func countingCall(resp string, calls *int) func() ([]byte, error) {
 // model call: the basis for byte-identical reports.
 func TestReplayIsByteIdenticalWithoutCalls(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), ".creep")
-	recorder, err := Open(dir, testSecret)
+	recorder, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestReplayIsByteIdenticalWithoutCalls(t *testing.T) {
 	}
 	_ = recorder.Close()
 
-	replayer, err := Open(dir, testSecret)
+	replayer, err := OpenWithSecret(dir, testSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,8 +142,11 @@ func TestInvalidKeysRefused(t *testing.T) {
 	}
 }
 
-// A damaged cache entry is an error, not a miss: treating it as a miss would
-// make replay call the network or record over evidence of tampering.
+// A damaged cache entry is an error in replay, never a miss: a miss would
+// make replay call the network. Live never serves it either, but a file a
+// repository can plant (#160) must not stop the scan: it is a miss, and the
+// model's answer is recorded over it. Only a newer creep's entry, which
+// carries this user's MAC, still fails closed in live.
 func TestCorruptCacheEntryFailsClosed(t *testing.T) {
 	k := testKey("x")
 	other := testKey("y")
@@ -173,6 +176,72 @@ func TestCorruptCacheEntryFailsClosed(t *testing.T) {
 			}
 			if _, err := s.Respond(ModeReplay, k, nil); !errors.Is(err, tt.want) {
 				t.Errorf("Respond err = %v; want %v", err, tt.want)
+			}
+			calls := 0
+			got, err := s.Respond(ModeLive, k, countingCall("real", &calls))
+			if tt.want == ErrUnsupportedVersion {
+				if !errors.Is(err, tt.want) || calls != 0 {
+					t.Errorf("live = %v with %d calls; want %v and no call", err, calls, tt.want)
+				}
+				return
+			}
+			if err != nil || string(got) != "real" || calls != 1 {
+				t.Fatalf("live = %q, %v with %d calls; want the model's answer", got, err, calls)
+			}
+			if again, ok, err := s.Lookup(k); !ok || err != nil || string(again) != "real" {
+				t.Errorf("after live, Lookup = %q, %v, %v; want the entry overwritten", again, ok, err)
+			}
+		})
+	}
+}
+
+// A cache entry, or the cache directory, that is not a regular file or a
+// real directory (planted in the repository) is never read through, even
+// when the link leads to an entry this user signed: replay fails closed,
+// and live calls the model and never writes through the link, so the scan
+// goes on with the real answer.
+func TestNonRegularCacheEntryIsAMiss(t *testing.T) {
+	k := testKey("x")
+	tests := []struct {
+		name  string
+		plant func(s, outside *Store) error
+	}{
+		{"entry is a directory", func(s, _ *Store) error {
+			return os.MkdirAll(cachePath(s, k), 0o700)
+		}},
+		{"entry links to a signed entry", func(s, outside *Store) error {
+			if err := os.Mkdir(filepath.Join(s.dir, cacheDir), 0o700); err != nil {
+				return err
+			}
+			return os.Symlink(cachePath(outside, k), cachePath(s, k))
+		}},
+		{"cache is a file", func(s, _ *Store) error {
+			return os.WriteFile(filepath.Join(s.dir, cacheDir), nil, 0o600)
+		}},
+		{"cache links to a signed cache", func(s, outside *Store) error {
+			return os.Symlink(filepath.Join(outside.dir, cacheDir), filepath.Join(s.dir, cacheDir))
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, outside := openStore(t), openStore(t)
+			if err := outside.Record(k, []byte("planted")); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.plant(s, outside); err != nil {
+				t.Skipf("plant: %v", err)
+			}
+			if _, err := s.Respond(ModeReplay, k, nil); !errors.Is(err, ErrUnsafePath) {
+				t.Errorf("replay err = %v; want ErrUnsafePath", err)
+			}
+			calls := 0
+			got, err := s.Respond(ModeLive, k, countingCall("real", &calls))
+			if err != nil || string(got) != "real" || calls != 1 {
+				t.Fatalf("live = %q, %v with %d calls; want the model's answer", got, err, calls)
+			}
+			_, _ = s.Respond(ModeRecord, k, countingCall("real", &calls))
+			if kept, _, err := outside.Lookup(k); err != nil || string(kept) != "planted" {
+				t.Errorf("link target = %q, %v; want it untouched", kept, err)
 			}
 		})
 	}

@@ -1,7 +1,6 @@
 package state
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -11,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"testing"
 )
 
 const (
@@ -36,24 +36,60 @@ var (
 // Store is a state directory. Every file access goes through an os.Root, so
 // no name can escape it.
 type Store struct {
-	dir    string
-	root   *os.Root
-	secret []byte
+	dir  string
+	root *os.Root
+	key  macKey // set only by open; the zero key signs nothing and verifies nothing
 }
 
-// Open opens the state directory dir, creating it with mode 0700 if missing.
-// secret (normally UserSecret) authenticates every line written and read,
-// so state that did not come from this user's creep is never trusted.
-func Open(dir string, secret []byte) (*Store, error) {
+// OpenUser opens the state directory dir, creating it with mode 0700 if
+// missing. Every line written and read is authenticated with this user's
+// secret (<os.UserConfigDir>/creep/state.key), so state that did not come
+// from this user's creep is never trusted. It is the only way production
+// code opens a store.
+func OpenUser(dir string) (*Store, error) {
+	secret, err := userSecret()
+	if err != nil {
+		return nil, err
+	}
+	return open(dir, secret)
+}
+
+// ErrTestOnly means OpenWithSecret was called outside a go test binary.
+var ErrTestOnly = errors.New("state: OpenWithSecret works only in tests; open stores with OpenUser")
+
+// OpenWithSecret opens dir with a fixed secret, such as the public test key
+// that signs committed fixtures. It works only in a binary built by go test
+// (testing.Testing): in creep itself it always fails, however it is reached
+// (an alias, a second import, a function value), so a fixed key never opens
+// a production store (TestOpenWithSecretRefusedOutsideTests).
+func OpenWithSecret(dir string, secret []byte) (*Store, error) {
+	if !testing.Testing() {
+		return nil, ErrTestOnly
+	}
+	return open(dir, secret)
+}
+
+func open(dir string, secret []byte) (*Store, error) {
 	if len(secret) != SecretBytes {
 		return nil, fmt.Errorf("state dir: secret must be %d bytes", SecretBytes)
 	}
+	s, err := openDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	s.key = newMACKey(secret)
+	return s, nil
+}
+
+// openDir opens dir as a store with no MAC key: it can hold files (the key
+// store in userSecret) but every line it signs or verifies fails.
+func openDir(dir string) (*Store, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("state dir: %w", err)
 	}
-	if err := os.MkdirAll(abs, dirMode); err != nil {
-		return nil, fmt.Errorf("state dir: %w", err)
+	if err := makeStateDir(abs); err != nil {
+		return nil, err
 	}
 	before, err := checkDir(abs, os.Lstat)
 	if err != nil {
@@ -72,12 +108,25 @@ func Open(dir string, secret []byte) (*Store, error) {
 		_ = root.Close()
 		return nil, err
 	}
-	return &Store{dir: abs, root: root, secret: bytes.Clone(secret)}, nil
+	return &Store{dir: abs, root: root}, nil
 }
 
 // Close releases the directory handle.
 func (s *Store) Close() error {
 	return s.root.Close()
+}
+
+// makeStateDir creates abs if missing. A file or link planted in its place
+// is refused as ErrUnsafePath on every OS (MkdirAll's own error for it is
+// "path not found" on Windows).
+func makeStateDir(abs string) error {
+	if info, err := os.Lstat(abs); err == nil && !info.IsDir() { //nolint:gosec // G703: abs is the state directory the caller chose; a link there is refused here
+		return fmt.Errorf("state dir %q: not a directory: %w", abs, ErrUnsafePath)
+	}
+	if err := os.MkdirAll(abs, dirMode); err != nil { //nolint:gosec // G703: as above; Open checks the result through checkDir and os.Root
+		return fmt.Errorf("state dir: %w", err)
+	}
+	return nil
 }
 
 // checkDir refuses a directory that is a link or writable by other users.

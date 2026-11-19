@@ -96,7 +96,7 @@ func (s Summary) Complete() bool {
 
 // decodeEvents reads a whole log and checks its order. Any problem is
 // ErrCorrupt (or ErrUnsupportedVersion): nothing is skipped or repaired.
-func decodeEvents(r io.Reader, secret []byte, id string) (Summary, error) {
+func decodeEvents(r io.Reader, mk macKey, id string) (Summary, error) {
 	sum := Summary{Outcome: OutcomeIncomplete}
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 4096), MaxLineBytes+1)
@@ -104,7 +104,7 @@ func decodeEvents(r io.Reader, secret []byte, id string) (Summary, error) {
 	var seq uint64
 	for sc.Scan() {
 		seq++
-		ev, err := decodeEvent(sc.Bytes(), secret, runDomain(id))
+		ev, err := decodeEvent(sc.Bytes(), mk, runDomain(id))
 		if err == nil {
 			err = sum.apply(ev, seq)
 		}
@@ -135,11 +135,11 @@ func scanLines(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
-func decodeEvent(line, secret, domain []byte) (Event, error) {
+func decodeEvent(line []byte, mk macKey, domain []byte) (Event, error) {
 	if len(line) > MaxLineBytes {
 		return Event{}, fmt.Errorf("line over %d bytes: %w", MaxLineBytes, ErrCorrupt)
 	}
-	body, err := verify(secret, domain, line)
+	body, err := verify(mk, domain, line)
 	if err != nil {
 		return Event{}, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}

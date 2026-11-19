@@ -44,7 +44,7 @@ func newCacheEnv(t *testing.T) *cacheEnv {
 
 func openCache(t *testing.T, dir string, secret []byte) *state.Store {
 	t.Helper()
-	s, err := state.Open(dir, secret)
+	s, err := state.OpenWithSecret(dir, secret)
 	if err != nil {
 		t.Fatal(err)
 	}

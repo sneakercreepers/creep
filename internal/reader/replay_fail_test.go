@@ -45,7 +45,7 @@ func refuseModel(t *testing.T) model {
 
 func openStore(t *testing.T, dir string, secret []byte) *state.Store {
 	t.Helper()
-	store, err := state.Open(dir, secret)
+	store, err := state.OpenWithSecret(dir, secret)
 	if err != nil {
 		t.Fatal(err)
 	}

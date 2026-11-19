@@ -14,11 +14,7 @@ import (
 // run and one corrupt run, and returns their IDs.
 func makeRuns(t *testing.T) (open, ended, corrupt string) {
 	t.Helper()
-	secret, err := state.UserSecret()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := state.Open(stateDir, secret)
+	s, err := state.OpenUser(stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}

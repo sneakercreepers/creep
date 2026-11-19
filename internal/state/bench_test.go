@@ -21,7 +21,7 @@ func BenchmarkDecodeEvents(b *testing.B) {
 		b.Run(fmt.Sprintf("steps=%d", steps), func(b *testing.B) {
 			b.SetBytes(int64(log.Len()))
 			for b.Loop() {
-				if _, err := decodeEvents(bytes.NewReader(log.Bytes()), testSecret, benchRunID); err != nil {
+				if _, err := decodeEvents(bytes.NewReader(log.Bytes()), testMAC, benchRunID); err != nil {
 					b.Fatal(err)
 				}
 			}

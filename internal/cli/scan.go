@@ -148,18 +148,16 @@ func checkModelConfig(m config.Model) error {
 }
 
 func (s *session) openState() error {
-	secret, err := state.UserSecret()
-	if err != nil {
+	var err error
+	if s.store, err = state.OpenUser(stateDir); err != nil {
 		return err
 	}
-	if s.store, err = state.Open(stateDir, secret); err != nil {
+	// The run holds the state lock: a second scan must fail on it before
+	// it removes reports the first one is writing.
+	if s.run, err = s.store.NewRun(s.mode()); err != nil {
 		return err
 	}
-	if err := removeReports(); err != nil {
-		return err
-	}
-	s.run, err = s.store.NewRun(s.mode())
-	return err
+	return removeReports()
 }
 
 func (s *session) mode() state.Mode {

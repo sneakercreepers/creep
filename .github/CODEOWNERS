@@ -11,6 +11,8 @@
 /internal/static/        @Ludocius
 /internal/sandbox/       @Ludocius
 /internal/planner/       @Ludocius
+# Run state: MAC keys, the public test key guard and the inter-process lock.
+/internal/state/         @Ludocius
 # Presets pick the program that reads scanned code and the flags that turn its tools off.
 /internal/presets/       @Ludocius
 # Prompts sit next to each package that sends them (internal/reader/prompts, internal/calibrate/prompts).
