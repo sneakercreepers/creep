@@ -250,7 +250,9 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	}
 	if len(rs.graph.Routes) == 0 {
 		// No route means no sink either: there is nothing to plan or read.
-		return scanResult{gaps: rs.gaps, noRoutes: true}, nil
+		// A walk the deadline cut says nothing about the repository's
+		// routes, so the run is not reported as having none (#260).
+		return scanResult{gaps: rs.gaps, noRoutes: ctx.Err() == nil}, nil
 	}
 	findings := baseFindings(rs)
 	done = s.stats.start(phasePlan)
@@ -262,7 +264,8 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier) (scanResult, er
 	if err != nil {
 		return scanResult{}, err
 	}
-	stage := readStage{model: s.model, tier: rtier, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: s.readRepo}}
+	reads := newDeadlineReads(ctx, s.readRepo)
+	stage := readStage{model: s.model, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read}}
 	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
 	done()

@@ -63,11 +63,23 @@ func runEstimate(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer est.close()
-	if err := est.run(context.Background(), e.deps); err != nil {
+	// The estimate reads and redacts the repository as scan does, so a
+	// crafted file could hold it as long: budget.max_seconds bounds it too,
+	// and a cut estimate fails closed (exit 4), never reading as whole.
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	stop := startDeadline(ctx, cancel, est.cfg.Budget.MaxSeconds)
+	err = est.run(ctx, e.deps)
+	cut := stop()
+	if err != nil {
 		printError(e.stderr, "creep estimate", err)
 		return exitcode.ConfigError
 	}
 	printEstimate(e.stdout, est)
+	if cut {
+		fmt.Fprintf(e.stdout, "PARTIAL ESTIMATE: the deadline of %d s (budget.max_seconds) passed; files and sinks it did not reach are counted as not evaluated (reason %s), so the figures above are a lower bound\n", est.cfg.Budget.MaxSeconds, reasonDeadline)
+		return exitcode.Incomplete
+	}
 	return exitcode.OK
 }
 
@@ -106,16 +118,19 @@ func openCacheReadOnly() (*state.Store, error) {
 }
 
 func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {
-	p, err := static.NewParser(ctx)
+	// The parser and calibration (no repository text) run without the
+	// deadline; each parse and each redaction stops with ctx.
+	setup := context.WithoutCancel(ctx)
+	p, err := static.NewParser(setup)
 	if err != nil {
 		return err
 	}
 	est.scan, err = walkRepo(ctx, est.repo, p)
-	p.Close(ctx)
+	p.Close(setup)
 	if err != nil {
 		return err
 	}
-	if est.cal, err = est.calibration(ctx, deps); err != nil {
+	if est.cal, err = est.calibration(setup, deps); err != nil {
 		return err
 	}
 	for _, tier := range estimateTiers {
@@ -155,6 +170,9 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	if err != nil {
 		return t, err
 	}
+	if stop == "" && ctx.Err() != nil {
+		stop = reasonDeadline // the deadline cut this tier's slicing
+	}
 	countSkipped(findings, t.skipped)
 	t.incomplete = incompleteReason(stop, findings, est.scan.gaps)
 	return t, nil
@@ -165,23 +183,20 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 // incompleteReason sees it as answered: the estimate predicts which sinks
 // cannot be evaluated, not what the model will say.
 func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, plan planner.Plan, findings []report.Finding, t *tierEstimate) (string, error) {
-	red, err := redact.New()
-	if err != nil {
-		return "", err
-	}
 	targets, sinkOf := targetsFor(plan, est.scan, findings)
-	slicer := reader.Slicer{Redactor: red, Tier: rtier, Read: func(path string) ([]byte, error) {
-		return readInRoot(est.repo, path, static.MaxFileBytes)
-	}}
-	rep, err := slicer.Build(targets)
-	if err != nil && !rep.Incomplete {
+	if targetsPastDeadline(ctx, targets, sinkOf, findings) {
+		return reasonDeadline, nil
+	}
+	rep, err := est.slice(ctx, rtier, targets)
+	if err != nil {
 		return "", err
 	}
 	for _, n := range rep.NotEvaluated {
 		findings[sinkOf[n.Hypothesis]].Reason = string(n.Reason)
 	}
 	m := &meter{cache: est.cache}
-	if err := m.readerRequests(ctx, est.cfg.Model, rtier, rep.Slices); err != nil {
+	// Metering builds requests in memory only; the slices are already made.
+	if err := m.readerRequests(context.WithoutCancel(ctx), est.cfg.Model, rtier, rep.Slices); err != nil {
 		return "", err
 	}
 	t.requests = m.requestMeasure
@@ -196,6 +211,25 @@ func (est *estimateRun) measureReads(ctx context.Context, rtier reader.Tier, pla
 		return string(report.SkipRunFull), nil
 	}
 	return "", nil
+}
+
+// slice builds the tier's slices as the scan would, under the deadline:
+// the redactor stops with ctx, and files the slicer never reached are listed
+// as budget, unread.
+func (est *estimateRun) slice(ctx context.Context, rtier reader.Tier, targets []reader.Target) (reader.SliceReport, error) {
+	red, err := redact.NewWithContext(ctx)
+	if err != nil {
+		return reader.SliceReport{}, err
+	}
+	reads := newDeadlineReads(ctx, func(path string) ([]byte, error) {
+		return readInRoot(est.repo, path, static.MaxFileBytes)
+	})
+	rep, err := reader.Slicer{Redactor: red, Tier: rtier, Read: reads.Read}.Build(targets)
+	if err != nil && !rep.Incomplete {
+		return rep, err
+	}
+	reads.relabel(&rep, targets)
+	return rep, nil
 }
 
 // countSkipped counts the sinks that stay not evaluated, by reason.

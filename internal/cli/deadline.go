@@ -23,20 +23,28 @@ var errScanDeadline = errors.New("scan deadline reached (budget.max_seconds)")
 // incomplete.
 const reasonDeadline = string(report.SkipBudget)
 
+// startDeadline cancels ctx with errScanDeadline after seconds. The returned
+// stop disarms it and reports whether it fired.
+func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, seconds int) (stop func() bool) {
+	timer := time.AfterFunc(time.Duration(seconds)*time.Second, func() { cancel(errScanDeadline) })
+	return func() bool {
+		timer.Stop()
+		return errors.Is(context.Cause(ctx), errScanDeadline)
+	}
+}
+
 // scanWithin runs the repository scan and the optional scanners under the
 // scan deadline. Calibration reads no repository text, so the deadline
 // starts after it and a hostile repository cannot spend it there. Each stage
 // lists what the deadline cut; a run it cut stops with reason budget and is
 // never clean.
 func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc, tier calibrate.Tier, stderr io.Writer) (scanResult, error) {
-	limit := time.Duration(s.cfg.Budget.MaxSeconds) * time.Second
-	timer := time.AfterFunc(limit, func() { cancel(errScanDeadline) })
+	stop := startDeadline(ctx, cancel, s.cfg.Budget.MaxSeconds)
 	res, err := s.scan(ctx, tier)
 	if err == nil {
 		res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), stderr)
 	}
-	timer.Stop()
-	if err != nil || !errors.Is(context.Cause(ctx), errScanDeadline) {
+	if fired := stop(); err != nil || !fired {
 		return res, err
 	}
 	fmt.Fprintf(stderr, "creep scan: the scan deadline of %d s (budget.max_seconds) passed; the work left is listed as not evaluated (reason %s)\n", s.cfg.Budget.MaxSeconds, reasonDeadline)

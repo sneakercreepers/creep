@@ -78,24 +78,22 @@ func skipName(r planner.SkipReason) string {
 type readStage struct {
 	model  *models.HTTP
 	tier   reader.Tier
-	slicer reader.Slicer
+	slicer reader.Slicer // its Read is reads.Read
+	reads  *deadlineReads
 }
 
 // run slices and evaluates every hypothesis. It returns the files the
 // slicer could not use and the reason the run stopped early, if it did.
 func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, findings []report.Finding) ([]report.NotEvaluated, string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
-	if ctx.Err() != nil {
-		// Past the deadline: nothing is redacted or sent.
-		for _, t := range targets {
-			findings[sinkOf[t.Hypothesis]].Reason = reasonDeadline
-		}
+	if targetsPastDeadline(ctx, targets, sinkOf, findings) {
 		return nil, reasonDeadline, nil
 	}
 	rep, err := r.slicer.Build(targets)
 	if err != nil && !rep.Incomplete {
 		return nil, "", err
 	}
+	r.reads.relabel(&rep, targets)
 	gaps, incomplete := notEvaluatedFrom(gateway.ScanReport{NotScanned: rep.NotScanned, Incomplete: rep.Incomplete})
 	for _, n := range rep.NotEvaluated {
 		findings[sinkOf[n.Hypothesis]].Reason = string(n.Reason)
