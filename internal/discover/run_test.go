@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"testing"
 
@@ -31,6 +32,41 @@ func runPaths(t *testing.T, tier Tier, paths []string, files map[string]string, 
 }
 
 var honestReply = answering(func(secs []promptSection) any { return honest(secs) })
+
+// A1 (#268 audit): a file the name alone marks as not source is never
+// opened; source files and extensionless files, which only their bytes
+// can classify, are.
+func TestReadsOnlyPossibleSource(t *testing.T) {
+	files := map[string]string{
+		"a.py": "x = 1\n", "bin/serve": "#!/bin/sh\n", "bin/.deploy": "echo hi\n",
+		"package.json": "{}", "Dockerfile": "FROM scratch\n", "notes.md": "os.system(x)\n", "logo.png": "\x00",
+	}
+	var read []string
+	d := Discoverer{
+		Redactor: newRedactor(t), Model: fakeClient(t, honestReply, nil), Tier: TierM, Seed: testSeed,
+		Read: func(p string) ([]byte, error) {
+			read = append(read, p)
+			return []byte(files[p]), nil
+		},
+	}
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	res, err := d.Run(context.Background(), paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(read)
+	if want := []string{"a.py", "bin/.deploy", "bin/serve"}; !slices.Equal(read, want) {
+		t.Errorf("read %v, want only %v", read, want)
+	}
+	for _, f := range res.Files {
+		if f.Coverage != CoverageNotSource && f.Coverage != CoverageReadFull {
+			t.Errorf("file %+v: want not_source or read_full", f)
+		}
+	}
+}
 
 // Every source file discovery cannot read in full is listed with a closed
 // reason, is never sent, and keeps its tripwire hits when redaction let

@@ -121,14 +121,21 @@ func (d Discoverer) newRun(paths []string) (*run, error) {
 // queues it for discovery.
 func (r *run) addFile(ctx context.Context, i int) {
 	w := &r.work[i]
+	e := r.inv.classify(w.path, nil)
+	if e.Language == 0 && !r.inv.needsContent(w.path) {
+		// The name alone says it is not source: never open it.
+		w.file.Manifest, w.file.Container = e.Manifest, e.Container
+		w.file.Coverage = CoverageNotSource
+		return
+	}
 	content, readErr := r.d.Read(w.path)
 	if readErr != nil {
 		content = nil
 	}
-	e := r.inv.classify(w.path, content)
+	e = r.inv.classify(w.path, content)
 	w.file.Language, w.file.Manifest, w.file.Container = e.Language, e.Manifest, e.Container
 	switch {
-	case readErr != nil && (e.Language != 0 || r.inv.needsContent(w.path)):
+	case readErr != nil:
 		w.fail(CoverageNotRead, ReasonReadFailed)
 	case e.Language == 0:
 		w.file.Coverage = CoverageNotSource
