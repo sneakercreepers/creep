@@ -14,7 +14,8 @@ const lockFile = "lock"
 
 // ErrLocked means another open run holds the state directory: a second
 // creep process (or a second run in this one) would interleave its appends
-// with the first run's. Taking the lock never waits.
+// with the first run's. Taking the lock never waits for the holder; Windows
+// only retries a sharing violation for about 200 ms.
 var ErrLocked = errors.New("state directory in use by another creep process; wait for it to finish")
 
 // lock takes the store's exclusive lock without waiting. Closing the

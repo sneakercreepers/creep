@@ -43,7 +43,8 @@ type logFile interface {
 
 // NewRun takes the state directory's lock, creates runs/<id>/events.jsonl
 // with a fresh ID and writes its start line. While another run is open on
-// the directory it fails at once with ErrLocked.
+// the directory it fails with ErrLocked (on Windows after about 200 ms of
+// retries).
 func (s *Store) NewRun(mode Mode) (*Run, error) {
 	if !validMode(mode) {
 		return nil, fmt.Errorf("new run: mode %q: %w", mode, ErrInvalidID)

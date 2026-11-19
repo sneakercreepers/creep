@@ -111,6 +111,38 @@ func TestKeyOriginCatchesBypasses(t *testing.T) {
 	}
 }
 
+// A rename of a watched name fails the check instead of turning a rule off
+// (auditor A1).
+func TestKeyOriginFailsOnRename(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"macKey", "missing type macKey with field b"},
+		{"{ b []byte }", "missing type macKey with field b"},
+		{"Store struct{ key", "missing type Store with field key"},
+		{"newMACKey", "missing function newMACKey"},
+		{"newRun", "missing method Store.newRun"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := keyOriginBase
+			switch tt.name {
+			case "{ b []byte }":
+				src = strings.NewReplacer("{ b []byte }", "{ raw []byte }", "k.b", "k.raw", "{b: s}", "{raw: s}").Replace(src)
+			case "Store struct{ key":
+				src = strings.NewReplacer("Store struct{ key", "Store struct{ mk", "st.key", "st.mk", "s.key", "s.mk").Replace(src)
+			default:
+				src = strings.ReplaceAll(src, tt.name, tt.name+"2")
+			}
+			problems, err := keyOriginProblems(map[string]string{"base.go": src})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(problems, "\n"); !strings.Contains(got, tt.want) {
+				t.Fatalf("problems = %q; want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // sourceImporter is shared so the standard library is type-checked once.
 var sourceImporter = sync.OnceValue(func() types.Importer {
 	return importer.ForCompiler(token.NewFileSet(), "source", nil)
@@ -134,6 +166,9 @@ func keyOriginProblems(files map[string]string) ([]string, error) {
 		return nil, fmt.Errorf("type-check: %w", err)
 	}
 	c := keyChecker{fset: fset, info: info, scope: pkg.Scope()}
+	if missing := missingWatched(pkg.Scope()); len(missing) > 0 {
+		return missing, nil
+	}
 	for _, f := range parsed {
 		for _, decl := range f.Decls {
 			c.decl(decl)
@@ -141,6 +176,52 @@ func keyOriginProblems(files map[string]string) ([]string, error) {
 	}
 	slices.Sort(c.problems)
 	return c.problems, nil
+}
+
+// missingWatched lists each name the rules watch that the package no
+// longer declares, so a rename fails the check instead of switching a rule
+// off.
+func missingWatched(scope *types.Scope) []string {
+	var missing []string
+	for _, name := range []string{"open", "openDir", "newMACKey", "OpenUser", "OpenWithSecret", "userSecret"} {
+		if _, ok := scope.Lookup(name).(*types.Func); !ok {
+			missing = append(missing, "missing function "+name+": the key-origin rules no longer apply")
+		}
+	}
+	for owner, field := range map[string]string{"macKey": "b", "Store": "key", "Run": "key"} {
+		if !hasField(scope, owner, field) {
+			missing = append(missing, "missing type "+owner+" with field "+field+": the key-origin rules no longer apply")
+		}
+	}
+	if !hasMethod(scope, "Store", "newRun") {
+		missing = append(missing, "missing method Store.newRun: the key-origin rules no longer apply")
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+func hasField(scope *types.Scope, owner, field string) bool {
+	tn, ok := scope.Lookup(owner).(*types.TypeName)
+	if !ok {
+		return false
+	}
+	st, ok := tn.Type().Underlying().(*types.Struct)
+	for i := 0; ok && i < st.NumFields(); i++ {
+		if st.Field(i).Name() == field {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMethod(scope *types.Scope, owner, method string) bool {
+	tn, ok := scope.Lookup(owner).(*types.TypeName)
+	if !ok {
+		return false
+	}
+	obj, _, _ := types.LookupFieldOrMethod(types.NewPointer(tn.Type()), false, tn.Pkg(), method)
+	_, isFunc := obj.(*types.Func)
+	return isFunc
 }
 
 type keyChecker struct {

@@ -45,7 +45,8 @@
 //     a fixed pattern, so copying the test key there fails closed.
 //   - One run at a time per state directory: NewRun and Resume take an
 //     exclusive OS lock (flock on Unix, an unshared handle on Windows) held
-//     until Run.Close, and fail at once with ErrLocked instead of waiting, so
+//     until Run.Close, and fail with ErrLocked instead of waiting for the
+//     holder (on Windows after 5 attempts 50 ms apart, about 200 ms), so
 //     two creep processes never interleave appends. The OS drops the lock when
 //     a process dies, so a crash never leaves the directory locked. Load
 //     takes no lock.

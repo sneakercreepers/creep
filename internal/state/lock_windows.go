@@ -20,7 +20,8 @@ const (
 )
 
 // lockOpen opens the lock file with no sharing, so any second open (another
-// creep process, or another run in this one) fails at once. Even a stat of
+// creep process, or another run in this one) fails; lockOpen retries it
+// lockAttempts times, lockRetry apart (about 200 ms). Even a stat of
 // the file fails while it is held, so both count as "in use".
 func (s *Store) lockOpen(name string) (*os.File, error) {
 	for attempt := 1; ; attempt++ {
