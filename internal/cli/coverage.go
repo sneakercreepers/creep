@@ -57,7 +57,7 @@ type coverageInput struct {
 	cal      calibrate.Result
 	findings []report.Finding
 	gapped   bool // a file gap or an early stop: no class can be covered
-	planned  bool // false when the planner refused the input
+	planned  bool // false when the planner refused the input or there was no route to plan
 }
 
 // classCoverage lists every calibrated class, then template injection.

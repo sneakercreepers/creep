@@ -15,6 +15,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
+	"github.com/sneakercreepers/creep/internal/static"
 )
 
 // reportNames are the files scan writes in .creep, per report.formats.
@@ -50,6 +51,9 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 
 func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*report.Report, error) {
 	reason := incompleteReason(res.stop, res.findings, res.gaps)
+	if reason == "" && res.noRoutes {
+		reason = reasonNoRoutes
+	}
 	if reason == "" && res.scanners.failed {
 		reason = reasonScannerFailed
 	}
@@ -72,7 +76,16 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
 		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
+		NoRoutesIn: noRoutesIn(res.noRoutes),
 	})
+}
+
+// noRoutesIn names the frameworks static looked in when it found no route.
+func noRoutesIn(noRoutes bool) []string {
+	if !noRoutes {
+		return nil
+	}
+	return static.FrameworkNames()
 }
 
 // dataHandling summarizes egress.log; a run with no link writes none.
@@ -157,6 +170,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	}
 	w := e.stdout
 	fmt.Fprintf(w, "calibration: %s\n", escapeControl(cal.Header()))
+	printNoRoutes(w, rep.NoRoutesIn)
 	printFindings(w, rep.Findings)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
@@ -192,6 +206,13 @@ func incompleteMark(rep *report.Report) string {
 		}
 	}
 	return fmt.Sprintf("INCOMPLETE RUN (reason %s): %d not evaluated; this is not a clean result", rep.Run.Reason, n)
+}
+
+// printNoRoutes says where static looked when it found no route (#207).
+func printNoRoutes(w io.Writer, frameworks []string) {
+	if len(frameworks) > 0 {
+		fmt.Fprintf(w, "routes: no %s routes found; no class was evaluated\n", strings.Join(frameworks, "/"))
+	}
 }
 
 // printFindings counts findings by status and lists the probable and

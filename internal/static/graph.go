@@ -121,6 +121,32 @@ func (f Framework) String() string {
 	return "unknown"
 }
 
+// lastFramework is the highest Framework; FrameworkNames walks up to it.
+const lastFramework = Express
+
+// FrameworkNames names, for people and in enum order, every framework whose
+// routes static extracts, so a scan that found no route can say where it
+// looked (#207).
+func FrameworkNames() []string {
+	names := make([]string, 0, lastFramework)
+	for f := Flask; f <= lastFramework; f++ {
+		names = append(names, f.title())
+	}
+	return names
+}
+
+func (f Framework) title() string {
+	switch f {
+	case Flask:
+		return "Flask"
+	case FastAPI:
+		return "FastAPI"
+	case Express:
+		return "Express"
+	}
+	return "unknown"
+}
+
 // Methods is a set of HTTP methods.
 type Methods uint16
 
