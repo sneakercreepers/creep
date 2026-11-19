@@ -88,8 +88,6 @@ A package may import only packages in **lower** layers and only those listed in 
 
 These follow semver once v1.0 ships. Before then, any change needs a note in the PR and, if the change breaks a contract, an ADR.
 
-Narrowing what the project file (`./creep.yaml`, the untrusted layer) may set is a security fix, not a contract break: it is recorded in the threat model (R4, R5), README Configuration and the PR contract note, with no ADR. Removing or changing a key in the operator layers (policy, user file, `--config`, flags) breaks the contract and needs an ADR.
-
 | Contract | Where | Versioning |
 |---|---|---|
 | CLI flags and exit codes | `cli`, `exitcode` | semver |
