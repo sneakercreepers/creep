@@ -70,6 +70,14 @@ func TestDetect(t *testing.T) {
 		{"ssh DOCKER_HOST refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "ssh://me@host"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
 		{"local DOCKER_HOST used", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "unix:///run/user/1000/docker.sock"}, [2]Reason{ReasonOK, ReasonNotRunning}, Docker, IsolationRootless},
 		{"remote context refused", fakeRuntime{context: `"tcp://build.example:2376"`, info: dockerRootless}, fakeRuntime{}, nil, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"remote named pipe refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "npipe:////buildhost/pipe/docker_engine"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"loopback named pipe refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "npipe:////127.0.0.1/pipe/dockerDesktopLinuxEngine"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"named pipe with a path refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "npipe:////./pipe/../../host/pipe/x"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"upper-case pipe scheme refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "NPIPE:////./pipe/docker_engine"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"remote pipe context refused", fakeRuntime{context: `"npipe:////server/pipe/docker_engine"`, info: dockerRootless}, fakeRuntime{}, nil, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"relative unix socket refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "unix://docker.sock"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"empty unix socket refused", fakeRuntime{info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "unix:///"}, [2]Reason{ReasonRemoteEndpoint, ReasonNotRunning}, "", IsolationNone},
+		{"local named pipe used", fakeRuntime{info: dockerDesktop}, fakeRuntime{}, map[string]string{"DOCKER_HOST": "npipe:////./pipe/docker_engine"}, [2]Reason{ReasonOK, ReasonNotRunning}, Docker, IsolationVM},
 		{"context name is a flag", fakeRuntime{context: desktopCtx, info: dockerRootless}, fakeRuntime{}, map[string]string{"DOCKER_CONTEXT": "--host=tcp://x"}, [2]Reason{ReasonBadContext, ReasonNotRunning}, "", IsolationNone},
 		{"daemon down", fakeRuntime{context: desktopCtx}, fakeRuntime{}, nil, [2]Reason{ReasonNotRunning, ReasonNotRunning}, "", IsolationNone},
 		{"malformed info", fakeRuntime{context: desktopCtx, info: "{"}, fakeRuntime{info: "not json"}, nil, [2]Reason{ReasonMalformedInfo, ReasonMalformedInfo}, "", IsolationNone},
@@ -88,6 +96,7 @@ func TestDetect(t *testing.T) {
 				start: func(bin string, _ []string) runFunc {
 					return rt[strings.TrimSuffix(filepath.Base(bin), ".exe")].runner(&recorder{})
 				},
+				os: "linux",
 			}
 			rep := detect(context.Background(), Env{Repo: t.TempDir(), Getenv: func(k string) string { return tt.env[k] }}, p)
 			got := [2]Reason{rep.Checked[0].Reason, rep.Checked[1].Reason}
@@ -188,5 +197,44 @@ func TestDetectPrefersConfiguredRuntime(t *testing.T) {
 	}
 	if _, ok := rep.Best(); ok {
 		t.Error("no runtime on PATH, yet one is usable")
+	}
+}
+
+// TestPodmanRemoteRefusedWithoutRunning: a Podman that would be a client
+// of a service elsewhere is refused before it starts, and a local one is
+// always asked with --remote=false.
+func TestPodmanRemoteRefusedWithoutRunning(t *testing.T) {
+	tests := []struct {
+		name string
+		goos string
+		env  map[string]string
+		want Reason
+	}{
+		{"CONTAINER_HOST set", "linux", map[string]string{"CONTAINER_HOST": "ssh://me@build.example/run/podman/podman.sock"}, ReasonRemoteEndpoint},
+		{"CONTAINER_CONNECTION set", "linux", map[string]string{"CONTAINER_CONNECTION": "buildhost"}, ReasonRemoteEndpoint},
+		{"podman machine on Windows", "windows", nil, ReasonRemoteEndpoint},
+		{"podman machine on macOS", "darwin", nil, ReasonRemoteEndpoint},
+		{"local podman", "linux", nil, ReasonOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := &recorder{}
+			bin := fakeBin(t, "podman")
+			p := prober{
+				look:  func(string) (string, error) { return bin, nil },
+				start: func(string, []string) runFunc { return fakeRuntime{info: podmanRootless}.runner(rec) },
+				os:    tt.goos,
+			}
+			st := p.check(context.Background(), Podman, Env{Repo: t.TempDir(), Getenv: func(k string) string { return tt.env[k] }})
+			if st.Reason != tt.want {
+				t.Fatalf("reason %s, want %s", st.Reason, tt.want)
+			}
+			if tt.want != ReasonOK && len(rec.calls) != 0 {
+				t.Errorf("podman ran: %q", rec.calls)
+			}
+			if tt.want == ReasonOK && (len(rec.calls) != 1 || rec.calls[0][0] != "--remote=false") {
+				t.Errorf("info not pinned local: %q", rec.calls)
+			}
+		})
 	}
 }

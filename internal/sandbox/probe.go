@@ -72,16 +72,22 @@ func dockerHost(ctx context.Context, run runFunc, getenv func(string) string) (s
 	return localHost(host)
 }
 
-// localHost accepts unix:// and npipe:// endpoints only.
+// localPipe is a named pipe on this machine. Any other host in a pipe
+// path is a UNC path that Windows opens over SMB, sending NTLM.
+var localPipe = regexp.MustCompile(`^npipe:////\./pipe/[A-Za-z0-9._-]{1,256}$`)
+
+// localHost accepts a unix socket at an absolute path or a named pipe on
+// this machine; anything else could reach another host.
 func localHost(h string) (string, Reason) {
-	scheme, rest, ok := strings.Cut(h, "://")
-	if !ok || rest == "" || len(h) > 4096 || strings.ContainsAny(h, " \t\r\n\x00") {
+	switch {
+	case len(h) > 4096 || strings.ContainsAny(h, " \t\r\n\x00"):
 		return "", ReasonRemoteEndpoint
+	case strings.HasPrefix(h, "unix:///") && len(h) > len("unix:///"):
+		return h, ReasonOK
+	case localPipe.MatchString(h):
+		return h, ReasonOK
 	}
-	if scheme != "unix" && scheme != "npipe" {
-		return "", ReasonRemoteEndpoint
-	}
-	return h, ReasonOK
+	return "", ReasonRemoteEndpoint
 }
 
 func classifyDocker(info dockerInfo, st Status) Status {
@@ -126,10 +132,31 @@ type podmanInfo struct {
 	} `json:"host"`
 }
 
-// probePodman reads Podman's info. A remote service (podman machine, a
-// connection) is refused: creep drives only a local Podman.
+// podmanRemoteEnv are the variables that turn Podman into a client of a
+// service elsewhere. creep never passes them, and an operator who set them
+// wants a remote Podman, which creep refuses without starting it.
+var podmanRemoteEnv = []string{"CONTAINER_HOST", "CONTAINER_CONNECTION"}
+
+// podmanLocal reports whether Podman can run here without a remote
+// service: only on Linux (elsewhere the CLI is always a client of a podman
+// machine) and with no remote variable set. It runs nothing.
+func podmanLocal(goos string, getenv func(string) string) bool {
+	if goos != "linux" {
+		return false
+	}
+	for _, name := range podmanRemoteEnv {
+		if getenv(name) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// probePodman reads Podman's info with --remote=false (globalArgs), so a
+// containers.conf that makes Podman a client is overridden; a service that
+// still reports itself remote is refused: creep drives only a local Podman.
 func probePodman(ctx context.Context, run runFunc, st Status) Status {
-	res, err := run(ctx, []string{"info", "--format", "json"}, infoLimit)
+	res, err := run(ctx, append(globalArgs(st), "info", "--format", "json"), infoLimit)
 	if err != nil || res.exit != 0 {
 		st.Reason = ReasonNotRunning
 		return st

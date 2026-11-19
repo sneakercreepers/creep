@@ -63,6 +63,10 @@ var requiredOptions = []string{
 	"--pids-limit=128", "--memory=512m", "--memory-swap=512m", "--cpus=1", "--ipc=private",
 	"--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
 	"--label=" + LabelManaged + "=true", "--label=" + LabelRun + "=" + testRunID,
+	// Docker copies config.json proxies (credentials included) and Podman
+	// its environment's into containers unless each is set explicitly.
+	"--env=HTTP_PROXY=", "--env=HTTPS_PROXY=", "--env=FTP_PROXY=", "--env=NO_PROXY=", "--env=ALL_PROXY=",
+	"--env=http_proxy=", "--env=https_proxy=", "--env=ftp_proxy=", "--env=no_proxy=", "--env=all_proxy=",
 }
 
 // hardeningProblems checks one `run` argv: every required option, and no
@@ -100,9 +104,15 @@ func allowedOption(o string) bool {
 		return true
 	case strings.HasPrefix(o, "--name=creep-"+testRunID+"-"):
 		return true
+	case strings.HasPrefix(o, "--label="+LabelContainer+"=creep-"+testRunID+"-"):
+		return true
 	case strings.HasPrefix(o, "--env="):
-		name, _, ok := strings.Cut(strings.TrimPrefix(o, "--env="), "=")
-		return ok && envName.MatchString(name)
+		name, value, ok := strings.Cut(strings.TrimPrefix(o, "--env="), "=")
+		proxy := false
+		for _, p := range []string{"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "NO_PROXY", "ALL_PROXY"} {
+			proxy = proxy || strings.EqualFold(name, p)
+		}
+		return ok && envName.MatchString(name) && (!proxy || value == "")
 	case strings.HasPrefix(o, "--mount=type=bind,source="):
 		src, _, _ := strings.Cut(strings.TrimPrefix(o, "--mount=type=bind,source="), ",")
 		return strings.HasSuffix(o, ",readonly") && strings.Count(o, ",") == 3 && !hostPath(src)
@@ -161,19 +171,23 @@ func TestHardeningCheckCatchesWeakenedRun(t *testing.T) {
 		return slices.Insert(slices.Clone(good), i, extra)
 	}
 	weakened := map[string][]string{
-		"privileged":         insert("--privileged"),
-		"cap-add":            insert("--cap-add=SYS_ADMIN"),
-		"host network":       insert("--network=host"),
-		"seccomp unconfined": insert("--security-opt=seccomp=unconfined"),
-		"docker.sock volume": insert("--volume=/var/run/docker.sock:/var/run/docker.sock"),
-		"api socket":         insert("--use-api-socket"),
-		"host env copied":    insert("--env=HOME"),
-		"env file":           insert("--env-file=.env"),
-		"writable mount":     insert("--mount=type=bind,source=/work/a,target=/a"),
-		"socket mount":       insert("--mount=type=bind,source=/run/docker.sock,target=/a,readonly"),
-		"root user":          insert("--user=0"),
-		"device":             insert("--device=/dev/kvm"),
-		"host pid":           insert("--pid=host"),
+		"privileged":              insert("--privileged"),
+		"cap-add":                 insert("--cap-add=SYS_ADMIN"),
+		"host network":            insert("--network=host"),
+		"seccomp unconfined":      insert("--security-opt=seccomp=unconfined"),
+		"docker.sock volume":      insert("--volume=/var/run/docker.sock:/var/run/docker.sock"),
+		"api socket":              insert("--use-api-socket"),
+		"host env copied":         insert("--env=HOME"),
+		"env file":                insert("--env-file=.env"),
+		"writable mount":          insert("--mount=type=bind,source=/work/a,target=/a"),
+		"socket mount":            insert("--mount=type=bind,source=/run/docker.sock,target=/a,readonly"),
+		"root user":               insert("--user=0"),
+		"device":                  insert("--device=/dev/kvm"),
+		"proxy with password":     insert("--env=HTTP_PROXY=http://user:hunter2@proxy.example:3128"),
+		"lower-case proxy":        insert("--env=https_proxy=http://proxy.example:3128"),
+		"mixed-case proxy":        insert("--env=All_Proxy=socks5://proxy.example"),
+		"foreign container label": insert("--label=" + LabelContainer + "=postgres"),
+		"host pid":                insert("--pid=host"),
 	}
 	for i, opt := range good {
 		if slices.Contains(requiredOptions, opt) {
@@ -196,6 +210,7 @@ func TestRunRefusesSpec(t *testing.T) {
 		"bad env name":          {Image: testImage, Env: map[string]string{"A=B": "c"}},
 		"env name is a flag":    {Image: testImage, Env: map[string]string{"-e": "c"}},
 		"newline in env":        {Image: testImage, Env: map[string]string{"A": "x\nB=y"}},
+		"proxy in env":          {Image: testImage, Env: map[string]string{"Https_Proxy": "http://user:pw@proxy"}}, //nolint:gosec // G101: fake credentials a spec must not set
 		"NUL in command":        {Image: testImage, Cmd: []string{"a\x00b"}},
 		"too many arguments":    {Image: testImage, Cmd: make([]string, maxArgs+1)},
 		"timeout too long":      {Image: testImage, Timeout: MaxTimeout + time.Second},
@@ -224,5 +239,28 @@ func TestOpenRefuses(t *testing.T) {
 		if _, err := newSandbox(usableDocker(), id, (&recorder{}).run); !errors.Is(err, ErrSpec) {
 			t.Errorf("run ID %q: %v", id, err)
 		}
+	}
+}
+
+// TestPodmanRunIsLocalAndProxyFree: Podman runs pin the local engine and
+// stop Podman copying its own proxy variables in, besides the profile.
+func TestPodmanRunIsLocalAndProxyFree(t *testing.T) {
+	st := usableDocker()
+	st.Runtime, st.Host = Podman, ""
+	s, err := newSandbox(st, testRunID, (&recorder{}).run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	argv, err := s.runArgs("creep-"+testRunID+"-1", Spec{Image: testImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if argv[0] != "--remote=false" || !slices.Contains(argv, "--http-proxy=false") {
+		t.Errorf("podman run %q", argv)
+	}
+	without := slices.DeleteFunc(slices.Clone(argv), func(a string) bool { return a == "--http-proxy=false" })
+	if p := hardeningProblems(without); len(p) > 0 {
+		t.Errorf("podman run %q: %v", argv, p)
 	}
 }

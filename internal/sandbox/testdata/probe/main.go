@@ -71,9 +71,7 @@ func files() []string {
 	if os.WriteFile("/app/.env", []byte("x"), 0o600) == nil {
 		p = append(p, "mount is writable")
 	}
-	if os.Getenv("APP_ENV") != "test" || os.Getenv("CREEP_API_KEY") != "" {
-		p = append(p, "environment is not the synthetic one")
-	}
+	p = append(p, environment()...)
 	for _, sock := range []string{"/var/run/docker.sock", "/run/docker.sock", "/run/podman/podman.sock"} {
 		if _, err := os.Stat(sock); err == nil {
 			p = append(p, sock+" is mounted")
@@ -82,14 +80,66 @@ func files() []string {
 	return p
 }
 
-// limits reads cgroup v2 limits when the file system shows them.
-func limits() []string {
-	want := map[string]string{"/sys/fs/cgroup/pids.max": "128", "/sys/fs/cgroup/memory.max": "536870912"}
+// runtimeVars are the variables a runtime sets itself; proxyVars must be
+// present only empty. Anything else came from somewhere it should not.
+var (
+	runtimeVars = map[string]bool{"PATH": true, "HOSTNAME": true, "HOME": true, "TERM": true, "container": true}
+	proxyVars   = []string{"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "NO_PROXY", "ALL_PROXY"}
+)
+
+// environment allows exactly the spec's APP_ENV, the runtime's own
+// variables and empty proxy variables.
+func environment() []string {
 	var p []string
-	for file, value := range want {
-		got, err := os.ReadFile(file)
-		if err == nil && strings.TrimSpace(string(got)) != value {
-			p = append(p, fmt.Sprintf("%s = %s", file, strings.TrimSpace(string(got))))
+	if os.Getenv("APP_ENV") != "test" {
+		p = append(p, "APP_ENV missing")
+	}
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		switch {
+		case isProxy(name) && value != "":
+			p = append(p, "proxy variable "+name+" is set")
+		case isProxy(name), runtimeVars[name], name == "APP_ENV":
+		default:
+			p = append(p, "unexpected variable "+name)
+		}
+	}
+	return p
+}
+
+func isProxy(name string) bool {
+	for _, v := range proxyVars {
+		if strings.EqualFold(v, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// limit is one cgroup limit: the cgroup v2 file, then the v1 file, and the
+// value both hold for the profile.
+type limit struct{ v2, v1, want string }
+
+var limitFiles = []limit{
+	{"/sys/fs/cgroup/pids.max", "/sys/fs/cgroup/pids/pids.max", "128"},
+	{"/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes", "536870912"},
+	{"/sys/fs/cgroup/cpu.max", "/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "100000"},
+}
+
+// limits fails when a limit is wrong or cannot be read at all.
+func limits() []string {
+	var p []string
+	for _, l := range limitFiles {
+		got, err := os.ReadFile(l.v2)
+		if err != nil {
+			got, err = os.ReadFile(l.v1)
+		}
+		value := strings.Fields(strings.TrimSpace(string(got)))
+		switch {
+		case err != nil:
+			p = append(p, "cannot read "+l.v2+" or "+l.v1)
+		case len(value) == 0 || value[0] != l.want:
+			p = append(p, fmt.Sprintf("%s = %q, want %s", l.v2, got, l.want))
 		}
 	}
 	return p

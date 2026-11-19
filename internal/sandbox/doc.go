@@ -13,9 +13,10 @@
 //     working directory (final path, links and junctions followed) is
 //     refused, and on Windows only an .exe runs.
 //   - Docker's endpoint is pinned: DOCKER_HOST or the current context must
-//     be a unix socket or a named pipe, and every later call passes it as
-//     --host. A tcp:// or ssh:// endpoint, or a remote Podman service, is
-//     refused: the sandbox never reaches another machine.
+//     be a unix socket at an absolute path or a named pipe on this machine,
+//     and every later call passes it as --host. A tcp:// or ssh:// endpoint,
+//     a pipe on another host, or a Podman that would be a client of a
+//     remote service is refused: the sandbox never reaches another machine.
 //   - The runtime must run Linux containers with seccomp and memory and pids
 //     limits; Detect reports rootless, VM (Docker Desktop) or rootful
 //     isolation, rootless first.
@@ -26,12 +27,14 @@
 //   - Arguments come only from fixed builders. Every container runs with
 //     --network=none, --cap-drop=ALL, no-new-privileges, a read-only root
 //     with a noexec /tmp tmpfs, user 65534, pids, memory and CPU limits,
-//     the runtime's default seccomp profile, --pull=never, a digest-pinned
-//     image and a per-run timeout. Mounts are read-only regular files that
+//     the runtime's default seccomp profile, every proxy variable empty,
+//     --pull=never, a digest-pinned image and a per-run timeout. The CLI
+//     that runs containers reads an empty DOCKER_CONFIG, so the operator's
+//     config.json proxies (and their credentials) never reach a container. Mounts are read-only regular files that
 //     creep wrote in the sandbox's own work directory; the Docker socket,
 //     sockets in general and host credential paths are refused.
 //   - Every container carries creep's labels and its run ID. A timeout or
-//     Ctrl+C removes the container, Close removes the run's containers, and
+//     Ctrl+C removes the container (by label, never by name), Close removes the run's containers, and
 //     Clean (creep clean) removes every creep container a killed run left.
 //
 // No runtime is not an error: scans run as before and findings stay

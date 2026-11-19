@@ -35,13 +35,48 @@ func runName(t *testing.T, rec *recorder) string {
 	return ""
 }
 
+// removed reports that name's container was looked up by this run's and
+// its own label (never by name alone) and the ID found was removed.
 func removed(rec *recorder, name string) bool {
+	looked := false
+	for _, c := range rec.to("ps") {
+		looked = looked || slices.Contains(c, "label="+LabelRun+"="+testRunID) && slices.Contains(c, "label="+LabelContainer+"="+name)
+	}
 	for _, c := range rec.to("rm") {
-		if slices.Contains(c, "--force") && slices.Contains(c, name) {
+		if looked && slices.Contains(c, "--force") && slices.Contains(c, fakeID) && !slices.Contains(c, name) {
 			return true
 		}
 	}
 	return false
+}
+
+// withLabeledContainer answers ps with one ID, as a runtime does when the
+// labeled container exists.
+func withLabeledContainer(reply func(context.Context, []string) (cliResult, error)) func(context.Context, []string) (cliResult, error) {
+	return func(ctx context.Context, args []string) (cliResult, error) {
+		if subcommand(args) == "ps" {
+			return cliResult{stdout: []byte(fakeID + "\n")}, nil
+		}
+		return reply(ctx, args)
+	}
+}
+
+// TestRunNameConflictSparesOtherContainer: when the name is taken by a
+// container without this run's labels, Run fails and removes nothing.
+func TestRunNameConflictSparesOtherContainer(t *testing.T) {
+	rec := &recorder{reply: func(_ context.Context, args []string) (cliResult, error) {
+		if subcommand(args) == "run" {
+			return cliResult{exit: 125}, nil // "the container name is already in use"
+		}
+		return cliResult{}, nil // ps: no container carries this run's labels
+	}}
+	s := testSandbox(t, rec)
+	if _, err := s.Run(context.Background(), Spec{Image: testImage}); !errors.Is(err, ErrStart) {
+		t.Fatalf("err = %v", err)
+	}
+	if rm := rec.to("rm"); len(rm) != 0 {
+		t.Errorf("removed a container it does not own: %q", rm)
+	}
 }
 
 // TestRunCleansUpWhenCut covers timeout, Ctrl+C, a canceled caller and a
@@ -72,7 +107,7 @@ func TestRunCleansUpWhenCut(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := &recorder{reply: tt.reply}
+			rec := &recorder{reply: withLabeledContainer(tt.reply)}
 			s := testSandbox(t, rec)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -133,7 +168,7 @@ func TestCloseRemovesRunContainers(t *testing.T) {
 	if !slices.Contains(ps, "label="+LabelRun+"="+testRunID) || !slices.Contains(ps, "--all") {
 		t.Errorf("ps = %q", ps)
 	}
-	if !removed(rec, fakeID) {
+	if rm := rec.to("rm"); len(rm) != 1 || !slices.Contains(rm[0], fakeID) {
 		t.Errorf("run container not removed: %q", rec.calls)
 	}
 	if _, err := os.Stat(s.work); !os.IsNotExist(err) {

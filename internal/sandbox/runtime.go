@@ -112,6 +112,14 @@ const probeTimeout = 15 * time.Second
 type prober struct {
 	look  func(string) (string, error)
 	start func(bin string, env []string) runFunc
+	os    string // runtime.GOOS when empty
+}
+
+func (p prober) goos() string {
+	if p.os == "" {
+		return runtime.GOOS
+	}
+	return p.os
 }
 
 // Detect checks Docker and Podman, the preferred one first. It runs only
@@ -140,6 +148,10 @@ func (p prober) check(ctx context.Context, rt Runtime, env Env) Status {
 		return st
 	}
 	st.Path, st.env = bin, runtimeEnv(env.Getenv, env.Repo)
+	if rt == Podman && !podmanLocal(p.goos(), env.Getenv) {
+		st.Reason = ReasonRemoteEndpoint
+		return st
+	}
 	run := p.start(bin, st.env)
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()

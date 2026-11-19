@@ -19,22 +19,29 @@ import (
 // elsewhere they skip. They start real containers from a local image whose
 // only program is testdata/probe, so nothing is pulled.
 
-const childEnv = "CREEP_SANDBOX_TEST_CHILD" // image ID for the killed-run child
+const (
+	childEnv   = "CREEP_SANDBOX_TEST_CHILD" // image ID for the killed-run child
+	requireEnv = "CREEP_REQUIRE_SANDBOX"    // set by CI on Linux: a skip there is a failure
+)
 
 func realRuntime(t *testing.T) Status {
 	t.Helper()
-	if testing.Short() {
-		t.Skip("integration test")
-	}
 	rep := Detect(context.Background(), Env{Repo: t.TempDir(), Getenv: os.Getenv})
 	st, ok := rep.Best()
-	if !ok {
+	_, goErr := exec.LookPath("go")
+	switch {
+	case ok && goErr == nil && !testing.Short():
+		t.Logf("integration test on %s (isolation %s)", st.Runtime, st.Isolation)
+		return st
+	case os.Getenv(requireEnv) != "":
+		t.Fatalf("%s is set, so the sandbox integration tests must run: usable %v, go %v, short %v, checked %+v", requireEnv, ok, goErr, testing.Short(), rep.Checked)
+	case testing.Short():
+		t.Skip("integration test")
+	case !ok:
 		t.Skipf("no usable container runtime: %+v", rep.Checked)
 	}
-	if _, err := exec.LookPath("go"); err != nil {
-		t.Skip("no go tool to build the probe")
-	}
-	return st
+	t.Skip("no go tool to build the probe")
+	return Status{}
 }
 
 // cli runs the runtime CLI for the test's own setup and inspection.
@@ -107,6 +114,9 @@ func writeImageTar(t *testing.T, archive, bin string) {
 func TestRealContainerIsHardened(t *testing.T) {
 	st := realRuntime(t)
 	image := probeImage(t, st)
+	// The operator's docker config sets proxies with a password; none of it
+	// may reach the container (the probe fails on any proxy variable).
+	st.env = withEnv(st.env, "DOCKER_CONFIG", proxiedDockerConfig(t))
 	s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()))
 	if err != nil {
 		t.Fatal(err)

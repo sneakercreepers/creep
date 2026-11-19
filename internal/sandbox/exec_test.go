@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"slices"
 	"testing"
@@ -46,6 +47,43 @@ func TestThroughRealExec(t *testing.T) {
 	rm := callsTo(calls, "rm")
 	if len(rm) != 1 || !slices.Contains(rm[0], fakeID) {
 		t.Errorf("rm calls %q", rm)
+	}
+}
+
+// TestOperatorProxiesNeverReachContainers is the protection test for the
+// operator's proxy settings: the CLI that starts a container reads an
+// empty DOCKER_CONFIG, every proxy variable is set empty, and a spec cannot
+// set one. The broken path (the operator's config passed to run) is caught.
+func TestOperatorProxiesNeverReachContainers(t *testing.T) {
+	bin := installFake(t, "docker")
+	st := usableDocker()
+	st.Path, st.env = bin, []string{"DOCKER_CONFIG=" + proxiedDockerConfig(t)}
+	s, err := Open(st, testRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	res, err := s.Run(context.Background(), Spec{Image: testImage})
+	if err != nil || res.ExitCode != 3 {
+		t.Fatalf("Run = %+v, %v (exit 42: the operator's docker config reached run)", res, err)
+	}
+	for _, argv := range callsTo(fakeCalls(t, bin), "run") {
+		if p := hardeningProblems(argv); len(p) > 0 {
+			t.Errorf("run %q: %v", argv, p)
+		}
+	}
+	for _, name := range []string{"HTTP_PROXY", "https_proxy", "All_Proxy", "no_proxy"} {
+		if _, err := s.Run(context.Background(), Spec{Image: testImage, Env: map[string]string{name: "http://x"}}); !errors.Is(err, ErrSpec) {
+			t.Errorf("spec env %s: %v", name, err)
+		}
+	}
+	broken := newExecRunner(bin, st.env)
+	argv, err := s.runArgs("creep-"+testRunID+"-9", Spec{Image: testImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res, err := broken(context.Background(), argv, 1024); err != nil || res.exit != 42 {
+		t.Errorf("run with the operator's config was not caught: exit %d, %v", res.exit, err)
 	}
 }
 

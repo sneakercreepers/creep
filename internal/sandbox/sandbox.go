@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -16,8 +17,9 @@ import (
 // Labels on every container creep starts. LabelManaged marks creep's
 // containers for creep clean; LabelRun ties one to its run.
 const (
-	LabelManaged = "io.github.sneakercreepers.creep.managed"
-	LabelRun     = "io.github.sneakercreepers.creep.run"
+	LabelManaged   = "io.github.sneakercreepers.creep.managed"
+	LabelRun       = "io.github.sneakercreepers.creep.run"
+	LabelContainer = "io.github.sneakercreepers.creep.container" // the container's own name, so cleanup never acts on a name alone
 )
 
 // cleanupTimeout bounds removing containers after a run, a timeout or an
@@ -59,7 +61,31 @@ func Open(st Status, runID string) (*Sandbox, error) {
 	if !st.Usable() || st.Path == "" {
 		return nil, fmt.Errorf("open sandbox on %s (%s): %w", st.Runtime, st.Reason, ErrUnusable)
 	}
-	return newSandbox(st, runID, newExecRunner(st.Path, st.env))
+	s, err := newSandbox(st, runID, nil)
+	if err != nil {
+		return nil, err
+	}
+	config := filepath.Join(s.work, "docker-config")
+	if err := os.Mkdir(config, 0o700); err != nil {
+		_ = os.RemoveAll(s.work)
+		return nil, fmt.Errorf("open sandbox: %w", err)
+	}
+	s.run = newExecRunner(st.Path, withEnv(st.env, "DOCKER_CONFIG", config))
+	return s, nil
+}
+
+// withEnv replaces or adds one variable. The sandbox's CLI gets an empty
+// DOCKER_CONFIG: the endpoint is pinned with --host, so it needs no
+// context, and the operator's config.json would add its proxies, with any
+// credentials, to every container.
+func withEnv(env []string, name, value string) []string {
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, name+"=") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, name+"="+value)
 }
 
 func newSandbox(st Status, runID string, run runFunc) (*Sandbox, error) {
@@ -85,9 +111,14 @@ func newSandbox(st Status, runID string, run runFunc) (*Sandbox, error) {
 // global is the flags before the subcommand: Docker's pinned endpoint.
 func (s *Sandbox) global() []string { return globalArgs(s.status) }
 
+// globalArgs pins where the CLI connects: Docker's checked endpoint, and
+// Podman's local engine even when its config asks for a remote one.
 func globalArgs(st Status) []string {
-	if st.Runtime == Docker && st.Host != "" {
+	switch {
+	case st.Runtime == Docker && st.Host != "":
 		return []string{"--host=" + st.Host}
+	case st.Runtime == Podman:
+		return []string{"--remote=false"}
 	}
 	return []string{}
 }
@@ -150,7 +181,9 @@ func (s *Sandbox) interruptible(ctx context.Context) (context.Context, func()) {
 func (s *Sandbox) remove(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cancel()
-	_, _ = s.run(ctx, append(s.global(), "rm", "--force", name), infoLimit)
+	// By label, never by name: a name conflict means another container,
+	// which may not be creep's, already has the name.
+	_, _ = removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID, LabelContainer+"="+name)
 }
 
 // Close removes every container of this run and the work directory. It is

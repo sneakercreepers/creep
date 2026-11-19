@@ -62,15 +62,31 @@ var (
 	envName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 )
 
+// proxyVars are the proxy variables a runtime copies into containers on
+// its own: Docker from the proxies in the operator's config.json (with any
+// credentials in the URL), Podman from its environment. Each is set empty
+// in every container, and a spec may not set one.
+var proxyVars = []string{
+	"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "NO_PROXY", "ALL_PROXY",
+	"http_proxy", "https_proxy", "ftp_proxy", "no_proxy", "all_proxy",
+}
+
 // hardenedFlags are the run options every container gets, in order.
-func hardenedFlags() []string {
-	return []string{
+func hardenedFlags(rt Runtime) []string {
+	flags := []string{
 		"--rm", "--pull=never", "--network=none",
 		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--read-only", "--tmpfs=" + tmpfsMount, "--user=" + containerUser,
 		"--pids-limit=" + pidsLimit, "--memory=" + memoryLimit, "--memory-swap=" + memoryLimit,
 		"--cpus=" + cpuLimit, "--ipc=private",
 	}
+	if rt == Podman {
+		flags = append(flags, "--http-proxy=false")
+	}
+	for _, name := range proxyVars {
+		flags = append(flags, "--env="+name+"=")
+	}
+	return flags
 }
 
 // runArgs is the only builder of a `run` command line: the global flags,
@@ -85,8 +101,8 @@ func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 		return nil, err
 	}
 	args := append(s.global(), "run", "--name="+name)
-	args = append(args, hardenedFlags()...)
-	args = append(args, "--label="+LabelManaged+"=true", "--label="+LabelRun+"="+s.runID)
+	args = append(args, hardenedFlags(s.status.Runtime)...)
+	args = append(args, "--label="+LabelManaged+"=true", "--label="+LabelRun+"="+s.runID, "--label="+LabelContainer+"="+name)
 	args = append(args, envArgs(spec.Env)...)
 	args = append(args, mounts...)
 	args = append(args, spec.Image)
@@ -108,11 +124,21 @@ func checkSpec(spec Spec) error {
 		}
 	}
 	for name, v := range spec.Env {
-		if !envName.MatchString(name) || !plainValue(v) {
+		if !envName.MatchString(name) || !plainValue(v) || isProxyVar(name) {
 			return fmt.Errorf("env %q: %w", name, ErrSpec)
 		}
 	}
 	return nil
+}
+
+// isProxyVar matches proxy names in any case: Go and curl read both forms.
+func isProxyVar(name string) bool {
+	for _, p := range proxyVars {
+		if strings.EqualFold(p, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // plainValue refuses NUL and line breaks, which no argument or variable

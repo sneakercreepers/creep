@@ -32,10 +32,13 @@ func Clean(ctx context.Context, st Status) (int, error) {
 	return removeLabeled(ctx, newExecRunner(st.Path, st.env), st, LabelManaged+"=true")
 }
 
-// removeLabeled lists the containers carrying label (key=value) and
-// force-removes them in batches.
-func removeLabeled(ctx context.Context, run runFunc, st Status, label string) (int, error) {
-	list := append(globalArgs(st), "ps", "--all", "--quiet", "--no-trunc", "--filter", "label="+label)
+// removeLabeled lists the containers carrying every label (key=value; the
+// runtime ANDs the filters) and force-removes them in batches.
+func removeLabeled(ctx context.Context, run runFunc, st Status, labels ...string) (int, error) {
+	list := append(globalArgs(st), "ps", "--all", "--quiet", "--no-trunc")
+	for _, l := range labels {
+		list = append(list, "--filter", "label="+l)
+	}
 	res, err := run(ctx, list, infoLimit)
 	if err != nil {
 		return 0, fmt.Errorf("list %s containers: %w", st.Runtime, err)

@@ -34,6 +34,10 @@ func fakeMain(mode string, args []string) int {
 		fmt.Println(why)
 		return 42
 	}
+	if why := checkRunConfig(args); why != "" {
+		fmt.Println(why)
+		return 42
+	}
 	switch mode {
 	case "flood":
 		_, _ = io.WriteString(os.Stdout, strings.Repeat("x", 3<<20))
@@ -86,6 +90,21 @@ func checkEnv() string {
 		return "repository PATH entry leaked"
 	case strings.Contains(wd, "planted-repo"):
 		return "working directory is the repository"
+	}
+	return ""
+}
+
+// checkRunConfig fails a run unless DOCKER_CONFIG is an empty directory:
+// a real docker would add the proxies of any config.json it finds there
+// to the container's environment.
+func checkRunConfig(args []string) string {
+	if subcommand(args) != "run" {
+		return ""
+	}
+	dir := os.Getenv("DOCKER_CONFIG")
+	entries, err := os.ReadDir(dir)
+	if dir == "" || err != nil || len(entries) != 0 {
+		return "run reads the operator's docker config"
 	}
 	return ""
 }
@@ -166,10 +185,25 @@ func hostileEnv(t *testing.T, fakeDir string) (func(string) string, string) {
 	vars := map[string]string{
 		"PATH":          strings.Join([]string{repo, "relative/bin", fakeDir}, string(filepath.ListSeparator)),
 		"CREEP_API_KEY": "sk-secret", "GITHUB_TOKEN": "ghp_x", "HTTPS_PROXY": "http://evil:8080",
-		"DOCKER_HOST": "", "HOME": t.TempDir(),
+		"DOCKER_HOST": "", "HOME": t.TempDir(), "DOCKER_CONFIG": proxiedDockerConfig(t),
 	}
 	if runtime.GOOS != "windows" {
 		vars["TMPDIR"] = os.TempDir()
 	}
 	return func(k string) string { return vars[k] }, repo
+}
+
+// proxyConfig is a Docker client config whose proxies a real docker run
+// would add to the container, password included.
+const proxyConfig = `{"proxies":{"default":{"httpProxy":"http://user:hunter2@proxy.example:3128","httpsProxy":"http://user:hunter2@proxy.example:3128","noProxy":"internal.example"}}}` //nolint:gosec // G101: a fake proxy password the test proves never reaches a container
+
+// proxiedDockerConfig is an operator DOCKER_CONFIG directory holding
+// proxyConfig.
+func proxiedDockerConfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(proxyConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
