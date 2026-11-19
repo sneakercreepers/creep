@@ -1,0 +1,264 @@
+# Tripwire table (ADR 0017): sink signatures for every language.
+# One row per signature: <kind> TAB <signature> TAB <fixture line>.
+# kind is a planner sink kind: sql, nosql, shell, file, http_client or
+# template. Code evaluation and deserialization run code, so their rows use
+# shell until the planner has kinds for them. A signature is a plain byte
+# string of 2 to 64 bytes, matched case-sensitively on each line of the
+# redacted file, comments and strings included. A signature that starts
+# with an identifier byte (A-Z, a-z, 0-9, _) must not follow one, so
+# "open(" does not match "fopen(". The fixture line must match its row
+# (tripwire_test.go). A hit is a candidate for the reader, never a finding.
+#
+# SQL
+sql	execute(	cursor.execute(query)
+sql	executemany(	cur.executemany(sql, rows)
+sql	executescript(	conn.executescript(script)
+sql	exec_query(	ActiveRecord::Base.connection.exec_query(sql)
+sql	.raw(	User.objects.raw(sql)
+sql	.query(	db.query(`SELECT * FROM t WHERE id = ${id}`)
+sql	Query(	rows, err := db.Query(q)
+sql	QueryContext(	rows, err := db.QueryContext(ctx, q)
+sql	QueryRow(	row := db.QueryRow(q)
+sql	QueryRowContext(	row := db.QueryRowContext(ctx, q)
+sql	Exec(	_, err := db.Exec(q)
+sql	ExecContext(	_, err := db.ExecContext(ctx, q)
+sql	executeQuery(	ResultSet rs = stmt.executeQuery(sql);
+sql	executeUpdate(	stmt.executeUpdate(sql);
+sql	createQuery(	em.createQuery(jpql)
+sql	createNativeQuery(	em.createNativeQuery(sql)
+sql	createSQLQuery(	session.createSQLQuery(sql)
+sql	prepareStatement(	conn.prepareStatement(sql)
+sql	mysqli_query(	$r = mysqli_query($db, $sql);
+sql	mysql_query(	$r = mysql_query($sql);
+sql	pg_query(	$r = pg_query($conn, $sql);
+sql	find_by_sql(	User.find_by_sql(sql)
+sql	FromSqlRaw(	ctx.Users.FromSqlRaw(sql)
+sql	ExecuteSqlRaw(	ctx.Database.ExecuteSqlRaw(sql);
+sql	.SqlQuery	db.Database.SqlQuery<User>(sql)
+sql	ExecuteNonQuery(	cmd.ExecuteNonQuery();
+sql	ExecuteReader(	var r = cmd.ExecuteReader();
+sql	ExecuteScalar(	var n = cmd.ExecuteScalar();
+sql	new SqlCommand(	var cmd = new SqlCommand(sql, conn);
+sql	whereRaw(	knex("users").whereRaw(clause)
+sql	orderByRaw(	knex("users").orderByRaw(order)
+sql	$queryRawUnsafe(	await prisma.$queryRawUnsafe(sql)
+sql	$executeRawUnsafe(	await prisma.$executeRawUnsafe(sql)
+sql	.unsafe(	await sql.unsafe(query)
+sql	sqlx::query	let rows = sqlx::query(&q).fetch_all(&pool).await?;
+sql	sql_query(	diesel::sql_query(q).load(conn)
+#
+# NoSQL
+nosql	.find(	db.users.find({ name: req.query.name })
+nosql	.findOne(	await User.findOne({ username })
+nosql	.findOneAndUpdate(	Model.findOneAndUpdate(filter, update)
+nosql	.findOneAndDelete(	Model.findOneAndDelete(filter)
+nosql	.findById(	Model.findById(req.params.id)
+nosql	.aggregate(	coll.aggregate(pipeline)
+nosql	$where	db.users.find({ $where: expr })
+nosql	.updateOne(	coll.updateOne(filter, update)
+nosql	.updateMany(	coll.updateMany(filter, update)
+nosql	.deleteOne(	coll.deleteOne(filter)
+nosql	.deleteMany(	coll.deleteMany(filter)
+nosql	.replaceOne(	coll.replaceOne(filter, doc)
+nosql	.countDocuments(	coll.countDocuments(filter)
+nosql	.find_one(	users.find_one({"name": name})
+nosql	.update_one(	users.update_one(f, u)
+nosql	.delete_one(	users.delete_one(f)
+nosql	.Find(ctx	cur, err := coll.Find(ctx, filter)
+nosql	.FindOne(ctx	err := coll.FindOne(ctx, filter).Decode(&u)
+nosql	.Aggregate(ctx	cur, err := coll.Aggregate(ctx, pipeline)
+#
+# Shell and process execution
+shell	system(	system($cmd);
+shell	popen(	f = popen(cmd, "r");
+shell	subprocess.	subprocess.run(cmd, shell=True)
+shell	child_process	const cp = require("child_process");
+shell	exec(	exec(`ping -c 1 ${host}`)
+shell	execSync(	execSync(cmd)
+shell	execFile(	execFile(bin, args)
+shell	execFileSync(	execFileSync(bin, args)
+shell	spawn(	spawn(cmd, { shell: true })
+shell	spawnSync(	spawnSync(cmd)
+shell	exec.Command(	out, err := exec.Command("sh", "-c", c).Output()
+shell	exec.CommandContext(	cmd := exec.CommandContext(ctx, name)
+shell	os.system(	os.system(cmd)
+shell	os.popen(	os.popen(cmd)
+shell	Runtime.getRuntime().exec(	Runtime.getRuntime().exec(cmd);
+shell	ProcessBuilder(	new ProcessBuilder(cmd).start();
+shell	shell_exec(	$o = shell_exec($cmd);
+shell	passthru(	passthru($cmd);
+shell	proc_open(	$p = proc_open($cmd, $spec, $pipes);
+shell	pcntl_exec(	pcntl_exec($path, $args);
+shell	Process.Start(	Process.Start(fileName, args);
+shell	Command::new(	Command::new("sh").arg("-c").arg(c).output()
+shell	%x(	out = %x(ls #{dir})
+shell	%x{	out = %x{ls #{dir}}
+shell	IO.popen(	IO.popen(cmd)
+shell	Open3.	Open3.capture2(cmd)
+shell	Kernel.system(	Kernel.system(cmd)
+shell	System.cmd(	System.cmd("sh", ["-c", c])
+# Code evaluated from a string (planned as shell)
+shell	eval(	eval(req.body.expr)
+shell	new Function(	const f = new Function(src);
+shell	setTimeout("	setTimeout("run(" + x + ")", 10)
+shell	instance_eval(	obj.instance_eval(code)
+shell	class_eval(	klass.class_eval(code)
+shell	module_eval(	mod.module_eval(code)
+shell	create_function(	$f = create_function('$a', $code);
+shell	runInNewContext(	vm.runInNewContext(code, sandbox)
+shell	runInThisContext(	vm.runInThisContext(code)
+shell	runInContext(	vm.runInContext(code, ctx)
+shell	vm.Script(	new vm.Script(code)
+shell	Code.eval_string(	Code.eval_string(code)
+shell	loadstring(	local f = loadstring(code)
+shell	assert($	assert($code);
+# Objects decoded from bytes or text (planned as shell)
+shell	pickle.load	obj = pickle.loads(data)
+shell	cPickle.load	obj = cPickle.loads(data)
+shell	dill.load	obj = dill.loads(data)
+shell	jsonpickle.decode(	obj = jsonpickle.decode(data)
+shell	marshal.load	obj = marshal.loads(data)
+shell	yaml.load(	cfg = yaml.load(body)
+shell	yaml.unsafe_load(	cfg = yaml.unsafe_load(body)
+shell	yaml.full_load(	cfg = yaml.full_load(body)
+shell	YAML.load(	cfg = YAML.load(body)
+shell	Psych.load(	cfg = Psych.load(body)
+shell	Marshal.load(	obj = Marshal.load(data)
+shell	unserialize(	$o = unserialize($_COOKIE['s']);
+shell	ObjectInputStream(	new ObjectInputStream(in).readObject();
+shell	.readObject(	Object o = ois.readObject();
+shell	XMLDecoder(	new XMLDecoder(in).readObject();
+shell	XStream(	new XStream().fromXML(xml);
+shell	BinaryFormatter	var f = new BinaryFormatter();
+shell	NetDataContractSerializer	var s = new NetDataContractSerializer();
+shell	LosFormatter	var f = new LosFormatter();
+shell	TypeNameHandling	TypeNameHandling = TypeNameHandling.All
+shell	torch.load(	model = torch.load(path)
+shell	joblib.load(	model = joblib.load(path)
+#
+# Files opened, read, written or served by path
+file	open(	with open(path) as f:
+file	fopen(	$f = fopen($path, 'r');
+file	send_file(	return send_file(os.path.join(UPLOAD_DIR, name))
+file	send_from_directory(	return send_from_directory(DIR, name)
+file	FileResponse(	return FileResponse(path)
+file	safe_join(	p = safe_join(root, name)
+file	sendFile(	res.sendFile(file, { root })
+file	.download(	res.download(file)
+file	readFile(	fs.readFile(p, cb)
+file	readFileSync(	fs.readFileSync(p)
+file	writeFile(	fs.writeFile(p, data, cb)
+file	writeFileSync(	fs.writeFileSync(p, data)
+file	createReadStream(	fs.createReadStream(p).pipe(res)
+file	createWriteStream(	fs.createWriteStream(p)
+file	unlink(	fs.unlink(p, cb)
+file	os.Open(	f, err := os.Open(p)
+file	os.OpenFile(	f, err := os.OpenFile(p, flag, 0o600)
+file	os.ReadFile(	b, err := os.ReadFile(p)
+file	os.WriteFile(	err := os.WriteFile(p, b, 0o600)
+file	os.Create(	f, err := os.Create(p)
+file	os.Remove	err := os.RemoveAll(p)
+file	ioutil.ReadFile(	b, err := ioutil.ReadFile(p)
+file	ServeFile(	http.ServeFile(w, r, p)
+file	http.Dir(	http.FileServer(http.Dir(root))
+file	file_get_contents(	$s = file_get_contents($path);
+file	file_put_contents(	file_put_contents($path, $data);
+file	readfile(	readfile($path);
+file	include(	include($page);
+file	include $	include $page;
+file	include_once	include_once $page;
+file	require_once	require_once $page;
+file	require $	require $page;
+file	new File(	File f = new File(base, name);
+file	new FileInputStream(	InputStream in = new FileInputStream(p);
+file	new FileReader(	Reader r = new FileReader(p);
+file	new FileOutputStream(	OutputStream o = new FileOutputStream(p);
+file	Files.read	byte[] b = Files.readAllBytes(p);
+file	Files.write	Files.write(p, b);
+file	Files.newInputStream(	InputStream in = Files.newInputStream(p);
+file	Paths.get(	Path p = Paths.get(base, name);
+file	File.ReadAll	var s = File.ReadAllText(p);
+file	File.WriteAll	File.WriteAllText(p, s);
+file	File.Open	var f = File.OpenRead(p);
+file	PhysicalFile(	return PhysicalFile(p, "application/octet-stream");
+file	File.read(	s = File.read(path)
+file	File.open(	File.open(path)
+file	File.new(	f = File.new(path)
+file	IO.read(	s = IO.read(path)
+file	send_data(	send_data(File.read(p))
+file	shutil.	shutil.copy(src, dst)
+file	os.remove(	os.remove(path)
+file	fs::read	let s = fs::read_to_string(p)?;
+file	fs::write	fs::write(p, b)?;
+file	File::open(	let f = File::open(p)?;
+file	File::create(	let f = File::create(p)?;
+file	Path(	data = Path(base, name).read_text()
+#
+# Outbound HTTP or network requests
+http_client	requests.	resp = requests.get(url, timeout=5)
+http_client	urlopen(	urllib.request.urlopen(url)
+http_client	urllib.request.	req = urllib.request.Request(url)
+http_client	httpx.	resp = httpx.post(hook.url, json=body)
+http_client	aiohttp.	async with aiohttp.ClientSession() as s:
+http_client	fetch(	const r = await fetch(url)
+http_client	axios	const r = await axios.get(url)
+http_client	got(	const r = await got(url)
+http_client	needle(	needle("get", url)
+http_client	superagent	superagent.get(url)
+http_client	http.get(	http.get(url, cb)
+http_client	https.get(	https.get(url, cb)
+http_client	http.request(	http.request(opts, cb)
+http_client	https.request(	https.request(opts, cb)
+http_client	http.Get(	resp, err := http.Get(u)
+http_client	http.Post(	resp, err := http.Post(u, "application/json", body)
+http_client	http.Head(	resp, err := http.Head(u)
+http_client	http.NewRequest(	req, err := http.NewRequest("GET", u, nil)
+http_client	http.NewRequestWithContext(	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+http_client	curl_init(	$ch = curl_init($url);
+http_client	curl_exec(	$r = curl_exec($ch);
+http_client	fsockopen(	$s = fsockopen($host, 80);
+http_client	file_get_contents($	$s = file_get_contents($url);
+http_client	GuzzleHttp	$c = new GuzzleHttp\Client();
+http_client	HttpClient	var c = HttpClient.newHttpClient();
+http_client	RestTemplate	restTemplate = new RestTemplate();
+http_client	WebClient	WebClient.create(url)
+http_client	OkHttpClient	OkHttpClient c = new OkHttpClient();
+http_client	HttpURLConnection	HttpURLConnection c = (HttpURLConnection) u.openConnection();
+http_client	new URL(	URL u = new URL(target);
+http_client	.openConnection(	URLConnection c = u.openConnection();
+http_client	.GetAsync(	var r = await client.GetAsync(url);
+http_client	.PostAsync(	var r = await client.PostAsync(url, body);
+http_client	.SendAsync(	var r = await client.SendAsync(req);
+http_client	Net::HTTP	Net::HTTP.get(URI(url))
+http_client	URI.open(	URI.open(url).read
+http_client	HTTParty	HTTParty.get(url)
+http_client	Faraday	Faraday.get(url)
+http_client	RestClient.	RestClient.get(url)
+http_client	reqwest::	let r = reqwest::get(url).await?;
+http_client	ureq::	let r = ureq::get(url).call()?;
+http_client	HTTPoison.	HTTPoison.get(url)
+#
+# Templates rendered from a string
+template	render_template_string(	return render_template_string(body)
+template	Template(	t = Template(source)
+template	from_string(	t = env.from_string(source)
+template	Environment(	env = Environment(loader=BaseLoader())
+template	ejs.render(	ejs.render(tpl, data)
+template	ejs.compile(	ejs.compile(tpl)
+template	pug.render(	pug.render(tpl)
+template	pug.compile(	pug.compile(tpl)
+template	nunjucks.renderString(	nunjucks.renderString(tpl, ctx)
+template	Handlebars.compile(	Handlebars.compile(tpl)
+template	handlebars.compile(	handlebars.compile(tpl)
+template	Mustache.render(	Mustache.render(tpl, view)
+template	mustache.render(	mustache.render(tpl, view)
+template	_.template(	const t = _.template(tpl)
+template	template.HTML(	return template.HTML(s)
+template	template.New(	t := template.New("x").Parse(s)
+template	Velocity	Velocity.evaluate(ctx, w, "t", tpl);
+template	createTemplate(	$t = $twig->createTemplate($tpl);
+template	SpringTemplateEngine	SpringTemplateEngine engine = new SpringTemplateEngine();
+template	ERB.new(	ERB.new(tpl).result(binding)
+template	Liquid::Template.parse(	Liquid::Template.parse(tpl)
+template	render inline:	render inline: params[:tpl]
+template	Razor.Parse(	Razor.Parse(tpl, model)
