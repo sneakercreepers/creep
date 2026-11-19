@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/scanrun"
 	"github.com/sneakercreepers/creep/internal/static"
 )
 
@@ -81,6 +83,27 @@ func checkNoRoutesOutput(t *testing.T, out string, noRoutes bool) {
 	if got := strings.Contains(string(md), "**No "+frameworks+" routes found.**"); got != noRoutes {
 		t.Errorf("Markdown names the frameworks: %v, want %v\n%s", got, noRoutes, md)
 	}
+	if noRoutes {
+		checkNoCoverageClaim(t, out, string(md))
+	}
+}
+
+// checkNoCoverageClaim wants a run with no route never to read as if
+// everything was evaluated (#248): no "0 not evaluated" in the text, no
+// "Every file was evaluated" in Markdown, and the mark says why.
+func checkNoCoverageClaim(t *testing.T, out, md string) {
+	t.Helper()
+	for _, claim := range []string{"0 not evaluated", "Every file was evaluated"} {
+		if strings.Contains(out, claim) || strings.Contains(md, claim) {
+			t.Errorf("a run with no route claims %q\ntext:\n%s\nMarkdown:\n%s", claim, out, md)
+		}
+	}
+	if !strings.Contains(out, "static found no route, so no class was evaluated") {
+		t.Errorf("incomplete mark does not say no route was found:\n%s", out)
+	}
+	if !strings.Contains(md, "Static analysis found no route, so no file was evaluated") {
+		t.Errorf("Markdown Not evaluated section does not say no route was found:\n%s", md)
+	}
 }
 
 // checkClassStatuses wants every class not evaluated when there was no
@@ -109,9 +132,42 @@ func TestScanNoRoutesOtherFormats(t *testing.T) {
 		t.Run(format, func(t *testing.T) {
 			cfg := scanRepo(t, djangoViews, "gates:\n  pr: none\n")
 			code, _, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--format", format, "--config", cfg)
-			if code != exitcode.Incomplete || !strings.Contains(errOut, "INCOMPLETE RUN (reason no_routes)") {
+			if code != exitcode.Incomplete || !strings.Contains(errOut, "INCOMPLETE RUN (reason no_routes): static found no route") {
 				t.Fatalf("exit %d, stderr %q", code, errOut)
 			}
+			if strings.Contains(errOut, "0 not evaluated") {
+				t.Errorf("stderr mark claims nothing was left out: %q", errOut)
+			}
+		})
+	}
+}
+
+// ADR 0009 amendment: no_routes comes after the file gaps and before a
+// failed scanner, so swapping the checks in buildReport fails here (#248).
+// The scanner still runs and is listed failed whatever the reason.
+func TestNoRoutesReasonOrder(t *testing.T) {
+	tests := []struct {
+		name   string
+		files  map[string]string
+		reason string
+	}{
+		{"no route ahead of a failed scanner", djangoViews, reasonNoRoutes},
+		{"file gap ahead of no route and a failed scanner", map[string]string{"broken.py": "def f(:\n"}, string(report.SkipSyntaxError)},
+		{"failed scanner when a route was found", map[string]string{"app.py": helloRoute}, reasonScannerFailed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := scanRepo(t, tt.files, "scanners:\n  enabled: [gitleaks]\n")
+			t.Setenv("PATH", placeTool(t, "gitleaks"))
+			deps := fakeDeps(&fakeModel{}, calibrate.TierM)
+			deps.runScanner = func(context.Context, scanrun.Job) scanrun.Result {
+				return scanrun.Result{Outcome: scanrun.Failed, Failure: scanrun.FailTimeout}
+			}
+			code, out, errOut := runScanWith(deps, "scan", "--config", cfg)
+			if code != exitcode.Incomplete || !strings.Contains(out, "scanner gitleaks: failed") {
+				t.Fatalf("exit %d, want %d with gitleaks failed\nstdout:\n%s\nstderr:\n%s", code, exitcode.Incomplete, out, errOut)
+			}
+			checkJSONReport(t, tt.reason)
 		})
 	}
 }
