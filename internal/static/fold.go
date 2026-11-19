@@ -95,7 +95,7 @@ func jsEscape(s string) (int, string) {
 	case c == 'u':
 		return unicodeEscape(s)
 	case c == 'x' && len(s) >= 3 && hexValue(s[1]) >= 0 && hexValue(s[2]) >= 0:
-		return 3, string(rune(hexValue(s[1])<<4 | hexValue(s[2])))
+		return 3, string(hexNumber(s[1:3]))
 	case strings.HasPrefix(s, "\r\n"):
 		return 2, ""
 	case c == '\r' || c == '\n':
@@ -117,7 +117,7 @@ func jsEscape(s string) (int, string) {
 // string of unclosed escapes costs linear time.
 func unicodeEscape(s string) (int, string) {
 	if len(s) >= 5 && allHex(s[1:5]) {
-		return 5, string(rune(hexNumber(s[1:5])))
+		return 5, string(hexNumber(s[1:5]))
 	}
 	if len(s) < 2 || s[1] != '{' {
 		return 1, "u"
@@ -130,7 +130,7 @@ func unicodeEscape(s string) (int, string) {
 	if end == 2 || end == len(s) || s[end] != '}' || len(digits) > 6 || hexNumber(digits) > utf8.MaxRune {
 		return 1, "u"
 	}
-	return end + 1, string(rune(hexNumber(digits)))
+	return end + 1, string(hexNumber(digits))
 }
 
 // octalEscape decodes a legacy octal escape: up to three digits, at most
@@ -144,14 +144,14 @@ func octalEscape(s string) (int, string) {
 	return n, string(rune(v))
 }
 
-func hexValue(c byte) int {
+func hexValue(c byte) rune {
 	switch {
 	case '0' <= c && c <= '9':
-		return int(c - '0')
+		return rune(c - '0')
 	case 'a' <= c && c <= 'f':
-		return int(c-'a') + 10
+		return rune(c-'a') + 10
 	case 'A' <= c && c <= 'F':
-		return int(c-'A') + 10
+		return rune(c-'A') + 10
 	}
 	return -1
 }
@@ -165,8 +165,8 @@ func allHex(s string) bool {
 	return true
 }
 
-func hexNumber(s string) int {
-	v := 0
+func hexNumber(s string) rune {
+	var v rune
 	for i := 0; i < len(s); i++ {
 		v = v<<4 | hexValue(s[i])
 	}
