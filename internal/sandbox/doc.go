@@ -29,7 +29,7 @@
 //     with a noexec /tmp tmpfs, user 65534, pids, memory and CPU limits,
 //     the runtime's default seccomp profile, no log file (--log-driver=none),
 //     every proxy variable empty, --pull=never, a digest-pinned image and a
-//     per-run timeout. An image that declares a VOLUME is refused, since its
+//     per-container timeout. An image that declares a VOLUME is refused, since its
 //     volume would be writable past --read-only.
 //   - The CLI that runs containers reads an empty DOCKER_CONFIG, so the
 //     operator's config.json proxies and their credentials never reach a

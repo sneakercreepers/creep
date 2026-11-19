@@ -25,39 +25,48 @@ const (
 	requireEnv = "CREEP_REQUIRE_SANDBOX"    // set by CI on Linux: a skip there is a failure
 )
 
-// realRuntimes is every usable runtime, so Podman is exercised wherever it
-// works and not only when it is the best one.
+// realRuntimes is every runtime Detect checked, so Podman is exercised
+// wherever it works and not only when it is the best one. It skips the
+// test unless at least one is usable (and fails it when CI requires one).
 func realRuntimes(t *testing.T) []Status {
 	t.Helper()
 	rep := Detect(context.Background(), Env{Repo: t.TempDir(), Getenv: os.Getenv})
-	var usable []Status
-	for _, st := range rep.Checked {
-		if st.Usable() {
-			usable = append(usable, st)
-		} else {
-			t.Logf("%s not usable: %s", st.Runtime, st.Reason)
-		}
-	}
+	usable := slices.ContainsFunc(rep.Checked, Status.Usable)
 	_, goErr := exec.LookPath("go")
 	switch {
-	case len(usable) > 0 && goErr == nil && !testing.Short():
-		return usable
+	case usable && goErr == nil && !testing.Short():
+		return rep.Checked
 	case os.Getenv(requireEnv) != "":
-		t.Fatalf("%s is set, so the sandbox integration tests must run: usable %d, go %v, short %v, checked %+v", requireEnv, len(usable), goErr, testing.Short(), rep.Checked)
+		t.Fatalf("%s is set, so the sandbox integration tests must run: usable %v, go %v, short %v, checked %s", requireEnv, usable, goErr, testing.Short(), reasons(rep))
 	case testing.Short():
 		t.Skip("integration test")
-	case len(usable) == 0:
-		t.Skipf("no usable container runtime: %+v", rep.Checked)
+	case !usable:
+		t.Skipf("no usable container runtime: %s", reasons(rep))
 	}
 	t.Skip("no go tool to build the probe")
 	return nil
 }
 
-// eachRuntime runs test once per usable runtime, as a subtest named after it.
+// reasons names each checked runtime and why it is or is not usable, and
+// nothing of the environment it would run with.
+func reasons(rep Report) string {
+	var out []string
+	for _, st := range rep.Checked {
+		out = append(out, string(st.Runtime)+": "+string(st.Reason))
+	}
+	return strings.Join(out, ", ")
+}
+
+// eachRuntime runs test once per runtime, as a subtest named after it; an
+// unusable runtime's subtest skips with the reason, so `go test -v` (as in
+// CI logs) shows which runtimes were exercised and why the others were not.
 func eachRuntime(t *testing.T, test func(t *testing.T, st Status)) {
 	for _, st := range realRuntimes(t) {
 		t.Run(string(st.Runtime), func(t *testing.T) {
-			t.Logf("isolation %s", st.Isolation)
+			if !st.Usable() {
+				t.Skipf("%s not usable: %s", st.Runtime, st.Reason)
+			}
+			t.Logf("%s, isolation %s", st.Runtime, st.Isolation)
 			test(t, st)
 		})
 	}
@@ -274,7 +283,7 @@ func TestKilledRunChild(t *testing.T) {
 	}
 	image, runID, rt := args[0], args[1], Runtime(args[2])
 	usable := realRuntimes(t)
-	i := slices.IndexFunc(usable, func(st Status) bool { return st.Runtime == rt })
+	i := slices.IndexFunc(usable, func(st Status) bool { return st.Runtime == rt && st.Usable() })
 	if i < 0 {
 		t.Fatalf("%s is not usable in the child", rt)
 	}
