@@ -11,9 +11,9 @@ import (
 // stateDir is the run-state directory, relative to the scanned project.
 const stateDir = ".creep"
 
-// runResume checks that the run can be resumed, then fails closed: the scan
-// pipeline that would continue it is not built yet, and a resume that exits
-// 0 having scanned nothing must not pass a CI gate.
+// runResume checks that the run can be resumed, then fails closed:
+// continuing a run from its recorded steps is not built, and a resume that
+// exits 0 having scanned nothing must not pass a CI gate.
 func runResume(e env, args []string) int {
 	if len(args) != 1 {
 		printError(e.stderr, "creep resume", fmt.Errorf("want exactly one run ID, got %d arguments", len(args)))
@@ -24,7 +24,7 @@ func runResume(e env, args []string) int {
 		printError(e.stderr, "creep resume", err)
 		return exitcode.ConfigError
 	}
-	fmt.Fprintf(e.stderr, "creep resume: run %s (%s) has %d completed steps; continuing it needs scan, not implemented yet (see the v0.1 milestone)\n",
+	fmt.Fprintf(e.stderr, "creep resume: run %s (%s) has %d completed steps; continuing a run is not implemented yet, so start a new one with creep scan\n",
 		sum.ID, sum.Mode, len(sum.Steps))
 	return exitcode.ConfigError
 }

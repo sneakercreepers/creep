@@ -113,11 +113,11 @@ func TestFlagPositions(t *testing.T) {
 		notWantStderr []string
 	}{
 		{"valid flag after positional", []string{"scan", ".", "--format", "sarif"}, exitcode.ConfigError, []string{"creep scan: "}, []string{"invalid"}},
-		{"invalid flag after positional", []string{"scan", ".", "--format", "xml"}, exitcode.ConfigError, []string{`invalid --format "xml"`}, []string{"not implemented yet (see"}},
+		{"invalid flag after positional", []string{"scan", ".", "--format", "xml"}, exitcode.ConfigError, []string{`invalid --format "xml"`}, []string{"not implemented yet"}},
 		{"invalid flag with equals after positional", []string{"scan", ".", "--format=bogus"}, exitcode.ConfigError, []string{`invalid --format "bogus"`}, nil},
 		{"invalid flag before positional", []string{"scan", "--format=bogus", "."}, exitcode.ConfigError, []string{`invalid --format "bogus"`}, nil},
 		{"invalid log level between positionals", []string{"scan", "a", "--log-level", "loud", "b"}, exitcode.ConfigError, []string{"invalid --log-level"}, nil},
-		{"unknown flag after positional", []string{"scan", ".", "--bogus"}, exitcode.ConfigError, []string{"bogus", "Usage:"}, []string{"not implemented yet (see"}},
+		{"unknown flag after positional", []string{"scan", ".", "--bogus"}, exitcode.ConfigError, []string{"bogus", "Usage:"}, []string{"not implemented yet"}},
 		{"double dash ends flags", []string{"scan", "--", "--format=bogus"}, exitcode.ConfigError, []string{"current directory"}, []string{"invalid"}},
 		{"double dash after positional", []string{"scan", ".", "--", "--bogus"}, exitcode.ConfigError, []string{"current directory"}, []string{"bogus"}},
 		{"flag after double dash is positional", []string{"version", "--", "--format=json"}, exitcode.ConfigError, []string{`unexpected arguments: ["--format=json"]`}, nil},
@@ -160,7 +160,7 @@ func TestStubsFailClosed(t *testing.T) {
 			if code != exitcode.ConfigError {
 				t.Errorf("exit code = %d, want %d", code, exitcode.ConfigError)
 			}
-			assertContains(t, "stderr", stderr, []string{"not implemented yet (see "})
+			assertContains(t, "stderr", stderr, []string{"not implemented yet"})
 		})
 	}
 }

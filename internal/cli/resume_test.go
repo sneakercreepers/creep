@@ -43,7 +43,7 @@ func makeRuns(t *testing.T) (open, ended, corrupt string) {
 	return ids[0], ids[1], ids[2]
 }
 
-// Every resume outcome exits 2 until scan exists: a resume that scanned
+// Every resume outcome exits 2 while continuing a run is not built: a resume that scanned
 // nothing must never pass a CI gate.
 func TestResumeFailsClosed(t *testing.T) {
 	isolateUserConfig(t)
@@ -68,7 +68,7 @@ func TestResumeFailsClosed(t *testing.T) {
 		{"unknown run", []string{"resume", "20260101T000000Z-00000000"}, "run 20260101T000000Z-00000000"},
 		{"ended run", []string{"resume", ended}, "run already ended"},
 		{"corrupt run", []string{"resume", corrupt}, "state file corrupt"},
-		{"resumable run", []string{"resume", open}, "has 1 completed steps; continuing it needs scan"},
+		{"resumable run", []string{"resume", open}, "has 1 completed steps; continuing a run is not implemented yet"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
