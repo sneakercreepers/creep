@@ -48,18 +48,18 @@ A package may import only packages in **lower** layers and only those listed in 
 1        internal/config         exitcode presets
 1        internal/redact         -
 1        internal/gitindex       gitindex/gitindextest
+1        internal/repofile       -
 2        internal/gateway        config redact exitcode
 2        internal/gateway/gatewaytest -
 3        internal/models         gateway config
 3        internal/state          config
-4        internal/static         state config
 4        internal/calibrate      models gateway redact state config
 4        internal/planner        models state config
-4        internal/reader         models gateway redact state config
-4        internal/discover       models gateway redact state config
+4        internal/reader         models gateway redact state config repofile
+4        internal/discover       models gateway redact state config repofile
 5        internal/report         state config buildinfo
-5        internal/scanrun        static
-5        internal/sandbox        static
+5        internal/scanrun        repofile
+5        internal/sandbox        repofile
 6        internal/verify         sandbox state config
 6        internal/mcp            report state config
 7        internal/cli            *

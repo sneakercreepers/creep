@@ -14,7 +14,7 @@ type Span struct {
 	End   uint32
 }
 
-// SinkKind has the same values as static.SinkKind and planner.SinkKind, so
+// SinkKind has the same values as planner.SinkKind, so
 // the caller maps it by explicit switch. The zero value is not a kind.
 type SinkKind uint8
 
@@ -57,7 +57,7 @@ func (k SinkKind) String() string {
 	return "unknown"
 }
 
-// Methods has the same bits as planner.Methods and static.Methods.
+// Methods has the same bits as planner.Methods.
 type Methods uint16
 
 // HTTP methods. MethodOther stands for any other or unknown method.

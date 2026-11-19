@@ -12,7 +12,7 @@ import (
 )
 
 // Class is the vulnerability class a hypothesis names. The caller maps the
-// static sink kind to it, since reader may not import static.
+// discovered sink kind to it, since reader may not import discover.
 type Class uint8
 
 // Classes. The zero value is not a class.
@@ -43,7 +43,7 @@ func (c Class) String() string {
 }
 
 // Target is one route→sink hypothesis: where its handler and sink are, as
-// 1-based lines of the file at Path (static.Locations has both).
+// 1-based lines of the file at Path (discover.Result has both).
 type Target struct {
 	Hypothesis HypothesisID
 	Class      Class

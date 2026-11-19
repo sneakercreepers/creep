@@ -24,7 +24,7 @@ func probeKind(k planner.SinkKind) bool {
 // Every discover.SinkKind (those with a name) maps to a planner kind, every
 // kind the planner accepts is the image of one, and an unknown kind fails
 // closed. A kind added on either side fails here until it is mapped or
-// named in pendingKinds (#201 added static.SinkNoSQL; #212 mapped it).
+// named in pendingKinds (#201 added SinkNoSQL; #212 mapped it).
 func TestSinkKindMappingIsExhaustive(t *testing.T) {
 	mapped := map[planner.SinkKind]bool{}
 	for k := discover.SinkKind(1); k != 0; k++ {

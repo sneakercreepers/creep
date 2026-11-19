@@ -22,7 +22,7 @@
 //     a file that fits no batch is too_large, never split. Every call goes
 //     through models.Complete and the caller's client, the gateway in
 //     production. Each file is a "FILE n (language, count lines):" header
-//     and its lines as "N| text", escaped (escape.go), so no repository
+//     and its lines as "N| text", escaped (repofile.EscapeLines), so no repository
 //     line can pass for a header. Prompts are versioned data per tier
 //     (prompts/, PromptVersion) with token-budget tests.
 //

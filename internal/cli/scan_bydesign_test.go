@@ -102,7 +102,7 @@ func TestScanDoesNotTrustDeclaredSkips(t *testing.T) {
 // when git tracks nothing in it. A committed mark, a committed file in an
 // installed tree, a tree inside a submodule, and a scan with no readable
 // index all read the code like first-party code: a route there is
-// evaluated, and a file static cannot read makes the run incomplete.
+// evaluated.
 func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 	express := map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}
 	none := []string(nil)

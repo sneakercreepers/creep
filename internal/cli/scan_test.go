@@ -173,11 +173,11 @@ func TestScanFailsBeforeReport(t *testing.T) {
 	}
 }
 
-// #201 put Express in static and #212 made its NoSQL sinks readable: the
-// login query of the Express testdata app (line 43) is reported, the
-// ObjectId lookup (line 61) is evaluated and discarded, and nosql_injection
-// is covered, so the complete run trips the gate. The recorded run replays
-// to the same output with no model call.
+// The tripwire alone (the model proposes nothing) finds the Express
+// testdata app's NoSQL sinks (#212, ADR 0017): the login query (line 43)
+// is reported, the ObjectId lookup (line 61) is evaluated and discarded,
+// and nosql_injection is covered, so the complete run trips the gate. The
+// recorded run replays to the same output with no model call.
 func TestScanExpressApp(t *testing.T) {
 	cfg := scanRepo(t, map[string]string{"app.js": "@express"}, "")
 	m := &fakeModel{verdict: map[string]string{"command_injection": "vulnerable", "nosql_injection@43": "vulnerable"}}

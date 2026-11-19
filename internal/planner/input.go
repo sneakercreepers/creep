@@ -5,14 +5,14 @@ import (
 	"fmt"
 )
 
-// RouteID and SinkID are the static graph's IDs. The caller copies them
-// from static.Graph, since planner may not import static.
+// RouteID and SinkID are discovery's IDs. The caller copies them
+// from discover.Result, since planner may not import discover.
 type (
 	RouteID uint32
 	SinkID  uint32
 )
 
-// Methods is a set of HTTP methods with the same bits as static.Methods.
+// Methods is a set of HTTP methods with the same bits as discover.Methods.
 type Methods uint16
 
 // HTTP methods. MethodOther stands for a method list that is not literal or
@@ -37,7 +37,7 @@ const (
 )
 
 // SinkKind is the class of a dangerous call, with the same values as
-// static.SinkKind. The zero value is not a kind.
+// discover.SinkKind. The zero value is not a kind.
 type SinkKind uint8
 
 // Sink kinds.
@@ -88,8 +88,8 @@ type Budget struct {
 type Route struct {
 	ID      RouteID
 	Methods Methods
-	// Authenticated is set when static saw an auth decorator, dependency
-	// or call on the route. It is a name-based hint, not proof.
+	// Authenticated is a hint that the route checks auth. Discovery never
+	// sets it (ADR 0017: model output never lowers risk), so it is false.
 	Authenticated bool
 }
 

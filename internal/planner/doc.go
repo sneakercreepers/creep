@@ -12,8 +12,8 @@
 //     sequence, map, interface, func, chan or float); text_test.go walks
 //     the types by reflection and fails the build's tests if one appears,
 //     and checks that Build takes nothing else. The caller copies
-//     static.Graph and calibrate.Tier into Input, since planner may import
-//     neither static nor reader (the layer table enforces it).
+//     discover.Result and calibrate.Tier into Input, since planner may import
+//     neither discover nor reader (the layer table enforces it).
 //
 //   - Plan, the output, is a closed schema of IDs and enums with no
 //     free-text field; the same walk guards it. Every input sink appears
@@ -24,7 +24,7 @@
 //     enum values, duplicate or dangling IDs, a zero step cost or more than
 //     2^20 routes or sinks. Error messages hold only numbers.
 //
-// Ranking is deterministic and needs no model: the static facts already say
+// Ranking is deterministic and needs no model: the discovered facts already say
 // what matters, and a model call here would add cost and an output to
 // trust without adding information. Sinks are ordered by Risk (High: an
 // argument that can carry input on a route with no auth seen and no bound

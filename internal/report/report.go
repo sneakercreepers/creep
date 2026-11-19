@@ -56,17 +56,18 @@ const (
 	// SkipLinesShifted is reader.FileLinesShifted: redaction joined lines
 	// (a multi-line key), so no slice of the file could be numbered.
 	SkipLinesShifted SkipReason = "lines_shifted"
-	// Static analysis (ADR 0009). Vendor, generated and minified files are
-	// left out by design; the rest are gaps in the run.
+	// The walk and discovery (ADR 0009, ADR 0017 D2). Vendor, generated and
+	// minified files are left out by design; the rest are gaps in the run.
 	SkipVendor      SkipReason = "vendor"
 	SkipGenerated   SkipReason = "generated"
 	SkipMinified    SkipReason = "minified"
-	SkipNotRegular  SkipReason = "not_regular"          // a link or special file with a source extension
-	SkipInvalidPath SkipReason = "invalid_path"         // static refused the repo-relative name
-	SkipParseFailed SkipReason = "parse_failed"         // the parser hit a limit or failed
-	SkipSyntaxError SkipReason = "syntax_error"         // partial: routes in the broken region may be missing
-	SkipTruncated   SkipReason = "truncated"            // partial: a route or sink cap cut the file
-	SkipUnsupported SkipReason = "unsupported_language" // a source language static cannot extract yet
+	SkipNotRegular  SkipReason = "not_regular"  // a link or special file named as source
+	SkipInvalidPath SkipReason = "invalid_path" // the walk refused the repo-relative name
+	SkipParseFailed SkipReason = "parse_failed" // discovery's reply was invalid or missed the batch's canary
+	SkipTruncated   SkipReason = "truncated"    // partial: a tripwire or reply cap cut the file
+	// Kept for JSON v1 readers: no run since ADR 0017 emits these two.
+	SkipSyntaxError SkipReason = "syntax_error"
+	SkipUnsupported SkipReason = "unsupported_language"
 )
 
 var skipReasons = map[SkipReason]bool{
