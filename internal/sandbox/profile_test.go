@@ -16,18 +16,25 @@ const (
 )
 
 // recorder is a fake runtime CLI: it records every argv and answers with
-// reply, or exit 0 and no output.
+// reply, or exit 0 and no output. An image inspect gets image, or an image
+// without volumes.
 type recorder struct {
 	mu    sync.Mutex
 	calls [][]string
 	reply func(ctx context.Context, args []string) (cliResult, error)
+	image *cliResult
 }
 
 func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, slices.Clone(args))
 	r.mu.Unlock()
-	if r.reply != nil {
+	switch {
+	case subcommand(args) == "image" && r.image != nil:
+		return *r.image, nil
+	case subcommand(args) == "image":
+		return cliResult{stdout: []byte("null\n")}, nil
+	case r.reply != nil:
 		return r.reply(ctx, args)
 	}
 	return cliResult{}, nil
@@ -61,6 +68,7 @@ var requiredOptions = []string{
 	"--rm", "--pull=never", "--network=none", "--cap-drop=ALL",
 	"--security-opt=no-new-privileges", "--read-only", "--user=65534:65534",
 	"--pids-limit=128", "--memory=512m", "--memory-swap=512m", "--cpus=1", "--ipc=private",
+	"--log-driver=none", // the runtime would otherwise copy all container output to host disk, unbounded
 	"--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
 	"--label=" + LabelManaged + "=true", "--label=" + LabelRun + "=" + testRunID,
 	// Docker copies config.json proxies (credentials included) and Podman

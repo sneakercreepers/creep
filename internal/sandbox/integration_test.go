@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -24,24 +25,42 @@ const (
 	requireEnv = "CREEP_REQUIRE_SANDBOX"    // set by CI on Linux: a skip there is a failure
 )
 
-func realRuntime(t *testing.T) Status {
+// realRuntimes is every usable runtime, so Podman is exercised wherever it
+// works and not only when it is the best one.
+func realRuntimes(t *testing.T) []Status {
 	t.Helper()
 	rep := Detect(context.Background(), Env{Repo: t.TempDir(), Getenv: os.Getenv})
-	st, ok := rep.Best()
+	var usable []Status
+	for _, st := range rep.Checked {
+		if st.Usable() {
+			usable = append(usable, st)
+		} else {
+			t.Logf("%s not usable: %s", st.Runtime, st.Reason)
+		}
+	}
 	_, goErr := exec.LookPath("go")
 	switch {
-	case ok && goErr == nil && !testing.Short():
-		t.Logf("integration test on %s (isolation %s)", st.Runtime, st.Isolation)
-		return st
+	case len(usable) > 0 && goErr == nil && !testing.Short():
+		return usable
 	case os.Getenv(requireEnv) != "":
-		t.Fatalf("%s is set, so the sandbox integration tests must run: usable %v, go %v, short %v, checked %+v", requireEnv, ok, goErr, testing.Short(), rep.Checked)
+		t.Fatalf("%s is set, so the sandbox integration tests must run: usable %d, go %v, short %v, checked %+v", requireEnv, len(usable), goErr, testing.Short(), rep.Checked)
 	case testing.Short():
 		t.Skip("integration test")
-	case !ok:
+	case len(usable) == 0:
 		t.Skipf("no usable container runtime: %+v", rep.Checked)
 	}
 	t.Skip("no go tool to build the probe")
-	return Status{}
+	return nil
+}
+
+// eachRuntime runs test once per usable runtime, as a subtest named after it.
+func eachRuntime(t *testing.T, test func(t *testing.T, st Status)) {
+	for _, st := range realRuntimes(t) {
+		t.Run(string(st.Runtime), func(t *testing.T) {
+			t.Logf("isolation %s", st.Isolation)
+			test(t, st)
+		})
+	}
 }
 
 // cli runs the runtime CLI for the test's own setup and inspection.
@@ -57,8 +76,9 @@ func cli(t *testing.T, st Status, args ...string) string {
 }
 
 // probeImage builds testdata/probe for Linux and imports it as an image
-// holding that one file, removed after the test.
-func probeImage(t *testing.T, st Status) string {
+// holding that one file, with any --change instructions, removed after
+// the test.
+func probeImage(t *testing.T, st Status, changes ...string) string {
 	t.Helper()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "probe")
@@ -69,7 +89,11 @@ func probeImage(t *testing.T, st Status) string {
 	}
 	archive := filepath.Join(dir, "image.tar")
 	writeImageTar(t, archive, bin)
-	id := cli(t, st, "import", archive)
+	args := []string{"import"}
+	for _, c := range changes {
+		args = append(args, "--change", c)
+	}
+	id := cli(t, st, append(args, archive)...)
 	if !strings.HasPrefix(id, "sha256:") {
 		id = "sha256:" + id
 	}
@@ -112,7 +136,10 @@ func writeImageTar(t *testing.T, archive, bin string) {
 // root, writable /tmp, no network, synthetic .env read-only, no runtime
 // socket, cgroup limits), then the runtime's own record of a live one.
 func TestRealContainerIsHardened(t *testing.T) {
-	st := realRuntime(t)
+	eachRuntime(t, realContainerIsHardened)
+}
+
+func realContainerIsHardened(t *testing.T, st Status) {
 	image := probeImage(t, st)
 	// The operator's docker config sets proxies with a password; none of it
 	// may reach the container (the probe fails on any proxy variable).
@@ -139,6 +166,25 @@ func TestRealContainerIsHardened(t *testing.T) {
 	}
 }
 
+// TestRealImageVolumesRefused: an image that declares a VOLUME, which
+// would get a writable host volume past --read-only, starts nothing.
+func TestRealImageVolumesRefused(t *testing.T) {
+	eachRuntime(t, func(t *testing.T, st Status) {
+		image := probeImage(t, st, "VOLUME /data")
+		s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+		if _, err := s.Run(context.Background(), Spec{Image: image, Cmd: []string{"/probe", "check"}}); !errors.Is(err, ErrImageVolumes) {
+			t.Fatalf("image with a VOLUME: %v", err)
+		}
+		if left := cli(t, st, "ps", "--all", "--quiet", "--filter", "label="+LabelRun+"="+s.runID); left != "" {
+			t.Errorf("a container was created: %s", left)
+		}
+	})
+}
+
 // hostConfig is the part of `docker inspect` the test checks.
 type hostConfig struct {
 	CapDrop        []string
@@ -150,6 +196,7 @@ type hostConfig struct {
 	Memory         int64
 	NanoCpus       int64
 	Binds          []string
+	LogConfig      struct{ Type string }
 }
 
 func inspectLive(t *testing.T, st Status, s *Sandbox, image string) {
@@ -168,7 +215,7 @@ func inspectLive(t *testing.T, st Status, s *Sandbox, image string) {
 	}
 	if len(hc.CapDrop) != 1 || !strings.EqualFold(strings.TrimPrefix(hc.CapDrop[0], "CAP_"), "ALL") || hc.Privileged ||
 		!hc.ReadonlyRootfs || hc.NetworkMode != "none" || hc.PidsLimit != 128 || hc.Memory != 512<<20 ||
-		hc.NanoCpus != 1e9 || len(hc.Binds) != 0 || !strings.Contains(strings.Join(hc.SecurityOpt, ","), "no-new-privileges") {
+		hc.NanoCpus != 1e9 || len(hc.Binds) != 0 || hc.LogConfig.Type != "none" || !strings.Contains(strings.Join(hc.SecurityOpt, ","), "no-new-privileges") {
 		t.Errorf("host config %+v", hc)
 	}
 	if left := cli(t, st, "ps", "--all", "--quiet", "--filter", "label="+LabelRun+"="+s.runID); left != "" {
@@ -190,7 +237,10 @@ func waitForContainer(t *testing.T, st Status, label string) string {
 // TestKilledRunIsCleaned kills a creep process (a child test binary)
 // while its container runs, then checks creep clean removes the orphan.
 func TestKilledRunIsCleaned(t *testing.T) {
-	st := realRuntime(t)
+	eachRuntime(t, killedRunIsCleaned)
+}
+
+func killedRunIsCleaned(t *testing.T, st Status) {
 	image := probeImage(t, st)
 	runID := "itest-" + strings.ToLower(uniqueSuffix())
 	self, err := os.Executable()
@@ -198,7 +248,7 @@ func TestKilledRunIsCleaned(t *testing.T) {
 		t.Fatal(err)
 	}
 	child := exec.Command(self, "-test.run=^TestKilledRunChild$")
-	child.Env = append(os.Environ(), childEnv+"="+image+" "+runID)
+	child.Env = append(os.Environ(), childEnv+"="+image+" "+runID+" "+string(st.Runtime))
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -218,12 +268,17 @@ func TestKilledRunIsCleaned(t *testing.T) {
 
 // TestKilledRunChild is the creep process TestKilledRunIsCleaned kills.
 func TestKilledRunChild(t *testing.T) {
-	image, runID, ok := strings.Cut(os.Getenv(childEnv), " ")
-	if !ok {
+	args := strings.Fields(os.Getenv(childEnv))
+	if len(args) != 3 {
 		t.Skip("run by TestKilledRunIsCleaned only")
 	}
-	st := realRuntime(t)
-	s, err := Open(st, runID)
+	image, runID, rt := args[0], args[1], Runtime(args[2])
+	usable := realRuntimes(t)
+	i := slices.IndexFunc(usable, func(st Status) bool { return st.Runtime == rt })
+	if i < 0 {
+		t.Fatalf("%s is not usable in the child", rt)
+	}
+	s, err := Open(usable[i], runID)
 	if err != nil {
 		t.Fatal(err)
 	}

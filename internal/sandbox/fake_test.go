@@ -58,6 +58,8 @@ func answer(args []string) int {
 		fmt.Println(`{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`)
 	case "ps":
 		fmt.Println(fakeID)
+	case "image":
+		fmt.Println("null")
 	case "run":
 		fmt.Print("poc output")
 		return 3

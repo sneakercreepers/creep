@@ -132,6 +132,9 @@ func (s *Sandbox) Run(ctx context.Context, spec Spec) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if err := s.checkImage(ctx, spec.Image); err != nil {
+		return Result{}, err
+	}
 	ctx, done := s.interruptible(ctx)
 	defer done()
 	runCtx, cancel := context.WithTimeout(ctx, timeoutOf(spec))

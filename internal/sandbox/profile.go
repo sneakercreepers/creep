@@ -72,13 +72,15 @@ var proxyVars = []string{
 }
 
 // hardenedFlags are the run options every container gets, in order.
+// --log-driver=none: the attached CLI still gets stdout (capped), but the
+// runtime keeps no log file of its own, which no limit would bound.
 func hardenedFlags(rt Runtime) []string {
 	flags := []string{
 		"--rm", "--pull=never", "--network=none",
 		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--read-only", "--tmpfs=" + tmpfsMount, "--user=" + containerUser,
 		"--pids-limit=" + pidsLimit, "--memory=" + memoryLimit, "--memory-swap=" + memoryLimit,
-		"--cpus=" + cpuLimit, "--ipc=private",
+		"--cpus=" + cpuLimit, "--ipc=private", "--log-driver=none",
 	}
 	if rt == Podman {
 		flags = append(flags, "--http-proxy=false")
