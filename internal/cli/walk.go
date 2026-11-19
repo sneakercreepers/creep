@@ -48,7 +48,11 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 			}
 			return nil
 		}
-		if reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d); gap {
+		reason, gap := addRepoFile(ctx, ex, p, proofs, rel, lang, d)
+		if !gap && lang == static.Python && shadowsTrustedModule(rel) {
+			reason, gap = report.SkipTruncated, true
+		}
+		if gap {
 			gaps = append(gaps, report.NotEvaluated{Path: rel, Reason: reason})
 		}
 		return ctx.Err()

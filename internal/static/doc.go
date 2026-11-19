@@ -127,7 +127,11 @@
 // destructured, reached through .call or an aliased getattr), and in a
 // file with routes an unread dynamic import, marks the file truncated
 // (receiverEscapes in escape.go and pyescape.go, which list the benign
-// uses).
+// uses). A benign use is tied to what it is called on: a mount only on a
+// known app or router, createServer only from node core, uvicorn.run and
+// CORS only as imports, which callers distrust when the repository holds a
+// module of that name (ShadowsTrustedModule). A function that returns an
+// app is followed to its calls in the file.
 //
 // DetectScanners looks the optional external scanners (gitleaks,
 // osv-scanner, semgrep) up on PATH and never runs them (ADR 0010). The

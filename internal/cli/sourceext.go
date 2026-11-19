@@ -62,3 +62,13 @@ func routeFree(proofs *vendorProofs, rel string) bool {
 	}
 	return !static.MayHoldAnyRoute(src)
 }
+
+// shadowsTrustedModule reports whether a first-party Python file would be
+// imported in place of a package static trusts with an app (uvicorn.run,
+// flask_cors.CORS): Python searches the script's own directory first, so
+// a repository uvicorn.py makes uvicorn.run(app) code static does not
+// read. A file under a vendor directory is the installed package.
+func shadowsTrustedModule(rel string) bool {
+	why, err := static.IgnoreReason(rel, nil)
+	return err == nil && why != static.IgnoredVendor && static.ShadowsTrustedModule(rel)
+}

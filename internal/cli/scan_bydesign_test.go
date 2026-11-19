@@ -151,12 +151,20 @@ func TestScanComputedVerb(t *testing.T) {
 		{name: "parenthesized callee", files: map[string]string{"app.js": strings.ReplaceAll(express, "app.get(", "(app.get)(")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.js  truncated"}},
 		{name: "verb through call under a forged mark", files: map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": strings.ReplaceAll(express, "app.get(", "app.get.call(app, ")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"node_modules/app/app.js  truncated"}},
 		{name: "builtins.getattr", files: map[string]string{"app.py": "import builtins\n" + strings.ReplaceAll(flask, "@app.get(", `@builtins.getattr(app, "get")(`)}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.py  truncated"}},
+		{name: "repository module shadows the runner", files: map[string]string{"main.py": helloRoute + servedApp, "uvicorn.py": "def run(a):\n    a.add_url_rule('/run', view_func=print)\n"}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"uvicorn.py  truncated"}},
+		{name: "repository package shadows CORS", files: map[string]string{"main.py": helloRoute, "src/flask_cors/__init__.py": "def CORS(a):\n    pass\n"}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"src/flask_cors/__init__.py  truncated"}},
+		{name: "installed runner", files: map[string]string{"main.py": helloRoute + servedApp, "venv/pyvenv.cfg": "home = /usr\n", "venv/lib/python3.12/site-packages/uvicorn/__init__.py": "def run(a):\n    pass\n"}, wantCode: exitcode.OK},
+		{name: "app handed to a local module", files: map[string]string{"app.js": strings.ReplaceAll(express, "module.exports = app;", "require(\"./plug\").use(app);\nmodule.exports = app;")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.js  truncated"}},
 		{name: "computed getattr", files: map[string]string{"app.py": strings.ReplaceAll(flask, "@app.get(", "@getattr(app, VERB)(")}, wantCode: exitcode.Incomplete, wantReason: truncated, want: []string{"app.py  truncated"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { runByDesignCase(t, tt) })
 	}
 }
+
+// servedApp hands the app to uvicorn.run, which static trusts only while
+// the repository holds no module named uvicorn (#255 tester cycle 6).
+const servedApp = "\nimport uvicorn\n\nif __name__ == \"__main__\":\n    uvicorn.run(app)\n"
 
 // routerDeclaration is shaped like router 2.x's lib/route.d.ts, which real
 // Express 5 installs ship (#255 tester M3): "express" in a comment and call

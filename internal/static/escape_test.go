@@ -49,6 +49,20 @@ func TestReceiverEscapes(t *testing.T) {
 		"router member read":      `app.router.get("/run", h)`,
 		"spread":                  `reg(...[app])`,
 		"stored on an object key": `globalThis.server = app`,
+		// #255 tester cycle 6: the allowlist follows the callee, not its name.
+		"use of a local module":     "const plug = require(\"./plug\")\nplug.use(app)",
+		"use of an unknown object":  "const plug = makePlug()\nplug.use(app)",
+		"local http":                "const http = require(\"./http\")\nhttp.createServer(app)",
+		"factory result used":       "function mk() { return app }\nmk().get(\"/run\", h)",
+		"factory result stored":     "const mk = () => { return app }\nconst a = mk()\na.get(\"/run\", h)",
+		"factory passed":            "function mk() { return app }\nconst f = mk\nf().get(\"/run\", h)",
+		"method returns app":        "const o = { mk() { return app } }\no.mk().get(\"/run\", h)",
+		"route chain stored":        "const rt = app.route(\"/run\")\nrt.get(h)",
+		"route chain tail stored":   "const rt = app.route(\"/run\").all(h)\nrt.get(h)",
+		"method result stored":      "const a = app.use(h)\na.get(\"/run\", h)",
+		"exported and read back":    "exports.app = app\nexports.app.get(\"/run\", h)",
+		"module exports read back":  "module.exports = { app }\nmodule.exports.app.get(\"/run\", h)",
+		"method result in an arrow": "const paths = [\"/run\"]\npaths.forEach(p => app.get(p, h))",
 	}
 	for name, code := range js {
 		t.Run("js "+name, func(t *testing.T) {
@@ -70,6 +84,16 @@ func TestReceiverEscapes(t *testing.T) {
 		"local __import__":        "@app.get(\"/run\")\ndef run():\n    m = __import__(\"subprocess\")\n    m.call(request.args['c'], shell=True)\n    return 'x'\n",
 		"builtins.__import__":     "@app.get(\"/run\")\ndef run():\n    builtins.__import__(\"os\").system(request.args['c'])\n    return 'x'\n",
 		"getattr of __import__":   "@app.get(\"/run\")\ndef run():\n    getattr(__import__(\"os\"), \"system\")(request.args['c'])\n    return 'x'\n",
+		// #255 tester cycle 6.
+		"mount on an unknown object":   "reg = Registry()\nreg.mount(app)\n" + escapePyDef,
+		"mount on an imported module":  "import reg\nreg.mount(app)\n" + escapePyDef,
+		"local run":                    "from .server import uvicorn\nuvicorn.run(app)\n" + escapePyDef,
+		"local getattr":                "def getattr(a, n):\n    return a.route\n\n@getattr(app, 'get')('/run')\n" + escapePyDef,
+		"factory decorator":            "def mk():\n    return app\n\n@mk().route(\"/run\")\n" + escapePyDef,
+		"factory result stored":        "def mk():\n    return app\n\na = mk()\n\n@a.route(\"/run\")\n" + escapePyDef,
+		"factory in a class":           "class K:\n    def mk(self):\n        return app\n\n@K().mk().route(\"/run\")\n" + escapePyDef,
+		"lambda factory":               "mk = lambda: app\n\n@mk().route(\"/run\")\n" + escapePyDef,
+		"factory passed as a function": "def mk():\n    return app\n\nf = mk\n\n@f().route(\"/run\")\n" + escapePyDef,
 	}
 	for name, code := range py {
 		t.Run("py "+name, func(t *testing.T) {
@@ -85,18 +109,25 @@ func TestReceiverEscapes(t *testing.T) {
 // incomplete.
 func TestBenignReceiverUses(t *testing.T) {
 	js := map[string]string{
-		"listen":              `const server = app.listen(3000)`,
-		"locals":              `app.locals.title = "x"`,
-		"settings":            `if (app.settings.env) {}`,
-		"mount":               "const r = express.Router()\nr.get(\"/x\", h)\napp.use(\"/a\", r)",
-		"route chain":         `app.route("/y").get(h).post(h)`,
-		"module.exports":      `module.exports = app`,
-		"exports object":      `module.exports = { app, h }`,
-		"exports property":    `exports.app = app`,
-		"export default":      `export default app`,
-		"named createServer":  "const http = require(\"http\")\nhttp.createServer(app).listen(1)",
-		"factory return":      "function make() { const a = express(); a.get(\"/x\", h); return a }",
-		"subscript with call": `app["post"]("/y", h)`,
+		"listen":               `const server = app.listen(3000)`,
+		"locals":               `app.locals.title = "x"`,
+		"settings":             `if (app.settings.env) {}`,
+		"mount":                "const r = express.Router()\nr.get(\"/x\", h)\napp.use(\"/a\", r)",
+		"route chain":          `app.route("/y").get(h).post(h)`,
+		"module.exports":       `module.exports = app`,
+		"exports object":       `module.exports = { app, h }`,
+		"exports property":     `exports.app = app`,
+		"export default":       `export default app`,
+		"named createServer":   "const http = require(\"http\")\nhttp.createServer(app).listen(1)",
+		"factory return":       "function make() { const a = express(); a.get(\"/x\", h); return a }",
+		"subscript with call":  `app["post"]("/y", h)`,
+		"core createServer":    "const https = require(\"node:https\")\nhttps.createServer({}, app)",
+		"inline createServer":  `require("http").createServer(app).listen(1)`,
+		"router mount":         "const r = express.Router()\nr.get(\"/x\", h)\nr.use(\"/a\", app)",
+		"setting read":         "if (app.get(\"env\") === \"dev\") {}\napp.listen(app.get(\"port\"))",
+		"factory listened on":  "function mk() { return app }\nmk().listen(3000)",
+		"factory exported":     "function mk() { return app }\nmodule.exports = mk()",
+		"export written twice": "module.exports = app\nmodule.exports.extra = 1",
 	}
 	for name, code := range js {
 		t.Run("js "+name, func(t *testing.T) {
@@ -107,16 +138,19 @@ func TestBenignReceiverUses(t *testing.T) {
 		})
 	}
 	py := map[string]string{
-		"config":          "app.config['SECRET_KEY'] = 'x'\napp.secret_key = 'y'",
-		"run":             "if __name__ == '__main__':\n    app.run(debug=app.debug)",
-		"cors":            "CORS(app)",
-		"uvicorn":         "import uvicorn\nuvicorn.run(app, port=1)",
-		"blueprint mount": "from flask import Blueprint\nbp = Blueprint('b', __name__)\napp.register_blueprint(bp, url_prefix='/b')",
-		"bare decorator":  "@app.teardown_appcontext\ndef close(_):\n    pass",
-		"factory":         "def create_app():\n    app = Flask(__name__)\n    return app",
-		"getattr literal": "@getattr(app, 'post')('/y')\ndef y():\n    return 'y'",
-		"module import":   "os_ = __import__('os')",
-		"inline import":   "def f():\n    __import__('os').getcwd()",
+		"config":           "app.config['SECRET_KEY'] = 'x'\napp.secret_key = 'y'",
+		"run":              "if __name__ == '__main__':\n    app.run(debug=app.debug)",
+		"cors":             "CORS(app)",
+		"uvicorn":          "import uvicorn\nuvicorn.run(app, port=1)",
+		"blueprint mount":  "from flask import Blueprint\nbp = Blueprint('b', __name__)\napp.register_blueprint(bp, url_prefix='/b')",
+		"bare decorator":   "@app.teardown_appcontext\ndef close(_):\n    pass",
+		"factory":          "def create_app():\n    app = Flask(__name__)\n    return app",
+		"getattr literal":  "@getattr(app, 'post')('/y')\ndef y():\n    return 'y'",
+		"module import":    "os_ = __import__('os')",
+		"inline import":    "def f():\n    __import__('os').getcwd()",
+		"cors from import": "from flask_cors import CORS as C\nC(app)",
+		"factory run":      "def create_app():\n    return app\n\nif __name__ == '__main__':\n    create_app().run()",
+		"factory unused":   "def create_app():\n    a = Flask(__name__)\n    return a",
 	}
 	for name, code := range py {
 		t.Run("py "+name, func(t *testing.T) {
