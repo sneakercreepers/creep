@@ -20,24 +20,9 @@ func (s *state) checkProjectKeys(c *Config, keys []string, src string) error {
 func (s *state) checkProjectKey(c *Config, k, src string) error {
 	switch {
 	case projectForbidden[k]:
-		return fmt.Errorf("%s: key %q cannot be set in the project file, because the scanned repository must not choose where its code is sent, which model reads it or how it is run; set it in the user file, --config or policy", src, k)
-	case k == "scanners.enabled":
-		return s.checkProjectScanners(c.Scanners.Enabled, src)
+		return fmt.Errorf("%s: key %q cannot be set in the project file, because the scanned repository must not choose where its code is sent, which model reads it, how it is run or which scanners check it; set it in the user file, --config or policy", src, k)
 	case slices.Contains(projectLowerOnly, k):
 		return s.checkProjectCeiling(c, k, src)
-	}
-	return nil
-}
-
-// checkProjectScanners rejects a project file that enables a scanner the
-// layers before it did not: enabling one runs a program on the host
-// (ADR 0013), which the scanned repository must not choose. It may only
-// remove scanners.
-func (s *state) checkProjectScanners(project []string, src string) error {
-	for _, name := range project {
-		if !slices.Contains(s.Config.Scanners.Enabled, name) {
-			return fmt.Errorf("%s: key \"scanners.enabled\" cannot enable %q in the project file, because the scanned repository must not choose which programs run on this machine; the project file may only remove scanners, enable it in the user file, --config or policy", src, name)
-		}
 	}
 	return nil
 }

@@ -7,12 +7,15 @@ import (
 )
 
 // Protection (pentest P2, #62): the scanned repository cannot pick the model
-// or opt the operator into the sandbox; operator layers still can.
+// or how it is reached, opt the operator into the sandbox, or choose the
+// scanners, even when it restates the default; operator layers still can.
 func TestProjectCannotChooseModelOrSandbox(t *testing.T) {
 	tests := map[string]string{
-		"model.name":      "model:\n  name: o1-pro\n",
-		"sandbox.enabled": "sandbox:\n  enabled: true\n",
-		"sandbox.runtime": "sandbox:\n  runtime: podman\n",
+		"model.name":       "model:\n  name: o1-pro\n",
+		"model.contract":   "model:\n  contract: anthropic\n",
+		"sandbox.enabled":  "sandbox:\n  enabled: true\n",
+		"sandbox.runtime":  "sandbox:\n  runtime: podman\n",
+		"scanners.enabled": "scanners:\n  enabled: []\n",
 	}
 	for key, yaml := range tests {
 		t.Run(key, func(t *testing.T) {

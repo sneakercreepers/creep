@@ -50,9 +50,8 @@ func (e *BudgetError) Unwrap() error { return ErrBudgetExhausted }
 const maxBudgetLimit = math.MaxInt32
 
 // BudgetOptions configures NewBudget. MaxTokens and MaxCalls come from the
-// resolved config (budget.max_tokens, budget.max_calls). Until #62 lands
-// the project file can still set those keys, so a scanned repository can
-// raise them; the gateway enforces whatever the caller passes.
+// resolved config (budget.max_tokens, budget.max_calls). The project file
+// may only lower them (#62); the gateway enforces whatever the caller passes.
 type BudgetOptions struct {
 	MaxTokens         int // per run; required, at most 2^31-1
 	MaxCalls          int // per run; required, at most 2^31-1

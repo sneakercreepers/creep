@@ -47,7 +47,7 @@ type Report struct {
 }
 
 type Scanners struct {
-	Enabled []string `yaml:"enabled" desc:"Optional external scanners to run offline when installed (gitleaks, osv-scanner; semgrep is only detected). The project file may only remove them."`
+	Enabled []string `yaml:"enabled" desc:"Optional external scanners to run offline when installed (gitleaks, osv-scanner; semgrep is only detected). Cannot be set in the project file."`
 }
 
 type Sandbox struct {
@@ -96,23 +96,28 @@ var enums = map[string][]string{
 // switches between an HTTP API and that command. model.name picks what the
 // operator pays for and, on an aggregator endpoint, which provider reads the
 // code (pentest P2). sandbox.* would opt the operator into building and
-// running the repository's code (#62).
+// running the repository's code (#62). scanners.enabled would run a program
+// on the host when it adds a scanner (ADR 0013), and when it removes one a
+// class of findings drops out of a run that still reads as complete, so a
+// pull request could pass the gate that judges it (#62).
 var projectForbidden = map[string]bool{
-	"model.contract":  true,
-	"model.endpoint":  true,
-	"model.name":      true,
-	"model.run":       true,
-	"model.env":       true,
-	"model.preset":    true,
-	"egress.allow":    true,
-	"sandbox.enabled": true,
-	"sandbox.runtime": true,
+	"model.contract":   true,
+	"model.endpoint":   true,
+	"model.name":       true,
+	"model.run":        true,
+	"model.env":        true,
+	"model.preset":     true,
+	"egress.allow":     true,
+	"sandbox.enabled":  true,
+	"sandbox.runtime":  true,
+	"scanners.enabled": true,
 }
 
 // projectLowerOnly keys are the operator's limits on spend and time. The
-// project file may lower them (a smaller budget makes skipped work, and so
-// the run, incomplete) but never raise them above what the layers before it
-// set (pentest P2, #62).
+// project file may lower them but never raise them above what the layers
+// before it set (pentest P2, #62). Lowering cannot starve a scan into a
+// passing gate: work skipped for budget, a call refused by the gateway
+// budget and a timed-out model call each make the run incomplete (exit 4).
 var projectLowerOnly = []string{
 	"budget.max_tokens",
 	"budget.max_calls",
