@@ -27,8 +27,10 @@ var otherSourceExts = map[string]bool{
 	".cfm": true,
 }
 
-// ungrammaredSource lists a source file static cannot parse: vendor code by
-// design when its package manager's mark exists (vendorProofs), a link or special file as not_regular, anything else as
+// ungrammaredSource lists a source file static cannot parse: a link or
+// special file as not_regular, a file of an installed dependency tree
+// (vendorProofs: its mark exists and git tracks nothing in the tree) as
+// vendor by design whatever its language, anything else as
 // unsupported_language. Files with other extensions are not source and are
 // not listed.
 func ungrammaredSource(rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReason, bool) {

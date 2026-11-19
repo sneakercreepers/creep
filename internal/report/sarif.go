@@ -106,7 +106,8 @@ type sarifRegion struct {
 // WriteSARIF writes r as a SARIF 2.1.0 log for GitHub code scanning. Only
 // verified and probable findings become results; an incomplete run has
 // executionSuccessful false and an error notification, and every
-// not-evaluated file is a warning notification with its reason.
+// not-evaluated file is a warning notification with its reason, after a
+// note counting the files no class covers by design (#213).
 func WriteSARIF(w io.Writer, r *Report) error {
 	rules, index := sarifRules(r.Findings)
 	run := sarifRun{
@@ -177,6 +178,13 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 			Descriptor: sarifDescriptor{ID: "creep/incomplete"},
 			Level:      "error",
 			Message:    sarifMessage{Text: "incomplete run (" + r.Run.Reason + "): not everything was evaluated; this is not a clean result"},
+		})
+	}
+	if summary := ByDesignSummary(r.Coverage.NotEvaluated); summary != "" {
+		inv.Notifications = append(inv.Notifications, sarifNotification{
+			Descriptor: sarifDescriptor{ID: "creep/by-design"},
+			Level:      "note",
+			Message:    sarifMessage{Text: "no class covers the " + summary},
 		})
 	}
 	for _, n := range r.Coverage.NotEvaluated {

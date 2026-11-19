@@ -153,27 +153,37 @@ func BenchmarkIgnoreReason(b *testing.B) {
 }
 
 // TestVendorEvidence (pentest P4, #213): a vendor directory is believed
-// only through its package manager's mark, for the mark's own language,
-// with exact case; everything else has no evidence and is read.
+// only through its package manager's mark, with exact case; the mark names
+// its tree whatever the file's language. Go and PHP vendor trees have none,
+// and everything else has no evidence and is read.
 func TestVendorEvidence(t *testing.T) {
 	cases := map[string]string{ // "" means no evidence can vouch for it
 		".venv/lib/python3.12/site-packages/x.py": ".venv/pyvenv.cfg",
 		"services/api/venv/lib/x.py":              "services/api/venv/pyvenv.cfg",
 		"node_modules/app/app.js":                 "node_modules/app/package.json",
 		"web/node_modules/@scope/pkg/lib/i.ts":    "web/node_modules/@scope/pkg/package.json",
-		"vendor/github.com/x/y/z.go":              "vendor/modules.txt",
-		"lib/vendor/acme/a.php":                   "lib/composer.json",
-		"vendor/acme/a.php":                       "composer.json",
+		"node_modules/a/node_modules/b/i.js":      "node_modules/a/package.json",
+		"venv/Lib/site-packages/m/_speedups.c":    "venv/pyvenv.cfg",
+		"node_modules/node-gyp/lib/Find-VS.cs":    "node_modules/node-gyp/package.json",
+		"node_modules/node-gyp/gyp/pylib/gyp.py":  "node_modules/node-gyp/package.json",
+		"venv/web/App.vue":                        "venv/pyvenv.cfg",
+		"vendor/github.com/x/y/z.go":              "",
+		"vendor/modules.txt":                      "",
+		"lib/vendor/acme/a.php":                   "",
+		"vendor/acme/a.php":                       "",
 		"node_modules/app.js":                     "",
-		"src/node_modules/app/app.py":             "",
-		"venv/app.js":                             "",
+		"node_modules/@scope/app.js":              "",
+		"venv":                                    "",
 		"vendor/lib/app.py":                       "",
 		"VENDOR/x.go":                             "",
 		"Node_Modules/app/app.js":                 "",
+		"VENV/lib/x.py":                           "",
 		"third_party/svc/app.py":                  "",
 		"site-packages/x.py":                      "",
 		"app.py":                                  "",
-		"../vendor/a.go":                          "",
+		"../node_modules/a/b.js":                  "",
+		"/node_modules/a/b.js":                    "",
+		"":                                        "",
 	}
 	for name, want := range cases {
 		got, ok := VendorEvidence(name)

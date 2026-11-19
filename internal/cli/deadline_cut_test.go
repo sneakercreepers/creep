@@ -13,6 +13,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
@@ -133,6 +134,42 @@ func checkUnreachedFiles(t *testing.T, gaps []report.NotEvaluated, findings []re
 		if f.Status != report.StatusNotEvaluated || f.Reason != reason {
 			t.Errorf("finding %s in %s = %s (%s), want not evaluated (%s)", f.ID, f.Path, f.Status, f.Reason, reason)
 		}
+	}
+}
+
+// Past the deadline the vendor-tree proof neither reads the git index nor
+// stats the tree, so the walk cannot be held there; nothing is proven, so
+// a file under an installed tree is listed like first-party code. Before
+// the deadline the same tree is proven, so the check is what changed.
+func TestVendorProofsStopAtDeadline(t *testing.T) {
+	tests := []struct {
+		name string
+		cut  bool
+		want bool
+	}{
+		{"before the deadline", false, true},
+		{"past the deadline", true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := t.TempDir()
+			writeTreeFile(t, repo, "node_modules/ok/package.json", "{}")
+			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"app.py"}})))
+			root, err := os.OpenRoot(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			if tt.cut {
+				cancel(errScanDeadline)
+			}
+			proofs := newVendorProofs(ctx, root)
+			if got := proofs.proven("node_modules/ok/addon.c"); got != tt.want || proofs.loaded == tt.cut {
+				t.Fatalf("proven = %v (index read %v), want %v (index read %v)", got, proofs.loaded, tt.want, !tt.cut)
+			}
+		})
 	}
 }
 

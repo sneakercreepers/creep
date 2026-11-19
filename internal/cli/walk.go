@@ -30,7 +30,7 @@ type repoScan struct {
 // only a walk error stops it. Past the scan deadline every source file left
 // is listed, not parsed (walkFile).
 func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, error) {
-	ex, proofs := static.NewExtractor(), newVendorProofs(root)
+	ex, proofs := static.NewExtractor(), newVendorProofs(ctx, root)
 	var gaps []report.NotEvaluated
 	err := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -60,9 +60,12 @@ func walkRepo(ctx context.Context, root *os.Root, p *static.Parser) (repoScan, e
 	return repoScan{graph: ex.Graph(), locs: ex.Locations(), gaps: gaps}, nil
 }
 
-// addRepoFile reads one source file and hands it to addFile. A vendor file
-// whose package manager left its mark (vendorProofs) is listed from its
-// path alone, without reading it; any other is read like first-party code.
+// addRepoFile reads one source file and hands it to addFile. A file of an
+// installed dependency tree (vendorProofs: its package manager's mark
+// exists and git tracks nothing in the tree) is listed from its path
+// alone, without reading it; any other is read like first-party code, and
+// static believes a vendor path, generator header or minified shape only
+// for a file that parsed cleanly and holds no route.
 func addRepoFile(ctx context.Context, ex *static.Extractor, p *static.Parser, proofs *vendorProofs, rel string, lang static.Language, d fs.DirEntry) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
 		return report.SkipNotRegular, true
@@ -158,17 +161,4 @@ func ignoredReason(why static.Ignored) report.SkipReason {
 		return report.SkipMinified
 	}
 	return report.SkipInvalidPath
-}
-
-// byDesign reports a file left out on purpose: listed, but not a gap that
-// makes the run partial. A vendor, generated or minified mark is believed
-// only with evidence (pentest P4, #213): a vendor file is listed unread only
-// when its package manager's mark exists (vendorProofs); any other is read,
-// and static lists it only when it parsed cleanly and holds no route.
-func byDesign(g report.NotEvaluated) bool {
-	switch g.Reason {
-	case report.SkipVendor, report.SkipGenerated, report.SkipMinified:
-		return true
-	}
-	return false
 }

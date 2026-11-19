@@ -41,7 +41,8 @@
 - Languages: Python (Flask, FastAPI) and JS/TS (Express). Source files in other languages are listed as `unsupported_language` and make the run incomplete. A repository where static finds no Flask, FastAPI or Express route (Django only, no web code, empty) reports every class not evaluated and exits `4` (`no_routes`).
 - Redaction masks secrets by their shape and context. It does not mask a token built by concatenation (`"ghp_" + "..."`), a value under 8 bytes that shows up again without its key, a bare AWS secret key whose key id only appears in a later file, a token disguised with look-alike or invisible characters outside Unicode category Cf (variation selectors, combining marks, Hangul fillers, the braille blank), or a key id that has a format character inside it and is glued to a word by another one. Zero-width and other format characters inside a token are otherwise handled. Full list: [`internal/redact/doc.go`](internal/redact/doc.go) (Detection limits).
 - The `codex` and `gemini` presets can read host files outside redaction and `egress.log` (see [Presets](#presets), [ADR 0015](docs/adr/0015-model-presets.md)).
-- Known gaps that can let a run read as covered are tracked for v0.2: [#213](https://github.com/sneakercreepers/creep/issues/213), [#214](https://github.com/sneakercreepers/creep/issues/214).
+- Dependency trees: files under `node_modules/<pkg>/`, `venv/` or `.venv/` are listed as `vendor` without being read only when the tree's `package.json` or `pyvenv.cfg` exists with exact case and the repository's git index tracks nothing in the tree. Committed vendor code is read like your own, under whatever name git tracks it. A package installed from a `file:` or git dependency counts as installed. Without a readable `.git/index` at the scan root (a subdirectory or a tarball, a split or sparse index, `index.skipHash`), every vendor file is read, which can make the run incomplete. Go and PHP `vendor/` trees are always `unsupported_language`. A complete run prints how many files it left out by design.
+- A known gap that can let a run read as covered is tracked for v0.2: [#214](https://github.com/sneakercreepers/creep/issues/214).
 
 Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md).
 
@@ -216,7 +217,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217) |
+| v0.2 | Coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
