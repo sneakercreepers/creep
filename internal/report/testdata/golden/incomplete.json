@@ -104,6 +104,18 @@
         "reason": "read_failed"
       },
       {
+        "path": "node_modules/pkg/index.js",
+        "reason": "vendor"
+      },
+      {
+        "path": "node_modules/pkg/lib.js",
+        "reason": "vendor"
+      },
+      {
+        "path": "api_pb2.py",
+        "reason": "generated"
+      },
+      {
         "path": "lib/after.py",
         "reason": "run_full"
       },

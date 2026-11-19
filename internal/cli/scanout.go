@@ -174,6 +174,10 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	printFindings(w, rep.Findings, len(rep.NoRoutesIn) > 0)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
+	if summary := report.ByDesignSummary(rep.Coverage.NotEvaluated); summary != "" {
+		// Beside the class line, so "covered" never reads as covering them (#213).
+		fmt.Fprintf(w, "coverage excludes %s, listed above\n", summary)
+	}
 	printScanners(w, rep.Coverage.Scanners)
 	if rep.Run.Incomplete {
 		fmt.Fprintln(w, incompleteMark(rep))

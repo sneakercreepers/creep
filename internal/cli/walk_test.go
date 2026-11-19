@@ -128,7 +128,7 @@ func TestPartialFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got, gap := fileOutcome(static.Graph{Files: []static.File{{}, tt.file}})
-		if got != tt.want || gap != (tt.want != "") || byDesign(report.NotEvaluated{Path: "a.py", Reason: got}) {
+		if got != tt.want || gap != (tt.want != "") || got.ByDesign() {
 			t.Errorf("fileOutcome(%+v) = %q, %v; want %q", tt.file, got, gap, tt.want)
 		}
 		if gap && incompleteReason("", nil, []report.NotEvaluated{{Path: "a.py", Reason: got}}) != string(got) {

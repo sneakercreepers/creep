@@ -19,6 +19,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeNoRoutes(bw, r.NoRoutesIn)
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
+	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated, len(r.NoRoutesIn) > 0)
 	writeScanners(bw, r.Coverage.Scanners)
 	writeDataHandling(bw, r.DataHandling)
@@ -77,6 +78,15 @@ func writeClasses(w io.Writer, classes []ClassCoverage) {
 			codeSpan(c.Class), statusText(string(c.Status)), c.Detected, c.Tasks, c.CILow, c.CIHigh)
 	}
 	fmt.Fprint(w, "\n")
+}
+
+// writeByDesign says, under the class table, which files no class covers
+// although the run is complete: those left out by design (#213).
+func writeByDesign(w io.Writer, summary string) {
+	if summary == "" {
+		return
+	}
+	fmt.Fprintf(w, "**No class covers the %s**, listed under Not evaluated.\n\n", summary)
 }
 
 // writeNotEvaluated lists the files not evaluated in full. A run with no

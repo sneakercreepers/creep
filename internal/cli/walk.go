@@ -147,6 +147,11 @@ func addIgnored(ex *static.Extractor, rel string, why static.Ignored) (report.Sk
 	return ignoredReason(why), true
 }
 
+// ignoredReason maps static's reason to the report's. Each is left out by
+// design (report.SkipReason.ByDesign) and believed only with evidence
+// (pentest P4, #213): a vendor file is listed unread only when its package
+// manager's mark exists (vendorProofs); any other is read, and static lists
+// it only when it parsed cleanly and holds no route.
 func ignoredReason(why static.Ignored) report.SkipReason {
 	switch why {
 	case static.IgnoredVendor:
@@ -157,17 +162,4 @@ func ignoredReason(why static.Ignored) report.SkipReason {
 		return report.SkipMinified
 	}
 	return report.SkipInvalidPath
-}
-
-// byDesign reports a file left out on purpose: listed, but not a gap that
-// makes the run partial. A vendor, generated or minified mark is believed
-// only with evidence (pentest P4, #213): a vendor file is listed unread only
-// when its package manager's mark exists (vendorProofs); any other is read,
-// and static lists it only when it parsed cleanly and holds no route.
-func byDesign(g report.NotEvaluated) bool {
-	switch g.Reason {
-	case report.SkipVendor, report.SkipGenerated, report.SkipMinified:
-		return true
-	}
-	return false
 }
