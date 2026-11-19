@@ -40,7 +40,7 @@ var errNoKey = errors.New("state store has no MAC key")
 // macKey is the secret every line is signed with. Its field is unexported
 // and only newMACKey sets it, and only open calls newMACKey, so a key can
 // come only from OpenUser or (in tests) OpenWithSecret
-// (TestProductionUsesOnlyOpenUser).
+// (TestKeysComeOnlyFromOpen).
 type macKey struct{ b []byte }
 
 func newMACKey(secret []byte) macKey { return macKey{b: bytes.Clone(secret)} }

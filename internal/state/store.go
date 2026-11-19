@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"testing"
 )
 
 const (
@@ -53,11 +54,18 @@ func OpenUser(dir string) (*Store, error) {
 	return open(dir, secret)
 }
 
+// ErrTestOnly means OpenWithSecret was called outside a go test binary.
+var ErrTestOnly = errors.New("state: OpenWithSecret works only in tests; open stores with OpenUser")
+
 // OpenWithSecret opens dir with a fixed secret, such as the public test key
-// that signs committed fixtures. It is for _test.go files only:
-// TestProductionUsesOnlyOpenUser fails on any other reference outside this
-// package, so a fixed key never reaches a production code path.
+// that signs committed fixtures. It works only in a binary built by go test
+// (testing.Testing): in creep itself it always fails, however it is reached
+// (an alias, a second import, a function value), so a fixed key never opens
+// a production store (TestOpenWithSecretRefusedOutsideTests).
 func OpenWithSecret(dir string, secret []byte) (*Store, error) {
+	if !testing.Testing() {
+		return nil, ErrTestOnly
+	}
 	return open(dir, secret)
 }
 

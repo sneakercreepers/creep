@@ -36,12 +36,13 @@
 //   - Committed fixtures (testdata/v1, the reader's testdata/replay) are
 //     signed with a fixed, public test key that _test.go files pass to
 //     OpenWithSecret, so go test ./... replays them with no user key.
-//     Production code can only call OpenUser, which takes no secret:
-//     TestProductionUsesOnlyOpenUser fails on any non-test reference to
-//     OpenWithSecret or Store and Run literals outside this package, on any
-//     key inside it that does not come from open, and on the test key in any
-//     common encoding in a non-test file. OpenUser refuses a state.key
-//     holding a fixed pattern, so copying the test key there fails closed.
+//     OpenWithSecret returns ErrTestOnly unless the binary was built by go
+//     test (testing.Testing), however a caller reaches it, so production
+//     code opens stores only through OpenUser, which takes no secret.
+//     Inside this package a type-checked test (TestKeysComeOnlyFromOpen)
+//     keeps every key coming from open, and no non-test file may hold the
+//     test key in any common encoding. OpenUser refuses a state.key holding
+//     a fixed pattern, so copying the test key there fails closed.
 //   - One run at a time per state directory: NewRun and Resume take an
 //     exclusive OS lock (flock on Unix, an unshared handle on Windows) held
 //     until Run.Close, and fail at once with ErrLocked instead of waiting, so
