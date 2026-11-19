@@ -69,13 +69,13 @@ To verify a preset:
 
 1. Run the check below and record the CLI version.
 2. Open the [**Model preset** issue form](https://github.com/sneakercreepers/creep/issues/new?template=6-model_preset.yml) with the preset file, the CLI version and the full `creep doctor` output of both commands (the passing check and the tools-on control).
-3. A maintainer reviews the output, then a PR sets `verified: true` in that preset (a later change to its `program` or `args` must set it back to `false` until checked again; reviewers check this).
+3. A maintainer reviews the output, then a PR sets `verified: true` in that preset and adds the digest that `TestVerifiedPresetsArePinned` prints to `verifiedPins` in `internal/presets/verified_test.go`. A later change to its `program` or `args` fails that test until it sets `verified` back to `false` and removes the pin.
 
 Run it from a new empty directory, with no `creep.yaml`, and the config file outside it:
 
 ```sh
 cd "$(mktemp -d)"
-printf 'model:\n  preset: <name>\n' > ../preset-check.yaml           # ollama: add "  name: <model>"
+printf 'model:\n  preset: <name>\n' > ../preset-check.yaml           # ollama: add "  name: <model>"; gemini: add "  env: [GEMINI_API_KEY]"
 creep --config ../preset-check.yaml config explain | grep model.run   # the command line from the preset
 creep --config ../preset-check.yaml doctor
 ```
@@ -85,7 +85,7 @@ Expected: `doctor` asks for consent to the `command://<program>-<hash>` endpoint
 ```sh
 printf 'model:\n  contract: command\n' > ../tools-on.yaml
 creep --config ../tools-on.yaml --model-run 'claude -p --dangerously-skip-permissions --output-format text' doctor
-# gemini: 'gemini --approval-mode yolo'   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
+# gemini: 'gemini --skip-trust --approval-mode yolo' (add "  env: [GEMINI_API_KEY]" to tools-on.yaml)   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
 ```
 
 Delete the temporary directory and the two config files afterwards.

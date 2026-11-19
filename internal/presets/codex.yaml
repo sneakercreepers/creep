@@ -3,24 +3,35 @@
 #   --sandbox read-only     commands Codex runs cannot write files or reach
 #                           the network (also the exec default; pinned so
 #                           user config cannot loosen it).
+#   --ignore-user-config    does not load $CODEX_HOME/config.toml, so its MCP
+#                           servers, tools and sandbox settings stay off.
+#                           Project config loads only for trusted projects,
+#                           and the empty temp directory is not one.
+#   -c features.shell_tool=false
+#                           switches the command execution tools off (config
+#                           reference: "Enable command execution tools"), the
+#                           path by which Codex could read files under HOME.
 #   --skip-git-repo-check   creep runs the CLI in an empty temp directory,
 #                           which is not a Git repository.
-#   --ephemeral             keeps no session files on disk.
+#   --ephemeral             keeps no session rollout files on disk.
 #   --color never           no escape sequences in the reply.
-# host_reads: unbounded. A read-only sandbox still lets Codex run commands that only
-# read (cat a file under HOME) and send the result to its model; the canary
-# catches writes, not reads. MCP servers from ~/.codex/config.toml still
-# load. Credentials: codex's own login under HOME (CODEX_HOME), or
-# OPENAI_API_KEY declared in model.env.
+# Unverified (medium confidence): --ignore-user-config and
+# features.shell_tool are documented but not yet checked with the real CLI.
+# A renamed key could be ignored, leaving the shell on under the read-only
+# sandbox. So host_reads stays unbounded until the manual check confirms
+# them (#229). Credentials: CODEX_API_KEY declared in model.env, or the
+# login saved under CODEX_HOME.
 version: 1
 name: codex
-description: OpenAI Codex CLI exec mode in a read-only sandbox, prompt on stdin.
+description: OpenAI Codex CLI exec mode in a read-only sandbox without shell tools or user config, prompt on stdin.
 docs: https://developers.openai.com/codex/noninteractive
 program: codex
-args: [exec, --sandbox, read-only, --skip-git-repo-check, --ephemeral, --color, never, "-"]
+args: [exec, --sandbox, read-only, --ignore-user-config, -c, features.shell_tool=false, --skip-git-repo-check, --ephemeral, --color, never, "-"]
 tools_off:
   - [--sandbox, read-only]
+  - [--ignore-user-config]
+  - [-c, features.shell_tool=false]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: codex runs shell commands without approval; --sandbox read-only blocks writes and network, not reads of files such as ~/.ssh or ~/.aws
+host_reads_detail: the flags that turn off its shell tool and ~/.codex/config.toml are not yet checked with the real CLI, so assume it can still read files such as ~/.ssh
 verified: false

@@ -102,12 +102,23 @@ A preset sets `contract: command` and a reviewed command line with the CLI's too
 | Preset | Command line | Reads host files | Verified with the real CLI |
 |---|---|---|---|
 | `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` | no | yes |
-| `gemini` | `gemini --approval-mode default --extensions none --output-format text` | **yes**: read-only tools, web search, MCP servers from its settings | no |
-| `codex` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --color never -` | **yes**: the read-only sandbox blocks writes, not reads | no |
+| `gemini` | `gemini --skip-trust --approval-mode default --extensions none --allowed-mcp-server-names creep-no-mcp-server --output-format text` (needs `env: [GEMINI_API_KEY]`) | **yes**: tools, policies and include directories from `~/.gemini/settings.json`; a `.env` or `GEMINI.md` above its temp directory | no |
+| `codex` | `codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false --skip-git-repo-check --ephemeral --color never -` | **yes** until checked: the flags that turn off its shell and user config are unverified | no |
 | `ollama` | `ollama run <model.name> --format json` (needs `name: <model>`) | no | no |
 
 > [!WARNING]
-> The tool canary catches writes and commands, not reads. With `gemini` or `codex`, scanned code could steer the CLI to read host secrets (`~/.ssh`, `~/.aws`) and send them to its provider **unredacted, outside `egress.log`**; `gemini`'s web tools may reach addresses outside `egress.allow`. This is an accepted residual risk (ADR 0015, threat model C6, [#229](https://github.com/sneakercreepers/creep/issues/229)): creep only warns at `creep doctor` and every scan, as it does for unverified presets. Do not use them on untrusted code or on a machine whose home directory holds secrets; prefer `claude-code` or `ollama`.
+> The tool canary catches writes and commands, not reads. With `gemini` or `codex`, scanned code could steer the CLI to read host secrets (`~/.ssh`, `~/.aws`) and send them to its provider **unredacted, outside `egress.log`**. `gemini` denies `web_fetch` in headless mode and sends `google_web_search` queries to Google, its provider, but a tool or policy your `~/.gemini/settings.json` allows could reach any address outside `egress.allow`. This is an accepted residual risk (ADR 0015, threat model C6, [#229](https://github.com/sneakercreepers/creep/issues/229)): creep only warns at `creep doctor` and every scan, as it does for unverified presets. Do not use them on untrusted code or on a machine whose home directory holds secrets; prefer `claude-code` or `ollama`.
+
+The `gemini` preset needs a Google AI Studio key: a personal Google login fails in headless mode ("This client is no longer supported for Gemini Code Assist for individuals"). Declare the key in `model.env` so it reaches the CLI (creep passes only a minimal environment plus `model.env`):
+
+```yaml
+# ~/.creep/config.yaml
+model:
+  preset: gemini
+  env: [GEMINI_API_KEY]
+```
+
+It runs with `--skip-trust` because headless Gemini CLI exits 55 in an untrusted folder; the folder it trusts is creep's fresh, empty temp directory, which holds no settings, `.env` or `GEMINI.md`. Gemini still reads the first `.env` above it and, under a `.git` above it, `GEMINI.md` files: on a shared machine, set `TMPDIR` to a directory only you can write. For `codex`, declare `env: [CODEX_API_KEY]` or log in with `codex login`.
 
 > [!IMPORTANT]
 > The model reads untrusted code, so it must not have tools. `creep doctor` and every scan send a **tool canary** first and stop with exit `3` if the CLI writes a file or runs a command.

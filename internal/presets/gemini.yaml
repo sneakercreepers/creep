@@ -1,27 +1,44 @@
 # Gemini CLI in headless mode: with stdin not a terminal it reads the prompt
 # from stdin, prints the reply and exits (no -p needed).
+#   --skip-trust             trusts the working directory for this session
+#                            only (not saved). Headless gemini exits 55 in an
+#                            untrusted folder, and creep's working directory is
+#                            a fresh empty temp directory, so the workspace
+#                            files trust would load (.gemini/settings.json,
+#                            .env, GEMINI.md, commands) cannot exist there.
 #   --approval-mode default  pins the documented default even when the user's
 #                            settings choose yolo or auto_edit; in headless
 #                            mode, tools that need approval (file writes,
-#                            shell) are not run.
+#                            shell, web_fetch) are denied.
 #   --extensions none        loads no extensions (they can add tools and MCP
-#                            servers).
+#                            servers); "none" alone disables every extension.
+#   --allowed-mcp-server-names creep-no-mcp-server
+#                            allows only an MCP server name nobody defines, so
+#                            no MCP server from ~/.gemini/settings.json starts.
 #   --output-format text     the bare reply; json wraps it in an envelope.
-# host_reads: unbounded. Read-only tools (read_file, glob, web fetch, and
-# google_web_search, which reaches the web outside creep's gateway) may stay
-# available in headless mode, and MCP servers from ~/.gemini/settings.json are not switched off by a
-# flag; the canary catches writes and commands, not reads. Credentials:
-# gemini's own login under HOME, or GEMINI_API_KEY declared in model.env.
+# host_reads: unbounded. Built-in read tools (read_file, glob, grep) stay in
+# the empty workspace and google_web_search sends its query to Google, the
+# provider; but tools, policies and include directories set in
+# ~/.gemini/settings.json are outside the preset, and the canary catches
+# writes and commands, not reads. Gemini also reads files above its working
+# directory: the first .env up the tree and, when a parent holds a .git,
+# GEMINI.md files up to it. On a shared machine keep TMPDIR private, so no
+# other user can plant them above creep's temp directory.
+# Credentials: GEMINI_API_KEY (a Google AI Studio key) declared in model.env;
+# a planted .env cannot replace a variable that is already set. A personal
+# Google login does not work: the server answers "This client is no longer
+# supported for Gemini Code Assist for individuals".
 version: 1
 name: gemini
-description: Gemini CLI in headless mode with approvals pinned to default and no extensions.
-docs: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md
+description: Gemini CLI in headless mode with approvals pinned to default, no extensions and no MCP servers.
+docs: https://geminicli.com/docs/cli/cli-reference/
 program: gemini
-args: [--approval-mode, default, --extensions, none, --output-format, text]
+args: [--skip-trust, --approval-mode, default, --extensions, none, --allowed-mcp-server-names, creep-no-mcp-server, --output-format, text]
 tools_off:
   - [--approval-mode, default]
   - [--extensions, none]
+  - [--allowed-mcp-server-names, creep-no-mcp-server]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: read-only built-in tools (read_file, glob, web fetch and google_web_search) and MCP servers from ~/.gemini/settings.json may stay enabled
+host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply, and a .env or GEMINI.md planted above its temp directory is read
 verified: false
