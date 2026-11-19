@@ -16,7 +16,7 @@ func TestVendorProofsExactCase(t *testing.T) {
 		"node_modules/upper/PACKAGE.JSON", "node_modules/ok/package.json",
 		"node_modules/@s/ok/package.json", "venv/PyVenv.CFG", ".venv/pyvenv.cfg",
 	} {
-		writeRepoFile(t, repo, name, "{}")
+		writeTreeFile(t, repo, name, "{}")
 	}
 	if err := os.MkdirAll(filepath.Join(repo, "node_modules", "dir", "package.json"), 0o700); err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestVendorProofsExactCase(t *testing.T) {
 	}
 }
 
-func writeRepoFile(t *testing.T, repo, name, content string) {
+func writeTreeFile(t *testing.T, repo, name, content string) {
 	t.Helper()
 	path := filepath.Join(repo, filepath.FromSlash(name))
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
