@@ -62,7 +62,7 @@ Option C. What decided it: it is the narrowest exception. creep opens no socket 
 
 ## Amendment: run network, synthetic database and network canary (#22)
 
-- **Status:** Proposed amendment (needs maintainer approval before #22 merges)
+- **Status:** Accepted amendment (maintainer approval on #264, 2026-11-19)
 - **Date:** 2026-11-19
 - **Changes:** the argv builders of `internal/sandbox` (`network create`, `network ls`, `network rm`; `run` with the run's network, a network alias, `--detach` and fixed extra tmpfs mounts); two digest-pinned images the operator pulls (creep still never pulls); the VOLUME rule (a VOLUME covered by one of the package's own tmpfs mounts is allowed); the `creep clean` output and the `creep doctor` sandbox section. No new dependency, no `net`, no socket, no new package; the exec exception stays one package wide.
 

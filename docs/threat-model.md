@@ -150,7 +150,7 @@ Tests are in the package named, as `file:Test`; "budget" means `make budget` (`i
 
 ### 4.6 Sandbox (container runtime, #21, #22)
 
-The sandbox will run code chosen by a model that read the repository, so every container is treated as hostile. v0.2 ships the runtime driver and the hardened profile ([ADR 0016](adr/0016-sandbox-runtime.md)), and the run network, the synthetic database and the network canary (#22, ADR 0016 amendment, proposed); the app build, PoC templates and verification (#23–#25) build on them. The migrations that seed the database come from the repository, so the database is hostile too.
+The sandbox will run code chosen by a model that read the repository, so every container is treated as hostile. v0.2 ships the runtime driver and the hardened profile ([ADR 0016](adr/0016-sandbox-runtime.md)), and the run network, the synthetic database and the network canary (#22, ADR 0016 amendment); the app build, PoC templates and verification (#23–#25) build on them. The migrations that seed the database come from the repository, so the database is hostile too.
 
 | ID | Threat | Mitigation | Held by |
 |---|---|---|---|
