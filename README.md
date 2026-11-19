@@ -19,7 +19,7 @@
 </div>
 
 > [!NOTE]
-> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). There is no sandbox yet, so every finding is `probable`, never `verified` (v0.2).
+> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). PoC verification is not built yet, so every finding is `probable`, never `verified` (v0.2, #23–#25).
 
 ---
 
@@ -196,7 +196,7 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `0` | Nothing blocking |
 | `1` | Gate exceeded (`gates.pr`, default `probable:critical`) |
 | `2` | Usage, configuration or consent error |
-| `3` | Model, tool canary or calibration error |
+| `3` | Model, tool canary, calibration or sandbox error |
 | `4` | Incomplete run: report written, not everything evaluated ([ADR 0007](docs/adr/0007-exit-code-incomplete.md), [ADR 0009](docs/adr/0009-scan-and-why-contract.md)) |
 
 An incomplete run never exits `0`, even when the gate also trips.
@@ -232,7 +232,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29) |
+| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214), redaction and config hardening (#70 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

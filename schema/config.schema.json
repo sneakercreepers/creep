@@ -14,7 +14,7 @@
         },
         "max_seconds": {
           "default": 7200,
-          "description": "Seconds the scan of the repository may run, after calibration: static analysis, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it.",
+          "description": "Seconds the scan of the repository may run, after calibration: discovery, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it.",
           "maximum": 86400,
           "minimum": 1,
           "type": "integer"
