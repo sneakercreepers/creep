@@ -137,8 +137,10 @@
 // absolute PATH entry or an absolute path whose final path (links,
 // junctions and \\?\ resolved) is outside the repository and the current
 // directory by file identity; device and UNC paths are refused. Each run
-// gets only the base and declared environment variables, an empty temp
-// working directory and its own TMPDIR, a timeout and a stdout cap; stderr
+// gets only the base and declared environment variables, an empty private
+// working directory under the user cache directory (never the system temp
+// directory, where other users could plant files a CLI reads from parent
+// directories) and its own TMPDIR, a timeout and a stdout cap; stderr
 // is discarded. On Unix the CLI's whole process group is killed after it
 // exits or times out, before the working directory is checked; Windows
 // kills only the CLI (no job object without x/sys or unsafe). Anything

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,20 @@ func TestMain(m *testing.M) {
 	if mode := os.Getenv(fakeCLIEnv); mode != "" {
 		os.Exit(fakeCLI(mode))
 	}
-	os.Exit(m.Run())
+	os.Exit(runWithPrivateCache(m))
+}
+
+// runWithPrivateCache keeps model run directories out of the developer's
+// own cache directory while the tests run.
+func runWithPrivateCache(m *testing.M) int {
+	cache, err := os.MkdirTemp("", "creep-gateway-cache-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	defer os.RemoveAll(cache)
+	userCacheDir = func() (string, error) { return cache, nil }
+	return m.Run()
 }
 
 // fakeCLI behaves like one kind of model CLI, reading the prompt on stdin.
@@ -34,6 +48,8 @@ func fakeCLI(mode string) int {
 		wd, _ := os.Getwd()
 		entries, _ := os.ReadDir(".")
 		fmt.Printf("%s\n%d", wd, len(entries))
+	case "walkup":
+		printFilesAbove()
 	case "touch":
 		_ = os.WriteFile("creep-canary.txt", []byte("hi"), 0o600)
 		fmt.Print(`{"ok":true}`)
@@ -106,5 +122,25 @@ func fakeOptions(t *testing.T, mode string, timeout time.Duration) CommandOption
 		Getenv:         func(k string) string { return env[k] },
 		Timeout:        timeout,
 		MaxOutputBytes: 1 << 20,
+	}
+}
+
+// printFilesAbove prints the working directory, then every file in it or a
+// parent that a model CLI reads from above its working directory (Gemini
+// CLI: .env, .gemini/.env, GEMINI.md; Codex: AGENTS.md).
+func printFilesAbove() {
+	dir, _ := os.Getwd()
+	fmt.Println(dir)
+	for {
+		for _, name := range []string{".env", filepath.Join(".gemini", ".env"), "GEMINI.md", "AGENTS.md"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				fmt.Println(filepath.Join(dir, name))
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return
+		}
+		dir = parent
 	}
 }
