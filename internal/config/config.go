@@ -20,7 +20,7 @@ type Model struct {
 	Contract       string   `yaml:"contract" desc:"How creep talks to the model: an HTTP API (openai, anthropic) or a local command. Cannot be set in the project file."`
 	Endpoint       string   `yaml:"endpoint" desc:"Base URL of the model API (http:// or https://). Cannot be set in the project file."`
 	Name           string   `yaml:"name" desc:"Model name sent to the endpoint. Cannot be set in the project file."`
-	Tier           string   `yaml:"tier" desc:"Model tier; selects the prompt variant."`
+	Tier           string   `yaml:"tier" desc:"Unused: the scan takes the tier from calibration. Reserved for a forced-tier option. Cannot be set in the project file."`
 	Preset         string   `yaml:"preset" desc:"Name of a model CLI preset built into creep (claude-code, codex, gemini, ollama): sets model.run and contract command. Cannot be set in the project file."`
 	Run            string   `yaml:"run" desc:"Command line of a model CLI for contract command: prompt on stdin, JSON on stdout. Split without a shell. Cannot be set in the project file."`
 	Env            []string `yaml:"env" desc:"Names of extra environment variables passed to the model command (the rest of the environment is not). Cannot be set in the project file."`
@@ -43,7 +43,7 @@ type Budget struct {
 }
 
 type Report struct {
-	Formats []string `yaml:"formats" desc:"Report files written after a scan."`
+	Formats []string `yaml:"formats" desc:"Report files written after a scan. Cannot be set in the project file."`
 }
 
 type Scanners struct {
@@ -60,7 +60,7 @@ type Calibration struct {
 }
 
 type Output struct {
-	Format string `yaml:"format" desc:"Terminal output format (flag --format)."`
+	Format string `yaml:"format" desc:"Terminal output format (flag --format). Cannot be set in the project file."`
 }
 
 type Log struct {
@@ -99,11 +99,17 @@ var enums = map[string][]string{
 // running the repository's code (#62). scanners.enabled would run a program
 // on the host when it adds a scanner (ADR 0013), and when it removes one a
 // class of findings drops out of a run that still reads as complete, so a
-// pull request could pass the gate that judges it (#62).
+// pull request could pass the gate that judges it (#62). model.tier is
+// unused today; refusing it now means a forced-tier option, which would pick
+// the prompt variant and step caps, can never take it from the repository
+// (#250). report.formats and output.format decide what a CI step uploads
+// or parses (SARIF, report.json, stdout); a repository dropping them would
+// leave that step without its input (#250).
 var projectForbidden = map[string]bool{
 	"model.contract":   true,
 	"model.endpoint":   true,
 	"model.name":       true,
+	"model.tier":       true,
 	"model.run":        true,
 	"model.env":        true,
 	"model.preset":     true,
@@ -111,6 +117,8 @@ var projectForbidden = map[string]bool{
 	"sandbox.enabled":  true,
 	"sandbox.runtime":  true,
 	"scanners.enabled": true,
+	"report.formats":   true,
+	"output.format":    true,
 }
 
 // projectLowerOnly keys are the operator's limits on spend and time. The

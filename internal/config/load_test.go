@@ -31,8 +31,8 @@ func TestDefaultsAreValid(t *testing.T) {
 func TestLayerOrder(t *testing.T) {
 	in := Inputs{
 		Policy:  file("policy.yaml", "defaults:\n  model:\n    tier: small\n    name: p\n  budget:\n    max_calls: 10\n"),
-		User:    file("~/.creep/config.yaml", "model:\n  name: u\n  endpoint: https://user.example\n"),
-		Project: file("creep.yaml", "log:\n  level: warn\noutput:\n  format: json\n"),
+		User:    file("~/.creep/config.yaml", "model:\n  name: u\n  endpoint: https://user.example\noutput:\n  format: json\n"),
+		Project: file("creep.yaml", "log:\n  level: warn\n"),
 		Flags:   []Flag{{Name: "--format", Key: "output.format", Value: "sarif"}},
 	}
 	r, err := Load(in)
@@ -80,8 +80,8 @@ func TestExplicitReplacesUserAndProject(t *testing.T) {
 
 func TestListsReplaceAndDoNotAlias(t *testing.T) {
 	r, err := Load(Inputs{
-		User:    file("u", "report:\n  formats: [json, sarif]\n"),
-		Project: file("creep.yaml", "report:\n  formats: [markdown]\n"),
+		Policy: file("p", "defaults:\n  report:\n    formats: [json, sarif]\n"),
+		User:   file("u", "report:\n  formats: [markdown]\n"),
 	})
 	if err != nil {
 		t.Fatal(err)

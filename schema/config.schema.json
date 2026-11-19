@@ -133,7 +133,7 @@
         },
         "tier": {
           "default": "medium",
-          "description": "Model tier; selects the prompt variant.",
+          "description": "Unused: the scan takes the tier from calibration. Reserved for a forced-tier option. Cannot be set in the project file.",
           "enum": [
             "small",
             "medium",
@@ -156,7 +156,7 @@
       "properties": {
         "format": {
           "default": "text",
-          "description": "Terminal output format (flag --format).",
+          "description": "Terminal output format (flag --format). Cannot be set in the project file.",
           "enum": [
             "text",
             "json",
@@ -177,7 +177,7 @@
             "markdown",
             "sarif"
           ],
-          "description": "Report files written after a scan.",
+          "description": "Report files written after a scan. Cannot be set in the project file.",
           "items": {
             "enum": [
               "json",
