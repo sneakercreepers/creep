@@ -17,6 +17,9 @@ const (
 	memoryLimit   = "512m" // memory and memory+swap alike: no swap
 	cpuLimit      = "1"
 	tmpfsMount    = "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"
+	// serviceTmpfs backs a service's writable directories (a database's
+	// data): in memory, counted against the memory limit, never on the host.
+	serviceTmpfs = "rw,noexec,nosuid,nodev,size=256m,mode=1777"
 )
 
 // Per-container timeouts.
@@ -31,6 +34,7 @@ const (
 	maxEnv      = 64
 	maxMounts   = 16
 	maxValueLen = 4096
+	maxTmpfs    = 4
 	outputLimit = 1 << 20 // container stdout kept per run
 )
 
@@ -55,11 +59,20 @@ type Spec struct {
 	Env     map[string]string
 	Mounts  []Mount
 	Timeout time.Duration // 0 is DefaultTimeout
+
+	// Set only inside this package, so no caller can put a container on
+	// the run's network before the canary passed (RunBatch, StartDatabase)
+	// or keep one running past its timeout.
+	networked bool     // the run's internal network instead of none
+	alias     string   // the container's name on that network
+	detach    bool     // a service: runs until Close
+	tmpfs     []string // extra tmpfs targets; each may cover an image VOLUME
 }
 
 var (
 	pinnedImage = regexp.MustCompile(`^([a-z0-9][a-z0-9._/:-]{0,254}@)?sha256:[0-9a-f]{64}$`)
 	envName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
+	aliasName   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 )
 
 // proxyVars are the proxy variables a runtime copies into containers on
@@ -71,12 +84,13 @@ var proxyVars = []string{
 	"http_proxy", "https_proxy", "ftp_proxy", "no_proxy", "all_proxy",
 }
 
-// hardenedFlags are the run options every container gets, in order.
+// hardenedFlags are the run options every container gets, in order;
+// network is "none" or the run's internal network.
 // --log-driver=none: the attached CLI still gets stdout (capped), but the
 // runtime keeps no log file of its own, which no limit would bound.
-func hardenedFlags(rt Runtime) []string {
+func hardenedFlags(rt Runtime, network string) []string {
 	flags := []string{
-		"--rm", "--pull=never", "--network=none",
+		"--rm", "--pull=never", "--network=" + network,
 		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--read-only", "--tmpfs=" + tmpfsMount, "--user=" + containerUser,
 		"--pids-limit=" + pidsLimit, "--memory=" + memoryLimit, "--memory-swap=" + memoryLimit,
@@ -92,8 +106,9 @@ func hardenedFlags(rt Runtime) []string {
 }
 
 // runArgs is the only builder of a `run` command line: the global flags,
-// the hardened profile, creep's labels, the spec's checked env and mounts,
-// then the image and its command, which the runtime never reads as flags.
+// the hardened profile, the network, creep's labels, the spec's checked
+// env and mounts, then the image and its command, which the runtime never
+// reads as flags. No option that publishes a port is ever built.
 func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 	if err := checkSpec(spec); err != nil {
 		return nil, err
@@ -102,8 +117,21 @@ func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	network, err := s.networkFor(spec)
+	if err != nil {
+		return nil, err
+	}
 	args := append(s.global(), "run", "--name="+name)
-	args = append(args, hardenedFlags(s.status.Runtime)...)
+	if spec.detach {
+		args = append(args, "--detach")
+	}
+	args = append(args, hardenedFlags(s.status.Runtime, network)...)
+	if spec.alias != "" {
+		args = append(args, "--network-alias="+spec.alias)
+	}
+	for _, t := range spec.tmpfs {
+		args = append(args, "--tmpfs="+t+":"+serviceTmpfs)
+	}
 	args = append(args, "--label="+LabelManaged+"=true", "--label="+LabelRun+"="+s.runID, "--label="+LabelContainer+"="+name)
 	args = append(args, envArgs(spec.Env)...)
 	args = append(args, mounts...)
@@ -119,6 +147,15 @@ func checkSpec(spec Spec) error {
 		return fmt.Errorf("too many arguments, variables or mounts: %w", ErrSpec)
 	case spec.Timeout < 0 || spec.Timeout > MaxTimeout:
 		return fmt.Errorf("timeout %s outside 0..%s: %w", spec.Timeout, MaxTimeout, ErrSpec)
+	case spec.alias != "" && (!spec.networked || !aliasName.MatchString(spec.alias)):
+		return fmt.Errorf("network alias %q: %w", spec.alias, ErrSpec)
+	case len(spec.tmpfs) > maxTmpfs:
+		return fmt.Errorf("too many tmpfs mounts: %w", ErrSpec)
+	}
+	for _, t := range spec.tmpfs {
+		if checkTarget(t) != nil || strings.Contains(t, ":") {
+			return fmt.Errorf("tmpfs %q: %w", t, ErrSpec)
+		}
 	}
 	for _, a := range spec.Cmd {
 		if !plainValue(a) {

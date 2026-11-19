@@ -25,12 +25,13 @@
 //     directory outside the repository, no stdin, no stderr and capped
 //     stdout.
 //   - Arguments come only from fixed builders. Every container runs with
-//     --network=none, --cap-drop=ALL, no-new-privileges, a read-only root
+//     --network=none (or the run's internal network, below), --cap-drop=ALL, no-new-privileges, a read-only root
 //     with a noexec /tmp tmpfs, user 65534, pids, memory and CPU limits,
 //     the runtime's default seccomp profile, no log file (--log-driver=none),
 //     every proxy variable empty, --pull=never, a digest-pinned image and a
 //     per-container timeout. An image that declares a VOLUME is refused, since its
-//     volume would be writable past --read-only.
+//     volume would be writable past --read-only, unless a tmpfs of the
+//     package's own (the database's data) covers it.
 //   - The CLI that runs containers reads an empty DOCKER_CONFIG, so the
 //     operator's config.json proxies and their credentials never reach a
 //     container. Detection and Clean, which start no container, keep the
@@ -38,10 +39,24 @@
 //   - Mounts are read-only regular files that creep wrote in the sandbox's
 //     own work directory; the Docker socket, sockets in general and host
 //     credential paths are refused.
+//   - PoCs (RunBatch) and the database (StartDatabase) run on one network
+//     per run, creep-<run>: --internal, IPv4 only, and on Docker a bridge
+//     with no host address, so no port is reachable from the host; no
+//     option that publishes a port is ever built, and rootful Podman,
+//     whose bridge keeps a host address, gets no network. Before each
+//     batch a canary container (pinned BusyBox) must fail to reach a
+//     public IP over TCP and to resolve a public name, through the
+//     network's resolver and directly over UDP, while it reaches itself on
+//     the network; anything else aborts the run for good.
+//   - The database is a pinned PostgreSQL seeded only with the project's
+//     SQL migrations (MigrationPaths picks them): the seed is its only
+//     mount, its data directory is a tmpfs over the image's VOLUME, and its
+//     credentials are random placeholders. creep never pulls an image.
 //   - Every container carries creep's labels, its run ID and its own name
 //     as a label. A timeout or Ctrl+C removes the container by those labels,
-//     never by name alone; Close removes the run's containers, and Clean
-//     (creep clean) removes every creep container a killed run left.
+//     never by name alone; Close removes the run's containers and network,
+//     and Clean (creep clean) removes every creep container and network a
+//     killed run left.
 //
 // No runtime is not an error: scans run as before and findings stay
 // probable.

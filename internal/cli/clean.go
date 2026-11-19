@@ -52,6 +52,6 @@ func cleanRuntime(ctx context.Context, e env, st sandbox.Status) bool {
 		printError(e.stderr, "creep clean: "+string(st.Runtime), err)
 		return false
 	}
-	fmt.Fprintf(e.stdout, "%s: removed %d creep container(s)\n", st.Runtime, n)
+	fmt.Fprintf(e.stdout, "%s: removed %d creep container(s) and %d network(s)\n", st.Runtime, n.Containers, n.Networks)
 	return true
 }

@@ -148,14 +148,14 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep scan` | Scan the current directory; write `.creep/report.*` |
 | `creep estimate` | Build every request a scan would send and measure it; no model call, no network ([ADR 0011](docs/adr/0011-estimate-and-stats.md)) |
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
-| `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level |
-| `creep clean` | Remove every container creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
+| `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level, the pinned images it needs |
+| `creep clean` | Remove every container and network creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
 | `creep config explain` | Show each effective config value and its source layer |
 | `creep version` | Print version, commit and Go version |
 
 `creep init` and continuing a run with `creep resume` are not implemented yet and fail closed.
 
-The sandbox is optional. `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint. Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. Without a usable runtime, scans run as before and findings stay `probable`. PoC verification is not built yet (#22).
+The sandbox is optional. `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint. Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. PoCs and a synthetic PostgreSQL seeded only from the project's SQL migrations (`migrations/`, `db/migrations/`, Prisma's and a few others) share one `--internal` network per run, `creep-<run>`, with no published port; before each PoC batch a canary container must fail to reach a public IP and to resolve a public name, or the run aborts. Rootful Podman gets no network (its bridge is reachable from the host). creep never pulls images: `creep doctor` lists the two digest-pinned images it needs (BusyBox for the canary, PostgreSQL) and, for a missing one, the pull command for the endpoint it checked (`docker --host=<endpoint> pull <ref>`, or `podman --remote=false pull <ref>`). Without a usable runtime, scans run as before and findings stay `probable`. PoC verification is not built yet (#23–#25).
 
 | Flag | Effect |
 |---|---|
@@ -210,7 +210,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), PoC verification (#22–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#213, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -19,16 +20,20 @@ const (
 // reply, or exit 0 and no output. An image inspect gets image, or an image
 // without volumes.
 type recorder struct {
-	mu    sync.Mutex
-	calls [][]string
-	reply func(ctx context.Context, args []string) (cliResult, error)
-	image *cliResult
+	mu     sync.Mutex
+	calls  [][]string
+	reply  func(ctx context.Context, args []string) (cliResult, error)
+	image  *cliResult
+	images map[string]cliResult // per image reference, before image
 }
 
 func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, slices.Clone(args))
 	r.mu.Unlock()
+	if answer, ok := r.images[args[len(args)-1]]; ok && subcommand(args) == "image" {
+		return answer, nil
+	}
 	switch {
 	case subcommand(args) == "image" && r.image != nil:
 		return *r.image, nil
@@ -65,7 +70,7 @@ func testSandbox(t *testing.T, rec *recorder) *Sandbox {
 // list is written here, not taken from the builder, so a builder change
 // that weakens the profile fails this test.
 var requiredOptions = []string{
-	"--rm", "--pull=never", "--network=none", "--cap-drop=ALL",
+	"--rm", "--pull=never", "--cap-drop=ALL",
 	"--security-opt=no-new-privileges", "--read-only", "--user=65534:65534",
 	"--pids-limit=128", "--memory=512m", "--memory-swap=512m", "--cpus=1", "--ipc=private",
 	"--log-driver=none", // the runtime would otherwise copy all container output to host disk, unbounded
@@ -77,9 +82,14 @@ var requiredOptions = []string{
 	"--env=http_proxy=", "--env=https_proxy=", "--env=ftp_proxy=", "--env=no_proxy=", "--env=all_proxy=",
 }
 
-// hardeningProblems checks one `run` argv: every required option, and no
-// option outside an allowlist, so a flag that adds privilege, a network, a
-// device, a writable or socket mount or a host variable is caught.
+// allowedNetworks are the only --network values: none, or the run's own
+// internal network. Exactly one --network option must be present.
+var allowedNetworks = []string{"--network=none", "--network=creep-" + testRunID}
+
+// hardeningProblems checks one `run` argv: every required option, exactly
+// one allowed network, and no option outside an allowlist, so a flag that
+// adds privilege, a network, a published port, a device, a writable or
+// socket mount or a host variable is caught.
 func hardeningProblems(argv []string) []string {
 	run := slices.Index(argv, "run")
 	if run < 0 {
@@ -98,18 +108,30 @@ func hardeningProblems(argv []string) []string {
 			problems = append(problems, "missing "+want)
 		}
 	}
+	networks := 0
 	for _, o := range opts {
+		if strings.HasPrefix(o, "--network=") || strings.HasPrefix(o, "--net=") || o == "--network" || o == "--net" {
+			networks++
+		}
 		if !allowedOption(o) {
 			problems = append(problems, "not allowed: "+o)
 		}
+	}
+	if networks != 1 {
+		problems = append(problems, fmt.Sprintf("%d network options, want 1", networks))
 	}
 	return problems
 }
 
 func allowedOption(o string) bool {
 	switch {
-	case slices.Contains(requiredOptions, o):
+	case slices.Contains(requiredOptions, o), slices.Contains(allowedNetworks, o), o == "--detach":
 		return true
+	case strings.HasPrefix(o, "--network-alias="):
+		return aliasName.MatchString(strings.TrimPrefix(o, "--network-alias="))
+	case strings.HasPrefix(o, "--tmpfs=") && strings.HasSuffix(o, ":rw,noexec,nosuid,nodev,size=256m,mode=1777"):
+		target := strings.TrimSuffix(strings.TrimPrefix(o, "--tmpfs="), ":rw,noexec,nosuid,nodev,size=256m,mode=1777")
+		return checkTarget(target) == nil && !strings.Contains(target, ":")
 	case strings.HasPrefix(o, "--name=creep-"+testRunID+"-"):
 		return true
 	case strings.HasPrefix(o, "--label="+LabelContainer+"=creep-"+testRunID+"-"):
@@ -129,10 +151,11 @@ func allowedOption(o string) bool {
 }
 
 // TestEveryContainerIsHardened is the protection test for the profile:
-// every container Run starts, whatever the spec, gets the hardened options
-// and nothing else, and the endpoint stays pinned.
+// every container Run, RunBatch and StartDatabase start (PoCs, the canary,
+// the database and its readiness poll), whatever the spec, gets the
+// hardened options and nothing else, and the endpoint stays pinned.
 func TestEveryContainerIsHardened(t *testing.T) {
-	rec := &recorder{}
+	rec := networkRecorder(goodCanary, 0)
 	s := testSandbox(t, rec)
 	env, err := s.WriteSyntheticEnv([]string{"DATABASE_URL", "SECRET_KEY"})
 	if err != nil {
@@ -149,9 +172,16 @@ func TestEveryContainerIsHardened(t *testing.T) {
 			t.Fatalf("Run(%+v): %v", spec, err)
 		}
 	}
+	if _, err := s.StartDatabase(context.Background(), []Migration{{Path: "migrations/1.sql", SQL: []byte("CREATE TABLE t (id int);")}}); err != nil {
+		t.Fatalf("StartDatabase: %v", err)
+	}
+	if _, err := s.RunBatch(context.Background(), specs); err != nil {
+		t.Fatalf("RunBatch: %v", err)
+	}
 	runs := rec.to("run")
-	if len(runs) != len(specs) {
-		t.Fatalf("got %d run calls, want %d", len(runs), len(specs))
+	// Run, then canary, database and poll, then canary and the batch.
+	if want := len(specs) + 3 + 1 + len(specs); len(runs) != want {
+		t.Fatalf("got %d run calls, want %d", len(runs), want)
 	}
 	for _, argv := range runs {
 		if p := hardeningProblems(argv); len(p) > 0 {
@@ -196,9 +226,15 @@ func TestHardeningCheckCatchesWeakenedRun(t *testing.T) {
 		"mixed-case proxy":        insert("--env=All_Proxy=socks5://proxy.example"),
 		"foreign container label": insert("--label=" + LabelContainer + "=postgres"),
 		"host pid":                insert("--pid=host"),
+		"exec tmpfs":              insert("--tmpfs=/data:rw,exec,size=256m"),
+		"tmpfs over /proc":        insert("--tmpfs=/proc:rw,noexec,nosuid,nodev,size=256m,mode=1777"),
+		"alias with a dot":        insert("--network-alias=db.example.com"),
+	}
+	for name, argv := range publishWeakened(good) {
+		weakened[name] = argv
 	}
 	for i, opt := range good {
-		if slices.Contains(requiredOptions, opt) {
+		if slices.Contains(requiredOptions, opt) || slices.Contains(allowedNetworks, opt) {
 			weakened["without "+opt] = slices.Delete(slices.Clone(good), i, i+1)
 		}
 	}

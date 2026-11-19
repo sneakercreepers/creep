@@ -232,6 +232,35 @@ func TestRemoveLabeledBatches(t *testing.T) {
 	}
 }
 
+// TestRemoveLabeledToleratesRuntimeCleanup: an rm that fails because the
+// runtime's own --rm cleanup took the container (Podman exits 125) is
+// fine once a listing shows none left; one that leaves a container is an
+// error.
+func TestRemoveLabeledToleratesRuntimeCleanup(t *testing.T) {
+	for name, stays := range map[string]bool{"gone after rm": false, "still there": true} {
+		t.Run(name, func(t *testing.T) {
+			listed := 0
+			rec := &recorder{reply: func(_ context.Context, args []string) (cliResult, error) {
+				switch subcommand(args) {
+				case "ps":
+					listed++
+					if listed == 1 || stays {
+						return cliResult{stdout: []byte(fakeID + "\n")}, nil
+					}
+					return cliResult{}, nil
+				case "rm":
+					return cliResult{exit: 125}, nil
+				}
+				return cliResult{}, nil
+			}}
+			n, err := removeLabeled(context.Background(), rec.run, usableDocker(), LabelManaged+"=true")
+			if stays != (err != nil) || !stays && n != 1 {
+				t.Fatalf("removed %d, %v", n, err)
+			}
+		})
+	}
+}
+
 func TestCleanNeedsReachableRuntime(t *testing.T) {
 	_, err := Clean(context.Background(), Status{Runtime: Podman, Reason: ReasonRemoteEndpoint})
 	if !errors.Is(err, ErrNotReachable) {

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -52,8 +53,15 @@ type Sandbox struct {
 	work     string // temporary directory for mounted files, 0700
 	workReal string // work with links resolved, for mount checks
 	seq      atomic.Uint64
+	canaries atomic.Uint64
 	notify   func(chan<- os.Signal) // signal.Notify for os.Interrupt; tests replace it
 	stop     func(chan<- os.Signal)
+	netArgs  func(st Status, name, runID string) []string // networkArgs; tests replace it
+
+	mu       sync.Mutex
+	network  string // the run's network once created
+	database bool   // StartDatabase ran
+	aborted  error  // why the run was aborted (a canary failure); sticky
 }
 
 // Open prepares a sandbox for runID on a usable runtime from Detect.
@@ -103,8 +111,9 @@ func newSandbox(st Status, runID string, run runFunc) (*Sandbox, error) {
 	}
 	return &Sandbox{
 		status: st, runID: runID, run: run, work: work, workReal: resolved,
-		notify: func(c chan<- os.Signal) { signal.Notify(c, os.Interrupt) },
-		stop:   func(c chan<- os.Signal) { signal.Stop(c) },
+		notify:  func(c chan<- os.Signal) { signal.Notify(c, os.Interrupt) },
+		stop:    func(c chan<- os.Signal) { signal.Stop(c) },
+		netArgs: networkArgs,
 	}, nil
 }
 
@@ -123,16 +132,27 @@ func globalArgs(st Status) []string {
 	return []string{}
 }
 
-// Run starts one container and waits for it. On timeout or Ctrl+C the
-// container is removed and Run returns ErrTimeout or ErrInterrupted; the
-// caller should then stop the run.
+// Run starts one container with no network and waits for it. On timeout
+// or Ctrl+C the container is removed and Run returns ErrTimeout or
+// ErrInterrupted; the caller should then stop the run. After a canary
+// failure it starts nothing (RunBatch).
 func (s *Sandbox) Run(ctx context.Context, spec Spec) (Result, error) {
+	if err := s.abortErr(); err != nil {
+		return Result{}, err
+	}
+	spec.networked, spec.alias, spec.detach, spec.tmpfs = false, "", false, nil
+	return s.start(ctx, spec)
+}
+
+// start runs one container as its spec says. A detached one (a service)
+// returns once started and runs until Close.
+func (s *Sandbox) start(ctx context.Context, spec Spec) (Result, error) {
 	name := "creep-" + s.runID + "-" + strconv.FormatUint(s.seq.Add(1), 10)
 	args, err := s.runArgs(name, spec)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := s.checkImage(ctx, spec.Image); err != nil {
+	if err := s.checkImage(ctx, spec); err != nil {
 		return Result{}, err
 	}
 	ctx, done := s.interruptible(ctx)
@@ -189,12 +209,15 @@ func (s *Sandbox) remove(name string) {
 	_, _ = removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID, LabelContainer+"="+name)
 }
 
-// Close removes every container of this run and the work directory. It is
-// safe to call more than once.
+// Close removes every container of this run, then its network, then the
+// work directory. It is safe to call more than once.
 func (s *Sandbox) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cancel()
 	_, err := removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID)
+	if err == nil {
+		_, err = removeNetworks(ctx, s.run, s.status, LabelRun+"="+s.runID)
+	}
 	if rmErr := os.RemoveAll(s.work); rmErr != nil {
 		err = errors.Join(err, fmt.Errorf("remove sandbox work directory: %w", rmErr))
 	}
