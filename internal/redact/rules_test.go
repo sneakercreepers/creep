@@ -126,7 +126,7 @@ func TestCompileRulesErrors(t *testing.T) {
 func TestParseRulesIgnoresAllowlists(t *testing.T) {
 	toml := "[allowlist]\nregexes = [\n    '''x''',\n]\n" +
 		"[[rules]]\nid = \"r\"\nregex = '''abc'''\nkeywords = [\"Abc\", \"<add key=\"]\n" +
-		"[[rules.allowlists]]\nregex = '''ignored'''\nkeywords = [\"zzz\"]\n" +
+		"[[rules.allowlists]]\nregexTarget = \"match\"\nregexes = ['''ignored''']\nstopwords = [\n    \"zzz\", \"yyy\",\n]\n" +
 		"[[rules]]\nid = \"s\"\nregex = '''def'''\nkeywords = [\n    \"de\",\n    \"ef\",\n]\nsecretGroup = 0\n"
 	specs, err := parseRules([]byte(toml))
 	if err != nil {

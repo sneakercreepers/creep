@@ -14,7 +14,11 @@ import (
 // for 5. Line lengths cannot raise it much: the chunks scan about 1.2 times
 // the bytes of the short-line shape at most, about 1.3 times the file
 // (TestChunkScanIsBounded), and
-// the whole-file key scan is linear (TestFileBlankTailIsLinear). A larger
+// the whole-file key scan is linear (TestFileBlankTailIsLinear). A format
+// character outside a leading run makes every detector run twice
+// (format.go), so the same crafted file with one costs about twice as much:
+// 2.3 minutes for short lines without one and 4.7 with one, measured in one
+// run ("short lines, format char"), so plan for 10 minutes. A larger
 // cap would let one hostile file stall a scan for longer; larger files fail
 // closed with ErrFileTooLarge.
 const MaxFileBytes = 1 << 20
@@ -29,14 +33,10 @@ const MaxLineBytes = (MaxInputBytes - chunkOverlap) / 2
 // Every match whose bytes before the start of its last line number at most
 // chunkOverlap is seen whole by some chunk (chunkBounds). TestChunkOverlapBound
 // derives that reach from each regex's syntax tree: at most 284 bytes for the
-// vendored rules and this package's detectors (a key name and a separator
-// with a few blanks or newlines), so 4 KiB leaves a wide margin. The rules it
-// lists as exempt have no byte bound: the private-key rule (keys are found
-// over the whole file first), base64-encoded JWTs wrapped over lines (caught
-// by the whole-file key-body detector when wrapped at 40 to 76 columns), the
-// two curl rules, which allow five continuation lines of any length and are
-// covered while those lines fit in 4 KiB, and three rules that reach further
-// only through a run of blanks.
+// chunked rules and this package's detectors (a key name and a separator
+// with a few blanks or newlines), so 4 KiB leaves a wide margin. The rules
+// with no byte bound are not chunked: File runs them over the whole file
+// (wholeFileRules).
 const chunkOverlap = 4 << 10
 
 var (
@@ -50,11 +50,13 @@ var (
 // into fragments. It fails closed on content over MaxFileBytes, with a line
 // over MaxLineBytes, and once the run's value map is full (ErrRunFull).
 //
-// Private keys are found over the whole file, so a key is masked from its
-// BEGIN line to its END line wherever the file is later cut. The other
-// detectors run on overlapping chunks of at most MaxInputBytes, cut at line
-// ends; their spans are merged over the whole file before any marker is
-// written, so a value found by two chunks is masked once, with one marker.
+// Private keys and the rules with no bounded reach (wholeFileRules) are
+// found over the whole file, so a key is masked from its BEGIN line to its
+// END line wherever the file is later cut. The other detectors run on
+// overlapping chunks of at most MaxInputBytes, cut at line ends; their spans
+// are merged over the whole file before any marker is written, so a value
+// found by two chunks is masked once, with one marker. A file holding a
+// format character after its start goes through all of it twice (format.go).
 func (r *Redactor) File(content []byte) (string, error) {
 	if len(content) > MaxFileBytes {
 		return "", fmt.Errorf("redact file of %d bytes: %w", len(content), ErrFileTooLarge)
@@ -63,24 +65,62 @@ func (r *Redactor) File(content []byte) (string, error) {
 	if n := longestLine(text); n > MaxLineBytes {
 		return "", fmt.Errorf("redact file with a %d-byte line: %w", n, ErrLineTooLong)
 	}
-	return r.finish(text, r.detectFile(text))
+	return r.finish(text, withoutFormat(text, r.detectFile))
 }
 
-// detectFile finds private keys over the whole text and runs every other
-// detector chunk by chunk, with spans in whole-text offsets. Gates open on
-// the whole text, as gitleaks gates on the whole file, so an AWS key id in
-// one chunk still wakes the bare secret key detector in another.
+// wholeFileRules are the rules a match of which can start more than
+// chunkOverlap bytes before its last line: through continuation lines of any
+// length (the curl rules), runs of blanks (freemius, kubernetes, nuget) or
+// wrapped lines (a base64 JWT, a private key). TestChunkOverlapBound derives
+// the list from each regex. File runs them over the whole file, so no chunk
+// cut can split one of their matches. Their cost is no higher than in chunks:
+// the restart budget scales with the text either way.
+var wholeFileRules = map[string]bool{
+	"private-key":            true,
+	"jwt-base64":             true,
+	"curl-auth-header":       true,
+	"curl-auth-user":         true,
+	"freemius-secret-key":    true,
+	"kubernetes-secret-yaml": true,
+	"nuget-config-password":  true,
+}
+
+// detectFile finds private keys and runs the wholeFileRules over the whole
+// text, and every other detector chunk by chunk, with spans in whole-text
+// offsets. Gates open on the whole text, as gitleaks gates on the whole file,
+// so an AWS key id in one chunk still wakes the bare secret key detector in
+// another.
 func (r *Redactor) detectFile(text string) []span {
-	found := findPrivateKeys(text)
-	set := r.gated(text)
+	whole, chunked := r.gated(text).splitWholeFile()
+	found := append(findPrivateKeys(text), whole.find(text)...)
 	for _, c := range chunkBounds(text) {
-		for _, sp := range set.find(text[c.start:c.end]) {
+		for _, sp := range chunked.find(text[c.start:c.end]) {
 			sp.start += c.start
 			sp.end += c.start
 			found = append(found, sp)
 		}
 	}
 	return found
+}
+
+// splitWholeFile returns the rules File runs over the whole text and the
+// detectors it runs chunk by chunk.
+func (s detectorSet) splitWholeFile() (whole, chunked detectorSet) {
+	chunked.patterns = s.patterns
+	whole.rules, chunked.rules = partitionWholeFile(s.rules)
+	whole.encoded, chunked.encoded = partitionWholeFile(s.encoded)
+	return whole, chunked
+}
+
+func partitionWholeFile(rules []secretRule) (whole, chunked []secretRule) {
+	for _, rule := range rules {
+		if rule.wholeFile {
+			whole = append(whole, rule)
+		} else {
+			chunked = append(chunked, rule)
+		}
+	}
+	return whole, chunked
 }
 
 // chunk is a byte range of the text, at most MaxInputBytes, that ends at a

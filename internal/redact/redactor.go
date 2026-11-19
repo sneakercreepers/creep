@@ -15,7 +15,10 @@ import (
 // key assignments with long names take about 0.6 s, held there by the
 // restart budget in secretRule.find (BenchmarkRedact, "env keys"); input
 // crafted to hold every rule keyword before a long word run makes all ~220
-// rules scan it, about 8 s at the cap (BenchmarkRedact, "every keyword").
+// rules scan it, about 8 to 10 s at the cap (BenchmarkRedact, "every
+// keyword"). A format character other than a leading run of them makes
+// every detector run twice (format.go), so the same input with one costs
+// about twice that, 18 s (BenchmarkRedact, "every keyword, format char").
 // Re-masking the values of earlier fragments is linear in the input and does
 // not grow with the number of values known (BenchmarkSweepGrowth). Whole
 // files go through File, which chunks them.
@@ -100,7 +103,7 @@ func (r *Redactor) finish(text string, found []span) (string, error) {
 		return "", ErrRunFull
 	}
 	r.state.call = callShare{}
-	found = append(found, r.state.index.find(text)...)
+	found = append(found, withoutFormat(text, r.state.index.find)...)
 	out := r.state.render(text, mergeSpans(found))
 	r.state.rememberParts(text, found)
 	switch {
@@ -131,6 +134,18 @@ func (s *runState) rememberParts(text string, found []span) {
 			continue
 		}
 		s.marker(text[sp.start:sp.end], sp.label)
+		s.rememberStripped(text[sp.start:sp.end], sp.label)
+	}
+}
+
+// rememberStripped also gives a marker to a value without its format
+// characters, so the sweep masks it where it shows up without them.
+func (s *runState) rememberStripped(value, label string) {
+	if !hasFormat(value) {
+		return
+	}
+	if clean, _ := stripFormat(value); len(clean) >= minSweepLen {
+		s.marker(clean, label)
 	}
 }
 
@@ -163,8 +178,13 @@ func nestedKeys(found []span) map[[2]int]bool {
 	return nested
 }
 
-// detect runs every secret rule and PII detector over text.
+// detect runs every secret rule and PII detector over text and over its copy
+// without format characters (withoutFormat).
 func (r *Redactor) detect(text string) []span {
+	return withoutFormat(text, r.detectText)
+}
+
+func (r *Redactor) detectText(text string) []span {
 	return append(r.gated(text).find(text), findPrivateKeys(text)...)
 }
 

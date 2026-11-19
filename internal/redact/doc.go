@@ -26,7 +26,8 @@
 //     in scheme://user:password@host, the value of password, passwd, pwd,
 //     passphrase and secret keys (quoted or bare, references such as ${VAR}
 //     left alone), and a bare 40-character AWS secret key when an AWS access
-//     key id is in the same input (credentials.go). A value assigned through
+//     key id is in the same input, anywhere in the file for File
+//     (credentials.go). A value assigned through
 //     a subscript whose key names a credential (x['SECRET_KEY'] = '…',
 //     headers["X-Api-Key"] = "…", config[:api_key] = '…'), which the
 //     vendored generic rule misses at the closing "]" (subscript.go).
@@ -55,11 +56,49 @@
 // marker; each part is also remembered, so it is masked when it shows up
 // alone in a later fragment.
 //
+// Format characters: a zero-width space, joiner or other Unicode format
+// character (category Cf) inside a token renders as nothing but breaks every
+// rule. Each Redact and File call whose input holds one outside a leading
+// run runs every detector and the sweep twice: on the text, and on a copy
+// without format characters whose spans map back onto the original bytes,
+// so the mask covers the whole token, format characters inside it included
+// (format.go). The bytes sent change only where they are masked. A value
+// masked with format characters inside is also remembered without them.
+// Searching the original too keeps a match that the removal would break (a
+// key id followed by a zero-width space and a word). A leading run of them,
+// such as a byte order mark, joins nothing, so it costs no second pass.
+//
+// Detection limits: what follows is not masked, or not always. Each needs a
+// secret written in a shape no rule knows, mostly on purpose by whoever wrote
+// the code; covering it would mask large amounts of ordinary code or cost a
+// pass per shape.
+//   - Concatenated tokens: a token built from pieces ("ghp_" + "abc...",
+//     adjacent literals, a join or format call) is matched piece by piece,
+//     and a piece is masked only if it matches a rule alone. Joining literals
+//     would need a pass per language's syntax over ordinary code.
+//   - Short values: values of fewer than 8 bytes (minSweepLen) are masked
+//     where a rule matches them, but not re-masked where they show up later
+//     without their key, since a short value occurs inside ordinary words.
+//   - AWS ordering: a bare 40-character AWS secret key is masked only when an
+//     access key id is in the same Redact input or File call. If the id only
+//     comes in a later file, the secret has already been sent. Masking every
+//     40-character base64 run would mask paths and identifiers of that length.
+//     A secret key next to its usual name (aws_secret_access_key,
+//     SecretAccessKey) is masked by the password and generic rules anyway.
+//   - Other hidden or look-alike characters: only category Cf is removed.
+//     Variation selectors, the combining grapheme joiner, Hangul fillers,
+//     unusual spaces and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
+//     rule, and so do encodings other than the separators listed below.
+//   - A value split from its key by other text (see Performance).
+//
 // The rules file is read by a tiny reader for the TOML subset it uses
 // (toml.go) instead of a generator that converts it to JSON. Both need the same
 // parsing, but this way the embedded file stays identical to upstream and can
 // be verified by hash, there is no second artifact to keep in sync, and any
-// syntax outside the subset is an error caught by the tests. Only id, regex,
+// syntax outside the subset is an error caught by the tests: an unknown or
+// repeated key, a rule key (id, regex, secretGroup, keywords) after an
+// allowlist block, where TOML would give it to the allowlist, and an indented
+// line outside a multi-line array. Only id, regex,
 // secretGroup and keywords are used. Keywords gate rules exactly as in
 // gitleaks (a rule runs only if one of its keywords occurs, case-insensitive);
 // without that, running every regex on every fragment is far too slow.
@@ -89,14 +128,21 @@
 // guess at a key or token a boundary cut, and a guess can miss (a partial
 // line of a key body, a token's tail with no prefix). File finds private keys
 // over the whole file (from BEGIN to END, BEGIN to the end of the file, the
-// start of the file to END, and bare key bodies), then runs the other
-// detectors on chunks of at most MaxInputBytes that end at line ends, each
+// start of the file to END, and bare key bodies). It also runs over the whole
+// file the rules whose matches have no byte bound back from their last line
+// (wholeFileRules: the private-key rule, base64 JWTs wrapped over lines, the
+// two curl rules, whose continuation lines may be of any length, and the
+// freemius, kubernetes and nuget rules, which reach through a run of blanks
+// of any length). It runs every other detector on chunks of at most
+// MaxInputBytes that end at line ends, each
 // reaching chunkOverlap (4 KiB) to twice that back into the previous one; a
 // chunk starts inside a line only when a long line straddles that reach, so
 // long lines cannot make chunks re-scan most of a file. Every line lies in
-// one chunk with the 4 KiB before it, and no non-exempt rule reaches more than
-// a few hundred bytes back from its last line (derived per regex by
-// TestChunkOverlapBound), so every match is seen whole by some chunk. Spans
+// one chunk with the 4 KiB before it, and no chunked detector reaches more
+// than a few hundred bytes back from its last line (derived per regex by
+// TestChunkOverlapBound, which also fails if a rule over that bound is not a
+// whole-file rule), so every match is seen whole by the whole-file pass or by
+// some chunk. Spans
 // from all chunks are merged before markers are written, so a value found
 // twice in an overlap is masked once and keeps one marker for the run.
 // Redact still applies every detector to each fragment, as defense in depth.

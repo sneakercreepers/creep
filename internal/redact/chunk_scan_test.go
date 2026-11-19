@@ -54,6 +54,8 @@ func BenchmarkFileEveryKeyword(b *testing.B) {
 	shapes := map[string]string{
 		"short lines": head + wordLines(MaxFileBytes-len(head), 100),
 		"long lines":  head + wordLines(MaxFileBytes-len(head), 1000, 21379),
+		// Both passes of withoutFormat (#70): twice the short-line case.
+		"short lines, format char": withFormatChar(head + wordLines(MaxFileBytes-len(head), 100)),
 	}
 	for name, text := range shapes {
 		b.Run(name, func(b *testing.B) {
