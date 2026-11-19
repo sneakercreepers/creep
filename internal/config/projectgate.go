@@ -58,9 +58,10 @@ func (s *state) checkProjectGates(keys []string, src string, inherited map[strin
 }
 
 // checkProjectGate checks one project gate against the policy limit, the
-// inherited gate and the built-in default, and names what would pass: the
-// strictest broken floor, or, when the broken floors cannot be ordered,
-// every one of them and the loosest gate that meets them all.
+// inherited gate and the built-in default. The error names the strictest
+// broken floor (every broken floor when none is strictest) and suggests a
+// gate that meets all three floors and is at least as strict as the
+// project's own value.
 func (s *state) checkProjectGate(key string, inherited gateFloor) error {
 	limits, defaults := Config{Gates: s.limits.Gates}, Defaults()
 	floors := []gateFloor{
@@ -78,15 +79,14 @@ func (s *state) checkProjectGate(key string, inherited gateFloor) error {
 	if len(broken) == 0 {
 		return nil
 	}
-	f, ok := strictestFloor(broken)
-	if !ok {
-		return unorderedFloorsError(key, value, broken)
+	if f, ok := strictestFloor(broken); ok {
+		broken = []gateFloor{f}
 	}
-	err := checkFloor(key, value, f.value, f.what, f.by)
-	if f.what == "the limit" {
-		return err // no layer may loosen past a policy limit
+	hint := fmt.Sprintf("the project file may only make gates stricter, use %q or a stricter gate", passingGate(value, floors))
+	if !slices.ContainsFunc(broken, func(f gateFloor) bool { return f.what == "the limit" }) {
+		hint += ", or set a looser gate in the user file, --config or a flag"
 	}
-	return fmt.Errorf("%w; the project file may only make gates stricter, set a looser gate in the user file, --config or a flag", err)
+	return fmt.Errorf("%s %q is looser than %s; %s", key, value, floorNames(broken), hint)
 }
 
 // strictestFloor returns the first floor at least as strict as all the
@@ -112,17 +112,29 @@ func floorCovers(f gateFloor, floors []gateFloor) bool {
 	return true
 }
 
-// unorderedFloorsError names every broken floor and the join of them: the
-// strictest status and the lowest severity among them, which meets each.
-func unorderedFloorsError(key, value string, broken []gateFloor) error {
+// passingGate is the loosest gate at least as strict as value and every
+// floor: the strictest status and the lowest severity among them. A "none"
+// value or floor, or an absent floor, constrains nothing.
+func passingGate(value string, floors []gateFloor) string {
 	var join gate
-	names := make([]string, 0, len(broken))
-	for _, f := range broken {
-		g, _ := parseGate(f.value) // a broken floor is never "none"
+	gates := []string{value}
+	for _, f := range floors {
+		gates = append(gates, f.value)
+	}
+	for _, s := range gates {
+		g, err := parseGate(s)
+		if err != nil || g.none {
+			continue
+		}
 		join.status, join.severity = max(join.status, g.status), max(join.severity, g.severity)
+	}
+	return gateStatuses[join.status] + ":" + gateSeverities[join.severity]
+}
+
+func floorNames(floors []gateFloor) string {
+	names := make([]string, 0, len(floors))
+	for _, f := range floors {
 		names = append(names, fmt.Sprintf("%s %q set by %s", f.what, f.value, f.by))
 	}
-	need := gateStatuses[join.status] + ":" + gateSeverities[join.severity]
-	return fmt.Errorf("%s %q is looser than %s; the project file may only make gates stricter, use %q or a stricter gate",
-		key, value, strings.Join(names, " and "), need)
+	return strings.Join(names, " and ")
 }

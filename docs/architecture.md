@@ -88,10 +88,12 @@ A package may import only packages in **lower** layers and only those listed in 
 
 These follow semver once v1.0 ships. Before then, any change needs a note in the PR and, if the change breaks a contract, an ADR.
 
+Narrowing what the project file (`./creep.yaml`, the untrusted layer) may set is a security fix, not a contract break: it is recorded in the threat model (R4, R5), README Configuration and the PR contract note, with no ADR. Removing or changing a key in the operator layers (policy, user file, `--config`, flags) breaks the contract and needs an ADR.
+
 | Contract | Where | Versioning |
 |---|---|---|
 | CLI flags and exit codes | `cli`, `exitcode` | semver |
-| Config and policy schema | `config` | `version:` key |
+| Config and policy schema | `config` | No version key: `schema/config.schema.json` (kept in sync by `TestSchemaInSync`) is the contract; a change carries a PR contract note and the `breaking` label in the release notes when an existing file stops loading |
 | JSON report | `report` | `schema_version`; schema in `docs/schemas/report-vN.json`; v1 amended additively before the first release (ADR 0009) |
 | SARIF | `report` | SARIF 2.1.0 |
 | Run state (JSONL) | `state` | per-line `v` |
