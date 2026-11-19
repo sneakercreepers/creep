@@ -89,6 +89,37 @@ func TestSignatureBoundary(t *testing.T) {
 	}
 }
 
+// Spellings from the #268 reviews get the kind on their line, including
+// those an older row already covers (C system and popen).
+func TestTripwireSpellings(t *testing.T) {
+	rows, err := loadTripwire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		line string
+		kind SinkKind
+	}{
+		{`  system(cmd);`, SinkShell},
+		{`FILE *f = popen(cmd, "r");`, SinkShell},
+		{`execvp (argv[0], argv);`, SinkShell},
+		{`proc = await asyncio.create_subprocess_shell(cmd)`, SinkShell},
+		{`const { stdout } = await execa("sh", ["-c", cmd]);`, SinkShell},
+		{`my $o = qx(cat $f);`, SinkShell},
+		{`await Process.run("sh", ["-c", cmd]);`, SinkShell},
+		{`os.system (cmd)`, SinkShell},
+		{`$r = $db->query("SELECT * FROM t WHERE id = $id");`, SinkSQL},
+		{`Cursor c = db.rawQuery("SELECT * FROM t WHERE id = " + id, null);`, SinkSQL},
+		{`res = PQexec(conn, buf);`, SinkSQL},
+	}
+	for _, tt := range tests {
+		hits, _ := tripwire(rows, []byte(tt.line))
+		if !containsHit(hits, 1, tt.kind) {
+			t.Errorf("%q gives %+v, want a %s hit", tt.line, hits, tt.kind)
+		}
+	}
+}
+
 func TestTripwireLinesAndCap(t *testing.T) {
 	rows, err := loadTripwire()
 	if err != nil {

@@ -90,9 +90,10 @@ func parseSignature(line string) (signature, error) {
 // of the whole file that jumps to the next line after a hit, so work is
 // linear in the file size times the table size and does not grow with
 // the line count. On an i7-10510U a file at redact.MaxFileBytes takes
-// about 17 ms of empty or one-byte lines and up to 0.16 s when every line
-// holds a hit or a near-miss (BenchmarkTripwire), below what redact.File
-// takes on the same file.
+// about 20 ms of empty or one-byte lines and up to about 0.25 s when every
+// line holds a hit or a near-miss (BenchmarkTripwire, 300 rows; measured
+// 0.19 to 0.24 s across runs), below what redact.File takes on the same
+// file.
 func tripwire(rows []signature, text []byte) (hits []hit, cut bool) {
 	for _, r := range rows {
 		hits = r.lines(text, hits)

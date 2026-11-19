@@ -11,10 +11,13 @@
 # "exec(" matches "exec (cmd)". The fixture line must match its row
 # (tripwire_test.go). A hit is a candidate for the reader, never a finding.
 #
-# Known gaps, left to discovery: Ruby backtick commands (a backtick row
-# would hit every JavaScript template literal), calls of a bare name
-# imported from elsewhere ("from subprocess import run", then "run(cmd)";
-# the import line is the hit), and calls split across lines.
+# Known gaps, left to discovery: Ruby and Perl backtick commands (a
+# backtick row would hit every JavaScript template literal and Markdown
+# code span); calls of a bare name imported from elsewhere ("from
+# subprocess import run", then "run(cmd)"; the import line is the hit);
+# calls split across lines; Swift Process and NSTask (the names are too
+# common to match alone); string-interpolated SQL literals with no call
+# name (Scala sql"...", Kotlin and Groovy GString queries).
 #
 # SQL
 sql	execute(	cursor.execute(query)
@@ -301,3 +304,36 @@ http_client	wp_remote_post(	$r = wp_remote_post($url, $args);
 http_client	Http::get(	$r = Http::get($url);
 http_client	Http::post(	$r = Http::post($url, $data);
 http_client	$http->	$r = $http->get($url);
+#
+# Process, SQL and eval APIs from the second review sweep
+shell	create_subprocess_shell(	p = await asyncio.create_subprocess_shell(cmd)
+shell	create_subprocess_exec(	p = await asyncio.create_subprocess_exec(prog, *args)
+shell	execv(	execv(path, argv);
+shell	execve(	execve(path, argv, envp);
+shell	execvp(	execvp(file, argv);
+shell	execvpe(	execvpe(file, argv, envp);
+shell	execl(	execl("/bin/sh", "sh", "-c", cmd, NULL);
+shell	execlp(	execlp("sh", "sh", "-c", cmd, NULL);
+shell	execle(	execle("/bin/sh", "sh", "-c", cmd, NULL, envp);
+shell	posix_spawn(	posix_spawn(&pid, path, NULL, NULL, argv, envp);
+shell	posix_spawnp(	posix_spawnp(&pid, file, NULL, NULL, argv, envp);
+shell	execa(	await execa(cmd, args)
+shell	execaSync(	execaSync(cmd, args)
+shell	execaCommand(	await execaCommand(line)
+shell	qx(	my $out = qx(ls $dir);
+shell	qx{	my $out = qx{ls $dir};
+shell	qx/	my $out = qx/ls $dir/;
+shell	Process.run(	final r = await Process.run(cmd, args);
+shell	Process.runSync(	final r = Process.runSync(cmd, args);
+shell	Process.start(	final p = await Process.start(cmd, args);
+shell	os.spawn	os.spawnlp(os.P_WAIT, cmd, cmd, arg)
+shell	commands.getoutput(	out = commands.getoutput(cmd)
+shell	syscall.Exec(	err := syscall.Exec(path, argv, env)
+shell	ProcessStartInfo(	var psi = new ProcessStartInfo(file, args);
+shell	os.execute(	os.execute(cmd)
+shell	os:cmd(	os:cmd(Cmd)
+sql	sqlite3_exec(	sqlite3_exec(db, sql, NULL, NULL, &err);
+sql	PQexec(	res = PQexec(conn, sql);
+sql	mysql_real_query(	mysql_real_query(conn, sql, len);
+sql	rawQuery(	Cursor c = db.rawQuery(sql, null);
+sql	execSQL(	db.execSQL(sql);
