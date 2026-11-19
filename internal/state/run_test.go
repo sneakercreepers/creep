@@ -96,6 +96,7 @@ func TestIncompleteRunNeverReadsComplete(t *testing.T) {
 	if sum.Complete() || sum.Outcome != OutcomeIncomplete || sum.Reason != "redact_run_full" {
 		t.Fatalf("summary = %+v; want incomplete with reason", sum)
 	}
+	_ = r.Close()
 	if _, err := s.Resume(r.ID()); !errors.Is(err, ErrRunEnded) {
 		t.Fatalf("Resume of ended run err = %v; want ErrRunEnded", err)
 	}

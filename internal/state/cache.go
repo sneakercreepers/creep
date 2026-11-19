@@ -68,6 +68,13 @@ func (s *Store) Lookup(k Key) ([]byte, bool, error) {
 	if err := k.validate(); err != nil {
 		return nil, false, err
 	}
+	// os.Root follows a link inside the store, so a planted cache link to
+	// another directory is refused here rather than read through.
+	if _, err := checkDir(cacheDir, s.root.Lstat); errors.Is(err, fs.ErrNotExist) {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, fmt.Errorf("cache: %w", err)
+	}
 	name := k.fileName()
 	data, err := s.readBounded(name, maxEntryBytes)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -136,17 +143,16 @@ func (s *Store) Respond(mode Mode, k Key, call func() ([]byte, error)) ([]byte, 
 	if !validMode(mode) {
 		return nil, fmt.Errorf("respond: mode %q: %w", mode, ErrInvalidID)
 	}
+	record := true
 	if mode != ModeRecord {
-		resp, ok, err := s.Lookup(k)
-		if mode == ModeLive && errors.Is(err, ErrUnauthenticated) {
-			ok, err = false, nil // not written by this user (e.g. shipped in the repo): never served
-		}
-		if err != nil || ok {
+		resp, hit, rec, err := s.cached(mode, k)
+		if err != nil || hit {
 			return resp, err
 		}
 		if mode == ModeReplay {
 			return nil, fmt.Errorf("replay %s: %w", k.Model, ErrNotRecorded)
 		}
+		record = rec
 	}
 	if err := k.validate(); err != nil {
 		return nil, err
@@ -155,10 +161,42 @@ func (s *Store) Respond(mode Mode, k Key, call func() ([]byte, error)) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	// A response that cannot be recorded fails the call: a later replay
-	// would otherwise miss it.
-	if err := s.Record(k, resp); err != nil {
+	if err := s.keep(k, resp, record); err != nil {
 		return nil, err
 	}
 	return resp, nil
+}
+
+// cached looks k up for mode. Replay fails closed on any entry that is not
+// a valid recording. Live never serves one either but treats it as a miss,
+// so a file planted in the repository cannot stop the scan: a malformed or
+// unauthenticated regular file (torn, several lines, oversized, not signed
+// by this user) is overwritten by the new recording, and an entry that is
+// not a regular file (a planted directory or link) is left alone and the
+// new answer goes unrecorded (record false), never written through or over it.
+func (s *Store) cached(mode Mode, k Key) (resp []byte, hit, record bool, err error) {
+	resp, hit, err = s.Lookup(k)
+	if mode != ModeLive {
+		return resp, hit, true, err
+	}
+	switch {
+	case errors.Is(err, ErrCorrupt):
+		return nil, false, true, nil
+	case errors.Is(err, ErrUnsafePath):
+		return nil, false, false, nil
+	}
+	return resp, hit, true, err
+}
+
+// keep records resp for k, or only checks its size when record is false.
+// A response that cannot be recorded fails the call: a later replay would
+// otherwise miss it.
+func (s *Store) keep(k Key, resp []byte, record bool) error {
+	if !record && len(resp) > MaxResponseBytes {
+		return fmt.Errorf("cache: %d bytes: %w", len(resp), ErrTooLarge)
+	}
+	if !record {
+		return nil
+	}
+	return s.Record(k, resp)
 }

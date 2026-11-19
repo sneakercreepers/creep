@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -148,6 +149,7 @@ func TestRunLinesBoundToTheirRun(t *testing.T) {
 	if err := done.Finish(OutcomeComplete, ""); err != nil {
 		t.Fatal(err)
 	}
+	_ = done.Close()
 	open := newRun(t, s)
 	_ = open.Close()
 	log, err := os.ReadFile(filepath.Join(done.Dir(), eventsFile))
@@ -239,6 +241,34 @@ func TestUserSecret(t *testing.T) {
 	}
 	if _, err := UserSecret(); !errors.Is(err, ErrCorrupt) {
 		t.Fatalf("short secret err = %v; want ErrCorrupt", err)
+	}
+}
+
+// Copying the public test key (or any fixed pattern) into state.key would
+// make every committed fixture and anything a repository signs with that
+// key verify, so UserSecret refuses it instead of using it.
+func TestUserSecretRefusesFixedKey(t *testing.T) {
+	keyFile := isolateUserConfig(t)
+	if _, err := UserSecret(); err != nil {
+		t.Fatal(err)
+	}
+	pattern := make([]byte, SecretBytes)
+	for i := range pattern {
+		pattern[i] = byte(i % (minDistinctBytes - 1))
+	}
+	for _, key := range [][]byte{testSecret, make([]byte, SecretBytes), pattern} {
+		if err := os.WriteFile(keyFile, []byte(hex.EncodeToString(key)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := UserSecret(); !errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), "fixed test key") {
+			t.Errorf("state.key %x err = %v; want ErrCorrupt naming a fixed key", key[:4], err)
+		}
+	}
+	if err := os.Remove(keyFile); err != nil {
+		t.Fatal(err)
+	}
+	if fresh, err := UserSecret(); err != nil || fixedSecret(fresh) {
+		t.Fatalf("new secret after removing a fixed one: %v", err)
 	}
 }
 

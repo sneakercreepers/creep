@@ -52,8 +52,8 @@ func Open(dir string, secret []byte) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("state dir: %w", err)
 	}
-	if err := os.MkdirAll(abs, dirMode); err != nil {
-		return nil, fmt.Errorf("state dir: %w", err)
+	if err := makeStateDir(abs); err != nil {
+		return nil, err
 	}
 	before, err := checkDir(abs, os.Lstat)
 	if err != nil {
@@ -78,6 +78,19 @@ func Open(dir string, secret []byte) (*Store, error) {
 // Close releases the directory handle.
 func (s *Store) Close() error {
 	return s.root.Close()
+}
+
+// makeStateDir creates abs if missing. A file or link planted in its place
+// is refused as ErrUnsafePath on every OS (MkdirAll's own error for it is
+// "path not found" on Windows).
+func makeStateDir(abs string) error {
+	if info, err := os.Lstat(abs); err == nil && !info.IsDir() { //nolint:gosec // G703: abs is the state directory the caller chose; a link there is refused here
+		return fmt.Errorf("state dir %q: not a directory: %w", abs, ErrUnsafePath)
+	}
+	if err := os.MkdirAll(abs, dirMode); err != nil { //nolint:gosec // G703: as above; Open checks the result through checkDir and os.Root
+		return fmt.Errorf("state dir: %w", err)
+	}
+	return nil
 }
 
 // checkDir refuses a directory that is a link or writable by other users.

@@ -69,7 +69,9 @@ func verify(secret, domain, line []byte) ([]byte, error) {
 // UserSecret returns the per-user state secret from
 // <os.UserConfigDir>/creep/state.key, creating it (0600, in a 0700
 // directory) on first use. It lives outside every repository, so state
-// shipped inside a scanned repo can never carry a valid MAC.
+// shipped inside a scanned repo can never carry a valid MAC. It is the only
+// secret production code passes to Open (TestOnlyUserSecretOpensStores), and
+// a key file holding a fixed pattern such as the public test key is refused.
 func UserSecret() ([]byte, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -84,7 +86,11 @@ func UserSecret() ([]byte, error) {
 		return nil, fmt.Errorf("state secret: %w", err)
 	}
 	defer s.Close()
-	return s.readOrCreateSecret("state.key")
+	secret, err := s.readOrCreateSecret("state.key")
+	if err != nil {
+		return nil, fmt.Errorf("state secret in %s: %w", dir, err)
+	}
+	return secret, nil
 }
 
 func (s *Store) readOrCreateSecret(name string) ([]byte, error) {
@@ -119,7 +125,30 @@ func (s *Store) readSecret(name string) ([]byte, error) {
 	if err != nil || len(secret) != SecretBytes {
 		return nil, fmt.Errorf("%s: not a %d-byte hex secret: %w", name, SecretBytes, ErrCorrupt)
 	}
+	if fixedSecret(secret) {
+		return nil, fmt.Errorf("%s: a fixed test key, not a random secret; delete it to create a new one: %w", name, ErrCorrupt)
+	}
 	return secret, nil
+}
+
+// minDistinctBytes is fewer distinct byte values than a random secret ever
+// has in practice (the odds are below 2^-120), and more than any fixed test
+// key (one byte repeated, like the public key that signs committed fixtures).
+const minDistinctBytes = 8
+
+// fixedSecret reports a secret that is a pattern, not random. Copying the
+// public test key into state.key would make every fixture or planted entry
+// signed with it verify, so UserSecret refuses it.
+func fixedSecret(secret []byte) bool {
+	var seen [256]bool
+	n := 0
+	for _, b := range secret {
+		if !seen[b] {
+			seen[b] = true
+			n++
+		}
+	}
+	return n < minDistinctBytes
 }
 
 // createSecret writes a fresh secret to a temporary file and links it into

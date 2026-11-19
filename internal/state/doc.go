@@ -3,8 +3,9 @@
 //
 // It exists so that tests and CI runs are deterministic and free (model
 // responses replay from disk) without a database dependency. Layout under the
-// state directory (normally ./.creep):
+// state directory (./.creep in the scanned repository for creep scan):
 //
+//	lock                     empty; an open Run holds an OS lock on it
 //	runs/<id>/events.jsonl   append-only event log of one run
 //	cache/<sha256>.json      one recorded model response, shared across runs
 //	calibrations/<sha256>.json  one model calibration (internal/calibrate),
@@ -21,10 +22,28 @@
 //     inside the scanned repository. Every line ends with an HMAC-SHA256
 //     ("mac") keyed by a per-user secret kept outside every repository
 //     (UserSecret, in os.UserConfigDir). A run line's MAC also covers its
-//     run ID. A line without a valid MAC is ErrUnauthenticated: live mode
-//     treats such a cache entry as a miss and calls the model; replay, Load
-//     and Resume fail with ErrCorrupt. A planted response or a planted
-//     "complete" run is therefore never served or believed.
+//     run ID. A line without a valid MAC is ErrUnauthenticated (and
+//     ErrCorrupt); replay, Load and Resume fail on it. A planted response
+//     or a planted "complete" run is therefore never served or believed.
+//   - Live mode never serves a cache entry that is not a valid recording and
+//     never stops on one: a planted, torn, multi-line or oversized file is a
+//     miss and the model's answer is recorded over it; an entry or cache
+//     directory that is a link, directory or FIFO is a miss too, left alone,
+//     and the answer goes unrecorded. Replay fails closed on all of them, so
+//     the caller marks the run incomplete. Only an entry a newer creep signed
+//     (ErrUnsupportedVersion) is an error in live.
+//   - Committed fixtures (testdata/v1, the reader's testdata/replay) are
+//     signed with a fixed, public test key that only _test.go files pass to
+//     Open, so go test ./... replays them with no user key. Production code
+//     passes only UserSecret's result (TestOnlyUserSecretOpensStores), and
+//     UserSecret refuses a state.key holding a fixed pattern, so the test key
+//     can never make planted state verify.
+//   - One run at a time per state directory: NewRun and Resume take an
+//     exclusive OS lock (flock on Unix, an unshared handle on Windows) held
+//     until Run.Close, and fail at once with ErrLocked instead of waiting, so
+//     two creep processes never interleave appends. The OS drops the lock when
+//     a process dies, so a crash never leaves the directory locked. Load
+//     takes no lock.
 //   - Run IDs must match the exact form NewRun writes, so no alias (Windows
 //     drops a trailing dot or space) reaches a run.
 //   - Files are 0600 and directories 0700. Cache entries are written to a

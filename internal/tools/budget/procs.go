@@ -18,8 +18,10 @@ var watchedCalls = map[string]map[string]bool{
 }
 
 // newFileAllowed lists module-relative files that may call os.NewFile, each
-// with its reason. Empty today.
-var newFileAllowed = map[string]string{}
+// with its reason.
+var newFileAllowed = map[string]string{
+	"internal/state/lock_windows.go": "wraps the handle CreateFile just opened on the state lock file, checked to be that regular file",
+}
 
 // selectorUses returns "pkg.Name" for every selector on an import of a watched
 // package, resolving aliases. A dot import hides the selector, so it is

@@ -37,4 +37,19 @@ func TestFIFORefusedWithoutBlocking(t *testing.T) {
 	if _, _, err := s.Lookup(k); !errors.Is(err, ErrUnsafePath) {
 		t.Errorf("Lookup of FIFO err = %v; want ErrUnsafePath", err)
 	}
+	calls := 0
+	if got, err := s.Respond(ModeLive, k, countingCall("real", &calls)); err != nil || string(got) != "real" || calls != 1 {
+		t.Errorf("live on a FIFO entry = %q, %v with %d calls; want the model's answer", got, err, calls)
+	}
+
+	lock := filepath.Join(s.dir, lockFile)
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(lock, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NewRun(ModeLive); !errors.Is(err, ErrUnsafePath) {
+		t.Errorf("NewRun with a FIFO lock err = %v; want ErrUnsafePath", err)
+	}
 }

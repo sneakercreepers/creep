@@ -42,7 +42,8 @@ var execAllowedExact = []string{
 
 // execAllowedInTests lists packages whose tests may run programs.
 var execAllowedInTests = []string{
-	"cmd/creep", // end-to-end tests build and run the creep binary
+	"cmd/creep",      // end-to-end tests build and run the creep binary
+	"internal/state", // the lock tests re-run the test binary as a second creep process
 }
 
 // syscallAllowed lists module-relative files that may import syscall, each
@@ -53,6 +54,8 @@ var syscallAllowed = map[string]string{
 	"internal/cli/fifo_unix_test.go":   "creates a FIFO with syscall.Mkfifo",
 	"internal/state/open_unix.go":      "O_NONBLOCK open so a FIFO swapped in for a state file cannot hang creep",
 	"internal/state/fifo_unix_test.go": "creates a FIFO with syscall.Mkfifo",
+	"internal/state/lock_flock.go":     "non-blocking flock on the state directory's lock file",
+	"internal/state/lock_windows.go":   "opens the state directory's lock file with no sharing (CreateFile), the Windows lock",
 }
 
 // collectSources parses the imports and watched calls of every .go file under fsys, including
