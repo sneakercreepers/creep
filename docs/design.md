@@ -13,7 +13,12 @@ creep scan .
   2 Static          tree-sitter (WASM in wazero, ADR 0008): routes, sinks and auth for Flask, FastAPI and
                     Express (JS/TS); unresolved bindings fail closed; other source languages are listed as
                     unsupported_language. Optional scanners: gitleaks and osv-scanner run offline (ADR 0013);
-                    semgrep is detected only (ADR 0010)
+                    semgrep is detected only (ADR 0010).
+                    Planned (ADR 0017, #265): language-agnostic. An inventory by file name and bytes, a
+                    lexical tripwire (one cross-language sink table matched on bytes) and model discovery
+                    (whole redacted files through the gateway, closed schema of line spans and enums, one
+                    canary per batch), combined by union only with worst-case planner flags. Static stays
+                    in the union until a 100% recall gate on testdata/apps, then goes; wazero last
   3 Planner         sees only IDs, enums and booleans → deterministic ranking, no model call, tier step caps
   4 Reader          reads redacted slices (quarantined), answers in a closed schema
   5 Sandbox  v0.2   optional Docker/Podman through their CLI (ADR 0016): runtime detection, hardened
@@ -59,7 +64,7 @@ Each protection has a test that is proven able to fail, run by the required CI j
 
 ## Dependencies
 
-Two direct dependencies, each with an ADR: `go.yaml.in/yaml/v3` (ADR 0001) and `wazero` (ADR 0008). JSON Schema is validated in tests only, not in the binary. State is JSONL files. External scanners are optional programs on `PATH`; when missing, refused or not run, the report lists them and the classes they would cover.
+Two direct dependencies, each with an ADR: `go.yaml.in/yaml/v3` (ADR 0001) and `wazero` (ADR 0008; removed at #265 step F, ADR 0017). JSON Schema is validated in tests only, not in the binary. State is JSONL files. External scanners are optional programs on `PATH`; when missing, refused or not run, the report lists them and the classes they would cover.
 
 ## Changes since the original design
 
@@ -68,7 +73,7 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Original decision | Built at v0.1 | Drift | Main purpose |
 |---|---|---|---|
 | Calibration per model, cached 30 days | As designed; one model per run picks the tier. Routing each task to the cheapest model that solves it is not built | None for calibration; routing across models not scheduled | Kept |
-| Static: tree-sitter routes, sinks, auth | Flask, FastAPI, Express in Go code; kits as data in v0.2 ([ADR 0012](adr/0012-language-kits.md), #217); parser ~0.1 MB/s (#170, #171) | Changed by ADR 0012, moved to v0.2 | Kept; other languages are reported as not evaluated |
+| Static: tree-sitter routes, sinks, auth | Flask, FastAPI, Express in Go code; parser ~0.1 MB/s (#170, #171). Kits as data ([ADR 0012](adr/0012-language-kits.md), #217) are superseded: language-agnostic inventory, tripwire and model discovery replace per-language code ([ADR 0017](adr/0017-language-agnostic-analysis.md), #265, planned for v0.2) | Changed by ADR 0017 (supersedes ADR 0012); not built yet | Kept for Python and JS/TS; other languages are reported as not evaluated until #265 step D, which also sends whole redacted files to the model (ADR 0017 D1) |
 | Optional scanners "used when installed" | gitleaks and osv-scanner run offline with fixed arguments; semgrep detected only ([ADR 0010](adr/0010-optional-scanners-detect-only.md), [ADR 0013](adr/0013-scanner-runner.md)) | Changed by ADR 0010, 0013 | Kept; a failed scanner makes the run incomplete |
 | Planner sees only IDs and enums | As designed, reflection-guarded; NoSQL sinks planned and read since v0.2 (#212) | None; NoSQL moved to v0.2 | Kept |
 | Sandbox and verification | Runtime detection, hardened profile, cleanup and `creep clean` (#21, [ADR 0016](adr/0016-sandbox-runtime.md)); run network, canary and synthetic database (#22, ADR 0016 amendment); PoC verification not built | Changed by ADR 0016 (CLI, not the API socket; creep never pulls the pinned images); verification moved to v0.2 (#23–#25) | Partly: findings are `probable`, never `verified` |
