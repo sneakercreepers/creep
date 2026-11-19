@@ -1,9 +1,11 @@
 # ADR 0012: Language kits as data
 
-- **Status:** Accepted (maintainer approval on #220, 2026-11-16)
+- **Status:** Superseded by ADR 0017 (2026-11-19; first accepted on #220, 2026-11-16)
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** `internal/static` internals (engine plus kits), the language-kit contract (architecture §4, §5), a new `creep kit test` command
+
+> **Superseded.** [ADR 0017](0017-language-agnostic-analysis.md) makes creep language-agnostic (#265): no per-language code, no language kits and no external language engines. Kits as data (#217) will not be built. This record is kept for its spike numbers and its reasoning.
 
 ## Context
 

@@ -4,6 +4,8 @@
 - **Date:** 2026-11-14
 - **Deciders:** @Ludocius
 
+> **To be superseded by [ADR 0017](0017-language-agnostic-analysis.md) at step F of #265.** This ADR stays in force until then: wazero and the grammars still parse Python and JS/TS. Step F removes them (`dependencies.txt`, the budget net-reach exception for `internal/static`) only after ADR 0017's removal gate (D4) has passed in step E, and marks this record superseded in the same PR.
+
 ## Context
 
 Issue #9 (split into #85–#88) extracts routes, sinks and auth checks from Python and JavaScript/TypeScript. That needs real parsers: regular expressions miss decorators, nested routers and aliased imports. tree-sitter has maintained grammars for all three, but its runtime and grammars are C. creep must stay one static binary built with `CGO_ENABLED=0`, and the files it parses are untrusted: a hostile repository chooses the input to a C parser.

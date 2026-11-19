@@ -46,6 +46,10 @@
 
 Design and threat model: [docs/design.md](docs/design.md), [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md).
 
+## Languages: moving to language-agnostic analysis
+
+Today creep analyses **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only, and that stays true until [#265](https://github.com/sneakercreepers/creep/issues/265) lands. creep is moving to language-agnostic analysis ([ADR 0017](docs/adr/0017-language-agnostic-analysis.md)): an inventory of the repository by file name and bytes, a lexical tripwire of known sink calls, and model discovery of entry points and sinks, combined so the model can add candidates but never remove one or lower its risk. Discovery will send **whole redacted source files** to your model endpoint, through the same redaction, consent and `egress.log`; for sensitive code, use a local model. Quality on other languages is not measured until [#35](https://github.com/sneakercreepers/creep/issues/35), and an injected file can still hide a route that has no known sink signature ([threat model R19](docs/threat-model.md)).
+
 ## Install
 
 ### From the GitHub release
@@ -211,7 +215,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language kits as data (#217) |
+| v0.2 | Coverage gaps (#213 ✅, #214), redaction hardening (#70), preset policy (#229), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22), PoC verification (#23–#25), `--diff`, baseline, GitHub Action (#26–#29), language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
