@@ -9,8 +9,9 @@ import (
 	"github.com/sneakercreepers/creep/internal/sandbox"
 )
 
-// runClean removes every container creep labeled on each local runtime it
-// can reach: what a killed or crashed run left behind (ADR 0016). A
+// runClean removes every container, app image and network creep labeled
+// on each local runtime it can reach: what a killed or crashed run left
+// behind (ADR 0016). A
 // runtime that is missing or not running holds nothing to remove; one that
 // answers but fails to remove makes clean exit 3.
 func runClean(e env, args []string) int {
@@ -52,6 +53,6 @@ func cleanRuntime(ctx context.Context, e env, st sandbox.Status) bool {
 		printError(e.stderr, "creep clean: "+string(st.Runtime), err)
 		return false
 	}
-	fmt.Fprintf(e.stdout, "%s: removed %d creep container(s) and %d network(s)\n", st.Runtime, n.Containers, n.Networks)
+	fmt.Fprintf(e.stdout, "%s: removed %d creep container(s), %d image(s) and %d network(s)\n", st.Runtime, n.Containers, n.Images, n.Networks)
 	return true
 }

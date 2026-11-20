@@ -126,7 +126,7 @@ func TestClean(t *testing.T) {
 		want     []string
 	}{
 		{"removes orphans", []sandbox.Status{rootlessDocker, rootfulPodman}, nil, nil, nil, exitcode.OK,
-			[]string{"docker: removed 3 creep container(s) and 2 network(s)", "podman: removed 1 creep container(s) and 0 network(s)"}},
+			[]string{"docker: removed 3 creep container(s), 4 image(s) and 2 network(s)", "podman: removed 1 creep container(s), 0 image(s) and 0 network(s)"}},
 		{"unreachable runtime", []sandbox.Status{downDocker, missingPodman}, nil, nil, nil, exitcode.OK,
 			[]string{"docker: not reachable (not_running); nothing removed", "podman: not reachable (not_found)"}},
 		{"removal fails", []sandbox.Status{rootlessDocker}, errors.New("rm: \x1b[31mdenied"), nil, nil, exitcode.ModelOrSandbox,
@@ -138,7 +138,7 @@ func TestClean(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := scanRepo(t, nil, "")
-			deps := withSandbox(noModelDeps, tt.checked, map[sandbox.Runtime]sandbox.Removed{sandbox.Docker: {Containers: 3, Networks: 2}, sandbox.Podman: {Containers: 1}}, tt.fail)
+			deps := withSandbox(noModelDeps, tt.checked, map[sandbox.Runtime]sandbox.Removed{sandbox.Docker: {Containers: 3, Images: 4, Networks: 2}, sandbox.Podman: {Containers: 1}}, tt.fail)
 			if tt.deps != nil {
 				deps = tt.deps(deps)
 			}

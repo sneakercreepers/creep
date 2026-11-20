@@ -52,11 +52,25 @@
 //     SQL migrations (MigrationPaths picks them): the seed is its only
 //     mount, its data directory is a tmpfs over the image's VOLUME, and its
 //     credentials are random placeholders. creep never pulls an image.
+//   - The app is built (Build) only from the repository's own root compose
+//     file or Dockerfile, never a generated one and never through
+//     `docker compose`: creep reads the compose file for one service's
+//     context, Dockerfile and target and refuses every other build key,
+//     checks the Dockerfile for anything the builder would fetch (an ADD
+//     URL, a syntax frontend, a variable image), requires every base
+//     image to be present locally, and builds a copy of the context made
+//     in its work directory without .env, git, creep or credential files,
+//     with one fixed command line: --network=none, no build arguments,
+//     secrets, SSH agent, extra hosts or entitlements, no pull, creep's
+//     labels. Anything that stops the build is a closed reason
+//     (verification unavailable), never an error. StartApp runs the built
+//     image on the run network, after the canary, with the hardened
+//     profile.
 //   - Every container carries creep's labels, its run ID and its own name
 //     as a label. A timeout or Ctrl+C removes the container by those labels,
-//     never by name alone; Close removes the run's containers and network,
-//     and Clean (creep clean) removes every creep container and network a
-//     killed run left.
+//     never by name alone; Close removes the run's containers, built
+//     images and network, and Clean (creep clean) removes every creep
+//     container, image and network a killed run left.
 //
 // No runtime is not an error: scans run as before and findings stay
 // probable.

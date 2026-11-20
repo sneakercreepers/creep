@@ -57,11 +57,14 @@ type Sandbox struct {
 	notify   func(chan<- os.Signal) // signal.Notify for os.Interrupt; tests replace it
 	stop     func(chan<- os.Signal)
 	netArgs  func(st Status, name, runID string) []string // networkArgs; tests replace it
+	buildFor time.Duration                                // buildTimeout; tests shorten it
 
 	mu       sync.Mutex
-	network  string // the run's network once created
-	database bool   // StartDatabase ran
-	aborted  error  // why the run was aborted (a canary failure); sticky
+	network  string   // the run's network once created
+	database bool     // StartDatabase ran
+	app      bool     // StartApp ran
+	images   []string // image IDs Build made
+	aborted  error    // why the run was aborted (a canary failure); sticky
 }
 
 // Open prepares a sandbox for runID on a usable runtime from Detect.
@@ -113,7 +116,7 @@ func newSandbox(st Status, runID string, run runFunc) (*Sandbox, error) {
 		status: st, runID: runID, run: run, work: work, workReal: resolved,
 		notify:  func(c chan<- os.Signal) { signal.Notify(c, os.Interrupt) },
 		stop:    func(c chan<- os.Signal) { signal.Stop(c) },
-		netArgs: networkArgs,
+		netArgs: networkArgs, buildFor: buildTimeout,
 	}, nil
 }
 
@@ -209,14 +212,17 @@ func (s *Sandbox) remove(name string) {
 	_, _ = removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID, LabelContainer+"="+name)
 }
 
-// Close removes every container of this run, then its network, then the
-// work directory. It is safe to call more than once.
+// Close removes every container of this run, then the images it built and
+// its network (both need the containers gone), then the work directory.
+// It is safe to call more than once.
 func (s *Sandbox) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cancel()
 	_, err := removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID)
 	if err == nil {
-		_, err = removeNetworks(ctx, s.run, s.status, LabelRun+"="+s.runID)
+		_, imgErr := removeImages(ctx, s.run, s.status, LabelRun+"="+s.runID)
+		_, netErr := removeNetworks(ctx, s.run, s.status, LabelRun+"="+s.runID)
+		err = errors.Join(imgErr, netErr)
 	}
 	if rmErr := os.RemoveAll(s.work); rmErr != nil {
 		err = errors.Join(err, fmt.Errorf("remove sandbox work directory: %w", rmErr))

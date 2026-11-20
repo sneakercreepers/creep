@@ -56,8 +56,8 @@ func publishWeakened(good []string) map[string][]string {
 }
 
 // TestNoPortPublished is the protection test for host reachability: no
-// command line of a whole run (network, canary, database, PoCs, cleanup)
-// publishes a port or uses the host network; the network is internal,
+// command line of a whole run (network, canary, database, PoCs, the app's
+// build and container, cleanup) publishes a port or uses the host network; the network is internal,
 // Docker's bridge gets no host address, and rootful Podman, whose bridge
 // keeps one, gets no network at all. Each weakened line is caught.
 func TestNoPortPublished(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNoPortPublished(t *testing.T) {
 	podman.Runtime, podman.Host = Podman, ""
 	for _, st := range []Status{usableDocker(), podman} {
 		t.Run(string(st.Runtime), func(t *testing.T) {
-			rec := networkRecorder(goodCanary, 0)
+			rec := withBuilds(networkRecorder(goodCanary, 0), 0)
 			s, err := newSandbox(st, testRunID, rec.run)
 			if err != nil {
 				t.Fatal(err)
@@ -111,6 +111,13 @@ func runWholeFlow(t *testing.T, s *Sandbox) {
 	}
 	if _, err := s.RunBatch(context.Background(), []Spec{{Image: testImage, Env: map[string]string{"PORT": "8080"}}}); err != nil {
 		t.Fatalf("RunBatch: %v", err)
+	}
+	app, err := s.Build(context.Background(), dockerfileRepo("FROM alpine:3\nEXPOSE 8080\n"))
+	if err != nil || !app.Built() {
+		t.Fatalf("Build = %+v, %v", app, err)
+	}
+	if err := s.StartApp(context.Background(), app); err != nil {
+		t.Fatalf("StartApp: %v", err)
 	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
