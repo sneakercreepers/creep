@@ -42,11 +42,9 @@ func symlinkOrSkip(t *testing.T, target, link string) {
 	}
 }
 
-// walkWithLink writes files under a temporary repository, adds one link
-// with makeLink and walks it.
-func walkWithLink(t *testing.T, files map[string]string, makeLink func(t *testing.T, repo string)) repoFiles {
+// writeTree writes files (slash names) under dir.
+func writeTree(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
-	dir := t.TempDir()
 	for name, content := range files {
 		path := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -56,6 +54,14 @@ func walkWithLink(t *testing.T, files map[string]string, makeLink func(t *testin
 			t.Fatal(err)
 		}
 	}
+}
+
+// walkWithLink writes files under a temporary repository, adds links with
+// makeLink and walks it.
+func walkWithLink(t *testing.T, files map[string]string, makeLink func(t *testing.T, repo string)) repoFiles {
+	t.Helper()
+	dir := t.TempDir()
+	writeTree(t, dir, files)
 	makeLink(t, dir)
 	root, err := os.OpenRoot(dir)
 	if err != nil {
@@ -69,56 +75,17 @@ func walkWithLink(t *testing.T, files map[string]string, makeLink func(t *testin
 	return got
 }
 
-// A directory link is listed whatever its name, never followed (#214): a
-// symlink on Unix, a junction on Windows (linkDir). So is a link creep
-// cannot resolve inside the repository (its target is outside, missing or
-// absolute), which could be a directory. A
-// link resolving to a file keeps the old rule (listed only when named as
-// source), and a link in an installed tree is vendor, like its files.
-func TestWalkListsDirectoryLinks(t *testing.T) {
-	outside := outsideCode(t)
-	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
-	tests := []struct {
-		name      string
-		files     map[string]string
-		link      func(t *testing.T, repo string)
-		wantPaths []string
-		wantGaps  []report.NotEvaluated
-	}{
-		{"directory link out of the repository", map[string]string{"main.py": "x = 1\n"},
-			func(t *testing.T, repo string) { linkDir(t, outside, filepath.Join(repo, "web")) },
-			[]string{"main.py"}, []report.NotEvaluated{{Path: "web", Reason: report.SkipNotRegular}}},
-		{"directory link inside the repository", map[string]string{"real/app.py": "x = 1\n"},
-			func(t *testing.T, repo string) { linkDir(t, filepath.Join(repo, "real"), filepath.Join(repo, "web")) },
-			[]string{"real/app.py"}, []report.NotEvaluated{{Path: "web", Reason: report.SkipNotRegular}}},
-		{"directory link with a dotted name", map[string]string{"main.py": "x = 1\n"},
-			func(t *testing.T, repo string) { linkDir(t, outside, filepath.Join(repo, "conf.d")) },
-			[]string{"main.py"}, []report.NotEvaluated{{Path: "conf.d", Reason: report.SkipNotRegular}}},
-		{"relative symlink to a directory", map[string]string{"real/app.py": "x = 1\n"},
-			func(t *testing.T, repo string) { symlinkOrSkip(t, "real", filepath.Join(repo, "web")) },
-			[]string{"real/app.py"}, []report.NotEvaluated{{Path: "web", Reason: report.SkipNotRegular}}},
-		{"symlink out of the repository", map[string]string{"main.py": "x = 1\n"},
-			func(t *testing.T, repo string) { symlinkOrSkip(t, outside, filepath.Join(repo, "web")) },
-			[]string{"main.py"}, []report.NotEvaluated{{Path: "web", Reason: report.SkipNotRegular}}},
-		{"dangling link", map[string]string{"main.py": "x = 1\n"},
-			func(t *testing.T, repo string) { symlinkOrSkip(t, "missing", filepath.Join(repo, "notes.txt")) },
-			[]string{"main.py"}, []report.NotEvaluated{{Path: "notes.txt", Reason: report.SkipNotRegular}}},
-		{"link to a file with a non-source name", map[string]string{"README.md": "# x\n"},
-			func(t *testing.T, repo string) { symlinkOrSkip(t, "README.md", filepath.Join(repo, "notes.txt")) },
-			[]string{"README.md"}, nil},
-		{"absolute link to a file in the repository", map[string]string{"README.md": "# x\n"},
-			func(t *testing.T, repo string) {
-				symlinkOrSkip(t, filepath.Join(repo, "README.md"), filepath.Join(repo, "notes.txt"))
-			},
-			[]string{"README.md"}, []report.NotEvaluated{{Path: "notes.txt", Reason: report.SkipNotRegular}}},
-		{"directory link in an installed venv", venv,
-			func(t *testing.T, repo string) {
-				linkDir(t, filepath.Join(repo, ".venv", "lib"), filepath.Join(repo, ".venv", "lib64"))
-			},
-			[]string{"main.py"}, []report.NotEvaluated{
-				{Path: ".venv/lib/site.py", Reason: report.SkipVendor}, {Path: ".venv/lib64", Reason: report.SkipVendor},
-			}},
-	}
+// linkCase is one repository with a link the walk must not follow.
+type linkCase struct {
+	name      string
+	files     map[string]string
+	link      func(t *testing.T, repo string)
+	wantPaths []string
+	wantGaps  []report.NotEvaluated
+}
+
+func runLinkCases(t *testing.T, tests []linkCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := walkWithLink(t, tt.files, tt.link)
@@ -129,38 +96,130 @@ func TestWalkListsDirectoryLinks(t *testing.T) {
 	}
 }
 
-// Through the CLI (#214 acceptance): a directory link is listed as
-// not_regular and the run is incomplete (exit 4, ADR 0009), and no request
-// carries the code it points to; in an installed tree it is vendor, by
-// design, and the run stays clean.
+// notRegular is the one gap a listed link leaves.
+func notRegular(path string) []report.NotEvaluated {
+	return []report.NotEvaluated{{Path: path, Reason: report.SkipNotRegular}}
+}
+
+// A link to a directory the walk does not reach at its own path is listed
+// whatever its name, never followed (#214): one the root cannot resolve
+// (outside, missing, a loop, absolute, a Windows junction) and one into the
+// root's .git or .creep. A link the root resolves to a directory the walk
+// covers is not (a pnpm or workspace link), nor is one to a file with a
+// non-source name. A listed link in an installed tree is vendor. linkDir
+// makes an absolute symlink on Unix and a junction on Windows.
+func TestWalkListsDirectoryLinks(t *testing.T) {
+	outside := outsideCode(t)
+	main := map[string]string{"main.py": "x = 1\n"}
+	real := map[string]string{"real/app.py": "x = 1\n"}
+	at := func(repo string, name ...string) string { return filepath.Join(append([]string{repo}, name...)...) }
+	runLinkCases(t, []linkCase{
+		{"directory link out of the repository", main,
+			func(t *testing.T, repo string) { linkDir(t, outside, at(repo, "web")) }, []string{"main.py"}, notRegular("web")},
+		{"absolute directory link or junction inside the repository", real,
+			func(t *testing.T, repo string) { linkDir(t, at(repo, "real"), at(repo, "web")) }, []string{"real/app.py"}, notRegular("web")},
+		{"directory link with a dotted name", main,
+			func(t *testing.T, repo string) { linkDir(t, outside, at(repo, "conf.d")) }, []string{"main.py"}, notRegular("conf.d")},
+		{"relative symlink to a walked directory", real,
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "real", at(repo, "web")) }, []string{"real/app.py"}, nil},
+		{"relative symlink up to a walked directory", real,
+			func(t *testing.T, repo string) {
+				symlinkOrSkip(t, filepath.Join("..", "real"), at(repo, "real", "web"))
+			}, []string{"real/app.py"}, nil},
+		{"workspace link back into the repository", map[string]string{"packages/app/index.js": "x()\n", "node_modules/left/package.json": "{}"},
+			func(t *testing.T, repo string) {
+				symlinkOrSkip(t, filepath.Join("..", "packages", "app"), at(repo, "node_modules", "app"))
+			}, []string{"node_modules/left/package.json", "packages/app/index.js"}, nil},
+		{"relative symlink into .git", map[string]string{".git/hooks/x.py": "x = 1\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, filepath.Join(".git", "hooks"), at(repo, "web")) }, nil, notRegular("web")},
+		{"relative symlink to .creep", map[string]string{".creep/x.py": "x = 1\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, ".creep", at(repo, "web")) }, nil, notRegular("web")},
+		{"relative symlink loop", main,
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "loop", at(repo, "loop")) }, []string{"main.py"}, notRegular("loop")},
+		{"symlink out of the repository", main,
+			func(t *testing.T, repo string) { symlinkOrSkip(t, outside, at(repo, "web")) }, []string{"main.py"}, notRegular("web")},
+		{"dangling link", main,
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "missing", at(repo, "notes.txt")) }, []string{"main.py"}, notRegular("notes.txt")},
+		{"link to a file with a non-source name", map[string]string{"README.md": "# x\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "README.md", at(repo, "notes.txt")) }, []string{"README.md"}, nil},
+		{"absolute link to a file in the repository", map[string]string{"README.md": "# x\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, at(repo, "README.md"), at(repo, "notes.txt")) },
+			[]string{"README.md"}, notRegular("notes.txt")},
+	})
+}
+
+// In an installed tree a listed link is vendor, like the tree's files; a
+// relative one the walk covers (a venv's lib64 -> lib) is not listed.
+func TestWalkDirectoryLinksInInstalledTree(t *testing.T) {
+	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
+	site := report.NotEvaluated{Path: ".venv/lib/site.py", Reason: report.SkipVendor}
+	runLinkCases(t, []linkCase{
+		{"absolute link or junction", venv,
+			func(t *testing.T, repo string) {
+				linkDir(t, filepath.Join(repo, ".venv", "lib"), filepath.Join(repo, ".venv", "lib64"))
+			},
+			[]string{"main.py"}, []report.NotEvaluated{site, {Path: ".venv/lib64", Reason: report.SkipVendor}}},
+		{"relative symlink", venv,
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "lib", filepath.Join(repo, ".venv", "lib64")) },
+			[]string{"main.py"}, []report.NotEvaluated{site}},
+	})
+}
+
+// The root's .git and .creep are skipped whatever their type (#214 tester
+// L1): a link or junction there is not listed, and a worktree's .git file,
+// which holds a local absolute path, is never sent to discovery.
+func TestWalkSkipsRootStateEntriesOfAnyType(t *testing.T) {
+	outside := outsideCode(t)
+	main := map[string]string{"main.py": "x = 1\n"}
+	runLinkCases(t, []linkCase{
+		{"worktree .git file", map[string]string{"main.py": "x = 1\n", ".git": "gitdir: /home/me/src/repo/.git/worktrees/x\n"},
+			func(*testing.T, string) {}, []string{"main.py"}, nil},
+		{".git link or junction", main,
+			func(t *testing.T, repo string) { linkDir(t, outside, filepath.Join(repo, ".git")) }, []string{"main.py"}, nil},
+		{".creep link or junction", main,
+			func(t *testing.T, repo string) { linkDir(t, outside, filepath.Join(repo, stateDir)) }, []string{"main.py"}, nil},
+	})
+}
+
+// Through the CLI (#214 acceptance): a directory link out of the
+// repository is listed as not_regular and the run is incomplete (exit 4,
+// ADR 0009), and no request carries the code it points to; a workspace
+// link back into the repository and a link in an installed tree keep the
+// run clean.
 func TestScanDirectoryLinkExitCode(t *testing.T) {
 	tests := []struct {
 		name       string
 		files      map[string]string
-		link       [2]string // target, link; a relative target is under the repository
+		link       func(t *testing.T, outside string)
 		wantCode   int
 		wantReason string
 		want       string
 	}{
-		{"link out of the repository", map[string]string{"main.py": helloRoute}, [2]string{"", "web"},
+		{"link out of the repository", map[string]string{"main.py": helloRoute},
+			func(t *testing.T, outside string) { linkDir(t, outside, "web") },
 			exitcode.Incomplete, string(report.SkipNotRegular), "web  not_regular"},
+		{"workspace link back into the repository", map[string]string{"main.py": helloRoute, "packages/app/index.js": "x = 1;\n"},
+			func(t *testing.T, _ string) {
+				if err := os.Mkdir("node_modules", 0o700); err != nil {
+					t.Fatal(err)
+				}
+				symlinkOrSkip(t, filepath.Join("..", "packages", "app"), filepath.Join("node_modules", "app"))
+			}, exitcode.OK, "", "coverage:"},
 		{"link in an installed venv",
 			withGitIndex(map[string]string{"main.py": helloRoute, ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
-			[2]string{".venv/lib", ".venv/lib64"}, exitcode.OK, "", ".venv/lib64  vendor"},
+			func(t *testing.T, _ string) {
+				abs, err := filepath.Abs(filepath.Join(".venv", "lib"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				linkDir(t, abs, filepath.Join(".venv", "lib64"))
+			}, exitcode.OK, "", ".venv/lib64  vendor"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outside := outsideCode(t)
 			cfg := scanRepo(t, tt.files, "")
-			target := outside
-			if tt.link[0] != "" {
-				abs, err := filepath.Abs(filepath.FromSlash(tt.link[0]))
-				if err != nil {
-					t.Fatal(err)
-				}
-				target = abs
-			}
-			linkDir(t, target, filepath.FromSlash(tt.link[1]))
+			tt.link(t, outside)
 			deps, leaked := watchPayloads(fakeDeps(&fakeModel{verdict: map[string]string{"command_injection": "vulnerable"}}, calibrate.TierM))
 			code, out, errOut := runScanWith(deps, "scan", "--config", cfg)
 			if code != tt.wantCode || !strings.Contains(out, tt.want) {

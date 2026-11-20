@@ -10,9 +10,12 @@ import (
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
-// skipDirs are the top-level directories never walked: version control and
-// creep's own state. Only at the root: a nested ".git" or ".creep" is
-// walked, so a repository cannot hide code by naming a folder after them.
+// skipDirs are the top-level entries never walked or listed, whatever
+// their type: version control and creep's own state. A link or junction
+// there, or a worktree's .git file (it holds a local absolute path), is
+// skipped like the directory. Only at the root: a nested ".git" or
+// ".creep" is walked, so a repository cannot hide code by naming a folder
+// after them.
 var skipDirs = map[string]bool{".git": true, stateDir: true}
 
 // repoFiles is what the walk found: the files discovery is given, in
@@ -47,10 +50,10 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if skipDirs[rel] {
-				return fs.SkipDir
-			}
+		if skipDirs[rel] && d.IsDir() {
+			return fs.SkipDir
+		}
+		if skipDirs[rel] || d.IsDir() {
 			return nil
 		}
 		reason, send := entryGap(root, rel, d, proofs)
@@ -94,31 +97,4 @@ func entryGap(root *os.Root, rel string, d fs.DirEntry, proofs *vendorProofs) (r
 		return report.SkipInvalidPath, false
 	}
 	return report.SkipVendor, false
-}
-
-// linkGap lists a link or special file the walk does not follow when it
-// could hold source: its name is a source name, or it may be a directory
-// (mayBeDirectory), whatever its name (#214). One in an installed tree is
-// vendor, like the tree's files; any other is not_regular, which makes the
-// run incomplete (ADR 0009).
-func linkGap(root *os.Root, rel string, proofs *vendorProofs) report.SkipReason {
-	if !discover.SourceName(rel) && !mayBeDirectory(root, rel) {
-		return ""
-	}
-	if report.ValidPath(rel) && proofs.proven(rel) {
-		return report.SkipVendor
-	}
-	return report.SkipNotRegular
-}
-
-// mayBeDirectory reports whether the entry at rel may be a directory: the
-// root resolves it to one, or cannot resolve it. The root never leaves the
-// repository, so a link whose target is outside it, missing, a loop or an
-// absolute path, and a Windows junction, all of which the root refuses,
-// cannot be told from a directory without following it out; each counts
-// as one (fail closed).
-// Only the target's metadata is read, never its contents.
-func mayBeDirectory(root *os.Root, rel string) bool {
-	info, err := root.Stat(rel)
-	return err != nil || info.IsDir()
 }
