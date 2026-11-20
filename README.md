@@ -31,7 +31,7 @@
 
 - **Redaction through the gateway.** Every model call goes through one package that redacts secrets from the whole file before fragmenting it, checks consent and the token budget, and only then sends.
 - **`egress.log`.** Every request is written and fsynced before a byte is sent, then its result, with a payload file (mode `0600`).
-- **The planner never reads code.** It receives only IDs, enums and booleans, so text in the scanned repository cannot steer it.
+- **The planner never reads code.** It receives only IDs, enums, booleans and bounded numbers, so text in the scanned repository cannot steer it.
 - **Honest incompleteness.** Anything not evaluated (a file discovery did not read in full, a batch whose discovery canary the model missed, skipped sink, failed scanner, budget hit, a file name that is not a clean relative path) is listed and the run exits `4`, never `0`.
 - **Model output is never executed** on your machine.
 - No telemetry; no network except the model endpoints you configure.

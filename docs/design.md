@@ -17,7 +17,7 @@ creep scan .
                     by union only with worst-case planner flags. A stderr notice names the endpoint and
                     the number of whole files before the first call. Optional scanners: gitleaks and
                     osv-scanner run offline (ADR 0013); semgrep is detected only (ADR 0010).
-  3 Planner         sees only IDs, enums and booleans → deterministic ranking, no model call, tier step caps
+  3 Planner         sees only IDs, enums, booleans and bounded numbers → deterministic ranking, no model call, tier step caps
   4 Reader          reads redacted slices (quarantined), answers in a closed schema
   5 Sandbox  v0.2   optional Docker/Podman through their CLI (ADR 0016): runtime detection, hardened
                     profile and cleanup built (#21); internal network, canary and synthetic database
