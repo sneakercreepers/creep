@@ -49,12 +49,12 @@ var gitHosts = map[string]bool{
 }
 
 // notGitRemote rejects the user part of an SSH remote, git@github.com:org/r:
-// the user git at a well-known git host, or at a host whose first label
-// starts with "git" (git.example.com, gitlab.corp.example). No person owns
-// it. Any other address at those hosts is a person's and is masked (#71).
+// the user git at one of gitHosts, matched as the whole domain, so
+// git@github.com.example.io is still masked. No person owns it. Any other
+// address at those hosts is a person's and is masked (#71).
 func notGitRemote(email string) bool {
 	user, host, _ := strings.Cut(strings.ToLower(email), "@")
-	return user != "git" || !gitHosts[host] && !strings.HasPrefix(host, "git")
+	return user != "git" || !gitHosts[host]
 }
 
 func digitsOnly(s string) string {

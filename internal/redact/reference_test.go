@@ -31,9 +31,8 @@ func TestRedactKeepsPasswordHandlingCode(t *testing.T) {
 		{"env path generic", "api_key = process.env.API_KEY"},
 		{"config field", "secret := cfg.Secret"},
 		{"config field generic", "apiKey = cfg.Secret"},
-		{"object field", "this.password = user.password;"},
+		{"object field", "this.password = self.password;"},
 		{"git remote", "git clone git@github.com:org/repo.git"},
-		{"self-hosted git remote", "url = git@gitlab.example.com:team/app.git"},
 		{"user at host", "ssh user@host"},
 	}
 	for _, tc := range tests {
@@ -72,6 +71,32 @@ func TestRedactExemptionsKeepSecretsHidden(t *testing.T) {
 		{"bracket in a password", "password: t8wMWwtM6z(!d%5r"},
 		{"subscript in a password", "DB_PASSWORD=abcd[efgh"},
 		{"dotted passphrase", "password: correct.horse.battery"},
+		{"dotted words with key", "password = monkey.island.sunset"},
+		{"dotted words with pass", "password = compass.north.star"},
+		{"dotted words with auth", "password = author.unknown.river"},
+		{"dotted words with env", "password = envelope.green.tree"},
+		{"dotted words with secret", "password: keyboard.cat.secret"},
+		{"dotted capitalized", "password = Pass.word.Horse"},
+		{"dotted generic", "api_key = monkey.island.sunset"},
+		{"dotted token", "token = sacred.river.dawn"},
+		{"dotted client secret", "client_secret = blue.monkey.dance"},
+		{"field of another object", "password = user.password"},
+		{"measure word inside admin", "PASSWORD_ADMIN=48291337"},
+		{"measure word inside sysadmin", "DB_PASSWORD_SYSADMIN: 48291337"},
+		{"measure word inside message", "SECRET_MESSAGE=48291337"},
+		{"measure word inside storage", "secret_storage = 48291337"},
+		{"measure word inside passage", "secretpassage: 48291337"},
+		{"call with a blank", "password: real(PW99 + x)"},
+		{"call with a digit and blank", "password = hunter(2 )"},
+		{"call with operator", "password: realPW(99 - )"},
+		{"open call", "password = hunter( x"},
+		{"type with a value", "password: Optional[realPW99]"},
+		{"str with a value", "password: str[realPW99]"},
+		{"shell form with a blank", "$secret: /9j4kAbcFakeKey99"},
+		{"shell form password", "$PASSWORD: /fakePW99"},
+		{"self-hosted git host", "url = git@gitlab.example.com:team/app.git"},
+		{"git host as a subdomain", "git@github.com.evil.io"},
+		{"git-prefixed host", "git@gitlab.evil.io"},
 		{"php variable", `$password = "PW";`},
 		{"shell var not a path", "$PASSWORD: PW"},
 		{"person at a git host", "author: alice@github.com"},
@@ -91,8 +116,8 @@ func TestRedactExemptionsKeepSecretsHidden(t *testing.T) {
 	}
 }
 
-// A number is masked unless the key measures the password, and a dotted
-// generic value needs a word that reads as config and no digit.
+// A number is kept only under a key whose last word measures the password,
+// a dotted path only from a known receiver, a call only in a call's shape.
 func TestJudgeBare(t *testing.T) {
 	tests := []struct {
 		key, value, after string
@@ -112,7 +137,15 @@ func TestJudgeBare(t *testing.T) {
 		{"password: ", "t8wMWwtM6z(!d%5r", "", maskValue},
 		{"password: ", "abc(def)", " x)", maskValue},
 		{"password = ", "hunter(2)", "", maskValue},
-		{"password = ", "user.password", "", keepReference},
+		{"password = ", "self.password", "", keepReference},
+		{"password = ", "user.password", "", maskValue},
+		{"password = ", "monkey.island.sunset", "", maskValue},
+		{"PASSWORD_ADMIN=", "48291337", "", maskValue},
+		{"passwordMaxAge: ", "90", "", keepReference},
+		{"password: ", "Optional[str]", "", keepReference},
+		{"password: ", "Optional[realPW]", "", maskValue},
+		{"$secret: ", "/9j4k", "", maskValue},
+		{"password: ", "real(PW", " + x)", maskValue},
 		{"password = ", "user.name", "", maskValue},
 		{"password = ", "user.password2", "", maskValue},
 		{"password = ", "${DB_PASSWORD}", "", keepReference},
@@ -131,15 +164,19 @@ func TestURLPasswordOneMarker(t *testing.T) {
 	pw := urlPassword + "x"
 	url := "postgres://admin:" + pw + "@db.internal\n"
 	alone := "DB_PASSWORD=" + pw + "\n"
+	// The email tail of the URL masked in an earlier call (tester F6).
+	pwAt := urlPassword + "@x"
 	tests := []struct {
-		name  string
-		calls []string
+		name, pw string
+		calls    []string
 	}{
-		{"url then alone", []string{url, alone}},
-		{"alone then url", []string{alone, url}},
-		{"one call, url first", []string{url + alone}},
-		{"one call, alone first", []string{alone + url}},
-		{"url then bare later", []string{url, "pw " + pw + " "}},
+		{"url then alone", pw, []string{url, alone}},
+		{"alone then url", pw, []string{alone, url}},
+		{"one call, url first", pw, []string{url + alone}},
+		{"one call, alone first", pw, []string{alone + url}},
+		{"url then bare later", pw, []string{url, "pw " + pw + " "}},
+		{"email tail seen first", pwAt, []string{"mail x@db.example.com\n",
+			"postgres://admin:" + pwAt + "@db.example.com/app\n", "DB_PASSWORD=" + pwAt + "\n"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -147,7 +184,7 @@ func TestURLPasswordOneMarker(t *testing.T) {
 			markers := map[string]bool{}
 			for _, text := range tc.calls {
 				out := mustRedact(t, r, text)
-				if strings.Contains(out, pw) {
+				if strings.Contains(out, tc.pw) {
 					t.Fatalf("password leaked: %q", out)
 				}
 				if back := r.Unredact(out); back != text {

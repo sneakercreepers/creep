@@ -10,7 +10,7 @@ type bareVerdict int
 
 const (
 	maskValue     bareVerdict = iota // a secret written out, or a shape no rule below knows
-	keepValue                        // not an assignment at all: "$PWD:/src" expands a shell variable before a path
+	keepValue                        // not an assignment at all: "$PWD:/src" expands a shell variable before a path, no blank between
 	keepReference                    // code that stands for a value; the literals after it are masked
 	keepLookup                       // a lookup whose first literal names what it reads
 )
@@ -27,7 +27,7 @@ const (
 // (tailLiterals).
 func judgeBare(key, value, after string) bareVerdict {
 	switch {
-	case strings.HasPrefix(key, "$") && operator(key) == ":" && strings.HasPrefix(value, "/"):
+	case strings.HasPrefix(key, "$") && strings.HasSuffix(key, ":") && shellPathRe.MatchString(value):
 		return keepValue
 	case lookupExpr(value, after):
 		return keepLookup
@@ -37,6 +37,9 @@ func judgeBare(key, value, after string) bareVerdict {
 	}
 	return maskValue
 }
+
+// shellPathRe is the path after a shell variable: "$PWD:/src".
+var shellPathRe = regexp.MustCompile(`^/[A-Za-z0-9_./-]*$`)
 
 // nullWords are values that hold no secret in any language.
 var nullWords = map[string]bool{
@@ -66,11 +69,13 @@ var exprRe = regexp.MustCompile(`^([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-
 
 // callExpr reports a call or subscript left open at the end of the value
 // and closed later on the line: GenerateFromPassword(pw, cost),
-// decrypt("x"), os.environ["X"]. A password holding a bracket (t8w(!d%5r)
-// has nothing after it that closes one, so it is masked.
+// decrypt("x"), os.environ["X"]. The value must end at a comma or a quote
+// (the next argument or a literal one), and its arguments so far must be
+// names without digits ([]byte(pw). A password holding a bracket
+// (t8w(!d%5r, real(PW99 + x)) does not fit that shape, so it is masked.
 func callExpr(value, after string) bool {
 	m := exprRe.FindStringSubmatch(value)
-	if m == nil {
+	if m == nil || !callArgsRe.MatchString(m[3]) || after == "" || !strings.ContainsRune(",\"'`", rune(after[0])) {
 		return false
 	}
 	closer := ")"
@@ -79,6 +84,9 @@ func callExpr(value, after string) bool {
 	}
 	return strings.Count(m[2]+m[3], m[2]) > strings.Count(m[3], closer) && strings.Contains(after, closer)
 }
+
+// callArgsRe is what may follow a call's bracket within the value.
+var callArgsRe = regexp.MustCompile(`^(?:[A-Za-z_$.()]|\[\])*$`)
 
 // lookupExpr reports a call of a lookup function, or a subscript, that ends
 // where a quoted argument starts: os.environ[, os.getenv(, config.get(,
@@ -102,15 +110,21 @@ var lookupNames = map[string]bool{
 // makes it read like a password.
 var referencePathRe = regexp.MustCompile(`^[A-Za-z_$]{1,32}(?:\.[A-Za-z_$]{1,32})+$`)
 
-// referenceWordRe: a word that config objects and credential fields carry.
-var referenceWordRe = regexp.MustCompile(`(?i)env|conf|cfg|setting|secret|pass|pwd|key|token|auth|cred|param|option|opts|args|props|vault`)
+// referenceReceivers are the objects config and request values are read
+// from, as the whole first segment of a path.
+var referenceReceivers = map[string]bool{
+	"cfg": true, "config": true, "conf": true, "settings": true, "self": true, "this": true,
+	"os": true, "process": true, "env": true, "request": true, "req": true, "args": true,
+	"options": true, "opts": true, "params": true, "app": true, "ctx": true, "props": true,
+}
 
-// referencePath reports a dotted path that reads config or a credential
-// field: process.env.SECRET_KEY, cfg.Secret, user.password. A dotted
-// value with none of those words (correct.horse.battery) may be a
-// passphrase and is masked.
+// referencePath reports a dotted path read from a known receiver:
+// process.env.SECRET_KEY, cfg.Secret, self.password. Any other dotted
+// value (monkey.island.sunset, user.password) may be a passphrase and is
+// masked.
 func referencePath(value string) bool {
-	return referencePathRe.MatchString(value) && referenceWordRe.MatchString(value)
+	first, _, _ := strings.Cut(value, ".")
+	return referencePathRe.MatchString(value) && referenceReceivers[strings.ToLower(first)]
 }
 
 // typeNames are the type names a key is annotated with: password: string.
@@ -122,30 +136,60 @@ var typeNames = map[string]bool{
 }
 
 // typeAnnotation reports a type name after a ":" (password: string;,
-// password: str = ..., f(password: str), password: Optional[str]). After
-// "=" the same word may be a password.
+// password: str = ..., f(password: str), password: Optional[str]). Text in
+// brackets must be a type name too. After "=" the same word may be a
+// password.
 func typeAnnotation(key, value string) bool {
 	if operator(key) != ":" {
 		return false
 	}
-	base, _, _ := strings.Cut(strings.TrimRight(value, "[]?!)"), "[")
+	v := strings.TrimSuffix(strings.TrimRight(value, "?!)"), "[]")
+	base, inner, generic := strings.Cut(v, "[")
+	if generic {
+		inner, closed := strings.CutSuffix(inner, "]")
+		if !closed || !typeNames[strings.ToLower(inner)] {
+			return false
+		}
+	}
 	return typeNames[strings.ToLower(base)]
 }
 
 var numberRe = regexp.MustCompile(`^[0-9][0-9_]*(?:\.[0-9]+)?$`)
 
-// measureKeyRe is a key that measures a password or secret rather than
-// holding one: PASSWORD_MIN_LENGTH, passwordHashRounds, SECRET_TTL.
-var measureKeyRe = regexp.MustCompile(`(?i)(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.-]*?` +
-	`(?:len|length|size|min|max|minimum|maximum|count|rounds|cost|iterations?|attempts|retries|tries|ttl|timeout|` +
-	`expiry|expires|expiration|age|days|hours|minutes|seconds|interval|lifetime|duration|version|level|limit|history|` +
-	`strength|bits|bytes|chars|characters|digits)s?$`)
+// measureWords name what a key measures about a password or secret.
+var measureWords = map[string]bool{
+	"len": true, "length": true, "size": true, "min": true, "max": true, "minimum": true,
+	"maximum": true, "count": true, "rounds": true, "cost": true, "iteration": true,
+	"iterations": true, "attempts": true, "retries": true, "tries": true, "ttl": true,
+	"timeout": true, "expiry": true, "expires": true, "expiration": true, "age": true,
+	"days": true, "hours": true, "minutes": true, "seconds": true, "interval": true,
+	"lifetime": true, "duration": true, "version": true, "level": true, "limit": true,
+	"history": true, "strength": true, "bits": true, "bytes": true, "chars": true,
+	"characters": true, "digits": true,
+}
 
-// measureNumber reports a number under a key that measures the password.
-// A number under any other key (PIN = 1234, DB_PASSWORD=123456) is masked.
+// measureNumber reports a number under a key whose last word measures the
+// password: PASSWORD_MIN_LENGTH, passwordHashRounds, SECRET_TTL. A number
+// under any other key (PIN = 1234, DB_PASSWORD=123456, PASSWORD_ADMIN,
+// SECRET_MESSAGE) is masked.
 func measureNumber(key, value string) bool {
 	name := strings.TrimRight(key, " \t:=>\"'`]")
-	return numberRe.MatchString(value) && measureKeyRe.MatchString(name)
+	return numberRe.MatchString(value) && measureWords[strings.ToLower(lastWord(name))]
+}
+
+// lastWord returns the last word of an identifier: after the last "_", "."
+// or "-", or the last change from a lowercase letter to an uppercase one.
+func lastWord(name string) string {
+	for i := len(name) - 1; i > 0; i-- {
+		c, prev := name[i], name[i-1]
+		if strings.IndexByte("_.-", prev) >= 0 {
+			return name[i:]
+		}
+		if c >= 'A' && c <= 'Z' && prev >= 'a' && prev <= 'z' {
+			return name[i:]
+		}
+	}
+	return name
 }
 
 // closesString reports a value that ends at a quote closing the string it

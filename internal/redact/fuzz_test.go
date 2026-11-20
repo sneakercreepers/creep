@@ -66,6 +66,18 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 			`password: str = '%s'`, `secret := cfg.Secret + "%s"`, "password = decrypt(`%s`)"}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], pw), pw
 	},
+	// A passphrase of dotted words with no digit, the shape of a config
+	// path (tester F1 on #71). Words of five letters or more cannot be a
+	// receiver name such as cfg or os.
+	func(rng *rand.Rand) (string, string) {
+		words := make([]string, 2+rng.IntN(3))
+		for i := range words {
+			words[i] = fakeToken(rng, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 5+rng.IntN(5))
+		}
+		pw := strings.Join(words, ".")
+		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}
+		return fmt.Sprintf([]string{"%s = %s", "%s: %s", "%s=%s"}[rng.IntN(3)], keys[rng.IntN(len(keys))], pw), pw
+	},
 }
 
 // fakePassword mixes letters, digits and the punctuation people put in

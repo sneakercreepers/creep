@@ -53,10 +53,10 @@ var credentialDetectors = append([]patternDetector{
 	},
 }, subscriptDetectors...)
 
-// callRe matches a value that is a function call in code, not a literal
-// password: getPassword() or os.Getenv( (the bare value stops at the quote
-// of the argument). A password of that exact shape is not masked.
-var callRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*\(\)?$`)
+// callRe matches a value that is a call without arguments in code, not a
+// literal password: getPassword(). A call with arguments is judged by
+// callExpr. A password of that exact shape is not masked.
+var callRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*\(\)$`)
 
 // notPlaceholder rejects values that only point at a password: ${VAR}, $VAR,
 // {{ var }}, <your-password>, %s and function calls. Anything else is masked,
@@ -100,9 +100,9 @@ func (r secretRule) comparedWord(text string, start, end int) bool {
 	return strings.HasSuffix(strings.TrimRight(text[:start], " \t\"'`"), "==")
 }
 
-// referenceWord reports a generic-api-key value that is a dotted path of
-// words naming config or a credential field, as in process.env.SECRET_KEY
-// or cfg.Secret: code reading a key, not a key (#71). The value must also
+// referenceWord reports a generic-api-key value that is a dotted path read
+// from a known receiver, as in process.env.SECRET_KEY or cfg.Secret: code
+// reading a key, not a key (#71). The value must also
 // be a word in the gitleaks allowlist sense, so a token with a digit is
 // still masked, whatever its shape.
 func (r secretRule) referenceWord(value string) bool {

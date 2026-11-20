@@ -22,8 +22,9 @@
 //     ranges), Spanish DNI and NIE (control letter) and Brazilian CPF (two
 //     check digits, dotted or not). Checksums keep ordinary numbers in code
 //     unmasked. An address needs a dotted domain (user@host is not one), and
-//     the user git at a well-known git host or one whose name starts with
-//     "git" is an SSH remote (git@github.com:org/repo), not a person's.
+//     the user git at a well-known git host, matched as the whole domain
+//     (github.com, gitlab.com, bitbucket.org, ...), is an SSH remote
+//     (git@github.com:org/repo), not a person's.
 //   - Credentials with no fixed format, which gitleaks misses: the password
 //     in scheme://user:password@host, the value of password, passwd, pwd,
 //     passphrase and secret keys (see below for the values left alone), and
@@ -52,23 +53,27 @@
 //   - A quoted password value is masked unless it only points at one (${VAR},
 //     $VAR, {{ var }}, <placeholder>, %s, getPassword()). A bare one is kept
 //     only when it is code (reference.go, #71): None, null, nil, true and
-//     false; a number under a key that measures the password
-//     (PASSWORD_MIN_LENGTH = 12; DB_PASSWORD=123456 is masked); a type after
-//     ":" (password: string); a dotted path of names, no digit, with a word
-//     config or credential fields carry (process.env.SECRET_KEY,
-//     cfg.Secret); a call or subscript the line goes on to close
-//     (GenerateFromPassword(pw, cost), os.environ["X"]); a shell variable
-//     before a path ("$PWD:/src"). The literals after a kept value on its
-//     line are masked (None or "x", os.environ.get("X", "default"),
-//     str = "x"), except the first argument of a lookup, which names what it
-//     reads; the read stops at a comment and reads each line once. A value
-//     in a shape that only resembles code (hunter(2), t8w(!d, a dotted
-//     passphrase) is masked.
+//     false; a number under a key whose last word measures the password
+//     (PASSWORD_MIN_LENGTH = 12; DB_PASSWORD=123456 and PASSWORD_ADMIN=1234
+//     are masked); a known type name after ":", alone or around another one
+//     (password: string, Optional[str]); a dotted path of names, no digit,
+//     whose first segment is a known receiver such as cfg, config, settings,
+//     self, this, os, process, env or req (process.env.SECRET_KEY,
+//     cfg.Secret); a call or subscript left open, its arguments so far names
+//     without digits, ending at a comma or a quote and closed later on the
+//     line (GenerateFromPassword(pw, cost), os.environ["X"]); a shell
+//     variable right before a path, no blank ("$PWD:/src"). The literals
+//     after a kept value on its line are masked (None or "x",
+//     os.environ.get("X", "default"), str = "x"), except the first argument
+//     of a lookup, which names what it reads; the read stops at a comment
+//     and reads each line once. A value in a shape that only resembles code
+//     (hunter(2), real(PW99 + x), Optional[x99], monkey.island.sunset,
+//     user.password) is masked.
 //   - The generic-api-key rule skips a word compared with == or === (key ===
 //     "constructor"): letters, "_", "." and "-" only, as in the gitleaks
 //     allowlist. Assigned values, and compared values with any digit or other
 //     character, are still masked. It also skips a dotted path of such words
-//     that reads config (process.env.SECRET_KEY, cfg.Secret).
+//     read from a known receiver (process.env.SECRET_KEY, cfg.Secret).
 //
 // When matches overlap they are merged into one masked span, and a fixed
 // precedence names it: a rule that knows the secret's format, then the
@@ -126,6 +131,17 @@
 //     spaces, and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
 //     rule, and so do encodings other than the separators listed below.
 //   - A value split from its key by other text (see Performance).
+//   - Literals the password detector leaves next to code (#71), as main did
+//     before it: the first argument of a lookup or getter
+//     (getSecret("..."), d["..."], os.environ['...']), which is taken for the
+//     name it reads; a value on a later line than its key or call
+//     (os.environ.get(\n "X", "..."), password=(\n"..."), a line
+//     continuation, YAML block scalars "|" and ">-", anchors and tags); a
+//     literal after "#" or "//" outside a string, read as a comment
+//     (cfg.Secret || this.#x || "..."); a literal glued to a kept value
+//     (None"..."); a no-break space before "=", and curly quotes. In one
+//     File call, a URL password under 8 bytes repeated alone on a later line
+//     is not masked there (Short values).
 //
 // The rules file is read by a tiny reader for the TOML subset it uses
 // (toml.go) instead of a generator that converts it to JSON. Both need the same

@@ -88,8 +88,11 @@ func (s *runState) render(text string, spans []merged, parts []span) string {
 // email) keeps the marker it has on its own, and the bytes on either side
 // get their own markers: the password has one name in every fragment, in
 // either order, and Unredact stays exact (#71). Any other merged span is one
-// value with one marker.
+// value with one marker. A part the sweep found takes the label of the
+// marker its value already has, so an email masked in an earlier call still
+// counts as personal data.
 func (s *runState) writeMerged(b *strings.Builder, text string, m merged, parts []span) {
+	parts = s.storedLabels(text, parts)
 	w, ok := secretInsidePII(m, parts)
 	if !ok {
 		b.WriteString(s.marker(text[m.start:m.end], m.label))
@@ -122,6 +125,30 @@ func secretInsidePII(m merged, parts []span) (span, bool) {
 		}
 	}
 	return w, true
+}
+
+// storedLabels returns parts with each unlabelled part, a known value the
+// sweep found, named by the label of its marker. It copies parts only when
+// one needs a label.
+func (s *runState) storedLabels(text string, parts []span) []span {
+	var out []span
+	for i, p := range parts {
+		if p.label != "" {
+			continue
+		}
+		m, ok := s.byValue[text[p.start:p.end]]
+		if !ok {
+			continue
+		}
+		if out == nil {
+			out = append([]span(nil), parts...)
+		}
+		out[i].label = m[1:strings.LastIndexByte(m, '_')]
+	}
+	if out == nil {
+		return parts
+	}
+	return out
 }
 
 // writePiece writes the marker of text[from:to], named by the best label
