@@ -1,8 +1,10 @@
 package main
 
 import (
+	"html"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // taskItem matches a ticked task-list item, also inside a blockquote, which
@@ -22,9 +24,21 @@ func docsOnlyClaimed(body string) bool {
 	return false
 }
 
-// isDocsOnlyBox ignores emphasis and code marks and case, so formatting the
-// box differently cannot hide it.
+// htmlTag and linkTarget hide markup GitHub does not render as text.
+var (
+	htmlTag    = regexp.MustCompile(`<[^>]*>`)
+	linkTarget = regexp.MustCompile(`\]\([^)]*\)`)
+)
+
+// isDocsOnlyBox compares letters only, after entities, tags and link targets
+// are gone, so rewording or formatting the box cannot hide it.
 func isDocsOnlyBox(text string) bool {
-	plain := strings.NewReplacer("*", "", "_", "", "`", "").Replace(text)
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(plain)), "documentation-only")
+	plain := linkTarget.ReplaceAllString(htmlTag.ReplaceAllString(html.UnescapeString(text), ""), "")
+	letters := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, plain)
+	return strings.HasPrefix(letters, "documentationonly")
 }

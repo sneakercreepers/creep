@@ -41,6 +41,8 @@ func TestDocsOnlyReason(t *testing.T) {
 		{"go.mod", "code or a build file"},
 		{".gitignore", "neither *.md nor under docs/"},
 		{"Docs/x.txt", "neither *.md nor under docs/"},
+		{"src/docs/x.txt", "neither *.md nor under docs/"},
+		{"src/docs/x.go", "code or a build file"},
 		{"prompts/reader.txt", "neither *.md nor under docs/"},
 		{"internal/report/testdata/golden/complete.md", ""},
 	}
