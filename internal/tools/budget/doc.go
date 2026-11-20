@@ -2,16 +2,19 @@
 //
 // creep reads untrusted source code and talks to model endpoints, so every
 // dependency is attack surface. Reviews miss slow growth, so this tool fails
-// the build when a direct dependency lacks an ADR, code outside the
-// module-root internal/gateway imports a package that can reach the network
-// (net, crypto/tls, syscall, unsafe, cgo, os/exec outside an allowlist…) or
-// calls os.StartProcess or os.NewFile, the repository holds non-Go sources
-// (assembly, C, .syso…), a go.work, vendor/ or a local replace, a package
-// imports outside the layers table of docs/architecture.md, a Go file passes
-// 400 lines, the module graph or the release binary outgrows its cap, or a
-// workflow uses
-// pull_request_target, an action or image not pinned immutably, or YAML a
-// line scan cannot resolve.
+// the build when a direct or tool dependency lacks an ADR, a versioned
+// replace swaps in a module without one, code outside the module-root
+// internal/gateway imports a package that can reach the network (net,
+// crypto/tls, syscall, unsafe, cgo, os/exec or go/build outside an
+// allowlist…), reaches net or a process start through any chain of imports
+// on linux, darwin or windows, or calls os.StartProcess or os.NewFile, the
+// repository holds non-Go sources (assembly, C, .syso…), a go.work, vendor/
+// or a local replace, a package imports outside the layers table of
+// docs/architecture.md, a Go file passes 400 lines, the module graph or the
+// release binary outgrows its cap, or a workflow uses pull_request_target,
+// an action not pinned by commit SHA, a docker:// action or a container or
+// service image not pinned by @sha256 digest, or YAML a line scan cannot
+// resolve.
 //
 // It is a static backstop, not a sandbox: it reads source text and cannot see
 // everything a determined author can hide. Code review and CODEOWNERS remain

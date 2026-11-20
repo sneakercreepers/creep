@@ -144,6 +144,8 @@ func forbiddenImport(modPath string, f sourceFile, imp string) string {
 		return "foreign or unchecked code can open sockets"
 	case imp == "os/exec" && !execPermitted(modPath, f):
 		return "running programs (curl, a shell) bypasses the network ban; add the package to execAllowed"
+	case (imp == "go/build" || imp == "go/importer") && !execPermitted(modPath, f):
+		return "it runs the go command, a way around the network ban; only packages that may run programs may import it"
 	}
 	return ""
 }

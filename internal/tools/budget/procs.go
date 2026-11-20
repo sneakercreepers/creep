@@ -11,7 +11,7 @@ import (
 var watchedCalls = map[string]map[string]bool{
 	"os": {"StartProcess": true, "NewFile": true},
 	"syscall": {
-		"Exec": true, "ForkExec": true, "StartProcess": true,
+		"Exec": true, "ForkExec": true, "StartProcess": true, "CreateProcess": true, "CreateProcessAsUser": true,
 		"Socket": true, "Connect": true,
 		"Syscall": true, "Syscall6": true, "RawSyscall": true, "RawSyscall6": true,
 	},

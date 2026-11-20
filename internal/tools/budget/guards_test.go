@@ -31,11 +31,12 @@ func writeTree(t *testing.T, files map[string]string) string {
 
 func TestProcessUsesFixtures(t *testing.T) {
 	root := writeTree(t, map[string]string{
-		"internal/cli/alias.go":      "package cli\n\nimport o \"os\"\n\nfunc start() { o.StartProcess(\"/bin/sh\", nil, nil) }\n",
-		"internal/cli/clean.go":      "package cli\n\nimport \"os\"\n\nfunc read() { os.Open(\"x\") }\n",
-		"internal/cli/dot.go":        "package cli\n\nimport . \"os\"\n\nvar start = StartProcess\n",
-		"internal/cli/exec_linux.go": "//go:build linux\n\npackage cli\n\nimport sc \"syscall\"\n\nfunc replace() { sc.Exec(\"/bin/sh\", nil, nil) }\n",
-		"internal/cli/newfile.go":    "package cli\n\nimport \"os\"\n\nvar inherited = os.NewFile(3, \"socket\")\n",
+		"internal/cli/alias.go":         "package cli\n\nimport o \"os\"\n\nfunc start() { o.StartProcess(\"/bin/sh\", nil, nil) }\n",
+		"internal/cli/clean.go":         "package cli\n\nimport \"os\"\n\nfunc read() { os.Open(\"x\") }\n",
+		"internal/cli/dot.go":           "package cli\n\nimport . \"os\"\n\nvar start = StartProcess\n",
+		"internal/cli/exec_linux.go":    "//go:build linux\n\npackage cli\n\nimport sc \"syscall\"\n\nfunc replace() { sc.Exec(\"/bin/sh\", nil, nil) }\n",
+		"internal/cli/spawn_windows.go": "//go:build windows\n\npackage cli\n\nimport \"syscall\"\n\nvar spawn = syscall.CreateProcess\n",
+		"internal/cli/newfile.go":       "package cli\n\nimport \"os\"\n\nvar inherited = os.NewFile(3, \"socket\")\n",
 		// The name matches a syscall allowlist entry, so only the call is reported.
 		"internal/cli/open_unix.go":   "//go:build unix\n\npackage cli\n\nimport \"syscall\"\n\nfunc spawn() { syscall.ForkExec(\"/bin/sh\", nil, nil) }\n",
 		"internal/cli/value.go":       "package cli\n\nimport \"os\"\n\nvar start = os.StartProcess\n",
@@ -57,6 +58,7 @@ func TestProcessUsesFixtures(t *testing.T) {
 		{"internal/cli/dot.go", []string{"uses os.*: dot imports"}},
 		{"internal/cli/open_unix.go", []string{"uses syscall.ForkExec: raw system calls"}},
 		{"internal/cli/exec_linux.go", []string{`imports "syscall"`, "uses syscall.Exec: raw system calls"}},
+		{"internal/cli/spawn_windows.go", []string{`imports "syscall"`, "uses syscall.CreateProcess: raw system calls"}},
 		{"internal/cli/clean.go", nil},
 		{"internal/tools/run/start.go", nil},
 		{"internal/tools/run/fd.go", []string{"uses os.NewFile: wrapping a raw descriptor"}},
@@ -216,7 +218,7 @@ func TestRepoPasses(t *testing.T) {
 	cfg := config{root: "../../..", architecture: "docs/architecture.md", allowlist: "docs/adr/dependencies.txt", maxModules: defaultMaxModules}
 	steps := map[string]func(config) ([]string, error){
 		"workspace": workspaceProblems, "deps": depProblems, "imports": importProblems,
-		"foreign": foreignProblems, "reach": netReachProblems, "modules": moduleProblems,
+		"foreign": foreignProblems, "reach": reachProblems, "modules": moduleProblems,
 		"layers": layerProblems, "lines": lineProblems, "workflows": workflowProblems,
 	}
 	for name, step := range steps {

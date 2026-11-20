@@ -157,12 +157,12 @@ Automated checks that guard an architectural property. A new property needs a ch
 
 | Property | Check | Where it runs |
 |---|---|---|
-| Only `gateway` reaches the network (invariant 1) | Net/exec/syscall import and reach rules, `internal/tools/budget/imports.go`, `reach.go`; depguard as editor feedback | `make budget`, CI `budget` and `lint` |
-| No dependency without an ADR (invariant 6) | Dependency allowlist vs `docs/adr/dependencies.txt`, `go mod tidy -diff` | `make check`, CI `budget` |
+| Only `gateway` reaches the network (invariant 1) | Net/exec/syscall/`go/build` import rules (`internal/tools/budget/imports.go`, `procs.go`); transitive reach of package net and of process starts over the linux, darwin and windows import graphs (`reach.go`, `procreach.go`: per package, deliberately conservative: reaching `os/exec`, a third-party package with any raw-call import or `os.StartProcess`, or `internal/tools` counts, #43); depguard as editor feedback | `make budget`, CI `budget` and `lint` |
+| No dependency without an ADR (invariant 6) | Dependency allowlist vs `docs/adr/dependencies.txt` for direct requires and `tool` directives; a versioned `replace` to another module needs that module's entry (#45, #46); `go mod tidy -diff` | `make check`, CI `budget` |
 | Small, auditable build | Module-graph and release-binary caps; no non-Go sources, `go.work`, `vendor/` or local replace | `make budget` |
 | Small files | Go file cap of 400 lines, build-tagged files included (`lineProblems`) | `make budget` |
 | Agent loop cannot erode | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md, PR template (`policy.go`) | `make budget` |
-| Workflows are pinned and safe | Immutable action/image pins, no `pull_request_target`; actionlint, zizmor | `make budget`, CI |
+| Workflows are pinned and safe | Actions pinned by commit SHA; `docker://` actions and job `container`/`services` images pinned by `@sha256` digest (#44); no `pull_request_target`; actionlint, zizmor | `make budget`, CI |
 | Secrets never leave unredacted | Redaction leak tests (`redact/*_test.go`, escaped and percent-encoded webhook URLs in `encoded_test.go`; the every-offset key tests try every 11th offset under `-race` and every offset in the `windows-latest` job, #203), gateway fragment scan test, reader slice tests: a slice masks a secret that only whole-file redaction finds (`reader/slice_test.go`) | `make check` |
 | Reader slices fail closed and keep repository text as data | Unreadable and redact-rejected files are listed as not scanned; `ErrRunFull` stops the run as incomplete; lines out of range are refused, and a file whose lines redaction shifted is listed as not scanned; every repository line sits behind its number with control, format and separator runes escaped, so none can fake a code line or header; the slice budget holds after escaping (`reader/slice_test.go`, `render_test.go`, `flow_test.go`) | `make check` |
 | Model spend is bounded | Over-budget and concurrent-overspend tests, AIMD table test (`gateway/budget_test.go`, `aimd_test.go`; race on Linux CI) | `make check` |
