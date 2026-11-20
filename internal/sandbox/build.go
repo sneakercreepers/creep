@@ -106,31 +106,6 @@ func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string) []stri
 	return append(args, dir)
 }
 
-// checkBaseImages makes sure every image the Dockerfile reads is present
-// locally, so the builder has nothing to pull.
-func (s *Sandbox) checkBaseImages(ctx context.Context, images []string) (*refusal, error) {
-	missing := 0
-	for _, ref := range images {
-		inspectCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-		res, err := s.run(inspectCtx, append(s.global(), "image", "inspect", ref), infoLimit)
-		cancel()
-		switch {
-		case ctx.Err() != nil:
-			return nil, fmt.Errorf("sandbox build: %w", ctx.Err())
-		case err != nil:
-			return refuse(BuildRuntimeError, "inspect"), nil
-		case res.exit != 0:
-			missing++
-		case res.truncated || hasOnBuild(res.stdout):
-			return refuse(BuildImageRefused, "base_onbuild"), nil
-		}
-	}
-	if missing > 0 {
-		return refuse(BuildBaseImageMissing, strconv.Itoa(missing)+"_of_"+strconv.Itoa(len(images))), nil
-	}
-	return nil, nil
-}
-
 // runBuild runs the build and reads the new image's ID from the iidfile
 // the CLI writes, not from build output a RUN step could print.
 func (s *Sandbox) runBuild(ctx context.Context, dir, dockerfile, target string) (string, *refusal, error) {

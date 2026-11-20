@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,7 +26,16 @@ type recorder struct {
 	reply  func(ctx context.Context, args []string) (cliResult, error)
 	image  *cliResult
 	images map[string]cliResult // per image reference, before image
+	// platform answers the engine platform query; "" is testPlatform.
+	platform string
 }
+
+// testPlatform is the fake engine's os/arch, and nativeInspect a base
+// image built for it: what a raw `image inspect` gets by default.
+const (
+	testPlatform  = "linux/amd64"
+	nativeInspect = `[{"Id":"sha256:1111111111111111111111111111111111111111111111111111111111111111","Os":"linux","Architecture":"amd64","Config":{"OnBuild":null}}]`
+)
 
 func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, error) {
 	r.mu.Lock()
@@ -35,7 +45,11 @@ func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, er
 	if answer, ok := r.images[args[len(args)-1]]; ok && inspect {
 		return answer, nil
 	}
-	switch {
+	switch last := args[len(args)-1]; {
+	case last == "{{.Server.Os}}/{{.Server.Arch}}" || last == "{{.Host.OS}}/{{.Host.Arch}}":
+		return cliResult{stdout: []byte(cmp.Or(r.platform, testPlatform) + "\n")}, nil
+	case inspect && !slices.Contains(args, "--format"):
+		return cliResult{stdout: []byte(nativeInspect)}, nil
 	case inspect && r.image != nil:
 		return *r.image, nil
 	case inspect:

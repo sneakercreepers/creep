@@ -59,8 +59,13 @@ func answer(args []string) int {
 		fmt.Println(`{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`)
 	case "ps":
 		fmt.Println(fakeID)
+	case "version":
+		fmt.Println(testPlatform)
 	case "image":
-		if slices.Contains(args, "inspect") {
+		switch {
+		case slices.Contains(args, "inspect") && !slices.Contains(args, "--format"):
+			fmt.Println(nativeInspect)
+		case slices.Contains(args, "inspect"):
 			fmt.Println("null")
 		}
 	case "build":

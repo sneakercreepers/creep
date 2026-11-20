@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 )
 
 // ErrImageVolumes refuses an image that declares a VOLUME: the runtime
@@ -46,36 +45,6 @@ func (s *Sandbox) checkImage(ctx context.Context, spec Spec) error {
 		return fmt.Errorf("%d declared, %d not covered by a tmpfs: %w", len(volumes), uncovered, ErrImageVolumes)
 	}
 	return nil
-}
-
-// hasOnBuild reports whether an image inspect answer holds ONBUILD
-// triggers: BuildKit runs a base image's triggers in the build that uses
-// it, and nothing in the Dockerfile shows them. It reads every "OnBuild"
-// key at any depth, since engines nest it differently; an answer that is
-// not JSON counts as having triggers.
-func hasOnBuild(inspect []byte) bool {
-	var v any
-	if err := json.Unmarshal(bytes.TrimSpace(inspect), &v); err != nil {
-		return true
-	}
-	return onBuildIn(v)
-}
-
-func onBuildIn(v any) bool {
-	switch t := v.(type) {
-	case []any:
-		return slices.ContainsFunc(t, onBuildIn)
-	case map[string]any:
-		for k, val := range t {
-			if list, ok := val.([]any); ok && strings.EqualFold(k, "OnBuild") && len(list) > 0 {
-				return true
-			}
-			if onBuildIn(val) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // PinnedImage is one image the network and database need. creep never

