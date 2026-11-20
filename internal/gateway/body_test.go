@@ -48,7 +48,7 @@ func TestSlowBodyBounded(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, roots := newTLSServer(t, tc.handler)
 			port := serverPort(t, srv)
-			res := newResolver(map[string][]string{"example.com": {"198.51.100.7"}})
+			res := newResolver(map[string][]string{"example.com": {"93.184.216.7"}})
 			d := &recordingDial{target: srv.Listener.Addr().String()}
 			c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots, limits: tc.limits})
 			t.Cleanup(c.CloseIdleConnections)

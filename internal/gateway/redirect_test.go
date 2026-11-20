@@ -57,7 +57,7 @@ func TestRedirectToAnotherOriginRefused(t *testing.T) {
 func TestRedirectDowngradeRefused(t *testing.T) {
 	srv, roots := newTLSServer(t, redirector())
 	port := serverPort(t, srv)
-	res := newResolver(map[string][]string{"example.com": {"198.51.100.7"}})
+	res := newResolver(map[string][]string{"example.com": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
 	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
 	_, err := get(c, "https://example.com:"+port+"/go?to=http://example.com:"+port+"/ok")

@@ -102,7 +102,7 @@ func TestPlainHTTPToLoopback(t *testing.T) {
 func TestResolvedIPIsPinned(t *testing.T) {
 	srv, roots := newTLSServer(t, okHandler())
 	port := serverPort(t, srv)
-	res := newResolver(map[string][]string{"example.com": {"198.51.100.7", "198.51.100.9"}})
+	res := newResolver(map[string][]string{"example.com": {"93.184.216.7", "93.184.216.9"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
 	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
 
@@ -120,8 +120,8 @@ func TestResolvedIPIsPinned(t *testing.T) {
 		t.Errorf("resolver called %d times, want 1", n)
 	}
 	for _, addr := range d.dialed() {
-		if addr != "198.51.100.7:"+port {
-			t.Errorf("dialed %s, want the pinned 198.51.100.7:%s", addr, port)
+		if addr != "93.184.216.7:"+port {
+			t.Errorf("dialed %s, want the pinned 93.184.216.7:%s", addr, port)
 		}
 	}
 	if len(d.dialed()) != 3 {
@@ -133,7 +133,7 @@ func TestTLSVerifiesHostname(t *testing.T) {
 	srv, roots := newTLSServer(t, okHandler())
 	port := serverPort(t, srv)
 	// The test certificate covers example.com, not this name.
-	res := newResolver(map[string][]string{"api.other.test": {"198.51.100.7"}})
+	res := newResolver(map[string][]string{"api.other.test": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
 	c := newTestClient(t, Options{Allow: []string{"api.other.test:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
 	if _, err := get(c, "https://api.other.test:"+port+"/"); err == nil {
@@ -152,7 +152,7 @@ func TestPrivateResolutionRefused(t *testing.T) {
 		{"::ffff:10.0.0.1"},
 		{"64:ff9b::a9fe:a9fe"},
 		{"0.0.0.0"},
-		{"198.51.100.7", "10.0.0.1"}, // mixed answer
+		{"93.184.216.7", "10.0.0.1"}, // mixed answer
 	}
 	for _, ips := range tests {
 		res := &fakeResolver{answers: map[string][][]netip.Addr{"example.com": {mustAddrs(ips)}}, calls: map[string]int{}}
@@ -196,13 +196,13 @@ func TestProxyEnvIgnored(t *testing.T) {
 	t.Setenv("ALL_PROXY", "http://127.0.0.1:1")
 	srv, roots := newTLSServer(t, okHandler())
 	port := serverPort(t, srv)
-	res := newResolver(map[string][]string{"example.com": {"198.51.100.7"}})
+	res := newResolver(map[string][]string{"example.com": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
 	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
 	if _, err := get(c, "https://example.com:"+port+"/"); err != nil {
 		t.Fatal(err)
 	}
-	if got := d.dialed(); len(got) != 1 || got[0] != "198.51.100.7:"+port {
+	if got := d.dialed(); len(got) != 1 || got[0] != "93.184.216.7:"+port {
 		t.Errorf("dialed %v, want the pinned address, not the proxy", got)
 	}
 	if tr := c.hc.Transport.(guard).next.(*http.Transport); tr.Proxy != nil {

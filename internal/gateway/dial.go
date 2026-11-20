@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 )
 
 // ErrPrivateAddress means a DNS answer pointed an allowlisted name at a
-// loopback, private, link-local or otherwise non-public address.
-var ErrPrivateAddress = errors.New("resolved to a non-public address not listed in egress.allow")
+// loopback, private, link-local or otherwise non-public address. No
+// egress.allow entry exempts a name; only an IP literal entry reaches such
+// an address.
+var ErrPrivateAddress = errors.New("resolved to a non-public address")
 
 // maxPinnedAddrs caps the addresses kept from one DNS answer, so whoever
 // controls DNS for an allowlisted name cannot make one dial try dozens of
@@ -112,11 +115,23 @@ func (d *pinningDialer) resolve(ctx context.Context, host string) ([]netip.Addr,
 	}
 	ctx, cancel := context.WithTimeout(ctx, d.limits.lookup)
 	defer cancel()
-	found, err := d.resolver.LookupNetIP(ctx, "ip", host)
+	found, err := d.resolver.LookupNetIP(ctx, "ip", lookupName(host))
 	if err != nil {
 		return nil, fmt.Errorf("resolve %q: %w", host, err)
 	}
 	return d.checkResolved(host, found)
+}
+
+// lookupName is the name handed to the resolver for a normalized host. A
+// multi-label name is made fully qualified, so a system resolver cannot
+// expand it with search domains into a name nobody allowlisted; the pin and
+// the allowlist keep the form without the dot. A single-label name stays
+// relative, which is what a user allowlisting one ("ollama") relies on.
+func lookupName(host string) string {
+	if !strings.Contains(host, ".") {
+		return host
+	}
+	return host + "."
 }
 
 // checkResolved refuses the whole answer if any address is non-public: a
