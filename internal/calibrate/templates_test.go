@@ -66,23 +66,28 @@ func TestEmbeddedCatalogCoversEveryClassAndLanguage(t *testing.T) {
 	}
 }
 
-// A safe twin has no defensible finding in any class (#162): the command
-// twins send only a value from a fixed allowlist, never a caller-chosen
-// path or name, and the fetch twin sends the URL it checked, rebuilt from
-// the parsed parts, never the raw string a second parser would read.
-func TestSafeTwinSinksTakeNoCallerValue(t *testing.T) {
+// A safe twin has no defensible finding in any class (#162). Every line
+// from the guard that refuses other input down to the sink is checked, so
+// caller input cannot come back on a line that builds the sink's argument:
+// the command twins send only an allowlisted value, the fetch twins the
+// URL they checked (host and port fixed), and the SQL twin binds a scalar
+// scoped to the logged-in owner.
+func TestSafeTwinsCleanInEveryClass(t *testing.T) {
 	cat, err := defaultCatalog()
 	if err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
 		id        string
-		forbidden []string // caller input that must not reach the sink line
-		guard     string   // the line before the sink that refuses other input
+		guard     string   // the last line before the sink that refuses other input
+		forbidden []string // caller input that must not appear after the guard
+		flowHas   []string // what must reach the sink after the guard
 	}{
-		{"js-command-exec", []string{"req.", placeholderMark}, "sendStatus(404)"},
-		{"py-command-shell", []string{"request.", placeholderMark}, "abort(404)"},
-		{"py-ssrf-fetch", []string{"raw", "request.", placeholderMark}, "urlunsplit((\"https\", parts.hostname"},
+		{"js-command-exec", "sendStatus(404)", []string{"req.", placeholderMark}, []string{", root]"}},
+		{"py-command-shell", "abort(404)", []string{"request.", placeholderMark}, []string{`"--", fqdn]`}},
+		{"py-ssrf-fetch", "abort(400)", []string{"raw", "request.", placeholderMark}, []string{`urlunsplit(("https", parts.hostname`, "requests.get(rebuilt"}},
+		{"js-ssrf-fetch", `target.port !== ""`, []string{"req.", placeholderMark}, []string{"fetch(target,"}},
+		{"js-sqli-concat", "requireLogin, (req, res)", []string{"[req.query.", ", req.query."}, []string{"[req.session.ownerId, String(req.query."}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
@@ -90,18 +95,33 @@ func TestSafeTwinSinksTakeNoCallerValue(t *testing.T) {
 			if i < 0 {
 				t.Fatalf("no template %s", tt.id)
 			}
-			safe := cat.templates[i].safe
-			sink := safe.lines[safe.sinkLine-1]
+			flow, ok := sinkFlow(cat.templates[i].safe, tt.guard)
+			if !ok {
+				t.Fatalf("safe twin lacks the guard %q before its sink", tt.guard)
+			}
 			for _, bad := range tt.forbidden {
-				if strings.Contains(sink, bad) {
-					t.Errorf("safe sink %q passes caller input %q", sink, bad)
+				if strings.Contains(flow, bad) {
+					t.Errorf("caller input %q reaches the sink after the guard:\n%s", bad, flow)
 				}
 			}
-			if !strings.Contains(strings.Join(safe.lines[:safe.sinkLine-1], "\n"), tt.guard) {
-				t.Errorf("safe twin lacks the guard %q before its sink", tt.guard)
+			for _, want := range tt.flowHas {
+				if !strings.Contains(flow, want) {
+					t.Errorf("sink flow lacks %q:\n%s", want, flow)
+				}
 			}
 		})
 	}
+}
+
+// sinkFlow returns the lines after the last guard line before the sink,
+// through the sink.
+func sinkFlow(v variant, guard string) (string, bool) {
+	for g := v.sinkLine - 2; g >= 0; g-- {
+		if strings.Contains(v.lines[g], guard) {
+			return strings.Join(v.lines[g+1:v.sinkLine], "\n"), true
+		}
+	}
+	return "", false
 }
 
 func TestLoadCatalogAcceptsCRLF(t *testing.T) {

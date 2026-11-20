@@ -17,8 +17,9 @@ import (
 // prototype_pollution tasks, points one sqli answer three lines off, flags
 // one safe idor twin, answers one ssrf twin invalidly twice, passes every
 // tool probe and answers the 128 KiB context probe wrongly. #162 changed
-// only the request hashes of the eleven calls that send a rewritten safe
-// twin; every reply, and so the tier, is the one recorded for #90.
+// only the request hashes of the 19 calls that send one of the five
+// rewritten safe twins; every reply, and so the tier, is the one recorded
+// for #90.
 func TestRunReplayIsDeterministic(t *testing.T) {
 	var first Result
 	for i := range 2 {

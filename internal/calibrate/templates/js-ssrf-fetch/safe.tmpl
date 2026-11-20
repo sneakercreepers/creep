@@ -9,7 +9,7 @@ router.get("/@@route@@", async (req, res) => {
   } catch {
     return res.sendStatus(400);
   }
-  if (target.protocol !== "https:" || !allowedHosts.has(target.hostname)) {
+  if (target.protocol !== "https:" || !allowedHosts.has(target.hostname) || target.port !== "") {
     return res.sendStatus(400);
   }
   // Large previews are cut by the client.

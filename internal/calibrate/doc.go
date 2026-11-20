@@ -29,8 +29,10 @@
 //   - A safe twin has no defensible finding in any class, not only its
 //     template's: scoring counts any finding on it as a false positive, so
 //     a twin a precise model could rightly flag under another class would
-//     penalize the best models (#162). Caller input reaches a sink only
-//     through a fixed allowlist or as the value that was checked.
+//     penalize the best models (#162). Caller input reaches a sink only in
+//     a form the sink cannot misread: an allowlisted value, the value that
+//     was checked, a bound scalar parameter or a path confined to a root;
+//     a twin that reads per-owner rows scopes them to the logged-in owner.
 //
 // Templates hold no real secret or hostname; hosts use the reserved
 // .invalid top-level domain.
