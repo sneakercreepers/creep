@@ -56,7 +56,7 @@ func scriptedDialer(t *testing.T, allow []string, res Resolver, d *scriptedDial,
 func manyAddrs(n int, last string) []netip.Addr {
 	out := make([]netip.Addr, 0, n)
 	for i := 1; i < n; i++ {
-		out = append(out, netip.MustParseAddr(fmt.Sprintf("198.51.100.%d", i)))
+		out = append(out, netip.MustParseAddr(fmt.Sprintf("93.184.216.%d", i)))
 	}
 	return append(out, netip.MustParseAddr(last))
 }
@@ -72,8 +72,8 @@ func TestFirstDialBounded(t *testing.T) {
 		wantDials  int
 		wantPublic bool
 	}{
-		{"20 black-holed addresses", manyAddrs(20, "198.51.100.200"), true, 1, true},
-		{"20 refusing addresses", manyAddrs(20, "198.51.100.200"), false, maxPinnedAddrs, true},
+		{"20 black-holed addresses", manyAddrs(20, "93.184.216.200"), true, 1, true},
+		{"20 refusing addresses", manyAddrs(20, "93.184.216.200"), false, maxPinnedAddrs, true},
 		{"private address past the cap", manyAddrs(20, "10.0.0.1"), false, 0, false},
 	}
 	for _, tc := range tests {
@@ -126,7 +126,7 @@ func TestLookupBounded(t *testing.T) {
 // returns when its own context ends.
 func TestPinWaiterHonorsContext(t *testing.T) {
 	res := &blockingResolver{
-		fakeResolver: newResolver(map[string][]string{"slow.example": {"198.51.100.9"}}),
+		fakeResolver: newResolver(map[string][]string{"slow.example": {"93.184.216.9"}}),
 		slowHost:     "slow.example",
 		started:      make(chan struct{}, 2),
 		release:      make(chan struct{}),

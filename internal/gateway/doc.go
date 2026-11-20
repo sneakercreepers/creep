@@ -39,11 +39,26 @@
 // dropped, and the next dial resolves again under the same checks. A slow
 // lookup holds only its own host, and a dial waiting on it returns when its
 // own context ends. "localhost" is never resolved; it means
-// 127.0.0.1, then ::1. A DNS answer containing any non-public address
-// (loopback, private, CGNAT, link-local and cloud metadata, multicast, or
-// NAT64, SIIT and 6to4 forms of those) is refused whole, always. A model on a
-// private network is reached by allowlisting and requesting its IP literal
-// ("10.0.0.5:8443"); that entry never vouches for a name resolving to it.
+// 127.0.0.1, then ::1. A multi-label name is looked up fully qualified
+// ("api.example.com."), so a system resolver cannot expand it with search
+// domains; the allowlist and the pin keep the form without the dot. A DNS
+// answer containing any non-public address (loopback, private, CGNAT,
+// link-local and cloud metadata, multicast, documentation, test and
+// benchmarking ranges, SRv6 SIDs, or NAT64, SIIT, ISATAP and 6to4 forms of
+// those) is refused whole, always. A model on a private network is reached
+// by allowlisting and requesting its IP literal ("10.0.0.5:8443"); that
+// entry never vouches for a name resolving to it.
+//
+// Known limit, undecoded IPv4 embeddings: an IPv6 address can carry an IPv4
+// address that some translator on the path will reach, in forms that cannot
+// be recognized from the address alone. The well-known NAT64 prefix
+// (64:ff9b::/96), SIIT (::ffff:0:0:0/96) and ISATAP interface IDs
+// ([00|02]00:5efe:w.x.y.z) are decoded and judged by their IPv4; 6to4,
+// Teredo, IPv4-compatible and local-use NAT64 prefixes are refused whole.
+// A network-specific NAT64 prefix (RFC 6052, any /32 to /96 an operator
+// picks, such as 2001:470:64::7f00:1) stays public. Reaching a non-global
+// IPv4 through it needs an operator NAT64 that translates to such
+// addresses, and TLS still verifies the hostname.
 //
 // DNS lookup, each dial and the dial over all pinned addresses, TLS
 // handshake, response-header wait and response body (idle and total) have
@@ -55,9 +70,13 @@
 // Every model call goes through EgressLog.Send, which writes
 // <run>/egress.log, one JSON object per line, mode 0600, opened with
 // O_APPEND and never through a link or onto a file others can read, own or
-// reach through a second hard link. Send copies the payload before hashing
-// it, follows no redirects (that would re-send the body unlogged), and
-// strips userinfo and query from every error it returns.
+// reach through a second hard link (the link count is read from the open
+// handle, on Windows too). The run directory is the only path resolved by
+// name: it is opened once as a directory handle, and egress.log and
+// payloads are looked up relative to it, so swapping the run directory or
+// an ancestor afterwards changes nothing. Send copies the payload before
+// hashing it, follows no redirects (that would re-send the body unlogged),
+// and strips userinfo and query from every error it returns.
 // Each call gets a random ID and two lines:
 //   - "request", written and fsynced before the request is built, with the
 //     endpoint (scheme, host and path only: no userinfo or query), model,
@@ -70,6 +89,28 @@
 //
 // The body itself is stored in <run>/payloads/<id>.payload (mode 0600, in a
 // 0700 directory), so the user can check the hash and read what was sent.
+//
+// Accepted limits of the log (#113); each needs the user's own account or
+// configuration:
+//   - Windows ACLs: Go file modes do not express them, so the mode and owner
+//     checks are skipped there and the run directory's inherited ACL decides
+//     who can read the log and payloads. The state directory must sit where
+//     only the user can read, such as under the user profile, not in a
+//     folder whose ACL grants other users access (one created directly
+//     under C:\ inherits modify access for every authenticated user).
+//     Setting an owner-only DACL needs Windows security calls the syscall
+//     package does not expose, so it waits for x/sys or an ADR.
+//   - Run directory location: the state package creates it per run, with a
+//     fresh name and mode 0700, under .creep/runs, which is refused when
+//     writable by others; the path up to the run directory is trusted until
+//     the one open here. Moving it out of the scanned repository is a
+//     state-layout decision, not a gateway one.
+//   - Endpoint path: the logged endpoint keeps its path, which the report's
+//     data-handling section shows, so an endpoint with a credential in its
+//     path ("/bot<token>/") is logged and reported verbatim. The endpoint
+//     comes only from the operator's configuration (the project file cannot
+//     set it), and the key belongs in CREEP_API_KEY, sent in a header that
+//     is never logged; userinfo and query are stripped.
 //
 // Consent gates every Send before the payload file, the request line or any
 // connection. It is per endpoint origin (scheme, host and effective port,

@@ -19,14 +19,19 @@ func ownedBySelf(info fs.FileInfo) bool {
 	return ok && int(st.Uid) == os.Geteuid()
 }
 
-// linkCount returns the number of hard links; a second link would let
-// another path, possibly readable by others, alias the log.
-func linkCount(info fs.FileInfo) uint64 {
+// linkCount returns the number of hard links of the open file; a second
+// link would let another path, possibly readable by others, alias the log.
+// An unknown count is 0, which the caller refuses.
+func linkCount(f *os.File) (uint64, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
 	st, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return 0
+		return 0, nil
 	}
-	return uint64(st.Nlink) // Nlink is narrower on some platforms
+	return uint64(st.Nlink), nil // Nlink is narrower on some platforms
 }
 
 // syncDir makes new directory entries durable.

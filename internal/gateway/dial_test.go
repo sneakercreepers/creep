@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,7 +29,7 @@ func TestDialContextChecksAllowlist(t *testing.T) {
 		"localhost:80",
 	}
 	for _, addr := range tests {
-		res := newResolver(map[string][]string{"evil.example": {"198.51.100.7"}, "api.example.com": {"198.51.100.7"}})
+		res := newResolver(map[string][]string{"evil.example": {"93.184.216.7"}, "api.example.com": {"93.184.216.7"}})
 		d := &recordingDial{target: "127.0.0.1:1"}
 		pd := newDialer(t, []string{"api.example.com", "10.0.0.5:8443"}, res, d)
 		if _, err := pd.DialContext(context.Background(), "tcp", addr); !errors.Is(err, ErrNotAllowed) {
@@ -62,7 +64,7 @@ type blockingResolver struct {
 }
 
 func (r *blockingResolver) LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error) {
-	if host == r.slowHost {
+	if strings.TrimSuffix(host, ".") == r.slowHost {
 		r.started <- struct{}{}
 		<-r.release
 	}
@@ -73,7 +75,7 @@ func (r *blockingResolver) LookupNetIP(ctx context.Context, network, host string
 // proceed, and concurrent first dials to the slow host share one lookup.
 func TestSlowLookupDoesNotBlockOtherHosts(t *testing.T) {
 	res := &blockingResolver{
-		fakeResolver: newResolver(map[string][]string{"fast.example": {"198.51.100.7"}, "slow.example": {"198.51.100.9"}}),
+		fakeResolver: newResolver(map[string][]string{"fast.example": {"93.184.216.7"}, "slow.example": {"93.184.216.9"}}),
 		slowHost:     "slow.example",
 		started:      make(chan struct{}, 2),
 		release:      make(chan struct{}),
@@ -107,5 +109,41 @@ func TestSlowLookupDoesNotBlockOtherHosts(t *testing.T) {
 	<-done
 	if n := res.calls["slow.example"]; n != 1 {
 		t.Errorf("slow.example resolved %d times, want 1", n)
+	}
+}
+
+// Acceptance (#111): the resolver gets a fully qualified name for a
+// multi-label host, so search domains cannot expand it, while the allowlist
+// and the pin keep the form without the dot: both spellings share one
+// lookup.
+func TestLookupIsFullyQualified(t *testing.T) {
+	tests := []struct {
+		name      string
+		host      string
+		dials     []string
+		wantNames []string
+	}{
+		{"multi-label", "api.example.com", []string{"api.example.com:443"}, []string{"api.example.com."}},
+		{"trailing dot is not doubled", "api.example.com", []string{"api.example.com.:443"}, []string{"api.example.com."}},
+		{"case is normalized first", "api.example.com", []string{"API.Example.COM:443"}, []string{"api.example.com."}},
+		{"one pin for both spellings", "api.example.com", []string{"api.example.com:443", "api.example.com.:443"}, []string{"api.example.com."}},
+		{"single label stays relative", "ollama", []string{"ollama:443"}, []string{"ollama"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := newResolver(map[string][]string{tc.host: {"93.184.216.7"}})
+			d := &scriptedDial{open: map[string]bool{"93.184.216.7:443": true}}
+			pd := scriptedDialer(t, []string{tc.host}, res, d, timeLimits{})
+			for _, addr := range tc.dials {
+				conn, err := pd.DialContext(context.Background(), "tcp", addr)
+				if err != nil {
+					t.Fatalf("dial %s: %v", addr, err)
+				}
+				_ = conn.Close()
+			}
+			if !slices.Equal(res.names, tc.wantNames) {
+				t.Errorf("resolver received %q, want %q", res.names, tc.wantNames)
+			}
+		})
 	}
 }

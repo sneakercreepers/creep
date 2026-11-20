@@ -9,16 +9,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"sync"
 	"testing"
 )
 
 // fakeResolver returns answers[host][i] on the i-th lookup of host (the last
-// answer repeats) and counts every lookup.
+// answer repeats) and counts every lookup. A trailing dot is ignored for the
+// answer and the count; names records each name exactly as received.
 type fakeResolver struct {
 	mu      sync.Mutex
 	answers map[string][][]netip.Addr
 	calls   map[string]int
+	names   []string
 }
 
 func newResolver(answers map[string][]string) *fakeResolver {
@@ -39,9 +42,11 @@ func mustAddrs(ips []string) []netip.Addr {
 	return out
 }
 
-func (r *fakeResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+func (r *fakeResolver) LookupNetIP(_ context.Context, _, name string) ([]netip.Addr, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.names = append(r.names, name)
+	host := strings.TrimSuffix(name, ".")
 	n := r.calls[host]
 	r.calls[host]++
 	seq := r.answers[host]
