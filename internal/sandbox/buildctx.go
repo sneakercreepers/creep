@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -44,29 +45,32 @@ func leftOut(p string) bool {
 // context cannot leave the repository, and the files leftOut names never
 // reach the builder. Executable bits are not in the file list, so a file
 // that starts like a script or an ELF binary is written executable.
-func (s *Sandbox) stageContext(repo Repo, plan buildPlan) (string, *refusal) {
+func (s *Sandbox) stageContext(ctx context.Context, repo Repo, plan buildPlan) (string, *refusal, error) {
 	files := contextFiles(repo.Paths, plan.context)
 	if len(files) > maxContextFiles {
-		return "", refuse(BuildContextRefused, "too_many_files")
+		return "", refuse(BuildContextRefused, "too_many_files"), nil
 	}
 	dir := filepath.Join(s.work, "build-"+strconv.FormatUint(s.seq.Add(1), 10))
 	if err := os.Mkdir(dir, 0o700); err != nil {
-		return "", refuse(BuildContextRefused, "work_directory")
+		return "", refuse(BuildContextRefused, "work_directory"), nil
 	}
 	total := 0
 	for _, p := range files {
+		if ctx.Err() != nil {
+			return "", nil, fmt.Errorf("sandbox build: stage context: %w", ctx.Err())
+		}
 		data, err := repo.Read(p)
 		if err != nil {
-			return "", refuse(BuildContextRefused, "unreadable_file")
+			return "", refuse(BuildContextRefused, "unreadable_file"), nil
 		}
 		if total += len(data); total > maxContextBytes {
-			return "", refuse(BuildContextRefused, "too_large")
+			return "", refuse(BuildContextRefused, "too_large"), nil
 		}
 		if err := writeStaged(dir, relTo(plan.context, p), data); err != nil {
-			return "", refuse(BuildContextRefused, "write")
+			return "", refuse(BuildContextRefused, "write"), nil
 		}
 	}
-	return dir, nil
+	return dir, nil, nil
 }
 
 // contextFiles are the clean repository paths below dir, minus leftOut.

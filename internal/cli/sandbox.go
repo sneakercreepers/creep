@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/sandbox"
@@ -19,6 +20,9 @@ type sandboxDeps struct {
 	clean  func(context.Context, sandbox.Status) (sandbox.Removed, error)
 	images func(context.Context, sandbox.Status) []sandbox.PinnedImage
 	open   func(st sandbox.Status, runID string) (appBuilder, error)
+	// interrupt and now default to Ctrl+C and time.Now; tests replace them.
+	interrupt func(context.Context) (context.Context, context.CancelFunc)
+	now       func() time.Time
 }
 
 // detectSandbox checks both runtimes from the current directory, the

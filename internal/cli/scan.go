@@ -94,7 +94,7 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan: calibration", err)
 		return failureCode(err)
 	}
-	deadline := time.Now().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
+	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
 	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)

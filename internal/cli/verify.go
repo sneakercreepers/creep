@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/sneakercreepers/creep/internal/report"
@@ -17,6 +18,23 @@ import (
 type appBuilder interface {
 	Build(ctx context.Context, repo sandbox.Repo) (sandbox.App, error)
 	Close() error
+}
+
+// interruptible is ctx canceled by Ctrl+C until stop; tests replace the
+// hook (sandboxDeps.interrupt).
+func (d sandboxDeps) interruptible(ctx context.Context) (context.Context, context.CancelFunc) {
+	if d.interrupt == nil {
+		return signal.NotifyContext(ctx, os.Interrupt)
+	}
+	return d.interrupt(ctx)
+}
+
+// clock is the time the build checks the scan deadline against.
+func (d sandboxDeps) clock() time.Time {
+	if d.now == nil {
+		return time.Now()
+	}
+	return d.now()
 }
 
 // openSandbox is the production sandboxDeps.open.
@@ -60,7 +78,7 @@ func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, d
 		return unavailableVerification(verifyNoRuntime, "")
 	case s.deps.sandbox.open == nil:
 		return unavailableVerification(verifyNotChecked, "")
-	case !time.Now().Before(deadline):
+	case !s.deps.sandbox.clock().Before(deadline):
 		return unavailableVerification(verifyDeadline, "")
 	}
 	return s.buildApp(ctx, w, best, files, deadline)
@@ -68,7 +86,17 @@ func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, d
 
 // buildApp opens a sandbox on the runtime, builds the app from the scan's
 // files and closes the sandbox, whatever happened.
+//
+// From before the sandbox opens until it is closed, Ctrl+C cancels the
+// build instead of killing creep, so Close always runs: the work
+// directory, which holds a copy of the repository, and any built image
+// never outlive the scan. The build's time is what the scan deadline
+// leaves, read from the sandbox clock.
 func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status, files repoFiles, deadline time.Time) report.Verification {
+	ctx, stop := s.deps.sandbox.interruptible(ctx)
+	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, deadline.Sub(s.deps.sandbox.clock()))
+	defer cancel()
 	fmt.Fprintf(w, "sandbox: building the app offline with %s (isolation %s)\n", best.Runtime, best.Isolation)
 	box, err := s.deps.sandbox.open(best, s.run.ID())
 	if err != nil {
@@ -76,8 +104,6 @@ func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status
 		return unavailableVerification(verifySandboxError, "open")
 	}
 	defer closeSandbox(w, box)
-	ctx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
 	app, err := box.Build(ctx, sandbox.Repo{Paths: files.paths, Read: buildReader(s.repo)})
 	return appVerification(ctx, app, err)
 }
@@ -92,7 +118,7 @@ func buildReader(root *os.Root) func(string) ([]byte, error) {
 // appVerification turns Build's outcome into the report's.
 func appVerification(ctx context.Context, app sandbox.App, err error) report.Verification {
 	switch {
-	case errors.Is(err, sandbox.ErrInterrupted):
+	case errors.Is(err, sandbox.ErrInterrupted), err != nil && errors.Is(ctx.Err(), context.Canceled):
 		return unavailableVerification(verifyInterrupted, "")
 	case err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return unavailableVerification(verifyDeadline, "")
@@ -105,9 +131,10 @@ func appVerification(ctx context.Context, app sandbox.App, err error) report.Ver
 }
 
 // unavailableVerification keeps the report valid whatever the sandbox
-// says: a reason or detail that is not an ID never fails the scan.
+// says: a reason outside the report's closed set, or a detail that is not
+// an ID, never fails the scan.
 func unavailableVerification(reason, detail string) report.Verification {
-	if !report.ValidID(reason) {
+	if !report.ValidVerificationReason(reason) {
 		reason, detail = verifySandboxError, "reason"
 	}
 	if !report.ValidID(detail) {

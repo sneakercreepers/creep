@@ -25,6 +25,7 @@ func TestCheckVerification(t *testing.T) {
 		{"built with reason", Verification{Status: VerificationAppBuilt, Reason: "build_failed"}, false},
 		{"unavailable without reason", Verification{Status: VerificationUnavailable}, false},
 		{"control bytes", Verification{Status: VerificationUnavailable, Reason: "x\x1b[2J"}, false},
+		{"unknown reason", Verification{Status: VerificationUnavailable, Reason: "made_up"}, false},
 		{"free-text detail", Verification{Status: VerificationUnavailable, Reason: "build_failed", Detail: "see `rm -rf`"}, false},
 	}
 	for _, tt := range tests {

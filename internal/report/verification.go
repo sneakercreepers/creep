@@ -27,6 +27,19 @@ const (
 	VerificationUnavailable VerificationStatus = "unavailable" // no runtime, or no build: Reason says why
 )
 
+// verificationReasons is the closed set of reasons verification is
+// unavailable: the sandbox's build reasons (sandbox.BuildReasons; a CLI
+// test keeps both in step) and the scan's own.
+var verificationReasons = map[string]bool{
+	"no_build_file": true, "compose_refused": true, "dockerfile_refused": true, "context_refused": true,
+	"base_image_missing": true, "build_failed": true, "build_timeout": true, "image_refused": true, "runtime_error": true,
+	"no_runtime": true, "not_checked": true, "sandbox_error": true, "interrupted": true, "budget": true,
+}
+
+// ValidVerificationReason reports whether reason is in the closed set, so
+// the CLI can map anything else before New refuses it.
+func ValidVerificationReason(reason string) bool { return verificationReasons[reason] }
+
 func checkVerification(v Verification) error {
 	switch v.Status {
 	case VerificationOff, VerificationAppBuilt:
@@ -34,7 +47,7 @@ func checkVerification(v Verification) error {
 			return nil
 		}
 	case VerificationUnavailable:
-		if idPattern.MatchString(v.Reason) && (v.Detail == "" || idPattern.MatchString(v.Detail)) {
+		if verificationReasons[v.Reason] && (v.Detail == "" || idPattern.MatchString(v.Detail)) {
 			return nil
 		}
 	}

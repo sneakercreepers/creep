@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 )
@@ -69,9 +70,13 @@ func TestRealTestAppsBuild(t *testing.T) {
 				continue
 			}
 			images = append(images, app.Image)
-			res, err := s.Run(context.Background(), Spec{Image: app.Image, Cmd: []string{"test", "-f", "/app/Dockerfile"}})
-			if err != nil || res.ExitCode != 0 {
-				t.Errorf("%s: the built image lacks the app's files: %+v, %v", dir, res, err)
+			check := []string{"test", "-f", "/app/Dockerfile"}
+			for _, src := range appSources(t, dir) {
+				check = append(check, "-a", "-f", "/app/"+src)
+			}
+			res, err := s.Run(context.Background(), Spec{Image: app.Image, Cmd: check})
+			if err != nil || res.ExitCode != 0 || len(check) == 3 {
+				t.Errorf("%s: the built image lacks the app's files (%q): %+v, %v", dir, check, res, err)
 			}
 		}
 		if err := s.Close(); err != nil {
@@ -83,4 +88,21 @@ func TestRealTestAppsBuild(t *testing.T) {
 			}
 		}
 	})
+}
+
+// appSources names a test app variant's source files, every file but its
+// Dockerfile.
+func appSources(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.Name() != "Dockerfile" {
+			names = append(names, e.Name())
+		}
+	}
+	return names
 }

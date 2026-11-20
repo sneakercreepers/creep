@@ -26,6 +26,15 @@ const (
 	BuildRuntimeError      BuildReason = "runtime_error"      // the runtime CLI did not start or answer
 )
 
+// BuildReasons lists every BuildReason, so the report's closed set can be
+// checked against it (report may not import sandbox).
+func BuildReasons() []BuildReason {
+	return []BuildReason{
+		BuildNoFile, BuildComposeRefused, BuildDockerfileRefused, BuildContextRefused, BuildBaseImageMissing,
+		BuildFailed, BuildTimeout, BuildImageRefused, BuildRuntimeError,
+	}
+}
+
 // Repo is the scanned repository as the scan sees it: its regular files,
 // as clean slash-separated paths relative to the root, and the scan's own
 // reader for them (TB1), which confines reads to the root, opens without
