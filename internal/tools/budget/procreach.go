@@ -17,17 +17,28 @@ import (
 //     hold the primitives every package reaches; their direct use is watched
 //     by checkProcessUses), so reaching os/exec counts, and with it go/build,
 //     go/importer and every other package that imports it;
-//   - a third-party package counts when any of its files, other platforms'
-//     included, imports a raw-call package or names os.StartProcess, whether
-//     or not it ever runs a program;
+//   - a third-party package counts when it holds any non-Go file (assembly,
+//     .syso, C…; any platform's) unless nonGoAllowed lists it, or when any of
+//     its Go files, any platform's, imports a raw-call package or names
+//     os.StartProcess, whether or not it ever runs a program;
 //   - a main-module package under execAllowed (internal/tools) counts when
 //     reached from outside it; other main-module packages are checked on
 //     their own, so the walk stops at them, as for package net.
+//
+// The import edges come from go list over reachTargets, so they miss what
+// only a non-target build sees: a main-module file for freebsd or a custom
+// tag, or a third-party import found only in a dependency's ignored files.
+// No release binary or CI run builds those files.
 const processStdlib = "os/exec"
 
 // rawCallImports can start a program without os/exec: system calls, cgo,
 // linkname through unsafe, plugins, or the go command via go/build.
 var rawCallImports = []string{"syscall", "golang.org/x/sys", "unsafe", "C", "runtime/cgo", "plugin", "os/exec", "go/build", "go/importer"}
+
+// nonGoAllowed lists third-party packages whose non-Go files were reviewed,
+// each with its reason. Empty: the one dependency, go.yaml.in/yaml/v3, is
+// pure Go.
+var nonGoAllowed = map[string]string{}
 
 // thirdPartyStarters returns each package outside the standard library and
 // the main module that could start a program, with the reason.
@@ -48,10 +59,14 @@ func thirdPartyStarters(pkgs map[string]listedPackage) (map[string]string, error
 	return starters, nil
 }
 
-// starterReason parses every Go file of p, whatever its build constraints.
+// starterReason checks p's non-Go files and parses every Go file of p,
+// whatever its build constraints.
 func starterReason(p listedPackage) (string, error) {
 	if p.Dir == "" {
 		return "", fmt.Errorf("package %s: go list gave no source directory", p.ImportPath)
+	}
+	if len(p.NonGoFiles) > 0 && nonGoAllowed[p.ImportPath] == "" {
+		return fmt.Sprintf("%s is not Go: assembly or a .syso can make system calls with no import; review it and add the package to nonGoAllowed", p.NonGoFiles[0]), nil
 	}
 	fset := token.NewFileSet()
 	for _, name := range slices.Concat(p.GoFiles, p.CgoFiles, p.IgnoredGoFiles) {

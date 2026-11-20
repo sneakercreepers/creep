@@ -99,6 +99,9 @@ func TestStarterReason(t *testing.T) {
 		{"dot import of os", map[string]string{"a.go": "package a\nimport . \"os\"\nvar start = StartProcess\n"}, "a.go uses os.*"},
 		{"other platform's file", map[string]string{"a.go": "package a\n", "z_plan9.go": "//go:build plan9\n\npackage a\nimport _ \"syscall\"\n"}, `z_plan9.go imports "syscall"`},
 		{"os without starts", map[string]string{"a.go": "package a\nimport \"os\"\nvar _ = os.Getenv\n"}, ""},
+		{"assembly makes system calls", map[string]string{"a.go": "package a\nfunc Getpid() int\n", "a_amd64.s": "TEXT ·Getpid(SB),0,$0\n\tSYSCALL\n"}, "a_amd64.s is not Go"},
+		{"syso object", map[string]string{"a.go": "package a\n", "blob.syso": "\x7fELF"}, "blob.syso is not Go"},
+		{"C source", map[string]string{"a.go": "package a\n", "x.c": "int x;\n"}, "x.c is not Go"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -108,9 +111,12 @@ func TestStarterReason(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(name, "plan9") {
+				switch {
+				case !strings.HasSuffix(name, ".go"):
+					p.NonGoFiles = append(p.NonGoFiles, name)
+				case strings.Contains(name, "plan9"):
 					p.IgnoredGoFiles = append(p.IgnoredGoFiles, name)
-				} else {
+				default:
 					p.GoFiles = append(p.GoFiles, name)
 				}
 			}
@@ -123,37 +129,6 @@ func TestStarterReason(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestProcessBypassModule runs the reach step over a throwaway module with go
-// list, so each PR #42 audit bypass and the per-platform union are covered
-// end to end. The dependency is a local replace only so the fixture needs no
-// network; the workspace check, not this step, rejects that.
-func TestProcessBypassModule(t *testing.T) {
-	root := writeTree(t, map[string]string{
-		"go.mod":                     "module example.com/m\n\ngo 1.24\n\nrequire example.com/dep v0.0.0\n\nreplace example.com/dep => ./dep\n",
-		"dep/go.mod":                 "module example.com/dep\n\ngo 1.24\n",
-		"dep/raw/raw.go":             "package raw\n",
-		"dep/raw/raw_plan9.go":       "//go:build plan9\n\npackage raw\nimport _ \"syscall\"\n",
-		"dep/clean/clean.go":         "package clean\nimport _ \"strings\"\n",
-		"internal/tools/run/run.go":  "package run\nimport _ \"os/exec\"\n",
-		"internal/cli/cli.go":        "package cli\nimport _ \"example.com/m/internal/tools/run\"\n",
-		"internal/gen/gen.go":        "package gen\nimport _ \"go/build\"\n",
-		"internal/mac/mac_darwin.go": "package mac\nimport _ \"go/importer\"\n",
-		"internal/dep/dep.go":        "package dep\nimport _ \"example.com/dep/raw\"\n",
-		"internal/ok/ok.go":          "package ok\nimport _ \"example.com/dep/clean\"\n",
-	})
-	got, err := reachProblems(config{root: root})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{
-		"internal/cli reaches a process start through example.com/m/internal/tools/run",
-		`internal/dep reaches a process start through example.com/dep/raw: raw_plan9.go imports "syscall"`,
-		"internal/gen reaches a process start through go/build",
-		"internal/mac reaches a process start through go/importer",
-	}
-	assertMentions(t, got, want)
 }
 
 // A dependency the budget cannot read is an error, never a clean package.

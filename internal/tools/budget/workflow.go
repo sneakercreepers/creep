@@ -11,13 +11,9 @@ import (
 var (
 	// usesKey finds `uses:` in block or flow style, with or without quoted
 	// keys, and captures the value up to whitespace, a quote, ',' or '}'.
-	usesKey = regexp.MustCompile(`(?:^|[\s{,\-])["']?uses["']?\s*:\s*["']?([^\s"',}#]*)`)
-	// imageKey and containerKey find a job container or service image, written
-	// as `image:` or as the `container: <image>` shorthand, the same way.
-	imageKey     = regexp.MustCompile(`(?:^|[\s{,\-])["']?image["']?\s*:\s*["']?([^\s"',}#]*)`)
-	containerKey = regexp.MustCompile(`(?:^|[\s{,\-])["']?container["']?\s*:\s*["']?([^\s"',}#]*)`)
-	shaPinned    = regexp.MustCompile(`@[0-9a-f]{40}$`)
-	digestPin    = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+	usesKey   = regexp.MustCompile(`(?:^|[\s{,\-])["']?uses["']?\s*:\s*["']?([^\s"',}#]*)`)
+	shaPinned = regexp.MustCompile(`@[0-9a-f]{40}$`)
+	digestPin = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
 	// yamlEscape matches YAML double-quoted escapes a trigger name could hide behind.
 	yamlEscape = regexp.MustCompile(`\\(?:x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})`)
 	// escapedKey finds a double-quoted key holding any backslash escape, such as "\x75ses":.
@@ -37,6 +33,7 @@ func checkWorkflow(name string, data []byte) []string {
 	var problems []string
 	block := -1    // key column of an open block scalar; deeper lines are its text
 	var quote byte // quote left open by the previous line, reported there
+	images := newImageScan()
 	for i, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimRight(line, "\r")
 		blockText := quote == 0 && block >= 0 && (strings.TrimSpace(line) == "" || indentOf(line) > block)
@@ -54,11 +51,12 @@ func checkWorkflow(name string, data []byte) []string {
 		}
 		block = -1
 		problems = append(problems, prefixed(at, structureProblems(code, open))...)
+		problems = append(problems, images.line(at, code)...)
 		if open == 0 && blockScalar.MatchString(code) {
 			block = keyColumn(code)
 		}
 	}
-	return problems
+	return append(problems, images.end()...)
 }
 
 func prefixed(at string, whys []string) []string {
@@ -79,33 +77,6 @@ func valueProblems(code string) []string {
 		}
 	}
 	return append(problems, imageProblems(code)...)
-}
-
-// imageProblems reports container and service images not pinned by digest.
-// An `image:` with no value on its line (a block scalar, say) cannot be
-// checked, so it fails too; a bare `container:` opens a mapping whose
-// `image:` line is checked on its own.
-func imageProblems(code string) []string {
-	var problems []string
-	for _, m := range imageKey.FindAllStringSubmatch(code, -1) {
-		problems = append(problems, unpinnedImage(m[1])...)
-	}
-	for _, m := range containerKey.FindAllStringSubmatch(code, -1) {
-		if m[1] != "" && !strings.HasPrefix(m[1], "{") {
-			problems = append(problems, unpinnedImage(m[1])...)
-		}
-	}
-	return problems
-}
-
-func unpinnedImage(ref string) []string {
-	switch {
-	case ref == "", strings.HasPrefix(ref, "|"), strings.HasPrefix(ref, ">"):
-		return []string{"image value must sit on the key's line"}
-	case digestPin.MatchString(ref):
-		return nil
-	}
-	return []string{"image " + ref + " is not pinned by @sha256 digest"}
 }
 
 func structureProblems(code string, open byte) []string {
