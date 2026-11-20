@@ -106,31 +106,49 @@ func declaredTiers(t *testing.T) []Tier {
 	return tiers
 }
 
+// tierConsts finds both spellings of a Tier value, `X Tier = "x"` and
+// `X = Tier("x")`. A Tier whose value is anything but a string literal
+// fails the test rather than being skipped.
 func tierConsts(t *testing.T, f *ast.File) []Tier {
 	t.Helper()
 	var tiers []Tier
 	ast.Inspect(f, func(n ast.Node) bool {
 		spec, ok := n.(*ast.ValueSpec)
-		if !ok || !isTierType(spec.Type) {
+		if !ok {
 			return true
 		}
+		typed := isTier(spec.Type)
+		if typed && len(spec.Values) != len(spec.Names) {
+			t.Fatalf("Tier %s without a literal value", spec.Names[0])
+		}
 		for _, v := range spec.Values {
-			lit, ok := v.(*ast.BasicLit)
-			if !ok {
-				t.Fatalf("tier constant with a non-literal value at %v", v.Pos())
+			converted := false
+			if call, ok := v.(*ast.CallExpr); ok && isTier(call.Fun) && len(call.Args) == 1 {
+				v, converted = call.Args[0], true
 			}
-			s, err := strconv.Unquote(lit.Value)
-			if err != nil {
-				t.Fatal(err)
+			if typed || converted {
+				tiers = append(tiers, tierLiteral(t, v))
 			}
-			tiers = append(tiers, Tier(s))
 		}
 		return true
 	})
 	return tiers
 }
 
-func isTierType(e ast.Expr) bool {
+func tierLiteral(t *testing.T, v ast.Expr) Tier {
+	t.Helper()
+	lit, ok := v.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		t.Fatalf("Tier with a non-literal value at %v", v.Pos())
+	}
+	s, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Tier(s)
+}
+
+func isTier(e ast.Expr) bool {
 	id, ok := e.(*ast.Ident)
 	return ok && id.Name == "Tier"
 }

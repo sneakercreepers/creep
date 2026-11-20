@@ -169,3 +169,31 @@ func readerReportName(c reader.Class) string {
 	}
 	return c.String()
 }
+
+// planBudget clamps budget.max_tokens (only checked positive by config) to
+// the planner's uint32 range: nothing at or above 2^32 wraps to a small or
+// zero budget, and nothing below 1 grants one.
+func TestPlanBudgetClampsTokens(t *testing.T) {
+	tests := []struct {
+		in   int64
+		want uint32
+	}{
+		{-1, 0},
+		{0, 0},
+		{1, 1},
+		{math.MaxInt32, math.MaxInt32},
+		{math.MaxUint32 - 1, math.MaxUint32 - 1},
+		{math.MaxUint32, math.MaxUint32},
+		{math.MaxUint32 + 1, math.MaxUint32},
+		{math.MaxInt64, math.MaxUint32},
+	}
+	for _, tt := range tests {
+		if tt.in > math.MaxInt {
+			continue // a 32-bit int cannot hold it
+		}
+		b := planBudget(int(tt.in), reader.TierS)
+		if b.Tokens != tt.want || b.StepTokens == 0 {
+			t.Errorf("planBudget(%d) = %+v; want Tokens %d and a step cost", tt.in, b, tt.want)
+		}
+	}
+}

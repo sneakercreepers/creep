@@ -3,7 +3,9 @@ package gitindex
 import (
 	"crypto/sha1" //nolint:gosec // G505: git's index checksum
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -83,6 +85,8 @@ func corruptIndexes(paths []string) []struct {
 	open = append(open, 0x80) // a varint that never ends
 	signature := slices.Clone(v2[:len(v2)-sha1.Size])
 	signature[3] = 'X'
+	negative := withCount(v2, 1<<31) // negative as a 32-bit int
+	huge := withCount(v2, math.MaxUint32)
 	return []struct {
 		name string
 		data []byte
@@ -93,7 +97,17 @@ func corruptIndexes(paths []string) []struct {
 		{"version 4 strip past the previous path", gitindextest.Sign(strip, sha1.Size, false), nil},
 		{"version 4 path not terminated", gitindextest.Sign(unterminated, sha1.Size, false), nil},
 		{"version 4 varint cut short", gitindextest.Sign(open, sha1.Size, false), nil},
+		{"entry count 2^31", gitindextest.Sign(negative, sha1.Size, false), nil},
+		{"entry count 2^32-1", gitindextest.Sign(huge, sha1.Size, false), nil},
 	}
+}
+
+// withCount is the body of a signed index with its header entry count
+// replaced by n.
+func withCount(index []byte, n uint32) []byte {
+	body := slices.Clone(index[:len(index)-sha1.Size])
+	binary.BigEndian.PutUint32(body[8:12], n)
+	return body
 }
 
 // growingPaths is a version 4 index that keeps every byte of the path

@@ -49,8 +49,14 @@ func Parse(data []byte) ([]string, error) {
 	if r.version < 2 || r.version > 4 {
 		return nil, fmt.Errorf("%w: version %d", ErrInvalid, r.version)
 	}
-	count := int(binary.BigEndian.Uint32(body[8:12]))
-	paths := make([]string, 0, min(count, len(body)/(statBytes+hashLen+3)))
+	// Every entry takes more than statBytes+hashLen+3 bytes, so a larger
+	// count cannot be read whole. Checked as int64: on 32-bit an int
+	// conversion turns a count of 2^31 or more negative.
+	count := binary.BigEndian.Uint32(body[8:12])
+	if int64(count) > int64(len(body)/(statBytes+hashLen+3)) {
+		return nil, fmt.Errorf("%w: %d entries cannot fit in %d bytes", ErrInvalid, count, len(body))
+	}
+	paths := make([]string, 0, count)
 	prev := ""
 	for range count {
 		if prev, err = r.entry(prev); err != nil {

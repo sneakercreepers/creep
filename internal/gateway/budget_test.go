@@ -131,7 +131,7 @@ func TestNewBudgetRejects(t *testing.T) {
 		{MaxTokens: 1},
 		{MaxTokens: 1, MaxCalls: 1, EndpointMaxTokens: -1},
 		{MaxTokens: 1, MaxCalls: 1, MaxConcurrency: -1},
-		{MaxTokens: math.MaxInt, MaxCalls: 1},
+		{MaxTokens: over, MaxCalls: 1},
 		{MaxTokens: 1, MaxCalls: over},
 		{MaxTokens: 1, MaxCalls: 1, EndpointMaxTokens: over},
 		{MaxTokens: 1, MaxCalls: 1, MaxConcurrency: over},
