@@ -134,18 +134,32 @@ func linkGap(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree
 }
 
 // unreached reports whether the entry may be a directory the walk does not
-// cover. A FIFO, socket or device is not a directory. A symbolic link is
-// covered when its target, read with one readlink, names an entry the walk
-// reached (walkedTree.reaches). Anything else may be a directory and is
-// not covered (fail closed): a Windows junction or other reparse point, a
-// link past the scan deadline (#260), or one that cannot be read.
+// cover. A FIFO, socket or device is not a directory. Past the scan
+// deadline (#260) nothing is read and anything else may be one (fail
+// closed). A symbolic link is covered when its target, read with one
+// readlink, names an entry the walk reached (walkedTree.reaches). Any
+// other entry (a Windows junction, a OneDrive placeholder or another
+// reparse point, all ModeIrregular) is told apart by mayBeDirectory.
 func unreached(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree) bool {
 	if l.mode&(fs.ModeNamedPipe|fs.ModeSocket|fs.ModeDevice|fs.ModeCharDevice) != 0 {
 		return false
 	}
-	if l.mode&fs.ModeSymlink == 0 || ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return true
+	}
+	if l.mode&fs.ModeSymlink == 0 {
+		return mayBeDirectory(recoverStat(root.Stat), l.rel)
 	}
 	target, err := readlinkInRoot(root, l.rel)
 	return err != nil || !tree.reaches(l.rel, target)
+}
+
+// mayBeDirectory reports whether a reparse point that is not a symbolic
+// link may be a directory. A junction is refused by the root (its target
+// is absolute), so it counts as one; a OneDrive placeholder stats as the
+// regular file it stands for and keeps the rule for files (listed only
+// when named as source). Stat's panic is recovered (recoverStat).
+func mayBeDirectory(stat func(string) (fs.FileInfo, error), rel string) bool {
+	info, err := stat(rel)
+	return err != nil || info.IsDir()
 }

@@ -60,12 +60,49 @@ func TestWalkedTreeReaches(t *testing.T) {
 		{"a/link", "missing", false},
 		{"a/link", "", false},
 		{"a/link", "/a/b", false},
+		{"link", "/a", false},  // names a walked directory, but the target is absolute
+		{"link", `\a`, false},  // rooted on Windows; a plain name on Unix, not walked
+		{"link", "C:a", false}, // a volume on Windows; a plain name on Unix, not walked
 		{"link", strings.Repeat("a/../", maxLinkSteps/2) + "a", false},
 		{"link", strings.Repeat("./", maxLinkSteps/2-1) + "a", true},
 	}
 	for _, tt := range tests {
 		if got := tree.reaches(tt.rel, tt.target); got != tt.want {
 			t.Errorf("reaches(%q, %q) = %v, want %v", tt.rel, tt.target, got, tt.want)
+		}
+	}
+}
+
+// How a link or special file is classified, with the mode the walk saw
+// (#214 tester L1, L2): a FIFO, socket or device is never a directory and
+// is not read; a reparse point that is not a symbolic link (ModeIrregular:
+// a junction, a OneDrive placeholder) is a directory unless the root stats
+// it as a regular file, the stand-in here for a placeholder, which no test
+// can make.
+func TestUnreachedByMode(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{"file.txt": "x\n", "sub/a.txt": "x\n"})
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	tests := []struct {
+		rel  string
+		mode fs.FileMode
+		want bool
+	}{
+		{"missing-pipe", fs.ModeNamedPipe, false},
+		{"missing-socket", fs.ModeSocket, false},
+		{"missing-device", fs.ModeDevice | fs.ModeCharDevice, false},
+		{"file.txt", fs.ModeIrregular, false},
+		{"sub", fs.ModeIrregular, true},
+		{"missing", fs.ModeIrregular, true},
+	}
+	for _, tt := range tests {
+		l := pendingLink{rel: tt.rel, mode: tt.mode}
+		if got := unreached(context.Background(), root, l, newWalkedTree()); got != tt.want {
+			t.Errorf("unreached(%q, %v) = %v, want %v", tt.rel, tt.mode, got, tt.want)
 		}
 	}
 }
