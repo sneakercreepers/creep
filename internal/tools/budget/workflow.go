@@ -33,6 +33,7 @@ func checkWorkflow(name string, data []byte) []string {
 	var problems []string
 	block := -1    // key column of an open block scalar; deeper lines are its text
 	var quote byte // quote left open by the previous line, reported there
+	images := newImageScan()
 	for i, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimRight(line, "\r")
 		blockText := quote == 0 && block >= 0 && (strings.TrimSpace(line) == "" || indentOf(line) > block)
@@ -50,11 +51,12 @@ func checkWorkflow(name string, data []byte) []string {
 		}
 		block = -1
 		problems = append(problems, prefixed(at, structureProblems(code, open))...)
+		problems = append(problems, images.line(at, code)...)
 		if open == 0 && blockScalar.MatchString(code) {
 			block = keyColumn(code)
 		}
 	}
-	return problems
+	return append(problems, images.end()...)
 }
 
 func prefixed(at string, whys []string) []string {
@@ -74,7 +76,7 @@ func valueProblems(code string) []string {
 			problems = append(problems, m[1]+" "+why)
 		}
 	}
-	return problems
+	return append(problems, imageProblems(code)...)
 }
 
 func structureProblems(code string, open byte) []string {

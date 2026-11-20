@@ -53,6 +53,14 @@ func TestCheckImports(t *testing.T) {
 		{"sandbox may not speak the runtime API", "internal/sandbox/exec.go", "net/http", "network access"},
 		{"sandbox may not use syscall", "internal/sandbox/exec.go", "syscall", "raw system calls"},
 		{"os/exec in verify", "internal/verify/x.go", "os/exec", "running programs"},
+		{"go/build runs the go command", "internal/cli/x.go", "go/build", "runs the go command"},
+		{"go/importer runs the go command", "internal/cli/x.go", "go/importer", "runs the go command"},
+		{"go/build in tests that may not run programs", "internal/cli/x_test.go", "go/build", "runs the go command"},
+		{"go/build in dev tools", "internal/tools/pkgmap/x.go", "go/build", ""},
+		{"go/importer in state tests", "internal/state/keyorigin_test.go", "go/importer", ""},
+		{"go/importer in state code", "internal/state/x.go", "go/importer", "runs the go command"},
+		{"go/build in the scanner runner", "internal/scanrun/run.go", "go/build", ""},
+		{"go/types is pure", "internal/cli/x.go", "go/types", ""},
 		{"allowlisted runner syscall file", "internal/scanrun/proc_unix.go", "syscall", ""},
 		{"other runner file may not use syscall", "internal/scanrun/run.go", "syscall", "raw system calls"},
 		{"net in tests", "internal/cli/x_test.go", "net/http/httptest", "network access"},
@@ -111,11 +119,11 @@ func TestBypassModule(t *testing.T) {
 	wantImports := []string{"internal/cli/internal/gateway/g.go", "internal/shell/s.go", "internal/tlsdial/t.go"}
 	assertMentions(t, checkImports(testMod, files), wantImports)
 
-	reach, err := netReachProblems(config{root: root})
+	reach, err := reachProblems(config{root: root})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantReach := []string{"internal/cli/internal/gateway reaches", "internal/metrics reaches", "internal/tlsdial reaches"}
+	wantReach := []string{"internal/cli/internal/gateway reaches", "internal/metrics reaches", "internal/tlsdial reaches", "internal/shell reaches a process start through os/exec"}
 	assertMentions(t, reach, wantReach)
 }
 

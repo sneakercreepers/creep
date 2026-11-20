@@ -1,47 +1,27 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"path"
 	"sort"
-	"strings"
 )
 
-// listedPackage is the subset of `go list -json` the reachability check needs.
-type listedPackage struct {
-	ImportPath   string
-	Imports      []string
-	TestImports  []string
-	XTestImports []string
-	Module       *struct {
-		Path string
-		Main bool
+// reachProblems runs the transitive net and process-start checks over one
+// listing of the import graph.
+func reachProblems(cfg config) ([]string, error) {
+	mf, err := readModFile(cfg.root)
+	if err != nil {
+		return nil, err
 	}
-}
-
-// decodePackages reads the JSON stream `go list -json` prints, dropping the
-// test variants ("p [p.test]", "p.test") that -test adds.
-func decodePackages(data []byte) (map[string]listedPackage, error) {
-	pkgs := map[string]listedPackage{}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	for {
-		var p listedPackage
-		err := dec.Decode(&p)
-		if errors.Is(err, io.EOF) {
-			return pkgs, nil
-		}
-		if err != nil {
-			return nil, fmt.Errorf("parse go list -json: %w", err)
-		}
-		if strings.Contains(p.ImportPath, " ") || strings.HasSuffix(p.ImportPath, ".test") {
-			continue
-		}
-		pkgs[p.ImportPath] = p
+	pkgs, err := listPackages(cfg.root)
+	if err != nil {
+		return nil, err
 	}
+	starters, err := thirdPartyStarters(pkgs)
+	if err != nil {
+		return nil, err
+	}
+	return append(checkNetReach(mf.Module.Path, pkgs), checkProcessReach(mf.Module.Path, pkgs, starters)...), nil
 }
 
 // checkNetReach reports main-module packages outside the gateway whose code or

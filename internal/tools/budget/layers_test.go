@@ -51,6 +51,8 @@ func TestLayerTableFailsBudget(t *testing.T) {
 		{"product imports tooling", "internal/top/t.go", imp("top", "internal/tools/gen"), "build tooling is never imported by the product"},
 		{"prefix look-alike of tooling has no row", "internal/toolsx/x.go", "package toolsx\n", "package example.com/m/internal/toolsx has no row"},
 		{"product imports a tooling look-alike", "internal/top/t.go", imp("top", "internal/toolsx"), "it has no row"},
+		// #141: example.com/mx shares the module path as a string prefix but is another module.
+		{"external module sharing the module path prefix", "internal/base/b.go", "package base\nimport _ \"example.com/mx/lib\"\n", ""},
 		{"import of a package missing from the table", "internal/top/t.go", imp("top", "internal/ghost"), "it has no row"},
 	}
 	for _, tt := range tests {

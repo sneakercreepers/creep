@@ -61,7 +61,7 @@ const maxFileLines = 400
 
 var steps = []func(config) ([]string, error){
 	workspaceProblems, depProblems, importProblems, layerProblems, lineProblems, foreignProblems,
-	netReachProblems, moduleProblems, binaryProblems, workflowProblems, policyProblems,
+	reachProblems, moduleProblems, binaryProblems, workflowProblems, policyProblems,
 }
 
 func collect(cfg config) ([]string, error) {
@@ -115,7 +115,9 @@ func depProblems(cfg config) ([]string, error) {
 		return nil, fmt.Errorf("%s: %w", cfg.allowlist, err)
 	}
 	exists := func(p string) bool { return fileExists(filepath.Join(cfg.root, filepath.FromSlash(p))) }
-	return checkDeps(directModules(mf.Require), allow, exists), nil
+	tools, problems := toolModules(mf)
+	problems = append(problems, checkDeps(union(directModules(mf.Require), tools), allow, exists)...)
+	return append(problems, checkReplaces(mf.Replace, allow, exists)...), nil
 }
 
 func importProblems(cfg config) ([]string, error) {
@@ -126,29 +128,18 @@ func importProblems(cfg config) ([]string, error) {
 	return append(checkImports(mf.Module.Path, files), checkProcessUses(mf.Module.Path, files)...), nil
 }
 
-func netReachProblems(cfg config) ([]string, error) {
-	mf, err := readModFile(cfg.root)
-	if err != nil {
-		return nil, err
-	}
-	out, err := goOutput(cfg.root, "list", "-deps", "-test", "-json", "./...")
-	if err != nil {
-		return nil, err
-	}
-	pkgs, err := decodePackages(out)
-	if err != nil {
-		return nil, err
-	}
-	return checkNetReach(mf.Module.Path, pkgs), nil
-}
-
 // goOutput runs the go command in dir and returns stdout; on failure the
 // error carries stderr, which is where go explains what went wrong.
 func goOutput(dir string, args ...string) ([]byte, error) {
+	return goOutputEnv(dir, nil, args...)
+}
+
+// goOutputEnv is goOutput with extra environment entries, such as GOOS.
+func goOutputEnv(dir string, env []string, args ...string) ([]byte, error) {
 	cmd := exec.Command("go", args...) //nolint:gosec // G204: callers pass fixed go subcommands, never user input
 	cmd.Dir = dir
 	// A go.work above the root must not change what the budget sees.
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	cmd.Env = append(append(os.Environ(), "GOWORK=off"), env...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
