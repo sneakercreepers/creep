@@ -40,6 +40,19 @@ type calibrationEntry struct {
 	MAC    string          `json:"mac,omitempty"` // HMAC-SHA256 of the line; always the last field
 }
 
+// CheckCalibrationDir refuses a calibrations/ entry that is a link, a
+// junction, a file or writable by others. A missing directory is fine. The
+// error is ErrUnsafePath and names the absolute path to remove: no
+// calibration can replace the directory, so retrying with --recalibrate
+// would fail the same way (#180).
+func (s *Store) CheckCalibrationDir() error {
+	_, err := checkDir(calibrationsDir, s.root.Lstat)
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return fmt.Errorf("calibration cache directory %q is unsafe; remove it and creep recreates it: %w", s.abs(calibrationsDir), err)
+}
+
 func calibrationFile(key string) (string, error) {
 	if !calibrationKeyPattern.MatchString(key) {
 		return "", fmt.Errorf("calibration key: %w", ErrInvalidID)
@@ -54,6 +67,9 @@ func calibrationFile(key string) (string, error) {
 func (s *Store) LoadCalibration(key string) (Calibration, bool, error) {
 	name, err := calibrationFile(key)
 	if err != nil {
+		return Calibration{}, false, err
+	}
+	if err := s.CheckCalibrationDir(); err != nil {
 		return Calibration{}, false, err
 	}
 	data, err := s.readBounded(name, MaxCalibrationBytes)
@@ -112,6 +128,9 @@ func (s *Store) SaveCalibration(key string, c Calibration) error {
 	line := append(signed, '\n')
 	if len(line) > MaxCalibrationBytes {
 		return fmt.Errorf("calibration: %d bytes: %w", len(line), ErrTooLarge)
+	}
+	if err := s.CheckCalibrationDir(); err != nil {
+		return err
 	}
 	if err := s.ensureDir(calibrationsDir); err != nil {
 		return err

@@ -1,6 +1,9 @@
 package calibrate
 
-import "math/big"
+import (
+	"math/big"
+	"slices"
+)
 
 // Tier is how much creep trusts a model, from the calibration result. The
 // planner bounds its strategy by it (#12).
@@ -66,9 +69,52 @@ func newToolCheck(probes, correct int) ToolCheck {
 }
 
 // ContextCheck is the largest probe size, in bytes, the model answered,
-// with every smaller size answered too; 0 when it failed the first.
+// with every smaller size answered too; 0 when it failed the first. When a
+// probe failed it also records which size and why (#174): a refusal for a
+// reason other than size (a 400 for a bad parameter, say) under-rates the
+// model, and the report must show that instead of hiding it in a low tier.
 type ContextCheck struct {
 	EffectiveBytes int `json:"effective_bytes"`
+	// StoppedAt is the size of the probe that failed; 0 when every size was
+	// answered.
+	StoppedAt int         `json:"stopped_at,omitempty"`
+	Stop      ContextStop `json:"stop,omitempty"`
+	// Status is the HTTP status of the refusal when Stop is ContextStopStatus.
+	Status int `json:"status,omitempty"`
+}
+
+// ContextStop is why the effective-context probe stopped.
+type ContextStop string
+
+// The reasons a context probe fails without ending the run.
+const (
+	ContextStopWrongAnswer   ContextStop = "wrong_answer"
+	ContextStopInvalidOutput ContextStop = "invalid_output"
+	ContextStopStatus        ContextStop = "status" // HTTP 400 or 413
+	ContextStopBudget        ContextStop = "budget" // the token budget refused the call
+)
+
+// consistent reports whether c could have come from runContextProbes: a
+// stop names the next size after the effective one, and only a status
+// stop carries a status. A cached result that is not is never trusted.
+func (c ContextCheck) consistent() bool {
+	i := slices.Index(contextSizes, c.EffectiveBytes)
+	if c.EffectiveBytes != 0 && i < 0 {
+		return false
+	}
+	if c.Stop == "" {
+		return c.StoppedAt == 0 && c.Status == 0 && c.EffectiveBytes == contextSizes[len(contextSizes)-1]
+	}
+	if i+1 >= len(contextSizes) || c.StoppedAt != contextSizes[i+1] {
+		return false
+	}
+	switch c.Stop {
+	case ContextStopStatus:
+		return c.Status == 400 || c.Status == 413
+	case ContextStopWrongAnswer, ContextStopInvalidOutput, ContextStopBudget:
+		return c.Status == 0
+	}
+	return false
 }
 
 // assignTier returns the highest tier whose rule r meets, or TierS. It

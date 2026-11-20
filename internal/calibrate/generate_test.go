@@ -45,10 +45,10 @@ func invariantSeeds() []uint64 {
 // carries the affects-results label.
 func TestGenerateGolden(t *testing.T) {
 	golden := map[uint64]string{
-		0:              "b6e3b05545da34ba6d79d211812b5d940883390e936e28995d0954a35a73b494",
-		1:              "28cf64d2552276273a01424b6a7194b46336354c595cf2768b27a1224cbd6bf0",
-		42:             "27dd34b25d95829d9551c3d61cbc4bef3b9878227fcb31e8aba5c86830b338ed",
-		math.MaxUint64: "0e16712bd6c73bfca47e0a3d0964518a23d771d84dedff92ecf685f1915f1757",
+		0:              "87f0abd538581692579605419d438ca7209d5f8676eb49c479b5792d85b9fb45",
+		1:              "0320e1388fbfc57ee8d26dd165659c348f3fc361651cb86e2c0aa07143a98983",
+		42:             "0760aea2a9fe42d2e5c56d9fb804adb287100db14fdda8c50cef117fbfb68d4c",
+		math.MaxUint64: "73d1e7af709dfa96f6885bc457c65ba241c54f631d63c36dbfe29f8abae5eb8a",
 	}
 	for seed, want := range golden {
 		if got := hashTasks(t, mustGenerate(t, seed)); got != want {

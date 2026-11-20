@@ -26,6 +26,14 @@
 //   - Half the tasks are vulnerable and half are their safe twins, spread
 //     round-robin over every template, then shuffled so position says
 //     nothing about the label.
+//   - A safe twin has no defensible finding in any class, not only its
+//     template's: scoring counts any finding on it as a false positive, so
+//     a twin a precise model could rightly flag under another class would
+//     penalize the best models (#162). Caller input reaches a sink only in
+//     a form the sink cannot misread: an allowlisted value, the value that
+//     was checked, a bound scalar parameter or a path confined to a root;
+//     a twin that reads per-owner rows scopes them to the logged-in owner,
+//     and a merge writes only into own, prototype-free objects.
 //
 // Templates hold no real secret or hostname; hosts use the reserved
 // .invalid top-level domain.
@@ -52,7 +60,10 @@
 //     tool, copy the argument exactly) and effective context (find one
 //     assignment in 8, 32, then 128 KiB of similar ones, stopping at the
 //     first miss). A probe refused for its size (HTTP 400 or 413, or the
-//     token budget) is a miss, not a failed run.
+//     token budget) is a miss, not a failed run. ContextCheck records the
+//     size that missed and why (wrong answer, invalid output, the status,
+//     the budget), and Header shows it: a 400 for another reason, such as
+//     a bad parameter, holds the model at tier S, and the report says so.
 //   - The Result records the seed, a hash of the task set and
 //     PromptVersion, so a cached result is tied to what it measured.
 //
@@ -60,20 +71,29 @@
 // default, calibration.cache_days) in a state.Store, normally the user's
 // cache directory:
 //   - The key is the SHA-256 of the model's identity (contract, endpoint
-//     URL, model name), the seed, the task-set hash and PromptVersion. The
-//     model name is the model's version as far as creep can tell: a dated
-//     name gets its own entry; an alias is measured again after MaxAge. A
-//     new creep whose templates or prompts changed never reuses a tier.
+//     URL, model name), the client settings that change its answers
+//     (models.Settings: structured output, max output tokens, retries), the
+//     seed, the task-set hash and PromptVersion. The model name is the
+//     model's version as far as creep can tell: a dated name gets its own
+//     entry; an alias such as "-latest" that moves to a new snapshot is
+//     measured again only after MaxAge, or with --recalibrate. A new creep
+//     whose templates, prompts or key fields changed never reuses a tier:
+//     entries under older keys are never looked up again.
 //   - A cached result is used only when its age is in [0, MaxAge), its line
 //     is authenticated by internal/state, it decodes strictly, it matches
-//     the key, and the current rules give it the tier it records. A torn,
-//     planted, linked or inconsistent file is recalibrated over, never
-//     read. A file from a newer creep fails closed (state.ErrUnsupported-
-//     Version) unless Recalibrate (--recalibrate) replaces it.
+//     the key, its context check is one a run can produce, and the current
+//     rules give it the tier it records. A torn, planted, linked or
+//     inconsistent file is recalibrated over, never read. This holds for
+//     files: a calibrations/ directory that is a link, junction or file
+//     fails closed before any model call, with or without --recalibrate,
+//     and the error names the directory to remove. A file from a newer
+//     creep fails closed (state.ErrUnsupportedVersion) unless Recalibrate
+//     (--recalibrate) replaces it.
 //   - The clock is injected (CacheOptions.Now), so expiry is tested at its
 //     boundaries.
 //   - Header is the report's calibration line: model, tier, date, seed,
-//     task set and prompt version.
+//     task set and prompt version, then the context probe that stopped
+//     early and why, if one did.
 //
 // The CLI (#14) must build Options.Model on models.Through(egressLog,
 // client) and give calibration its own redact.Redactor, separate from the

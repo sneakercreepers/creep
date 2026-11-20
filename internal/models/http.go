@@ -118,6 +118,21 @@ func (h *HTTP) Identity() Identity {
 	return Identity{Contract: h.contract, URL: h.url, Model: h.model}
 }
 
+// Settings are the client options that change what the same model
+// answers: how output is constrained, how long a reply may be and how many
+// invalid replies are retried. Callers that cache a measurement of the
+// model (the calibration cache) key on them next to Identity.
+type Settings struct {
+	Structured      Structured `json:"structured"`
+	MaxOutputTokens int        `json:"max_output_tokens"`
+	Retries         int        `json:"retries"`
+}
+
+// Settings returns the result-affecting options of h.
+func (h *HTTP) Settings() Settings {
+	return Settings{Structured: h.structured, MaxOutputTokens: h.maxOutput, Retries: h.retries}
+}
+
 func wireFor(contract string, s Structured) (wire, error) {
 	var w wire
 	switch contract {

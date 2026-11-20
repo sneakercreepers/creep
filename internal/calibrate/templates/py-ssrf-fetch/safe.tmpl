@@ -1,4 +1,4 @@
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from flask import Flask, abort, request
@@ -13,4 +13,5 @@ def @@func@@():
     parts = urlsplit(raw)
     if parts.scheme != "https" or parts.hostname not in ALLOWED_HOSTS:
         abort(400)
-    return requests.get(raw, timeout=5, allow_redirects=False).text
+    rebuilt = urlunsplit(("https", parts.hostname, parts.path, parts.query, ""))
+    return requests.get(rebuilt, timeout=5, allow_redirects=False).text

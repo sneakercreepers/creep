@@ -92,7 +92,7 @@ func run(ctx context.Context, opts Options, tasks []Task) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	effective, err := runContextProbes(ctx, opts, src)
+	contextCheck, err := runContextProbes(ctx, opts, src)
 	if err != nil {
 		return Result{}, err
 	}
@@ -100,7 +100,7 @@ func run(ctx context.Context, opts Options, tasks []Task) (Result, error) {
 		Seed: opts.Seed, TaskSet: taskSetHash(tasks), PromptVersion: PromptVersion,
 		Structured: newStructuredCheck(len(tasks), invalid),
 		Tools:      tools,
-		Context:    ContextCheck{EffectiveBytes: effective},
+		Context:    contextCheck,
 	}
 	r.Classes, r.Overall = scoreClasses(tasks, correct)
 	r.Tier = assignTier(r)
@@ -167,46 +167,55 @@ func runToolProbes(ctx context.Context, opts Options, probes []toolProbe) (ToolC
 }
 
 // runContextProbes tries each size in order and stops at the first wrong or
-// invalid answer, so a small model is not sent the largest inputs.
-func runContextProbes(ctx context.Context, opts Options, src rand.Source) (int, error) {
-	effective := 0
+// invalid answer, so a small model is not sent the largest inputs. The
+// check records which size stopped the probe and why.
+func runContextProbes(ctx context.Context, opts Options, src rand.Source) (ContextCheck, error) {
+	check := ContextCheck{}
 	for _, size := range contextSizes {
 		p := newContextProbe(src, size)
 		req, err := newRequest(opts.Redactor, purposeContext, contextSystem, p.prompt)
 		if err != nil {
-			return 0, fmt.Errorf("calibrate context probe: %w", err)
+			return ContextCheck{}, fmt.Errorf("calibrate context probe: %w", err)
 		}
 		req.Schema, req.Grammar = contextSchema(), contextGrammar()
 		a, err := models.Complete[contextAnswer](ctx, opts.Model, req)
-		if probeTooLarge(err) {
-			return effective, nil
+		stop, status, sized := sizeRefusal(err)
+		if err != nil && !sized {
+			return ContextCheck{}, fmt.Errorf("calibrate context probe: %w", err)
 		}
-		if err != nil {
-			return 0, fmt.Errorf("calibrate context probe: %w", err)
+		if err == nil && a.Value != p.value {
+			stop = ContextStopWrongAnswer
 		}
-		if a.Value != p.value {
-			return effective, nil
+		if stop != "" {
+			check.StoppedAt, check.Stop, check.Status = size, stop, status
+			return check, nil
 		}
-		effective = size
+		check.EffectiveBytes = size
 	}
-	return effective, nil
+	return check, nil
 }
 
-// probeTooLarge reports whether a context probe failed because of its size,
-// which measures the model's context instead of ending the run: invalid
-// output, a 400 or 413 (how endpoints refuse an input over their context
-// length), or a budget refusal. Consent, allowlist and egress failures are
-// not about the size and still end the run.
-func probeTooLarge(err error) bool {
-	if errors.Is(err, models.ErrInvalidOutput) || errors.Is(err, gateway.ErrBudgetExhausted) {
-		return true
+// sizeRefusal reports whether a context probe failed because of its size,
+// which measures the model's context instead of ending the run, and how:
+// invalid output, a 400 or 413 (how endpoints refuse an input over their
+// context length), or a budget refusal. Consent, allowlist and egress
+// failures are not about the size and still end the run.
+func sizeRefusal(err error) (ContextStop, int, bool) {
+	if errors.Is(err, models.ErrInvalidOutput) {
+		return ContextStopInvalidOutput, 0, true
+	}
+	if errors.Is(err, gateway.ErrBudgetExhausted) {
+		return ContextStopBudget, 0, true
 	}
 	var status *models.StatusError
 	if !errors.As(err, &status) {
-		return false
+		return "", 0, false
 	}
 	// Literals: only the gateway may import net/http (invariant 1).
-	return status.Status == 400 || status.Status == 413
+	if status.Status == 400 || status.Status == 413 {
+		return ContextStopStatus, status.Status, true
+	}
+	return "", 0, false
 }
 
 // newRequest redacts the whole prompt with File, as the gateway does with a

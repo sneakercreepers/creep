@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const @@store@@ = {};
+const @@store@@ = Object.create(null);
 
 function @@func@@(target, source) {
   for (const key of Object.keys(source)) {
     if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
     if (typeof source[key] === "object" && source[key] !== null) {
-      target[key] = @@func@@(target[key] || {}, source[key]);
+      const next = Object.hasOwn(target, key) && typeof target[key] === "object" && target[key] !== null ? target[key] : Object.create(null);
+      target[key] = @@func@@(next, source[key]);
     } else {
       target[key] = source[key];
     }

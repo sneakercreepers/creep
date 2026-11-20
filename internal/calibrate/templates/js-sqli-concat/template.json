@@ -10,5 +10,5 @@
     "field": ["name", "user", "account", "author", "customer", "tenant"]
   },
   "vulnerable": {"sink_line": 7, "marker": "db.query(sql, (err"},
-  "safe": {"sink_line": 7, "marker": "db.query(sql, ["}
+  "safe": {"sink_line": 8, "marker": "db.query(sql, ["}
 }

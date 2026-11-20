@@ -39,9 +39,12 @@ type Calibration struct {
 }
 
 // cacheKeyFields is everything a cached result depends on. A change to any
-// of them is a different file, so a stale tier is never reused.
+// of them is a different file, so a stale tier is never reused. Adding a
+// field changes every key: entries stored under the old keys are never
+// looked up again, so they are recalibrated over, not misread (#180).
 type cacheKeyFields struct {
 	Model         models.Identity `json:"model"`
+	Client        models.Settings `json:"client"`
 	Seed          uint64          `json:"seed"`
 	TaskSet       string          `json:"task_set"`
 	PromptVersion int             `json:"prompt_version"`
@@ -62,8 +65,13 @@ func RunCached(ctx context.Context, opts CacheOptions) (Calibration, error) {
 	if err != nil {
 		return Calibration{}, err
 	}
+	// A linked calibrations/ directory fails before any model call: no
+	// result could be stored, and recalibrating cannot replace it.
+	if err := opts.Store.CheckCalibrationDir(); err != nil {
+		return Calibration{}, err
+	}
 	want := cacheKeyFields{
-		Model: opts.Model.Identity(), Seed: opts.Seed,
+		Model: opts.Model.Identity(), Client: opts.Model.Settings(), Seed: opts.Seed,
 		TaskSet: taskSetHash(tasks), PromptVersion: PromptVersion,
 	}
 	key := cacheKey(want)
@@ -132,6 +140,9 @@ func decodeCached(raw json.RawMessage, want cacheKeyFields) (Result, bool) {
 	if r.Seed != want.Seed || r.TaskSet != want.TaskSet || r.PromptVersion != want.PromptVersion {
 		return Result{}, false
 	}
+	if !r.Context.consistent() {
+		return Result{}, false
+	}
 	return r, r.Tier == assignTier(r)
 }
 
@@ -148,13 +159,29 @@ func store(opts CacheOptions, key string, want cacheKeyFields, r Result) (Calibr
 }
 
 // Header is the report's calibration line: model, tier, calibration date
-// and what was measured, so two reports can be compared. The model name is
-// quoted because it comes from configuration.
+// and what was measured, so two reports can be compared, then why the
+// context probe stopped early, if it did. The model name is quoted because
+// it comes from configuration.
 func (c Calibration) Header() string {
 	set := c.TaskSet
 	if len(set) > 12 {
 		set = set[:12]
 	}
-	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)",
-		c.Model.Model, c.Tier, c.At.UTC().Format(time.DateOnly), c.Seed, set, c.PromptVersion)
+	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)%s",
+		c.Model.Model, c.Tier, c.At.UTC().Format(time.DateOnly), c.Seed, set, c.PromptVersion,
+		contextNote(c.Context))
+}
+
+// contextNote says which context probe failed and why, so a model held at
+// a low tier by a refusal unrelated to size (a 400 on the 8 KiB probe) is
+// visible in the report.
+func contextNote(c ContextCheck) string {
+	if c.Stop == "" {
+		return ""
+	}
+	reason := string(c.Stop)
+	if c.Stop == ContextStopStatus {
+		reason = fmt.Sprintf("HTTP %d", c.Status)
+	}
+	return fmt.Sprintf(" · context %d KiB (%d KiB probe: %s)", c.EffectiveBytes>>10, c.StoppedAt>>10, reason)
 }

@@ -1,6 +1,7 @@
 package calibrate
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -63,6 +64,69 @@ func TestEmbeddedCatalogCoversEveryClassAndLanguage(t *testing.T) {
 	if 2*len(cat.templates) > TaskCount {
 		t.Errorf("%d templates do not fit in %d tasks", len(cat.templates), TaskCount)
 	}
+}
+
+// A safe twin has no defensible finding in any class (#162). Every line
+// from the guard that refuses other input down to the sink is checked, so
+// caller input cannot come back on a line that builds the sink's argument:
+// the command twins send only an allowlisted value, the fetch twins the
+// URL they checked (host and port fixed), the SQL twin binds a scalar
+// scoped to the logged-in owner, and the merge twin writes only into own,
+// prototype-free objects.
+func TestSafeTwinsCleanInEveryClass(t *testing.T) {
+	cat, err := defaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		id        string
+		guard     string   // the last line before the sink that refuses other input
+		forbidden []string // caller input that must not appear after the guard
+		flowHas   []string // what must reach the sink after the guard
+	}{
+		{"js-command-exec", "sendStatus(404)", []string{"req.", placeholderMark}, []string{", root]"}},
+		{"py-command-shell", "abort(404)", []string{"request.", placeholderMark}, []string{`"--", fqdn]`}},
+		{"py-ssrf-fetch", "abort(400)", []string{"raw", "request.", placeholderMark}, []string{`urlunsplit(("https", parts.hostname`, "requests.get(rebuilt"}},
+		{"js-ssrf-fetch", `target.port !== ""`, []string{"req.", placeholderMark}, []string{"fetch(target,"}},
+		{"js-sqli-concat", "requireLogin, (req, res)", []string{"[req.query.", ", req.query."}, []string{"[req.session.ownerId, String(req.query."}},
+		// Recursing into an inherited key would merge into a shared
+		// built-in (Object.prototype.toString), so only own objects are
+		// merged into and new levels have no prototype.
+		{"js-prototype-merge", `key === "__proto__"`, []string{"|| {}", "= {}"}, []string{"Object.hasOwn(target, key)", "Object.create(null)", "(next, source[key])"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			i := slices.IndexFunc(cat.templates, func(tpl template) bool { return tpl.id == tt.id })
+			if i < 0 {
+				t.Fatalf("no template %s", tt.id)
+			}
+			flow, ok := sinkFlow(cat.templates[i].safe, tt.guard)
+			if !ok {
+				t.Fatalf("safe twin lacks the guard %q before its sink", tt.guard)
+			}
+			for _, bad := range tt.forbidden {
+				if strings.Contains(flow, bad) {
+					t.Errorf("caller input %q reaches the sink after the guard:\n%s", bad, flow)
+				}
+			}
+			for _, want := range tt.flowHas {
+				if !strings.Contains(flow, want) {
+					t.Errorf("sink flow lacks %q:\n%s", want, flow)
+				}
+			}
+		})
+	}
+}
+
+// sinkFlow returns the lines after the last guard line before the sink,
+// through the sink.
+func sinkFlow(v variant, guard string) (string, bool) {
+	for g := v.sinkLine - 2; g >= 0; g-- {
+		if strings.Contains(v.lines[g], guard) {
+			return strings.Join(v.lines[g+1:v.sinkLine], "\n"), true
+		}
+	}
+	return "", false
 }
 
 func TestLoadCatalogAcceptsCRLF(t *testing.T) {
