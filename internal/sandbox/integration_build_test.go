@@ -52,3 +52,35 @@ func TestRealBuildIsOffline(t *testing.T) {
 		}
 	})
 }
+
+// TestRealTestAppsBuild builds every test app on a real engine, offline,
+// from the pinned BusyBox its shared Dockerfile names: each image holds
+// the app's files, and Close removes it. The image does not serve the app:
+// an offline build cannot install Flask, FastAPI or Express (#277).
+func TestRealTestAppsBuild(t *testing.T) {
+	eachRuntime(t, func(t *testing.T, st Status) {
+		pullPinned(t, st)
+		s := openReal(t, st)
+		var images []string
+		for _, dir := range testAppVariants(t) {
+			app, err := s.Build(context.Background(), dirRepo(t, dir))
+			if err != nil || !app.Built() {
+				t.Errorf("%s: Build = %+v, %v", dir, app, err)
+				continue
+			}
+			images = append(images, app.Image)
+			res, err := s.Run(context.Background(), Spec{Image: app.Image, Cmd: []string{"test", "-f", "/app/Dockerfile"}})
+			if err != nil || res.ExitCode != 0 {
+				t.Errorf("%s: the built image lacks the app's files: %+v, %v", dir, res, err)
+			}
+		}
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
+		for _, image := range images {
+			if _, code := cliCode(t, st, "image", "inspect", image); code == 0 {
+				t.Errorf("Close left the built image %s", image)
+			}
+		}
+	})
+}

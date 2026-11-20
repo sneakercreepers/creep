@@ -73,6 +73,11 @@ func appFS(expected string, extra fstest.MapFS) fstest.MapFS {
 
 func swap(old, repl string) string { return strings.Replace(goodExpected, old, repl, 1) }
 
+// withDockerfile gives the vulnerable and safe variants these Dockerfiles.
+func withDockerfile(vulnerable, safe string) fstest.MapFS {
+	return fstest.MapFS{"x/vulnerable/Dockerfile": {Data: []byte(vulnerable)}, "x/safe/Dockerfile": {Data: []byte(safe)}}
+}
+
 func TestCheckAppReportsDrift(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -105,6 +110,17 @@ func TestCheckAppReportsDrift(t *testing.T) {
 		{"nested dir", goodExpected, fstest.MapFS{"x/safe/lib/a.py": {Data: []byte("\n")}}, "regular files"},
 		{"symlink", goodExpected, fstest.MapFS{"x/safe/link.py": {Data: []byte("app.py"), Mode: fs.ModeSymlink}}, "regular files"},
 		{"too long", goodExpected, fstest.MapFS{"x/safe/app.py": {Data: []byte(strings.Repeat("\n", maxAppLines))}}, "under 200"},
+		// Build files (#23): only the shared Dockerfile, in both variants.
+		{"shared dockerfile", goodExpected, withDockerfile(appDockerfile, appDockerfile), ""},
+		{"dockerfile in one variant", goodExpected, fstest.MapFS{"x/vulnerable/Dockerfile": {Data: []byte(appDockerfile)}}, "same files"},
+		{"dockerfile that runs", goodExpected, withDockerfile(appDockerfile, appDockerfile+"RUN python /app/app.py\n"), "exactly the shared one"},
+		{"dockerfile from another image", goodExpected, withDockerfile("FROM python:3\nCOPY . /app\n", "FROM python:3\nCOPY . /app\n"), "exactly the shared one"},
+		{"dockerfile link", goodExpected, fstest.MapFS{"x/vulnerable/Dockerfile": {Data: []byte("app.py"), Mode: fs.ModeSymlink}, "x/safe/Dockerfile": {Data: []byte(appDockerfile)}}, "regular files"},
+		{"dockerfile only", goodExpected, fstest.MapFS{"x/vulnerable/app.py": nil, "x/safe/app.py": nil, "x/vulnerable/Dockerfile": {Data: []byte(appDockerfile)}, "x/safe/Dockerfile": {Data: []byte(appDockerfile)}}, "no source files"},
+		{"containerfile", goodExpected, fstest.MapFS{"x/safe/Containerfile": {Data: []byte(appDockerfile)}}, "only .py"},
+		{"lowercase dockerfile", goodExpected, fstest.MapFS{"x/safe/dockerfile": {Data: []byte(appDockerfile)}}, "only .py"},
+		{"compose file", goodExpected, fstest.MapFS{"x/safe/compose.yaml": {Data: []byte("services: {}\n")}}, "only .py"},
+		{"dockerfile beside the variants", goodExpected, fstest.MapFS{"x/Dockerfile": {Data: []byte(appDockerfile)}}, "an app holds only"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

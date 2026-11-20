@@ -10,8 +10,8 @@
 // Layout, one directory per app:
 //
 //	testdata/apps/<app>/expected.json
-//	testdata/apps/<app>/vulnerable/<source files>
-//	testdata/apps/<app>/safe/<source files, same names>
+//	testdata/apps/<app>/vulnerable/<source files> and Dockerfile
+//	testdata/apps/<app>/safe/<source files, same names> and Dockerfile
 //
 // The expected findings live beside the two variants, not inside them, so a
 // scan of either variant never sees them. The source files carry the same
@@ -36,9 +36,13 @@
 // schema change: bump schema_version.
 //
 // The apps never run outside the sandbox. TestAppsMatchExpected rejects
-// anything but source files of the app's language and expected.json: no
-// package manifests, lockfiles, install hooks, build or run scripts, test files
-// a Python or JS runner would collect, Go files or symlinks.
+// anything but source files of the app's language, expected.json and one
+// Dockerfile per variant whose bytes are exactly the shared one (the pinned
+// BusyBox and COPY . /app, so nothing runs at build time; #23): no package
+// manifests, lockfiles, install hooks, compose files, other build or run
+// scripts, test files a Python or JS runner would collect, Go files or
+// symlinks. Only the sandbox builds that Dockerfile, offline
+// (internal/sandbox TestEveryTestAppBuilds and TestRealTestAppsBuild).
 // TestNothingExecutesApps fails when a Makefile, workflow, composite action,
 // Dockerfile, compose file, package.json (its scripts run under npm) or shell
 // script mentions testdata/apps, or when Go code that can start programs (os/exec, syscall,

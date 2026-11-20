@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -154,13 +155,14 @@ func scanRepo(t *testing.T, files map[string]string, extraConfig string) string 
 }
 
 // testApp reads the vulnerable variant of a testdata app ("flask",
-// "express"); each holds one source file.
+// "express"); each holds one source file beside its Dockerfile.
 func testApp(t *testing.T, app string) string {
 	t.Helper()
 	dir := filepath.Join("..", "..", "testdata", "apps", app, "vulnerable")
 	entries, err := os.ReadDir(dir)
+	entries = slices.DeleteFunc(entries, func(e os.DirEntry) bool { return e.Name() == "Dockerfile" })
 	if err != nil || len(entries) != 1 {
-		t.Fatalf("testdata app %s: %v, %d files", app, err, len(entries))
+		t.Fatalf("testdata app %s: %v, %d source files", app, err, len(entries))
 	}
 	data, err := os.ReadFile(filepath.Join(dir, entries[0].Name()))
 	if err != nil {
