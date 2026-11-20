@@ -38,9 +38,18 @@ var settingsDirs = []string{".github/", ".claude/"}
 // dependency allowlist that backs invariant 6.
 var settingsFiles = map[string]bool{"docs/adr/dependencies.txt": true}
 
+// ruleNames carry governance and security policy, lowercase; they match at
+// any depth because GitHub also reads SECURITY.md from docs/ and .github/
+// (ADR 0018).
+var ruleNames = map[string]bool{"governance.md": true, "security.md": true}
+
+// adrDir holds the architecture decisions, through which the loop changes
+// (ADR 0018).
+const adrDir = "docs/adr/"
+
 // docsOnlyReason says why a changed path is outside the docs-only shortcut,
 // or returns "" when it fits: only *.md or docs/, and not code, workflows,
-// settings, a Makefile or a policy file.
+// settings, a Makefile, a policy file, GOVERNANCE.md, SECURITY.md or an ADR.
 func docsOnlyReason(p string) string {
 	lower := strings.ToLower(p)
 	if policyNames[path.Base(lower)] || hasDir(lower, policyDir) {
@@ -48,6 +57,9 @@ func docsOnlyReason(p string) string {
 	}
 	if settingsFiles[lower] {
 		return "a setting make budget reads"
+	}
+	if ruleNames[path.Base(lower)] || strings.HasPrefix(lower, adrDir) {
+		return "governance, security policy or an ADR"
 	}
 	for _, dir := range settingsDirs {
 		if strings.HasPrefix(lower, dir) {

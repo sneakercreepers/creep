@@ -74,7 +74,7 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 	}
 	for _, want := range []string{
 		"only `*.md` files or `docs/`",
-		"not code, workflows, settings (including `docs/adr/dependencies.txt`, which `make budget` reads), Makefile or the policy files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, PR template)",
+		"not code, workflows, settings (including `docs/adr/dependencies.txt`, which `make budget` reads), Makefile, the policy files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, PR template), GOVERNANCE.md, SECURITY.md or anything under `docs/adr/`",
 		"The required `docs-only` CI check",
 	} {
 		if !strings.Contains(rule, want) {
@@ -86,6 +86,9 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 	}
 	if len(settingsFiles) != 1 || !settingsFiles["docs/adr/dependencies.txt"] {
 		t.Errorf("settingsFiles %v differs from the one file AGENTS.md names", settingsFiles)
+	}
+	if len(ruleNames) != 2 || !ruleNames["governance.md"] || !ruleNames["security.md"] || adrDir != "docs/adr/" {
+		t.Errorf("ruleNames %v or adrDir %q differs from AGENTS.md", ruleNames, adrDir)
 	}
 }
 

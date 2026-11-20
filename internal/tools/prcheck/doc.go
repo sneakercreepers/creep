@@ -8,8 +8,9 @@
 // Documentation-only box, every changed path must fit the shortcut as
 // AGENTS.md defines it: only *.md files or docs/, and not code, workflows,
 // settings (docs/adr/dependencies.txt, which make budget reads, included), a
-// Makefile or a policy file (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, the PR
-// template). A body that does not tick the box claims nothing and passes;
+// Makefile, a policy file (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, the PR
+// template), GOVERNANCE.md, SECURITY.md or anything under docs/adr/ (ADR
+// 0018). A body that does not tick the box claims nothing and passes;
 // the full loop applies to it.
 //
 // It reads only the event payload GitHub writes to disk and the changed-file
