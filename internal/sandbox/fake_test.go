@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -58,11 +59,32 @@ func answer(args []string) int {
 		fmt.Println(`{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`)
 	case "ps":
 		fmt.Println(fakeID)
+	case "version":
+		fmt.Println(testPlatform)
 	case "image":
-		fmt.Println("null")
+		switch {
+		case slices.Contains(args, "inspect") && !slices.Contains(args, "--format"):
+			fmt.Println(nativeInspect)
+		case slices.Contains(args, "inspect"):
+			fmt.Println("null")
+		}
+	case "build":
+		return fakeBuild(args)
 	case "run":
 		fmt.Print("poc output")
 		return 3
+	}
+	return 0
+}
+
+// fakeBuild writes a fake image ID to the --iidfile, as the CLI does.
+func fakeBuild(args []string) int {
+	for _, a := range args {
+		if path, ok := strings.CutPrefix(a, "--iidfile="); ok {
+			if err := os.WriteFile(path, []byte("sha256:"+fakeID+"\n"), 0o600); err != nil { //nolint:gosec // G703: the sandbox's work directory
+				return 1
+			}
+		}
 	}
 	return 0
 }
@@ -96,11 +118,12 @@ func checkEnv() string {
 	return ""
 }
 
-// checkRunConfig fails a run unless DOCKER_CONFIG is an empty directory:
-// a real docker would add the proxies of any config.json it finds there
-// to the container's environment.
+// checkRunConfig fails a run or a build unless DOCKER_CONFIG is an empty
+// directory: a real docker would add the proxies of any config.json it
+// finds there to the container's environment, and to a build as build
+// arguments.
 func checkRunConfig(args []string) string {
-	if subcommand(args) != "run" {
+	if sub := subcommand(args); sub != "run" && sub != "build" {
 		return ""
 	}
 	dir := os.Getenv("DOCKER_CONFIG")

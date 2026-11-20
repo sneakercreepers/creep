@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,27 +18,41 @@ const (
 )
 
 // recorder is a fake runtime CLI: it records every argv and answers with
-// reply, or exit 0 and no output. An image inspect gets image, or an image
-// without volumes.
+// reply, or exit 0 and no output. An image inspect gets images[ref], else
+// image, else an image without volumes.
 type recorder struct {
 	mu     sync.Mutex
 	calls  [][]string
 	reply  func(ctx context.Context, args []string) (cliResult, error)
 	image  *cliResult
 	images map[string]cliResult // per image reference, before image
+	// platform answers the engine platform query; "" is testPlatform.
+	platform string
 }
+
+// testPlatform is the fake engine's os/arch, and nativeInspect a base
+// image built for it: what a raw `image inspect` gets by default.
+const (
+	testPlatform  = "linux/amd64"
+	nativeInspect = `[{"Id":"sha256:1111111111111111111111111111111111111111111111111111111111111111","Os":"linux","Architecture":"amd64","Config":{"OnBuild":null}}]`
+)
 
 func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, slices.Clone(args))
 	r.mu.Unlock()
-	if answer, ok := r.images[args[len(args)-1]]; ok && subcommand(args) == "image" {
+	inspect := subcommand(args) == "image" && slices.Contains(args, "inspect")
+	if answer, ok := r.images[args[len(args)-1]]; ok && inspect {
 		return answer, nil
 	}
-	switch {
-	case subcommand(args) == "image" && r.image != nil:
+	switch last := args[len(args)-1]; {
+	case last == "{{.Server.Os}}/{{.Server.Arch}}" || last == "{{.Host.OS}}/{{.Host.Arch}}":
+		return cliResult{stdout: []byte(cmp.Or(r.platform, testPlatform) + "\n")}, nil
+	case inspect && !slices.Contains(args, "--format"):
+		return cliResult{stdout: []byte(nativeInspect)}, nil
+	case inspect && r.image != nil:
 		return *r.image, nil
-	case subcommand(args) == "image":
+	case inspect:
 		return cliResult{stdout: []byte("null\n")}, nil
 	case r.reply != nil:
 		return r.reply(ctx, args)
@@ -151,11 +166,12 @@ func allowedOption(o string) bool {
 }
 
 // TestEveryContainerIsHardened is the protection test for the profile:
-// every container Run, RunBatch and StartDatabase start (PoCs, the canary,
-// the database and its readiness poll), whatever the spec, gets the
-// hardened options and nothing else, and the endpoint stays pinned.
+// every container Run, RunBatch, StartDatabase and StartApp start (PoCs,
+// the canary, the database and its readiness poll, the built app),
+// whatever the spec, gets the hardened options and nothing else, and the
+// endpoint stays pinned.
 func TestEveryContainerIsHardened(t *testing.T) {
-	rec := networkRecorder(goodCanary, 0)
+	rec := withBuilds(networkRecorder(goodCanary, 0), 0)
 	s := testSandbox(t, rec)
 	env, err := s.WriteSyntheticEnv([]string{"DATABASE_URL", "SECRET_KEY"})
 	if err != nil {
@@ -178,9 +194,17 @@ func TestEveryContainerIsHardened(t *testing.T) {
 	if _, err := s.RunBatch(context.Background(), specs); err != nil {
 		t.Fatalf("RunBatch: %v", err)
 	}
+	app, err := s.Build(context.Background(), dockerfileRepo(plainDockerfile))
+	if err != nil || !app.Built() {
+		t.Fatalf("Build = %+v, %v", app, err)
+	}
+	if err := s.StartApp(context.Background(), app); err != nil {
+		t.Fatalf("StartApp: %v", err)
+	}
 	runs := rec.to("run")
-	// Run, then canary, database and poll, then canary and the batch.
-	if want := len(specs) + 3 + 1 + len(specs); len(runs) != want {
+	// Run, then canary, database and poll, then canary and the batch, then
+	// canary and the app.
+	if want := len(specs) + 3 + 1 + len(specs) + 2; len(runs) != want {
 		t.Fatalf("got %d run calls, want %d", len(runs), want)
 	}
 	for _, argv := range runs {
