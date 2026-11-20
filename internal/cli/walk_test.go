@@ -88,7 +88,7 @@ func TestEntryGapRefusedNames(t *testing.T) {
 		{`web\notes.png`, "", false},
 	}
 	for _, tt := range tests {
-		got, send := entryGap(tt.name, regularEntry{}, proofs)
+		got, send := entryGap(nil, tt.name, regularEntry{}, proofs)
 		if got != tt.want || send != tt.send {
 			t.Errorf("entryGap(%q) = %q, %v; want %q, %v", tt.name, got, send, tt.want, tt.send)
 		}
@@ -110,7 +110,8 @@ func TestScanListsRefusedName(t *testing.T) {
 }
 
 // Links and special files named as source are listed, not followed: a
-// link could point outside the repository.
+// link could point outside the repository. A link the root resolves to a
+// file with any other name is not (TestWalkListsDirectoryLinks).
 func TestWalkListsLinks(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "real.go"), []byte("package x\n"), 0o600); err != nil {
@@ -119,7 +120,7 @@ func TestWalkListsLinks(t *testing.T) {
 	if err := os.Symlink(filepath.Join(dir, "real.go"), filepath.Join(dir, "link.go")); err != nil {
 		t.Skipf("no symlinks here: %v", err)
 	}
-	if err := os.Symlink(filepath.Join(dir, "real.go"), filepath.Join(dir, "notes.txt")); err != nil {
+	if err := os.Symlink("real.go", filepath.Join(dir, "notes.txt")); err != nil {
 		t.Fatal(err)
 	}
 	root, err := os.OpenRoot(dir)

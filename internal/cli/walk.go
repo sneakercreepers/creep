@@ -53,7 +53,7 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 			}
 			return nil
 		}
-		reason, send := entryGap(rel, d, proofs)
+		reason, send := entryGap(root, rel, d, proofs)
 		switch {
 		case send:
 			files.paths = append(files.paths, rel)
@@ -71,8 +71,8 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 // entryGap says whether a file goes to discovery or, when it does not and
 // could be source, why it is listed:
 //
-//   - a link or special file named as source is not_regular: creep never
-//     reads through it;
+//   - a link or special file that could hold source is listed by linkGap:
+//     creep never reads through it;
 //   - a name report.New would refuse on a finding (such as a\b.py on Unix
 //     or a:b.py) is invalid_path, never dropped and never fatal;
 //   - a file of an installed dependency tree (vendorProofs: its package
@@ -80,12 +80,9 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 //     by design, without being read.
 //
 // A file that cannot be source is neither sent nor listed.
-func entryGap(rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReason, bool) {
+func entryGap(root *os.Root, rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReason, bool) {
 	if !d.Type().IsRegular() {
-		if discover.SourceName(rel) {
-			return report.SkipNotRegular, false
-		}
-		return "", false
+		return linkGap(root, rel, proofs), false
 	}
 	if report.ValidPath(rel) && !proofs.proven(rel) {
 		return "", true
@@ -97,4 +94,31 @@ func entryGap(rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReaso
 		return report.SkipInvalidPath, false
 	}
 	return report.SkipVendor, false
+}
+
+// linkGap lists a link or special file the walk does not follow when it
+// could hold source: its name is a source name, or it may be a directory
+// (mayBeDirectory), whatever its name (#214). One in an installed tree is
+// vendor, like the tree's files; any other is not_regular, which makes the
+// run incomplete (ADR 0009).
+func linkGap(root *os.Root, rel string, proofs *vendorProofs) report.SkipReason {
+	if !discover.SourceName(rel) && !mayBeDirectory(root, rel) {
+		return ""
+	}
+	if report.ValidPath(rel) && proofs.proven(rel) {
+		return report.SkipVendor
+	}
+	return report.SkipNotRegular
+}
+
+// mayBeDirectory reports whether the entry at rel may be a directory: the
+// root resolves it to one, or cannot resolve it. The root never leaves the
+// repository, so a link whose target is outside it, missing, a loop or an
+// absolute path, and a Windows junction, all of which the root refuses,
+// cannot be told from a directory without following it out; each counts
+// as one (fail closed).
+// Only the target's metadata is read, never its contents.
+func mayBeDirectory(root *os.Root, rel string) bool {
+	info, err := root.Stat(rel)
+	return err != nil || info.IsDir()
 }

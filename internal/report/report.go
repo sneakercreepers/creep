@@ -61,7 +61,7 @@ const (
 	SkipVendor      SkipReason = "vendor"
 	SkipGenerated   SkipReason = "generated"
 	SkipMinified    SkipReason = "minified"
-	SkipNotRegular  SkipReason = "not_regular"  // a link or special file named as source
+	SkipNotRegular  SkipReason = "not_regular"  // a link or special file named as source, or that may be a directory (#214)
 	SkipInvalidPath SkipReason = "invalid_path" // the walk refused the repo-relative name
 	SkipParseFailed SkipReason = "parse_failed" // discovery's reply was invalid or missed the batch's canary
 	SkipTruncated   SkipReason = "truncated"    // partial: a tripwire or reply cap cut the file
