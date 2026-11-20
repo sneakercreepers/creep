@@ -208,28 +208,44 @@ func setDirOpenHook(t *testing.T, hook func(string)) {
 	t.Cleanup(func() { testHookBeforeDirOpen = old })
 }
 
-// A directory swapped in at the run directory's path between its Lstat and
-// its open is refused by the same-directory check (#113).
-func TestRunDirSwapRefused(t *testing.T) {
-	dir := runDir(t)
-	setDirOpenHook(t, func(path string) {
-		if path != dir {
-			return
-		}
-		if err := os.Rename(dir, filepath.Join(t.TempDir(), "moved")); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-	})
-	l, err := OpenEgressLog(dir, nil, nil)
-	if err == nil {
-		_ = l.Close()
+// A directory swapped in at the run or payload directory's path between its
+// Lstat and its open is refused by the same-directory check (#113).
+func TestDirSwapRefused(t *testing.T) {
+	tests := []struct {
+		name   string
+		target func(dir string) string
+	}{
+		{"run dir", func(dir string) string { return dir }},
+		{"payloads", func(dir string) string { return filepath.Join(dir, payloadDirName) }},
 	}
-	if !errors.Is(err, ErrUnsafeLogPath) {
-		t.Fatalf("err = %v, want ErrUnsafeLogPath", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := runDir(t)
+			target := tt.target(dir)
+			setDirOpenHook(t, func(path string) {
+				if path == target {
+					swapDir(t, path)
+				}
+			})
+			l, err := OpenEgressLog(dir, nil, nil)
+			if err == nil {
+				_ = l.Close()
+			}
+			if !errors.Is(err, ErrUnsafeLogPath) {
+				t.Fatalf("err = %v, want ErrUnsafeLogPath", err)
+			}
+		})
 	}
+}
+
+// swapDir moves the directory at path aside and creates a new private one
+// in its place.
+func swapDir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Rename(path, filepath.Join(t.TempDir(), "moved")); err != nil {
+		t.Fatal(err)
+	}
+	mkdir(t, filepath.Dir(path), filepath.Base(path))
 }
 
 // Acceptance (#113): the run directory is resolved by path once. Moving it

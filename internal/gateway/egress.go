@@ -140,7 +140,6 @@ func openRunDir(path string) (*os.Root, error) {
 // entry itself, so the identity compared is never loaded later by path.
 func openPayloadDir(run *os.Root) (*os.Root, error) {
 	name := filepath.Join(run.Name(), payloadDirName)
-	testHookBeforeDirOpen(name)
 	err := run.Mkdir(payloadDirName, payloadDirMode)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return nil, fmt.Errorf("egress payload dir: %w", err)
@@ -152,6 +151,7 @@ func openPayloadDir(run *os.Root) (*os.Root, error) {
 	if err := checkDir(name, before, 0o077); err != nil {
 		return nil, err
 	}
+	testHookBeforeDirOpen(name)
 	root, err := run.OpenRoot(payloadDirName)
 	if err != nil {
 		return nil, fmt.Errorf("egress payload dir: %w", err)
