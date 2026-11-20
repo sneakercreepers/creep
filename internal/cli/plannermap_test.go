@@ -94,7 +94,7 @@ func TestMethodMappingIsExhaustive(t *testing.T) {
 // planner tier is reached; an unknown tier fails closed.
 func TestTierMappingIsExhaustive(t *testing.T) {
 	reached := map[planner.Tier]bool{}
-	for _, tier := range []calibrate.Tier{calibrate.TierS, calibrate.TierM, calibrate.TierL} {
+	for _, tier := range calibrate.Tiers() {
 		p, err := plannerTier(tier)
 		if err != nil {
 			t.Fatalf("tier %s: %v", tier, err)
@@ -102,6 +102,9 @@ func TestTierMappingIsExhaustive(t *testing.T) {
 		r, err := readerTier(tier)
 		if err != nil || string(r) != string(tier) {
 			t.Fatalf("reader tier %s = %q, %v", tier, r, err)
+		}
+		if d, err := discoverTier(tier); err != nil || string(d) != string(tier) {
+			t.Fatalf("discover tier %s = %q, %v", tier, d, err)
 		}
 		reached[p] = true
 	}
