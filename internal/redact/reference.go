@@ -111,7 +111,8 @@ var lookupNames = map[string]bool{
 var referencePathRe = regexp.MustCompile(`^[A-Za-z_$]{1,32}(?:\.[A-Za-z_$]{1,32})+$`)
 
 // referenceReceivers are the objects config and request values are read
-// from, as the whole first segment of a path.
+// from, as the whole first segment of a path, spelled exactly so: a
+// capitalized word (This.Is.Sparta) starts a passphrase, not code.
 var referenceReceivers = map[string]bool{
 	"cfg": true, "config": true, "conf": true, "settings": true, "self": true, "this": true,
 	"os": true, "process": true, "env": true, "request": true, "req": true, "args": true,
@@ -124,7 +125,7 @@ var referenceReceivers = map[string]bool{
 // masked.
 func referencePath(value string) bool {
 	first, _, _ := strings.Cut(value, ".")
-	return referencePathRe.MatchString(value) && referenceReceivers[strings.ToLower(first)]
+	return referencePathRe.MatchString(value) && referenceReceivers[first]
 }
 
 // typeNames are the type names a key is annotated with: password: string.

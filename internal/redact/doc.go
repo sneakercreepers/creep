@@ -139,9 +139,12 @@
 //     continuation, YAML block scalars "|" and ">-", anchors and tags); a
 //     literal after "#" or "//" outside a string, read as a comment
 //     (cfg.Secret || this.#x || "..."); a literal glued to a kept value
-//     (None"..."); a no-break space before "=", and curly quotes. In one
-//     File call, a URL password under 8 bytes repeated alone on a later line
-//     is not masked there (Short values).
+//     (None"..."); a no-break space before "=", and curly quotes.
+//   - A value repeated in the same input: a value a rule finds only by its
+//     context (a URL password, a key's value) and that shows up again
+//     without that context later in the same Redact or File call is not
+//     masked there, at any length. The sweep re-masks only values stored by
+//     earlier calls, so the repeat is masked from the next call on.
 //
 // The rules file is read by a tiny reader for the TOML subset it uses
 // (toml.go) instead of a generator that converts it to JSON. Both need the same
