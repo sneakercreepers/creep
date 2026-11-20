@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -63,14 +62,6 @@ func TestWalkSendsEveryRegularFile(t *testing.T) {
 	}
 }
 
-// regularEntry is a directory entry for a regular file with any name.
-type regularEntry struct{}
-
-func (regularEntry) Name() string               { return "" }
-func (regularEntry) IsDir() bool                { return false }
-func (regularEntry) Type() fs.FileMode          { return 0 }
-func (regularEntry) Info() (fs.FileInfo, error) { return nil, fs.ErrNotExist }
-
 // A name report.New would refuse on a finding (#177) is listed when it
 // could be source, never sent and never fatal; one that cannot be is
 // dropped. Windows cannot hold these names, so entryGap is called directly.
@@ -88,7 +79,7 @@ func TestEntryGapRefusedNames(t *testing.T) {
 		{`web\notes.png`, "", false},
 	}
 	for _, tt := range tests {
-		got, send := entryGap(nil, tt.name, regularEntry{}, proofs)
+		got, send := entryGap(tt.name, proofs)
 		if got != tt.want || send != tt.send {
 			t.Errorf("entryGap(%q) = %q, %v; want %q, %v", tt.name, got, send, tt.want, tt.send)
 		}

@@ -40,42 +40,59 @@ func (f repoFiles) sources() int {
 // walkRepo lists every file under root in lexical order, so the same tree
 // gives the same requests. Every regular file goes to discovery, which
 // decides from the name and bytes what is source (ADR 0017), except a file
-// listed by entryGap. Only a walk error stops it; past a deadline on ctx
-// no vendor tree is proven (vendorProofs), so the files go to discovery,
-// which lists them unread.
+// listed by entryGap or, once the walk is over, by linkGap. Only a walk
+// error stops it; past a deadline on ctx no vendor tree is proven
+// (vendorProofs) and no link is read, so the files go to discovery, which
+// lists them unread, and the links are listed.
 func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
-	proofs := newVendorProofs(ctx, root)
-	var files repoFiles
-	err := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if skipDirs[rel] && d.IsDir() {
-			return fs.SkipDir
-		}
-		if skipDirs[rel] || d.IsDir() {
-			return nil
-		}
-		reason, send := entryGap(root, rel, d, proofs)
-		switch {
-		case send:
-			files.paths = append(files.paths, rel)
-		case reason != "":
-			files.gaps = append(files.gaps, report.NotEvaluated{Path: rel, Reason: reason})
-		}
-		return nil
-	})
-	if err != nil {
+	w := repoWalk{proofs: newVendorProofs(ctx, root), tree: newWalkedTree()}
+	if err := fs.WalkDir(root.FS(), ".", w.visit); err != nil {
 		return repoFiles{}, fmt.Errorf("walk repository: %w", err)
 	}
-	return files, nil
+	resolveLinks(ctx, root, &w.files, w.links, w.tree, w.proofs)
+	return w.files, nil
 }
 
-// entryGap says whether a file goes to discovery or, when it does not and
-// could be source, why it is listed:
+// repoWalk is the state of one walkRepo.
+type repoWalk struct {
+	proofs *vendorProofs
+	tree   *walkedTree
+	files  repoFiles
+	links  []pendingLink // gaps decided after the walk, in files.gaps order
+}
+
+func (w *repoWalk) visit(rel string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+	if skipDirs[rel] && d.IsDir() {
+		return fs.SkipDir
+	}
+	if skipDirs[rel] {
+		return nil
+	}
+	if !d.IsDir() && !d.Type().IsRegular() {
+		w.links = append(w.links, pendingLink{gap: len(w.files.gaps), rel: rel, mode: d.Type()})
+		w.files.gaps = append(w.files.gaps, report.NotEvaluated{Path: rel})
+		return nil
+	}
+	w.tree.add(rel, d.IsDir())
+	if d.IsDir() {
+		return nil
+	}
+	reason, send := entryGap(rel, w.proofs)
+	switch {
+	case send:
+		w.files.paths = append(w.files.paths, rel)
+	case reason != "":
+		w.files.gaps = append(w.files.gaps, report.NotEvaluated{Path: rel, Reason: reason})
+	}
+	return nil
+}
+
+// entryGap says whether a regular file goes to discovery or, when it does
+// not and could be source, why it is listed:
 //
-//   - a link or special file that could hold source is listed by linkGap:
-//     creep never reads through it;
 //   - a name report.New would refuse on a finding (such as a\b.py on Unix
 //     or a:b.py) is invalid_path, never dropped and never fatal;
 //   - a file of an installed dependency tree (vendorProofs: its package
@@ -83,10 +100,10 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 //     by design, without being read.
 //
 // A file that cannot be source is neither sent nor listed.
-func entryGap(root *os.Root, rel string, d fs.DirEntry, proofs *vendorProofs) (report.SkipReason, bool) {
-	if !d.Type().IsRegular() {
-		return linkGap(root, rel, proofs), false
-	}
+//
+// Links and special files are listed by linkGap: creep never reads
+// through them.
+func entryGap(rel string, proofs *vendorProofs) (report.SkipReason, bool) {
 	if report.ValidPath(rel) && !proofs.proven(rel) {
 		return "", true
 	}

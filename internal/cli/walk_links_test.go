@@ -102,9 +102,10 @@ func notRegular(path string) []report.NotEvaluated {
 }
 
 // A link to a directory the walk does not reach at its own path is listed
-// whatever its name, never followed (#214): one the root cannot resolve
-// (outside, missing, a loop, absolute, a Windows junction) and one into the
-// root's .git or .creep. A link the root resolves to a directory the walk
+// whatever its name, never followed (#214): one whose target does not name
+// a walked entry over walked names (outside, missing, a loop, absolute,
+// through another link, a Windows junction) and one into the root's .git
+// or .creep. A link the root resolves to a directory the walk
 // covers is not (a pnpm or workspace link), nor is one to a file with a
 // non-source name. A listed link in an installed tree is vendor. linkDir
 // makes an absolute symlink on Unix and a junction on Windows.
@@ -122,10 +123,20 @@ func TestWalkListsDirectoryLinks(t *testing.T) {
 			func(t *testing.T, repo string) { linkDir(t, outside, at(repo, "conf.d")) }, []string{"main.py"}, notRegular("conf.d")},
 		{"relative symlink to a walked directory", real,
 			func(t *testing.T, repo string) { symlinkOrSkip(t, "real", at(repo, "web")) }, []string{"real/app.py"}, nil},
+		// real\web -> ..\real and src\me -> . made os.Root.Stat panic on
+		// Windows (Go 1.27.4, #214 tester H1); the walk no longer stats links.
 		{"relative symlink up to a walked directory", real,
 			func(t *testing.T, repo string) {
 				symlinkOrSkip(t, filepath.Join("..", "real"), at(repo, "real", "web"))
 			}, []string{"real/app.py"}, nil},
+		{"relative symlink to its own directory", map[string]string{"src/app.py": "x = 1\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, ".", at(repo, "src", "me")) }, []string{"src/app.py"}, nil},
+		{"relative symlink through another link", real,
+			func(t *testing.T, repo string) {
+				symlinkOrSkip(t, "real", at(repo, "l"))
+				sep := string(filepath.Separator) // not filepath.Join, which would clean l/.. away
+				symlinkOrSkip(t, "l"+sep+".."+sep+"real", at(repo, "web"))
+			}, []string{"real/app.py"}, notRegular("web")},
 		{"workspace link back into the repository", map[string]string{"packages/app/index.js": "x()\n", "node_modules/left/package.json": "{}"},
 			func(t *testing.T, repo string) {
 				symlinkOrSkip(t, filepath.Join("..", "packages", "app"), at(repo, "node_modules", "app"))
