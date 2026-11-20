@@ -98,6 +98,12 @@ func buildSection(b *yaml.Node) (buildPlan, *refusal) {
 			return buildPlan{}, refuse(BuildComposeRefused, refusedKey(key))
 		}
 	}
+	return buildMapping(b)
+}
+
+// buildMapping reads context, dockerfile and target from a build mapping
+// whose keys are all allowed.
+func buildMapping(b *yaml.Node) (buildPlan, *refusal) {
 	plan := buildPlan{context: ".", dockerfile: "Dockerfile"}
 	var why *refusal
 	if n, ok := lookup(b, "context"); ok {
