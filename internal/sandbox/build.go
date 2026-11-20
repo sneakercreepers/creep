@@ -112,7 +112,7 @@ func (s *Sandbox) checkBaseImages(ctx context.Context, images []string) (*refusa
 	missing := 0
 	for _, ref := range images {
 		inspectCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-		res, err := s.run(inspectCtx, append(s.global(), "image", "inspect", "--format", "{{.Id}}", ref), infoLimit)
+		res, err := s.run(inspectCtx, append(s.global(), "image", "inspect", ref), infoLimit)
 		cancel()
 		switch {
 		case ctx.Err() != nil:
@@ -121,6 +121,8 @@ func (s *Sandbox) checkBaseImages(ctx context.Context, images []string) (*refusa
 			return refuse(BuildRuntimeError, "inspect"), nil
 		case res.exit != 0:
 			missing++
+		case res.truncated || hasOnBuild(res.stdout):
+			return refuse(BuildImageRefused, "base_onbuild"), nil
 		}
 	}
 	if missing > 0 {

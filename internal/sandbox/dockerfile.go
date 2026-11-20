@@ -25,6 +25,8 @@ import (
 //     anywhere, no JSON directive, so the escape character is always "\";
 //   - instruction keywords and flag names in any case; flags only from a
 //     list per instruction, with no quote or backslash in them;
+//   - no ONBUILD, whose trigger would run unchecked in a later FROM; mounts
+//     only of a type that leaves nothing behind (mountTypes);
 //   - a stage reference only to an earlier stage: by name, or in --from and
 //     from= by an index below the number of earlier stages; anything else
 //     is an image.
@@ -41,7 +43,8 @@ const (
 	ruleImageName     = "image_name"       // not a plain image reference
 	rulePlatform      = "platform"         // FROM for another platform would pull it
 	ruleFlag          = "flag"             // a flag outside the instruction's list, or quoted
-	ruleMount         = "mount"            // a --mount option creep cannot check
+	ruleMount         = "mount"            // a --mount type that outlives the build, or a source above its root
+	ruleOnbuild       = "onbuild"          // a trigger runs in a later FROM, unchecked
 	ruleTooManyImages = "too_many_images"  // more images than the check covers
 	ruleNoFrom        = "no_from"          // nothing to build
 )
@@ -67,6 +70,15 @@ var allowedFlags = map[string][]string{
 	"COPY": {"from", "chown", "chmod", "link", "parents", "exclude"},
 	"ADD":  {"chown", "chmod", "link", "exclude"},
 }
+
+// booleanFlags may stand alone, as BuildKit reads them: --link is --link=true.
+var booleanFlags = []string{"link", "parents"}
+
+// mountTypes leave nothing behind and read only the staged context or an
+// earlier stage. A cache mount outlives --no-cache, Close and creep clean,
+// so a later build of the operator's would read what this one wrote; a
+// secret or ssh mount has nothing to offer a build that gets none.
+var mountTypes = []string{"bind", "tmpfs"}
 
 // checkDockerfile returns the images the build reads and the stage names,
 // or the rule that refuses the file.
@@ -190,6 +202,8 @@ func checkInstruction(keyword string, flags map[string][]string, args []string, 
 		return eachValue(flags["from"], st, stageOrImage)
 	case "RUN":
 		return eachValue(flags["mount"], st, mountFrom)
+	case "ONBUILD":
+		return nil, ruleOnbuild
 	}
 	return nil, ""
 }
@@ -228,6 +242,9 @@ func parseFlags(keyword, rest string) (map[string][]string, []string, string) {
 	for ; i < len(fields) && strings.HasPrefix(fields[i], "--"); i++ {
 		name, value, ok := strings.Cut(fields[i][2:], "=")
 		name = strings.ToLower(name)
+		if !ok && slices.Contains(booleanFlags, name) {
+			value, ok = "true", true
+		}
 		if !ok || strings.ContainsAny(fields[i], "\"'\\") {
 			return nil, nil, ruleFlag
 		}
@@ -304,13 +321,18 @@ func checkAdd(args []string) string {
 	return ""
 }
 
-// mountFrom checks a --mount value: keys in any case, from= an earlier
-// stage or an image, source= never above its root.
+// mountFrom checks a --mount value: keys in any case, a type from
+// mountTypes only (bind when none is given), from= an earlier stage or an
+// image, source= never above its root.
 func mountFrom(spec string, st *stageSet) ([]string, string) {
 	var images []string
 	for _, kv := range strings.Split(spec, ",") {
 		key, value, _ := strings.Cut(kv, "=")
 		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "type":
+			if !slices.Contains(mountTypes, value) {
+				return nil, ruleMount
+			}
 		case "from":
 			imgs, rule := stageOrImage(value, st)
 			if rule != "" {
