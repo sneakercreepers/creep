@@ -220,7 +220,11 @@ func (s *Sandbox) Close() error {
 	defer cancel()
 	_, err := removeLabeled(ctx, s.run, s.status, LabelRun+"="+s.runID)
 	if err == nil {
-		_, imgErr := removeImages(ctx, s.run, s.status, LabelRun+"="+s.runID)
+		known := s.builtImages()
+		_, imgErr := removeImages(ctx, s.run, s.status, known, LabelRun+"="+s.runID)
+		if imgErr == nil {
+			s.forgetImages(known)
+		}
 		_, netErr := removeNetworks(ctx, s.run, s.status, LabelRun+"="+s.runID)
 		err = errors.Join(imgErr, netErr)
 	}

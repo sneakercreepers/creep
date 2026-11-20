@@ -216,6 +216,21 @@ func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 	return nil
 }
 
+// builtImages is a copy of the IDs Build made that Close has not removed.
+func (s *Sandbox) builtImages() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.images)
+}
+
+// forgetImages drops the IDs Close removed, so a second Close does not
+// ask for them again.
+func (s *Sandbox) forgetImages(removed []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.images = slices.DeleteFunc(s.images, func(id string) bool { return slices.Contains(removed, id) })
+}
+
 func (s *Sandbox) builtHere(image string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

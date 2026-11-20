@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func Clean(ctx context.Context, st Status) (Removed, error) {
 		return r, err
 	}
 	var imgErr, netErr error
-	r.Images, imgErr = removeImages(ctx, run, st, LabelManaged+"=true")
+	r.Images, imgErr = removeImages(ctx, run, st, nil, LabelManaged+"=true")
 	r.Networks, netErr = removeNetworks(ctx, run, st, LabelManaged+"=true")
 	return r, errors.Join(imgErr, netErr)
 }
@@ -146,27 +147,20 @@ func parseIDs(out []byte, truncated bool) ([]string, error) {
 	return ids, nil
 }
 
-// removeImages lists the images carrying every label (the app images
-// Build made) and removes them by ID, after their containers are gone.
+// removeImages removes, by ID, the images carrying every label (the app
+// images Build made) and the known IDs, after their containers are gone.
+// The known IDs cover an engine whose listing leaves out untagged images.
 // No --force: an image another container still uses stays.
-func removeImages(ctx context.Context, run runFunc, st Status, labels ...string) (int, error) {
-	list := append(globalArgs(st), "image", "ls", "--quiet", "--no-trunc")
-	for _, l := range labels {
-		list = append(list, "--filter", "label="+l)
-	}
-	res, err := run(ctx, list, infoLimit)
+func removeImages(ctx context.Context, run runFunc, st Status, known []string, labels ...string) (int, error) {
+	ids, err := listImages(ctx, run, st, labels)
 	if err != nil {
-		return 0, fmt.Errorf("list %s images: %w", st.Runtime, err)
+		return 0, err
 	}
-	if res.exit != 0 {
-		return 0, fmt.Errorf("list %s images: exit status %d", st.Runtime, res.exit)
-	}
-	ids, err := parseIDs(bytes.ReplaceAll(res.stdout, []byte("sha256:"), nil), res.truncated)
-	if err != nil {
-		return 0, fmt.Errorf("list %s images: %w", st.Runtime, err)
+	for _, id := range known {
+		ids = append(ids, strings.TrimPrefix(id, "sha256:"))
 	}
 	slices.Sort(ids)
-	ids = slices.Compact(ids) // one image listed once per tag
+	ids = slices.Compact(ids) // one image listed once per tag, or listed and known
 	for start := 0; start < len(ids); start += removeBatch {
 		args := append(append(globalArgs(st), "image", "rm"), ids[start:min(start+removeBatch, len(ids))]...)
 		res, err := run(ctx, args, infoLimit)
@@ -178,4 +172,25 @@ func removeImages(ctx context.Context, run runFunc, st Status, labels ...string)
 		}
 	}
 	return len(ids), nil
+}
+
+// listImages lists every image, untagged ones too, carrying every label,
+// as hex IDs only.
+func listImages(ctx context.Context, run runFunc, st Status, labels []string) ([]string, error) {
+	list := append(globalArgs(st), "image", "ls", "--all", "--quiet", "--no-trunc")
+	for _, l := range labels {
+		list = append(list, "--filter", "label="+l)
+	}
+	res, err := run(ctx, list, infoLimit)
+	if err != nil {
+		return nil, fmt.Errorf("list %s images: %w", st.Runtime, err)
+	}
+	if res.exit != 0 {
+		return nil, fmt.Errorf("list %s images: exit status %d", st.Runtime, res.exit)
+	}
+	ids, err := parseIDs(bytes.ReplaceAll(res.stdout, []byte("sha256:"), nil), res.truncated)
+	if err != nil {
+		return nil, fmt.Errorf("list %s images: %w", st.Runtime, err)
+	}
+	return ids, nil
 }

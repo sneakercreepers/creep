@@ -141,7 +141,7 @@ Option C for this slice. What decided it: it is the only option where "a build t
 
 **Result.** `Build` returns an `App`: the image ID, or a closed reason (`no_build_file`, `compose_refused`, `dockerfile_refused`, `context_refused`, `base_image_missing`, `build_failed`, `build_timeout`, `image_refused`, `runtime_error`) and a closed detail (a known compose key, a Dockerfile rule, `exit_<n>`), never repository text. Only Ctrl+C, the caller's cancel and an aborted run return an error, so a build failure cannot fail a scan.
 
-**Run phase.** `StartApp` starts only an image this sandbox built, once per run, after the canary passed, detached on the run's `--internal` network as `app`, with the hardened profile; nothing is published. `Close` removes the run's containers, then the images labeled with its run ID, then its network; `creep clean` also removes every creep-labeled image. Images are removed by hex ID, without `--force`.
+**Run phase.** `StartApp` starts only an image this sandbox built, once per run, after the canary passed, detached on the run's `--internal` network as `app`, with the hardened profile; nothing is published. `Close` removes the run's containers, then the images labeled with its run ID (untagged ones included, `image ls --all`) and the IDs `Build` recorded (the CI runner's Docker left the untagged build out of its labeled listing, found by `TestRealBuildIsOffline`), then its network; `creep clean` also removes every creep-labeled image. Images are removed by hex ID, without `--force`.
 
 ### Consequences
 

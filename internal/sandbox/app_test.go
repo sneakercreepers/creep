@@ -85,6 +85,29 @@ func TestCloseAndCleanRemoveImages(t *testing.T) {
 	if !slices.Contains(rec.to("image")[0], "label="+LabelRun+"="+testRunID) {
 		t.Errorf("Close lists images beyond its run: %q", rec.to("image")[0])
 	}
+	if !slices.Contains(rec.to("image")[0], "--all") {
+		t.Errorf("Close lists tagged images only: %q", rec.to("image")[0])
+	}
+
+	// An engine whose listing leaves the built image out: Close still
+	// removes it by the ID Build recorded, once, and a second Close asks
+	// for nothing more.
+	unlisted := withBuilds(list(""), 0)
+	s = testSandbox(t, unlisted)
+	if app, err := s.Build(context.Background(), dockerfileRepo(plainDockerfile)); err != nil || !app.Built() {
+		t.Fatalf("Build = %+v, %v", app, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rms = slices.DeleteFunc(unlisted.to("image"), func(c []string) bool { return !slices.Contains(c, "rm") })
+	if len(rms) != 1 || !slices.Equal(rms[0][len(rms[0])-2:], []string{"rm", fakeID}) {
+		t.Errorf("unlisted image rm calls %q", rms)
+	}
+
 	bad := list("--force\n")
 	s = testSandbox(t, bad)
 	if err := s.Close(); err == nil {
