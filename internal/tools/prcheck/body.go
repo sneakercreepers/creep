@@ -31,7 +31,8 @@ var (
 )
 
 // isDocsOnlyBox compares letters only, after entities, tags and link targets
-// are gone, so rewording or formatting the box cannot hide it.
+// are gone, anywhere in the item, so rewording, formatting or prefixing the
+// box cannot hide it.
 func isDocsOnlyBox(text string) bool {
 	plain := linkTarget.ReplaceAllString(htmlTag.ReplaceAllString(html.UnescapeString(text), ""), "")
 	letters := strings.Map(func(r rune) rune {
@@ -40,5 +41,5 @@ func isDocsOnlyBox(text string) bool {
 		}
 		return -1
 	}, plain)
-	return strings.HasPrefix(letters, "documentationonly")
+	return strings.Contains(letters, "documentationonly")
 }
