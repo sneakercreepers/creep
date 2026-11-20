@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"regexp"
 	"slices"
@@ -120,13 +122,8 @@ var flowList = regexp.MustCompile(`(?m)^\s*(goos|goarch|os):\s*\[([^\]]*)\]`)
 // when .goreleaser.yaml or the CI matrix changes shape without them.
 func TestReachTargetsMatchRelease(t *testing.T) {
 	release := readRepoFile(t, ".goreleaser.yaml")
-	for _, shape := range []string{"ignore:", "targets:", "goarm", "goamd64", "goarm64", "tags:"} {
-		if strings.Contains(release, shape) {
-			t.Errorf(".goreleaser.yaml uses %q; update reachTargets and this test", shape)
-		}
-	}
-	if !strings.Contains(release, "- CGO_ENABLED=0") {
-		t.Error(".goreleaser.yaml no longer builds with CGO_ENABLED=0; update reachTargets")
+	for _, why := range releaseShapeProblems(release) {
+		t.Error(why)
 	}
 	lists := flowLists(release)
 	if len(lists["goos"]) != 1 || len(lists["goarch"]) != 1 {
@@ -145,6 +142,78 @@ func TestReachTargetsMatchRelease(t *testing.T) {
 	}
 	if !sameTargets(reachTargets, want) {
 		t.Errorf("reachTargets = %v, want %v", reachTargets, want)
+	}
+}
+
+// releaseShapes change which files a release build compiles beyond goos ×
+// goarch, so reachTargets would no longer match the release.
+var releaseShapes = []string{"ignore:", "targets:", "goarm:", "goamd64:", "goarm64:", "tags:", "-tags"}
+
+func releaseShapeProblems(release string) []string {
+	var problems []string
+	for _, shape := range releaseShapes {
+		if strings.Contains(release, shape) {
+			problems = append(problems, fmt.Sprintf(".goreleaser.yaml uses %q; update reachTargets and this test", shape))
+		}
+	}
+	if !strings.Contains(release, "- CGO_ENABLED=0") {
+		problems = append(problems, ".goreleaser.yaml no longer builds with CGO_ENABLED=0; update reachTargets")
+	}
+	return problems
+}
+
+// Each release-config shape that changes the compiled files is drift.
+func TestReleaseShapeProblems(t *testing.T) {
+	base := "builds:\n  - env:\n      - CGO_ENABLED=0\n    goos: [linux]\n    goarch: [amd64]\n"
+	tests := []struct {
+		name string
+		doc  string
+		want string // substring of the single problem; "" means no drift
+	}{
+		{"plain matrix", base, ""},
+		{"build tags in flags", base + "    flags:\n      - -trimpath\n      - -tags=creepx\n", `uses "-tags"`},
+		{"build tags as a separate flag", base + "    flags: [-tags, creepx]\n", `uses "-tags"`},
+		{"tags key", base + "    tags: [creepx]\n", `uses "tags:"`},
+		{"ignored target", base + "    ignore:\n      - goos: linux\n", `uses "ignore:"`},
+		{"explicit targets", base + "    targets: [linux_amd64]\n", `uses "targets:"`},
+		{"amd64 level", base + "    goamd64: [v3]\n", `uses "goamd64:"`},
+		{"arm64 level", base + "    goarm64: [v9.0]\n", `uses "goarm64:"`},
+		{"arm level", base + "    goarm: [7]\n", `uses "goarm:"`},
+		{"cgo on", strings.Replace(base, "CGO_ENABLED=0", "CGO_ENABLED=1", 1), "no longer builds with CGO_ENABLED=0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertOneProblem(t, releaseShapeProblems(tt.doc), tt.want)
+		})
+	}
+}
+
+// A failed or unreadable listing stops the reach step; it is never merged as
+// an empty graph that passes.
+func TestMergeListingFailsClosed(t *testing.T) {
+	tests := []struct {
+		name string
+		out  string
+		err  error
+	}{
+		{"go list failed", `{"ImportPath":"p"}`, errors.New("go list: exit status 1")},
+		{"malformed output", `{"ImportPath":`, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			merged := map[string]listedPackage{}
+			if err := mergeListing(merged, []byte(tt.out), tt.err); err == nil {
+				t.Errorf("mergeListing() succeeded, merged %v", merged)
+			}
+		})
+	}
+}
+
+// A target whose go list fails fails the whole step, named in the error.
+func TestListPackagesFailsClosed(t *testing.T) {
+	root := writeTree(t, map[string]string{"go.mod": "module example.com/m\n\ngo 1.24\n", "a/a.go": "package a\nimport _ \"example.com/m/missing\"\n"})
+	if _, err := listPackages(root); err == nil || !strings.Contains(err.Error(), "GOOS=") {
+		t.Errorf("listPackages() error = %v, want the failing target named", err)
 	}
 }
 
