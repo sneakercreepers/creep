@@ -94,7 +94,7 @@ func buildSection(b *yaml.Node) (buildPlan, *refusal) {
 		return buildPlan{}, refuse(BuildComposeRefused, "build")
 	}
 	for i := 0; i < len(b.Content); i += 2 {
-		if key := b.Content[i].Value; !composeBuildKeys[key] {
+		if key := keyText(b.Content[i]); !composeBuildKeys[key] {
 			return buildPlan{}, refuse(BuildComposeRefused, refusedKey(key))
 		}
 	}
@@ -160,7 +160,7 @@ func lookup(m *yaml.Node, key string) (*yaml.Node, bool) {
 		return nil, false
 	}
 	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
+		if keyText(m.Content[i]) == key {
 			return resolveAlias(m.Content[i+1]), true
 		}
 	}
@@ -171,11 +171,17 @@ func lookup(m *yaml.Node, key string) (*yaml.Node, bool) {
 func hasMergeKey(m *yaml.Node) bool {
 	m = resolveAlias(m)
 	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].ShortTag() == "!!merge" || m.Content[i].Value == "<<" {
+		if k := resolveAlias(m.Content[i]); k.ShortTag() == "!!merge" || k.Value == "<<" {
 			return true
 		}
 	}
 	return false
+}
+
+// keyText is a mapping key as Compose reads it: an alias key (*a: ...)
+// stands for its anchor's text, so `*a` can spell "extends" or "context".
+func keyText(n *yaml.Node) string {
+	return resolveAlias(n).Value
 }
 
 func resolveAlias(n *yaml.Node) *yaml.Node {

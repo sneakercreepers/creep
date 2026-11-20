@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"bytes"
 	"encoding/json"
 	"regexp"
 	"slices"
@@ -10,26 +9,39 @@ import (
 
 // The build runs with --network=none, which binds only RUN steps. The
 // builder itself still fetches what an instruction names: a URL or git
-// repository in ADD, a frontend image in "# syntax=", and every image in
-// FROM, COPY --from and RUN --mount from=. checkDockerfile refuses the
-// first three and returns the images, which must then be present locally,
-// so the builder never pulls.
+// repository in ADD, a frontend image in a parser directive, and every
+// image in FROM, COPY --from and RUN --mount from= (Docker pulls a missing
+// one even with --pull=false). checkDockerfile is an allowlist: it accepts
+// only a lexical form it reads exactly as BuildKit does, refuses every
+// parser directive, and returns the images, which must then be present
+// locally, so the builder never pulls.
 //
-// It reads the file as Docker does (instructions, line continuations,
-// comments inside them) and errs on the side of refusing: logical lines
-// are formed once with "\" and once with "`" as the escape character, so
-// an escape directive cannot hide an instruction, and heredoc bodies are
-// read as instructions too.
+// The accepted form:
+//   - bytes: printable ASCII, tab and line feed; a carriage return only
+//     right before a line feed (BuildKit's line scanner drops it there). So
+//     no BOM, no \v, \f or lone \r, and the only white space inside a line
+//     is space and tab, which both readers split on alike;
+//   - no parser directive in any form: no "//" line, no "# key=" line
+//     anywhere, no JSON directive, so the escape character is always "\";
+//   - instruction keywords and flag names in any case; flags only from a
+//     list per instruction, with no quote or backslash in them;
+//   - a stage reference only to an earlier stage: by name, or in --from and
+//     from= by an index below the number of earlier stages; anything else
+//     is an image.
+//
+// Heredoc bodies are read as instructions too, which refuses more, never
+// less.
 
 // Dockerfile rules, reported as the refusal's detail.
 const (
-	ruleBinary        = "binary"           // a NUL byte: not a Dockerfile
-	ruleSyntax        = "syntax_directive" // the frontend image would be pulled
+	ruleCharacter     = "character"        // a byte outside the accepted form
+	ruleDirective     = "parser_directive" // # key= or //: a frontend, an escape character
 	ruleRemoteAdd     = "remote_add"       // ADD of a URL or git repository: fetched outside --network=none
 	ruleVariableImage = "variable_image"   // FROM, --from or from= with a variable: no image to check
 	ruleImageName     = "image_name"       // not a plain image reference
 	rulePlatform      = "platform"         // FROM for another platform would pull it
-	ruleRunOption     = "run_option"       // RUN --network, --security or --device
+	ruleFlag          = "flag"             // a flag outside the instruction's list, or quoted
+	ruleMount         = "mount"            // a --mount option creep cannot check
 	ruleTooManyImages = "too_many_images"  // more images than the check covers
 	ruleNoFrom        = "no_from"          // nothing to build
 )
@@ -37,58 +49,84 @@ const (
 const maxBaseImages = 16
 
 var (
-	directive = regexp.MustCompile(`^#\s*([A-Za-z][A-Za-z0-9_-]*)\s*=`)
+	// anyDirective is a "# key=" comment in any spacing or case: BuildKit
+	// reads directives as `#\s*key\s*=`, so this matches every one of them.
+	anyDirective = regexp.MustCompile(`^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=`)
+	continuation = regexp.MustCompile(`\\[ \t]*$`)
 	// imageRef is a plain reference: no flag, variable or space.
 	imageRef       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
-	continuation   = map[byte]*regexp.Regexp{'\\': regexp.MustCompile(`\\[ \t]*$`), '`': regexp.MustCompile("`[ \t]*$")}
 	nativePlatform = []string{"$BUILDPLATFORM", "${BUILDPLATFORM}", "$TARGETPLATFORM", "${TARGETPLATFORM}"}
 )
+
+// allowedFlags are the flags each instruction may carry, by lower-case
+// name. RUN has no --network, --security or --device; ADD has no flag
+// that only a remote source uses.
+var allowedFlags = map[string][]string{
+	"FROM": {"platform"},
+	"RUN":  {"mount"},
+	"COPY": {"from", "chown", "chmod", "link", "parents", "exclude"},
+	"ADD":  {"chown", "chmod", "link", "exclude"},
+}
 
 // checkDockerfile returns the images the build reads and the stage names,
 // or the rule that refuses the file.
 func checkDockerfile(data []byte) (images, stages []string, rule string) {
-	if bytes.IndexByte(data, 0) >= 0 {
-		return nil, nil, ruleBinary
+	text, ok := plainText(data)
+	if !ok {
+		return nil, nil, ruleCharacter
 	}
-	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-	if hasSyntaxDirective(lines) {
-		return nil, nil, ruleSyntax
+	lines := strings.Split(text, "\n")
+	if hasDirective(text, lines) {
+		return nil, nil, ruleDirective
 	}
-	var all, allStages []string
-	for _, esc := range []byte{'\\', '`'} {
-		imgs, st, rule := checkInstructions(logicalLines(lines, esc))
-		if rule != "" {
-			return nil, nil, rule
-		}
-		all, allStages = append(all, imgs...), append(allStages, st...)
+	images, stages, rule = checkInstructions(logicalLines(lines))
+	if rule != "" {
+		return nil, nil, rule
 	}
-	slices.Sort(all)
-	all = slices.Compact(all)
-	if len(all) > maxBaseImages {
+	slices.Sort(images)
+	if images = slices.Compact(images); len(images) > maxBaseImages {
 		return nil, nil, ruleTooManyImages
 	}
-	slices.Sort(allStages)
-	return all, slices.Compact(allStages), ""
+	return images, stages, ""
 }
 
-// hasSyntaxDirective looks at every comment before the first instruction,
-// where Docker reads parser directives.
-func hasSyntaxDirective(lines []string) bool {
-	for _, l := range lines {
-		l = strings.TrimSpace(l)
-		if l != "" && !strings.HasPrefix(l, "#") {
-			return false
+// plainText accepts printable ASCII, tab and line feed, and a carriage
+// return only before a line feed, which it drops.
+func plainText(data []byte) (string, bool) {
+	var b strings.Builder
+	for i, c := range data {
+		switch {
+		case c == '\r' && i+1 < len(data) && data[i+1] == '\n':
+			continue
+		case c == '\t', c == '\n', c >= 0x20 && c <= 0x7e:
+			b.WriteByte(c)
+		default:
+			return "", false
 		}
-		if m := directive.FindStringSubmatch(l); m != nil && strings.EqualFold(m[1], "syntax") {
+	}
+	return b.String(), true
+}
+
+// hasDirective finds a parser directive in any form BuildKit reads, and
+// anywhere in the file, not only at the top: a "# key=" comment, a "//"
+// line, or a JSON document.
+func hasDirective(text string, lines []string) bool {
+	if strings.HasPrefix(strings.TrimLeft(text, " \t\n"), "{") {
+		return true
+	}
+	for _, l := range lines {
+		l = strings.TrimLeft(l, " \t")
+		if strings.HasPrefix(l, "//") || anyDirective.MatchString(l) {
 			return true
 		}
 	}
 	return false
 }
 
-// logicalLines joins continued lines with esc as the escape character and
-// drops comments and blank lines, inside continuations too, as Docker does.
-func logicalLines(lines []string, esc byte) []string {
+// logicalLines joins continued lines ("\" is the only escape character,
+// since no directive is accepted) and drops comments and blank lines,
+// inside continuations too, as BuildKit does.
+func logicalLines(lines []string) []string {
 	var out []string
 	var cur strings.Builder
 	open := false
@@ -97,7 +135,7 @@ func logicalLines(lines []string, esc byte) []string {
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		if loc := continuation[esc].FindStringIndex(l); loc != nil {
+		if loc := continuation.FindStringIndex(l); loc != nil {
 			cur.WriteString(l[:loc[0]] + " ")
 			open = true
 			continue
@@ -113,74 +151,135 @@ func logicalLines(lines []string, esc byte) []string {
 	return out
 }
 
-// checkInstructions walks the instructions in order, so a stage name is
-// known before a later --from uses it.
+// stageSet is what earlier FROM instructions defined.
+type stageSet struct {
+	names []string // lower case
+	count int      // FROM instructions so far: indices below it are stages
+}
+
+// checkInstructions walks the instructions in order, so a stage is known
+// before a later reference uses it.
 func checkInstructions(lines []string) (images, stages []string, rule string) {
-	froms := 0
+	var st stageSet
 	for _, l := range lines {
 		keyword, rest := splitKeyword(l)
-		var imgs []string
-		switch strings.ToUpper(keyword) {
-		case "FROM":
-			froms++
-			var stage string
-			imgs, stage, rule = checkFrom(rest, stages)
-			if stage != "" {
-				stages = append(stages, stage)
-			}
-		case "ADD":
-			if rule = checkAdd(rest); rule == "" {
-				imgs, rule = fromFlag(rest, stages)
-			}
-		case "COPY":
-			imgs, rule = fromFlag(rest, stages)
-		case "RUN":
-			imgs, rule = checkRun(rest, stages)
+		keyword = strings.ToUpper(keyword)
+		flags, args, rule := parseFlags(keyword, rest)
+		if rule != "" {
+			return nil, nil, rule
 		}
+		imgs, rule := checkInstruction(keyword, flags, args, &st)
 		if rule != "" {
 			return nil, nil, rule
 		}
 		images = append(images, imgs...)
 	}
-	if froms == 0 {
+	if st.count == 0 {
 		return nil, nil, ruleNoFrom
 	}
-	return images, stages, ""
+	return images, st.names, ""
 }
 
-// checkFrom reads FROM [--platform=P] image [AS name].
-func checkFrom(rest string, stages []string) (images []string, stage, rule string) {
-	flags, args := splitFlags(rest)
-	for _, f := range flags {
-		name, value, _ := strings.Cut(f, "=")
-		if name == "--platform" && !slices.Contains(nativePlatform, value) {
-			return nil, "", rulePlatform
+func checkInstruction(keyword string, flags map[string][]string, args []string, st *stageSet) ([]string, string) {
+	switch keyword {
+	case "FROM":
+		return checkFrom(flags, args, st)
+	case "ADD":
+		return nil, checkAdd(args)
+	case "COPY":
+		return eachValue(flags["from"], st, stageOrImage)
+	case "RUN":
+		return eachValue(flags["mount"], st, mountFrom)
+	}
+	return nil, ""
+}
+
+// eachValue checks every value of a flag, which may be given more than
+// once (RUN --mount).
+func eachValue(values []string, st *stageSet, check func(string, *stageSet) ([]string, string)) ([]string, string) {
+	var images []string
+	for _, v := range values {
+		imgs, rule := check(v, st)
+		if rule != "" {
+			return nil, rule
+		}
+		images = append(images, imgs...)
+	}
+	return images, ""
+}
+
+// splitKeyword cuts the keyword off at the first space or tab, the only
+// white space the accepted form has.
+func splitKeyword(l string) (keyword, rest string) {
+	i := strings.IndexAny(l, " \t")
+	if i < 0 {
+		return l, ""
+	}
+	return l[:i], l[i+1:]
+}
+
+// parseFlags splits the leading --name=value flags (names in lower case)
+// from the arguments. A flag not in the instruction's list, without a
+// value or with a quote or backslash in it is refused.
+func parseFlags(keyword, rest string) (map[string][]string, []string, string) {
+	fields := strings.Fields(rest)
+	flags := map[string][]string{}
+	i := 0
+	for ; i < len(fields) && strings.HasPrefix(fields[i], "--"); i++ {
+		name, value, ok := strings.Cut(fields[i][2:], "=")
+		name = strings.ToLower(name)
+		if !ok || strings.ContainsAny(fields[i], "\"'\\") {
+			return nil, nil, ruleFlag
+		}
+		if allowed, listed := allowedFlags[keyword]; listed && !slices.Contains(allowed, name) {
+			return nil, nil, ruleFlag
+		}
+		flags[name] = append(flags[name], value)
+	}
+	return flags, fields[i:], ""
+}
+
+// checkFrom reads FROM [--platform=P] image [AS name]. FROM names an
+// earlier stage only by name: a number is an image.
+func checkFrom(flags map[string][]string, args []string, st *stageSet) ([]string, string) {
+	for _, p := range flags["platform"] {
+		if !slices.Contains(nativePlatform, p) {
+			return nil, rulePlatform
 		}
 	}
-	if len(args) == 0 {
-		return nil, "", ruleImageName
-	}
-	if len(args) == 3 && strings.EqualFold(args[1], "AS") {
-		if !stageName.MatchString(args[2]) {
-			return nil, "", ruleImageName
-		}
+	var stage string
+	switch {
+	case len(args) == 3 && strings.EqualFold(args[1], "AS") && stageName.MatchString(args[2]):
 		stage = strings.ToLower(args[2])
-	} else if len(args) != 1 {
-		return nil, "", ruleImageName
+	case len(args) != 1:
+		return nil, ruleImageName
 	}
-	imgs, rule := imageUse(args[0], stages)
-	return imgs, stage, rule
+	ref, lower := args[0], strings.ToLower(args[0])
+	var imgs []string
+	var rule string
+	if lower != "scratch" && !slices.Contains(st.names, lower) {
+		imgs, rule = image(ref)
+	}
+	st.count++
+	if stage != "" {
+		st.names = append(st.names, stage)
+	}
+	return imgs, rule
 }
 
-// imageUse is one image an instruction reads: an earlier stage, scratch or
-// a stage index need nothing; anything else must be a plain reference.
-func imageUse(ref string, stages []string) ([]string, string) {
-	lower := strings.ToLower(ref)
+// stageOrImage is a --from or from= value: an earlier stage by name or
+// index, else an image.
+func stageOrImage(ref string, st *stageSet) ([]string, string) {
+	if slices.Contains(st.names, strings.ToLower(ref)) || isIndexBelow(ref, st.count) {
+		return nil, ""
+	}
+	return image(ref)
+}
+
+func image(ref string) ([]string, string) {
 	switch {
 	case strings.Contains(ref, "$"):
 		return nil, ruleVariableImage
-	case lower == "scratch" || slices.Contains(stages, lower) || isDigits(ref):
-		return nil, ""
 	case !imageRef.MatchString(ref):
 		return nil, ruleImageName
 	}
@@ -189,8 +288,7 @@ func imageUse(ref string, stages []string) ([]string, string) {
 
 // checkAdd refuses a source the builder would fetch: a URL, a git remote
 // (scp-like user@host:path too) or a variable that could expand to one.
-func checkAdd(rest string) string {
-	_, args := splitFlags(rest)
+func checkAdd(args []string) string {
 	if joined := strings.Join(args, " "); strings.HasPrefix(joined, "[") {
 		args = jsonArgs(joined)
 	}
@@ -206,72 +304,29 @@ func checkAdd(rest string) string {
 	return ""
 }
 
-// fromFlag checks COPY --from (and ADD's) image.
-func fromFlag(rest string, stages []string) ([]string, string) {
-	flags, _ := splitFlags(rest)
-	for _, f := range flags {
-		if v, ok := strings.CutPrefix(f, "--from="); ok {
-			return imageUse(v, stages)
-		}
-	}
-	return nil, ""
-}
-
-// checkRun refuses RUN options that ask for a network, privileges or a
-// device, and checks the image of each --mount from=.
-func checkRun(rest string, stages []string) ([]string, string) {
-	flags, _ := splitFlags(rest)
+// mountFrom checks a --mount value: keys in any case, from= an earlier
+// stage or an image, source= never above its root.
+func mountFrom(spec string, st *stageSet) ([]string, string) {
 	var images []string
-	for _, f := range flags {
-		name, value, _ := strings.Cut(f, "=")
-		switch name {
-		case "--network":
-			if value != "none" {
-				return nil, ruleRunOption
-			}
-		case "--security", "--device":
-			return nil, ruleRunOption
-		case "--mount":
-			imgs, rule := mountFrom(value, stages)
+	for _, kv := range strings.Split(spec, ",") {
+		key, value, _ := strings.Cut(kv, "=")
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "from":
+			imgs, rule := stageOrImage(value, st)
 			if rule != "" {
 				return nil, rule
 			}
 			images = append(images, imgs...)
+		case "source", "src":
+			if value == ".." || strings.HasPrefix(value, "../") || strings.Contains(value, "/../") || strings.HasSuffix(value, "/..") {
+				return nil, ruleMount
+			}
 		}
 	}
 	return images, ""
 }
 
-func mountFrom(spec string, stages []string) ([]string, string) {
-	for _, kv := range strings.Split(spec, ",") {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(kv), "from="); ok {
-			return imageUse(v, stages)
-		}
-	}
-	return nil, ""
-}
-
-// splitKeyword cuts the instruction keyword off at the first space or tab.
-func splitKeyword(l string) (keyword, rest string) {
-	i := strings.IndexAny(l, " 	")
-	if i < 0 {
-		return l, ""
-	}
-	return l[:i], l[i+1:]
-}
-
-// splitFlags splits an instruction's arguments into its leading --flags
-// and the rest, on white space.
-func splitFlags(rest string) (flags, args []string) {
-	fields := strings.Fields(rest)
-	i := 0
-	for i < len(fields) && strings.HasPrefix(fields[i], "--") {
-		i++
-	}
-	return fields[:i], fields[i:]
-}
-
-// jsonArgs reads the exec form ["src", ..., "dest"] after any flags.
+// jsonArgs reads the exec form ["src", ..., "dest"].
 func jsonArgs(joined string) []string {
 	var args []string
 	if err := json.Unmarshal([]byte(joined), &args); err != nil {
@@ -280,14 +335,16 @@ func jsonArgs(joined string) []string {
 	return args
 }
 
-func isDigits(s string) bool {
-	if s == "" {
+func isIndexBelow(s string, n int) bool {
+	if s == "" || len(s) > 4 {
 		return false
 	}
+	i := 0
 	for _, r := range s {
 		if r < '0' || r > '9' {
 			return false
 		}
+		i = i*10 + int(r-'0')
 	}
-	return true
+	return i < n
 }

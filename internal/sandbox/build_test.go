@@ -230,10 +230,15 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		"remote context":     {compose("      context: https://github.com/o/r.git\n"), BuildComposeRefused},
 		"no build file":      {(&memRepo{files: map[string]string{"app.py": ""}}).repo(), BuildNoFile},
 		"base image missing": {dockerfileRepo("FROM missing.example/base:1\n"), BuildBaseImageMissing},
+		"BOM frontend":       {dockerfileRepo("\xef\xbb\xbf# syntax=evil.example/fe\nFROM alpine:3\n"), BuildDockerfileRefused},
+		"slash frontend":     {dockerfileRepo("// syntax=evil.example/fe\nFROM alpine:3\n"), BuildDockerfileRefused},
+		"vertical tab FROM":  {dockerfileRepo("FROM alpine:3\nFROM\vmissing.example/base:1\n"), BuildDockerfileRefused},
+		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildBaseImageMissing},
+		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildBaseImageMissing},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			rec := withBuilds(&recorder{}, 0, "missing.example/base:1")
+			rec := withBuilds(&recorder{}, 0, "missing.example/base:1", "1234")
 			s := testSandbox(t, rec)
 			app, err := s.Build(context.Background(), tt.repo)
 			if err != nil || app.Built() || app.Unavailable != tt.reason {
