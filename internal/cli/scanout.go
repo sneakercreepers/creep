@@ -72,7 +72,7 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
 		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
-		Discovery: res.disc,
+		Discovery: res.disc, Verification: res.verify,
 	})
 }
 
@@ -151,6 +151,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 		if err := renderReport(e.stdout, format, rep); err != nil {
 			return err
 		}
+		printVerification(e.stderr, rep.Verification)
 		if rep.Run.Incomplete {
 			fmt.Fprintln(e.stderr, incompleteMark(rep))
 		}
@@ -167,6 +168,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 		fmt.Fprintf(w, "coverage excludes %s, listed above\n", summary)
 	}
 	printScanners(w, rep.Coverage.Scanners)
+	printVerification(w, rep.Verification)
 	if rep.Run.Incomplete {
 		fmt.Fprintln(w, incompleteMark(rep))
 	}
@@ -260,6 +262,14 @@ func printScanners(w io.Writer, scanners []report.ScannerCoverage) {
 			verb = "evaluated"
 		}
 		fmt.Fprintf(w, "scanner %s: %s; %s: %s\n", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))
+	}
+}
+
+// printVerification states the sandbox's outcome; nothing when it is off.
+// Every value is an ID report.New checked.
+func printVerification(w io.Writer, v report.Verification) {
+	if text := v.Text(); text != "" {
+		fmt.Fprintf(w, "sandbox: %s\n", text)
 	}
 }
 

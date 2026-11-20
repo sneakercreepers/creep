@@ -52,13 +52,26 @@ func (s *Sandbox) Build(ctx context.Context, repo Repo) (App, error) {
 	if err := s.abortErr(); err != nil {
 		return App{}, err
 	}
+	// Ctrl+C anywhere in the build, not only while the builder runs, ends
+	// it with ErrInterrupted instead of killing creep, so the caller's
+	// Close still removes the work directory and any built image.
+	ctx, done := s.interruptible(ctx)
+	defer done()
+	app, err := s.build(ctx, repo)
+	if err != nil && errors.Is(context.Cause(ctx), ErrInterrupted) {
+		return App{}, ErrInterrupted
+	}
+	return app, err
+}
+
+func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 	plan, why := planBuild(repo)
 	if why != nil {
 		return unavailable(why), nil
 	}
-	dir, why := s.stageContext(repo, plan)
-	if why != nil {
-		return unavailable(why), nil
+	dir, why, err := s.stageContext(ctx, repo, plan)
+	if err != nil || why != nil {
+		return unavailableOrErr(why, err)
 	}
 	dockerfile := filepath.Join(dir, filepath.FromSlash(relTo(plan.context, plan.dockerfile)))
 	if info, err := os.Lstat(dockerfile); err != nil || !info.Mode().IsRegular() {
@@ -111,8 +124,6 @@ func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string) []stri
 func (s *Sandbox) runBuild(ctx context.Context, dir, dockerfile, target string) (string, *refusal, error) {
 	iid := filepath.Join(s.work, "iid-"+strconv.FormatUint(s.seq.Add(1), 10))
 	args := buildArgs(s.status, s.runID, dir, dockerfile, target, iid)
-	ctx, done := s.interruptible(ctx)
-	defer done()
 	buildCtx, cancel := context.WithTimeout(ctx, s.buildFor)
 	defer cancel()
 	res, err := s.run(buildCtx, args, outputLimit)

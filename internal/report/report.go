@@ -175,6 +175,9 @@ type Report struct {
 	// discovery batches, for Markdown and the text summary (ADR 0017 D3).
 	// It is not part of the contract, so a report read back has none.
 	Discovery Discovery `json:"-"`
+	// Verification is the sandbox's outcome (#23); not part of the
+	// contract either.
+	Verification Verification `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -189,6 +192,7 @@ type Input struct {
 	Scanners       []ScannerCoverage // in the caller's fixed order
 	DataHandling   DataHandling
 	Discovery      Discovery
+	Verification   Verification
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -211,7 +215,7 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkDiscovery(in.Discovery); err != nil {
+	if err := errors.Join(checkDiscovery(in.Discovery), checkVerification(in.Verification)); err != nil {
 		return nil, err
 	}
 	info := buildinfo.Get()
@@ -226,6 +230,7 @@ func New(in Input) (*Report, error) {
 			WholeFiles: in.Discovery.WholeFiles,
 			Inventory:  slices.Clone(in.Discovery.Inventory), Batches: slices.Clone(in.Discovery.Batches),
 		},
+		Verification: in.Verification,
 	}, nil
 }
 

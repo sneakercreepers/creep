@@ -22,6 +22,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
 	writeDiscovery(bw, r.Discovery)
 	writeScanners(bw, r.Coverage.Scanners)
+	writeVerification(bw, r.Verification)
 	writeDataHandling(bw, r.DataHandling, r.Discovery.WholeFiles)
 	if err := bw.Flush(); err != nil {
 		return fmt.Errorf("write Markdown report: %w", err)

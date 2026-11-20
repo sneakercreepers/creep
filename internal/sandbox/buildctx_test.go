@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -34,7 +35,7 @@ func TestBuildContextLeavesSecretsOut(t *testing.T) {
 	repo := m.repo()
 	repo.Paths = append(repo.Paths, "../outside", "/etc/passwd", "a/../../b", `a\b`, "./app.py", "")
 	s := testSandbox(t, &recorder{})
-	dir, why := s.stageContext(repo, buildPlan{context: ".", dockerfile: "Dockerfile"})
+	dir, why, _ := s.stageContext(context.Background(), repo, buildPlan{context: ".", dockerfile: "Dockerfile"})
 	if why != nil {
 		t.Fatalf("refused: %+v", why)
 	}
@@ -101,7 +102,7 @@ func stagedFiles(t *testing.T, dir string) []string {
 func TestStageContextOfSubdirectory(t *testing.T) {
 	m := &memRepo{files: map[string]string{"web/Dockerfile": plainDockerfile, "web/a/b.txt": "b", "web/.env": "x", "api/main.go": "", "webby/x": ""}}
 	s := testSandbox(t, &recorder{})
-	dir, why := s.stageContext(m.repo(), buildPlan{context: "web", dockerfile: "web/Dockerfile"})
+	dir, why, _ := s.stageContext(context.Background(), m.repo(), buildPlan{context: "web", dockerfile: "web/Dockerfile"})
 	if why != nil {
 		t.Fatalf("refused: %+v", why)
 	}
@@ -132,10 +133,45 @@ func TestStageContextRefuses(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			s := testSandbox(t, &recorder{})
-			_, why := s.stageContext(tt.repo, buildPlan{context: "."})
+			_, why, _ := s.stageContext(context.Background(), tt.repo, buildPlan{context: "."})
 			if why == nil || why.reason != BuildContextRefused || why.detail != tt.detail {
 				t.Errorf("got %+v, want %s", why, tt.detail)
 			}
 		})
+	}
+}
+
+// TestCtrlCWhileStagingIsInterrupted (#23 F2): Ctrl+C while the context is
+// copied ends Build with ErrInterrupted before any runtime call, instead of
+// killing creep, so Close still removes the staged copy of the repository.
+func TestCtrlCWhileStagingIsInterrupted(t *testing.T) {
+	rec := withBuilds(&recorder{}, 0)
+	s := testSandbox(t, rec)
+	var sig chan<- os.Signal
+	s.notify = func(c chan<- os.Signal) { sig = c }
+	caught := make(chan struct{})
+	s.caught = func() { close(caught) }
+	repo := (&memRepo{files: map[string]string{"Dockerfile": plainDockerfile, "a.txt": "a", "b.txt": "b"}}).repo()
+	read, reads := repo.Read, 0
+	repo.Read = func(p string) ([]byte, error) {
+		if reads++; reads == 2 && sig == nil { // the first staged file; the first read is the plan's
+			t.Error("no Ctrl+C hook while staging")
+		} else if reads == 2 {
+			sig <- os.Interrupt
+			<-caught // the build's context is canceled before the next file
+		}
+		return read(p)
+	}
+	if _, err := s.Build(context.Background(), repo); !errors.Is(err, ErrInterrupted) {
+		t.Errorf("Build: %v", err)
+	}
+	if len(rec.calls) != 0 {
+		t.Errorf("calls after Ctrl+C while staging: %q", rec.calls)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s.work); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("Close left the staged copy: %v", err)
 	}
 }

@@ -196,6 +196,7 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 		})
 	}
 	inv.Notifications = append(inv.Notifications, scannerNotifications(r.Coverage.Scanners)...)
+	inv.Notifications = append(inv.Notifications, verificationNotifications(r.Verification)...)
 	return inv
 }
 

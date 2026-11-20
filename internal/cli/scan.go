@@ -49,6 +49,7 @@ type scanResult struct {
 	planned  bool   // false when the planner refused the input or never ran
 	disc     report.Discovery
 	scanners scannerRun
+	verify   report.Verification // the sandbox's outcome (#23)
 }
 
 // runScan scans the current directory: walk, calibrate, discovery (the
@@ -93,12 +94,13 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan: calibration", err)
 		return failureCode(err)
 	}
+	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
 	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
-	noteSandbox(context.WithoutCancel(ctx), e.stderr, s.deps.sandbox, s.cfg.Sandbox)
+	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline)
 	return s.finish(e, cal, res)
 }
 

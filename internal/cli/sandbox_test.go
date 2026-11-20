@@ -49,7 +49,7 @@ func withSandbox(deps scanDeps, checked []sandbox.Status, removed map[sandbox.Ru
 
 func TestProductionWiresSandbox(t *testing.T) {
 	d := productionDeps().sandbox
-	if d.detect == nil || d.clean == nil || d.images == nil {
+	if d.detect == nil || d.clean == nil || d.images == nil || d.open == nil {
 		t.Fatal("production deps leave the sandbox unchecked")
 	}
 }
@@ -171,11 +171,11 @@ func TestScanWithoutRuntimeStaysProbable(t *testing.T) {
 		t.Fatal(err)
 	}
 	deps := withSandbox(fakeDeps(&fakeModel{verdict: verdict}, calibrate.TierM), []sandbox.Status{missingDocker, missingPodman}, nil, nil)
-	code, _, stderr := runScanWith(deps, "--config", cfg, "scan")
+	code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan")
 	if code != base || code != exitcode.GateExceeded {
 		t.Fatalf("exit %d with the sandbox enabled, %d without (want %d)\n%s", code, base, exitcode.GateExceeded, stderr)
 	}
-	assertContains(t, "stderr", stderr, []string{"sandbox: unavailable", "findings stay probable"})
+	assertContains(t, "stdout", stdout, []string{"sandbox: verification unavailable (no_runtime); findings stay probable"})
 	f, err := os.Open(filepath.Join(stateDir, "report.json"))
 	if err != nil {
 		t.Fatal(err)

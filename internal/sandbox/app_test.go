@@ -150,35 +150,51 @@ func TestBuildThroughRealExec(t *testing.T) {
 	}
 }
 
-// TestEveryTestAppGetsAnOutcome runs Build over every app in the test-app
-// directory with a recorded runtime: nothing is executed. None ships a
-// compose file or Dockerfile (the test-app guard forbids build files), so
-// each one is verification unavailable, no_build_file, and never an error.
-func TestEveryTestAppGetsAnOutcome(t *testing.T) {
-	root := filepath.Join("..", "..", "testdata", "apps")
-	variants, err := filepath.Glob(filepath.Join(root, "*", "*"))
+// TestEveryTestAppBuilds runs Build over every app in the test-app
+// directory with a recorded runtime, so nothing is executed. Each
+// variant's Dockerfile passes the check and reads only the pinned BusyBox
+// (CanaryImage, which the real-runtime job pulls), and each build gets
+// the offline command line; the test-app guard keeps those bytes. This is
+// #23's "works for every app in testdata/apps" without a runtime;
+// TestRealTestAppsBuild is the same on a real engine.
+func TestEveryTestAppBuilds(t *testing.T) {
+	variants := testAppVariants(t)
+	for _, dir := range variants {
+		repo := dirRepo(t, dir)
+		plan, why := planBuild(repo)
+		if why != nil || plan.dockerfile != "Dockerfile" || !slices.Equal(plan.images, []string{CanaryImage}) {
+			t.Errorf("%s: plan %+v, refused %+v", dir, plan, why)
+		}
+		rec := withBuilds(&recorder{}, 0)
+		s := testSandbox(t, rec)
+		app, err := s.Build(context.Background(), repo)
+		if err != nil || !app.Built() {
+			t.Errorf("%s: Build = %+v, %v", dir, app, err)
+		}
+		builds := rec.to("build")
+		if len(builds) != 1 {
+			t.Fatalf("%s: %d builds", dir, len(builds))
+		}
+		if p := buildProblems(builds[0], Docker, s.work); len(p) > 0 {
+			t.Errorf("%s: build %q: %v", dir, builds[0], p)
+		}
+	}
+	if len(variants) < 6 {
+		t.Fatalf("found %d app variants", len(variants))
+	}
+}
+
+// testAppVariants lists every testdata/apps/<app>/<variant> directory.
+func testAppVariants(t *testing.T) []string {
+	t.Helper()
+	all, err := filepath.Glob(filepath.Join("..", "..", "testdata", "apps", "*", "*"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen := 0
-	for _, dir := range variants {
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			continue
-		}
-		seen++
-		rec := withBuilds(&recorder{}, 0)
-		s := testSandbox(t, rec)
-		app, err := s.Build(context.Background(), dirRepo(t, dir))
-		if err != nil || app.Built() || app.Unavailable != BuildNoFile {
-			t.Errorf("%s: Build = %+v, %v", dir, app, err)
-		}
-		if len(rec.calls) != 0 {
-			t.Errorf("%s: calls %q", dir, rec.calls)
-		}
-	}
-	if seen < 6 {
-		t.Fatalf("found %d app variants", seen)
-	}
+	return slices.DeleteFunc(all, func(dir string) bool {
+		info, err := os.Stat(dir)
+		return err != nil || !info.IsDir()
+	})
 }
 
 func dirRepo(t *testing.T, dir string) Repo {

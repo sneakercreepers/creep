@@ -3,22 +3,26 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/sandbox"
 )
 
-// sandboxDeps finds the container runtime and removes creep's containers.
-// productionDeps sets sandbox.Detect, sandbox.Clean and sandbox.Images
-// (ADR 0016); a nil detect reports the sandbox as not checked, so tests
-// never run a real runtime.
+// sandboxDeps finds the container runtime, builds the app and removes
+// creep's containers. productionDeps sets sandbox.Detect, sandbox.Clean,
+// sandbox.Images and openSandbox (ADR 0016); a nil detect or open reports
+// the sandbox as not checked, so tests never run a real runtime.
 type sandboxDeps struct {
 	detect func(context.Context, sandbox.Env) sandbox.Report
 	clean  func(context.Context, sandbox.Status) (sandbox.Removed, error)
 	images func(context.Context, sandbox.Status) []sandbox.PinnedImage
+	open   func(st sandbox.Status, runID string) (appBuilder, error)
+	// interrupt and now default to Ctrl+C and time.Now; tests replace them.
+	interrupt func(context.Context) (context.Context, context.CancelFunc)
+	now       func() time.Time
 }
 
 // detectSandbox checks both runtimes from the current directory, the
@@ -57,7 +61,7 @@ func reportSandbox(e env, cfg config.Sandbox) {
 		fmt.Fprintln(e.stdout, "sandbox: sandbox.enabled is false, so scans do not use it")
 	}
 	reportImages(e, best)
-	fmt.Fprintln(e.stdout, "sandbox: PoC verification is not built yet (#23-#25); findings stay probable")
+	fmt.Fprintln(e.stdout, "sandbox: with sandbox.enabled, a scan builds the app offline; PoC verification is not built yet (#24, #25), so findings stay probable")
 }
 
 // reportImages lists the digest-pinned images the run network needs
@@ -95,22 +99,4 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
-}
-
-// noteSandbox tells a scan with sandbox.enabled what verification it gets.
-// Without a runtime the scan goes on unchanged: findings stay probable.
-func noteSandbox(ctx context.Context, w io.Writer, d sandboxDeps, cfg config.Sandbox) {
-	if !cfg.Enabled {
-		return
-	}
-	rep, checked := detectSandbox(ctx, d, cfg)
-	best, ok := rep.Best()
-	switch {
-	case !checked:
-		fmt.Fprintln(w, "sandbox: not checked; findings stay probable")
-	case !ok:
-		fmt.Fprintln(w, "sandbox: unavailable (no usable docker or podman; see creep doctor); verification is off and findings stay probable")
-	default:
-		fmt.Fprintf(w, "sandbox: %s found (isolation %s); PoC verification is not built yet (#23-#25), so findings stay probable\n", best.Runtime, best.Isolation)
-	}
 }

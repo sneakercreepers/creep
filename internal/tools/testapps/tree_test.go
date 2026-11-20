@@ -38,6 +38,34 @@ func checkVariants(fsys fs.FS, dir, ext string) []string {
 	return problems
 }
 
+// buildFile is the one build file a variant may hold, so the sandbox can
+// build the app offline (#23), and appDockerfile its only allowed content:
+// the pinned BusyBox the sandbox already trusts (sandbox.CanaryImage, kept
+// in step by TestEveryTestAppBuilds there) and a COPY. Nothing runs at
+// build time, and both variants hold the same bytes, so the file says
+// nothing about which one is vulnerable. An offline build cannot install
+// Flask, FastAPI or Express, so the image holds the app but cannot serve
+// it until a registry mirror exists (#277).
+const (
+	buildFile     = "Dockerfile"
+	appDockerfile = "FROM docker.io/library/busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec\nCOPY . /app\n"
+)
+
+// checkBuildFile reports a variant's Dockerfile that is not the shared one.
+func checkBuildFile(fsys fs.FS, name string, e fs.DirEntry) []string {
+	if !e.Type().IsRegular() {
+		return []string{name + ": only regular files (no directories or symlinks)"}
+	}
+	data, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return []string{fmt.Sprintf("%s: %v", name, err)}
+	}
+	if string(data) != appDockerfile {
+		return []string{name + ": a test app's Dockerfile must be exactly the shared one (pinned BusyBox, COPY . /app)"}
+	}
+	return nil
+}
+
 // checkVariant returns the sorted file names of one variant and its problems.
 func checkVariant(fsys fs.FS, dir, ext string) ([]string, []string) {
 	entries, err := fs.ReadDir(fsys, dir)
@@ -45,9 +73,13 @@ func checkVariant(fsys fs.FS, dir, ext string) ([]string, []string) {
 		return nil, []string{fmt.Sprintf("%s: %v", dir, err)}
 	}
 	var names, problems []string
-	lines := 0
+	lines, sources := 0, 0
 	for _, e := range entries {
 		name := path.Join(dir, e.Name())
+		if e.Name() == buildFile {
+			names, problems = append(names, e.Name()), append(problems, checkBuildFile(fsys, name, e)...)
+			continue
+		}
 		if why := rejectSource(e, ext); why != "" {
 			problems = append(problems, fmt.Sprintf("%s: %s", name, why))
 			continue
@@ -56,9 +88,9 @@ func checkVariant(fsys fs.FS, dir, ext string) ([]string, []string) {
 		if err != nil {
 			return nil, []string{fmt.Sprintf("%s: %v", name, err)}
 		}
-		names, lines = append(names, e.Name()), lines+bytes.Count(data, []byte("\n"))
+		names, lines, sources = append(names, e.Name()), lines+bytes.Count(data, []byte("\n")), sources+1
 	}
-	if len(names) == 0 {
+	if sources == 0 {
 		problems = append(problems, dir+": no source files")
 	}
 	if lines >= maxAppLines {
