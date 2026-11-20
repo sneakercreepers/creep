@@ -41,6 +41,7 @@
           { "context": "workflows", "integration_id": 15368 },
           { "context": "budget", "integration_id": 15368 },
           { "context": "protections", "integration_id": 15368 },
+          { "context": "pr-body", "integration_id": 15368 },
           { "context": "analyze (go)", "integration_id": 15368 }
         ]
       }

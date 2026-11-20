@@ -24,7 +24,7 @@ Closes #
 <!-- Required if this PR touches internal/gateway (egress.log included), redact, models, reader, discover, repofile, planner, sandbox, prompts/ or .github/workflows. Delete otherwise. -->
 
 - [ ] Secrets and PII still never reach the gateway unredacted
-- [ ] The planner still receives only IDs, enums and booleans
+- [ ] The planner still receives only IDs, enums, booleans and bounded numbers
 - [ ] No new network path outside `internal/gateway`
 - [ ] Model output is still never executed on the host
 - [ ] `docs/threat-model.md` reviewed (updated if needed)
@@ -37,6 +37,6 @@ Closes #
 
 - [ ] No AI assistance
 - [ ] AI-assisted (tool/model: ______ ). I reviewed and understand every line I'm signing off.
-- [ ] AI-assisted: ran the agent loop developer → tester → pentester → auditor. Tester verdict, security review and auditor decision: <!-- links -->
+- [ ] AI-assisted: ran the agent loop developer → tester → pentester → auditor. Tester verdict, security review and auditor decision: <!-- links to comments on this PR; the pr-body check needs them -->
 - [ ] External contributor: the pentester ran with no shared context. Maintainer PRs: skipped; the release pentest covers this change (ADR 0004).
-- [ ] Documentation-only (`*.md` or `docs/`): ran only the auditor. Auditor decision: <!-- link -->
+- [ ] Documentation-only (`*.md` or `docs/`): ran only the auditor. Auditor decision: <!-- link to a comment on this PR; the pr-body check needs it and fails on any path outside `*.md` or `docs/` -->
