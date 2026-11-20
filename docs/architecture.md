@@ -25,7 +25,7 @@ This is the source of truth for what each part of `creep` does, which way depend
 |---|---|---|---|---|
 | 1 | calibrate | model contract, seeded templates | per-class scores, tier S/M/L | v0.1 |
 | 2 | discover | repo files (whole, redacted, to the model) | entry points, sinks and auth as **IDs, enums and line spans** | v0.2 (static analysis in v0.1) |
-| 3 | planner | IDs, enums, booleans, calibration | prioritized hypotheses | v0.1 |
+| 3 | planner | IDs, enums, booleans and bounded numbers; calibration tier | prioritized hypotheses | v0.1 |
 | 4 | reader | redacted slices + hypothesis | closed-schema verdicts | v0.1 |
 | 5 | sandbox + verify | app build, PoC template | verified / discarded | v0.2 |
 | 6 | fix | verified finding | suggested diff | v3 |

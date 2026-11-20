@@ -21,7 +21,7 @@ go test ./... -failfast           # tests replay recorded model responses; no ke
 
 1. Only `internal/gateway` may import `net/http` or open network connections. A linter enforces it.
 2. Every model call goes through the gateway, which redacts secrets first and writes `egress.log`.
-3. The planner receives only IDs, enums and booleans — never text from the scanned repo.
+3. The planner receives only IDs, enums, booleans and bounded numbers — never text from the scanned repo.
 4. Model output is never executed on the host. PoCs run only in the sandbox (v0.2).
 5. No telemetry. No network calls except to configured model endpoints.
 6. No new direct dependency without an ADR in `docs/adr/`.
@@ -32,7 +32,7 @@ go test ./... -failfast           # tests replay recorded model responses; no ke
 - Each package has a `doc.go` explaining why it exists.
 - Errors wrap with context: `fmt.Errorf("redact %s: %w", path, err)`.
 - Tests are table-driven. New behavior needs a test that covers its edge cases, failure paths and security protections, not trivial happy paths or getters; new model behavior needs a replay fixture. Engineering principles: [docs/architecture.md §8](docs/architecture.md#8-engineering-principles).
-- Prompts live in `prompts/` as versioned data, one variant per model tier, with a token-budget test.
+- Each package keeps its prompts in its own `prompts/` directory (`internal/reader/prompts/`, `internal/discover/prompts/`, `internal/calibrate/prompts/`) as versioned data, one variant per model tier, with a token-budget test.
 - Commits: Conventional Commits with `Signed-off-by` (`git commit -s`); SSH or GPG signing recommended (required once #49 lands).
 - Test fixtures are generated in `t.TempDir()` unless they must be committed files; throwaway worktrees or folders go outside the repo and are removed when done.
 

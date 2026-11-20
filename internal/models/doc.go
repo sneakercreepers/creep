@@ -25,12 +25,13 @@
 //     caller's closed struct with unknown fields refused, after a size cap,
 //     and never executed. A second token pass (strictkeys.go) refuses
 //     duplicate keys and keys that differ from a json tag only in case, at
-//     any depth, which encoding/json would otherwise accept. A reply that does not parse, is cut off, is a
-//     refusal or fails the struct's Validate is retried at most Retries
-//     times, each retry carrying the reason as context; then Complete
-//     returns an *InvalidOutputError. The reason is creep's fixed text, which
-//     never includes a key or value from the reply, except a caller's
-//     Validate message, which is cut to 256 bytes of printable ASCII.
+//     any depth, which encoding/json would otherwise accept. A reply that
+//     does not parse, is cut off, is a refusal or fails the struct's
+//     Validate is retried at most Retries times, each retry carrying the
+//     reason as context; then Complete returns an *InvalidOutputError. The
+//     reason is creep's fixed text, which never includes a key or value from
+//     the reply, except a caller's Validate message, which is cut to 256
+//     bytes of printable ASCII.
 //   - Structured output uses what the endpoint supports: JSON schema, a GBNF
 //     grammar (llama.cpp servers), a forced tool call, or the prompt alone.
 //     Anthropic supports tools and prompt.

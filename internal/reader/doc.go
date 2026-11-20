@@ -14,11 +14,12 @@
 //     counted as bytes, the same upper bound models reserves per call.
 //
 //   - The model's reply decodes into Answer, a closed struct (output.go):
-//     models.Complete refuses unknown, duplicate and case-variant keys, prose around the JSON object
-//     and wrong types, then Answer.Validate allows only a verdict from the
-//     enum, at most MaxEvidence ascending, non-overlapping line ranges and
-//     an integer confidence from 0 to 100. Schema and Grammar send the same
-//     shape to endpoints that can constrain output.
+//     models.Complete refuses unknown, duplicate and case-variant keys,
+//     prose around the JSON object and wrong types, then Answer.Validate
+//     allows only a verdict from the enum, at most MaxEvidence ascending,
+//     non-overlapping line ranges and an integer confidence from 0 to 100.
+//     Schema and Grammar send the same shape to endpoints that can
+//     constrain output.
 //
 //   - Project (signal.go) checks the ranges against the lines the model was
 //     shown and returns a Signal: hypothesis ID, verdict enum, confidence

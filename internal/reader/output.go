@@ -25,8 +25,8 @@ const (
 
 // Answer is the model's reply. It is a closed struct: models.Complete
 // refuses unknown, duplicate and case-variant keys and trailing text, then
-// runs Validate. Required
-// fields are pointers or slices so a missing one is told apart from zero.
+// runs Validate. Required fields are pointers or slices so a missing one is
+// told apart from zero.
 type Answer struct {
 	Verdict    string     `json:"verdict"`
 	Evidence   []Evidence `json:"evidence"`
