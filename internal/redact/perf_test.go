@@ -91,6 +91,10 @@ func BenchmarkRedact(b *testing.B) {
 	inputs := largeInputs()
 	inputs["every keyword"] = everyKeyword(b)
 	inputs["every keyword, format char"] = withFormatChar(everyKeyword(b))
+	// Kept references read the literals after them once per line (#71): one
+	// line of them, and lines of lookups with a default.
+	inputs["references"] = fill(`password = None or "ab" `)
+	inputs["lookups"] = fill(`secret = os.environ.get("X", "default-value")` + "\n")
 	r := newRedactor(b)
 	for name, text := range inputs {
 		b.Run(name, func(b *testing.B) {

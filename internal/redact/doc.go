@@ -21,13 +21,16 @@
 //   - PII: email addresses, card numbers (Luhn), US SSNs (dashed, SSA-valid
 //     ranges), Spanish DNI and NIE (control letter) and Brazilian CPF (two
 //     check digits, dotted or not). Checksums keep ordinary numbers in code
-//     unmasked.
+//     unmasked. An address needs a dotted domain (user@host is not one), and
+//     the user git at a well-known git host, matched as the whole domain
+//     (github.com, gitlab.com, bitbucket.org, ...), is an SSH remote
+//     (git@github.com:org/repo), not a person's.
 //   - Credentials with no fixed format, which gitleaks misses: the password
 //     in scheme://user:password@host, the value of password, passwd, pwd,
-//     passphrase and secret keys (quoted or bare, references such as ${VAR}
-//     left alone), and a bare 40-character AWS secret key when an AWS access
-//     key id is in the same input, anywhere in the file for File
-//     (credentials.go). A value assigned through
+//     passphrase and secret keys (see below for the values left alone), and
+//     a bare 40-character AWS secret key when an AWS access key id is in the
+//     same input, anywhere in the file for File (credentials.go). A value
+//     assigned through
 //     a subscript whose key names a credential (x['SECRET_KEY'] = '…',
 //     headers["X-Api-Key"] = "…", config[:api_key] = '…'), which the
 //     vendored generic rule misses at the closing "]" (subscript.go).
@@ -47,13 +50,41 @@
 //     of the fragment ("-----END RSA PRIV") anchors the body lines next to it,
 //     even one shorter than 40 bytes (pem_edge.go). This can mask ordinary
 //     data, which is the safe side.
+//   - A quoted password value is masked unless it only points at one (${VAR},
+//     $VAR, {{ var }}, <placeholder>, %s, getPassword()). A bare one is kept
+//     only when it is code (reference.go, #71): None, null, nil, true and
+//     false; a number under a key whose last word measures the password
+//     (PASSWORD_MIN_LENGTH = 12; DB_PASSWORD=123456 and PASSWORD_ADMIN=1234
+//     are masked); a known type name after ":", alone or around another one
+//     (password: string, Optional[str]); a dotted path of names, no digit,
+//     whose first segment is, spelled exactly so, one of the config and
+//     environment receivers cfg, config, conf, settings, os, process, env,
+//     environ, options, opts, params, args, request and props
+//     (process.env.SECRET_KEY, cfg.Secret; self.password is masked); a call or subscript left open, its arguments so far names
+//     without digits, ending at a comma or a quote and closed later on the
+//     line (GenerateFromPassword(pw, cost), os.environ["X"]); a shell
+//     variable right before a path, no blank ("$PWD:/src"). The literals
+//     after a kept value on its line are masked (None or "x",
+//     os.environ.get("X", "default"), str = "x"), except the first argument
+//     of a lookup, which names what it reads; the read stops at a comment
+//     and reads each line once. A value in a shape that only resembles code
+//     (hunter(2), real(PW99 + x), Optional[x99], monkey.island.sunset,
+//     this.is.sparta, user.password) is masked.
 //   - The generic-api-key rule skips a word compared with == or === (key ===
 //     "constructor"): letters, "_", "." and "-" only, as in the gitleaks
 //     allowlist. Assigned values, and compared values with any digit or other
-//     character, are still masked.
+//     character, are still masked. It also skips a dotted path of such words
+//     read from a known receiver (process.env.SECRET_KEY, cfg.Secret).
 //
-// When matches overlap they are merged and the most specific label names the
-// marker; each part is also remembered, so it is masked when it shows up
+// When matches overlap they are merged into one masked span, and a fixed
+// precedence names it: a rule that knows the secret's format, then the
+// password detector, then the generic-api-key rule, then PII, then the
+// sweep; a tie goes to the label that sorts first, so File and Redact name
+// the same span alike whatever order the detectors ran in. A secret that
+// only personal data reaches past (a URL password whose tail and host read
+// as an email) keeps its own marker and the bytes on either side get theirs,
+// so the password has one marker inside the URL and on its own, in either
+// order. Each part is also remembered, so it is masked when it shows up
 // alone in a later fragment.
 //
 // Format characters: a zero-width space, joiner or other Unicode format
@@ -101,6 +132,23 @@
 //     spaces, and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
 //     rule, and so do encodings other than the separators listed below.
 //   - A value split from its key by other text (see Performance).
+//   - Literals the password detector leaves next to code (#71), as main did
+//     before it: the first argument of a lookup or getter
+//     (getSecret("..."), d["..."], os.environ['...']), which is taken for the
+//     name it reads; a value on a later line than its key or call
+//     (os.environ.get(\n "X", "..."), password=(\n"..."), a line
+//     continuation, YAML block scalars "|" and ">-", anchors and tags); a
+//     literal after "#" or "//" outside a string, read as a comment
+//     (cfg.Secret || this.#x || "..."); a literal glued to a kept value
+//     (None"..."); a no-break space before "=", and curly quotes.
+//   - A digit-free dotted passphrase that starts with one of the receivers
+//     above (config.is.sparta, env.monkey.island) reads as a config path and
+//     is sent; the password and generic rules both keep it (#71).
+//   - A value repeated in the same input: a value a rule finds only by its
+//     context (a URL password, a key's value) and that shows up again
+//     without that context later in the same Redact or File call is not
+//     masked there, at any length. The sweep re-masks only values stored by
+//     earlier calls, so the repeat is masked from the next call on.
 //
 // The rules file is read by a tiny reader for the TOML subset it uses
 // (toml.go) instead of a generator that converts it to JSON. Both need the same

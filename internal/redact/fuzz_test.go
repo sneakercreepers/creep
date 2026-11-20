@@ -58,6 +58,31 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		forms := []string{"%s=%s", "%s: %s", "%s = \"%s\"", "%s := '%s'", "\"%s\": \"%s\"", "%s => `%s`"}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], keys[rng.IntN(len(keys))], pw), pw
 	},
+	// A literal after a value kept as code (#71): a fallback, a lookup's
+	// default, an initializer after a type.
+	func(rng *rand.Rand) (string, string) {
+		pw := fakePassword(rng)
+		forms := []string{`password = None or "%s"`, `SECRET = os.environ.get("X", "%s")`,
+			`password: str = '%s'`, `secret := cfg.Secret + "%s"`, "password = decrypt(`%s`)"}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], pw), pw
+	},
+	// A passphrase of dotted words with no digit, the shape of a config
+	// path (tester F1 on #71). Random words of five letters or more cannot be
+	// a receiver such as cfg or os; half the time a word a passphrase starts
+	// with that is not a receiver comes first (auditor A1 and A3).
+	func(rng *rand.Rand) (string, string) {
+		words := make([]string, 2+rng.IntN(3))
+		for i := range words {
+			words[i] = fakeToken(rng, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 5+rng.IntN(5))
+		}
+		if rng.IntN(2) == 0 {
+			lookalikes := []string{"self", "this", "app", "req", "ctx", "my", "Config", "ENV", "Self", "This"}
+			words = append([]string{lookalikes[rng.IntN(len(lookalikes))]}, words...)
+		}
+		pw := strings.Join(words, ".")
+		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}
+		return fmt.Sprintf([]string{"%s = %s", "%s: %s", "%s=%s"}[rng.IntN(3)], keys[rng.IntN(len(keys))], pw), pw
+	},
 }
 
 // fakePassword mixes letters, digits and the punctuation people put in

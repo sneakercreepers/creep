@@ -30,12 +30,17 @@ var credentialDetectors = append([]patternDetector{
 	{
 		// key = value, key: value, key := value, key => value, with the value
 		// in double, single or back quotes, or bare (.env, YAML, properties,
-		// JSON, code). The key may close a subscript (x['secret'] = v).
-		// Only the value is masked; the key stays readable.
+		// JSON, code). The key may close a subscript (x['secret'] = v), and
+		// a leading "$" stays in the key so judgeBare can tell a shell
+		// expansion ("$PWD:/src") from an assignment. Only the value is
+		// masked; the key stays readable. An unquoted value that is code,
+		// not a secret written out, is kept, and the literals after it on
+		// its line are masked instead (judgeBare).
 		label: passwordLabel,
-		re: regexp.MustCompile(`(?i)[A-Za-z0-9_.-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.-]*["']?\]?[ \t]*(?::=|=>|=|:)[ \t]*` +
+		re: regexp.MustCompile(`(?i)\$?[A-Za-z0-9_.-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.-]*["']?\]?[ \t]*(?::=|=>|=|:)[ \t]*` +
 			"(?:\"([^\"\\r\\n]*)\"|'([^'\\r\\n]*)'|`([^`\\r\\n]*)`|([^=" + valueStop + "][^" + valueStop + "]*))"),
 		valid: notPlaceholder,
+		bare:  judgeBare,
 		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
 	},
 	{
@@ -48,10 +53,10 @@ var credentialDetectors = append([]patternDetector{
 	},
 }, subscriptDetectors...)
 
-// callRe matches a value that is a function call in code, not a literal
-// password: getPassword() or os.Getenv( (the bare value stops at the quote
-// of the argument). A password of that exact shape is not masked.
-var callRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*\(\)?$`)
+// callRe matches a value that is a call without arguments in code, not a
+// literal password: getPassword(). A call with arguments is judged by
+// callExpr. A password of that exact shape is not masked.
+var callRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.]*\(\)$`)
 
 // notPlaceholder rejects values that only point at a password: ${VAR}, $VAR,
 // {{ var }}, <your-password>, %s and function calls. Anything else is masked,
@@ -77,21 +82,6 @@ func mixedCase(v string) bool {
 		strings.ContainsAny(v, "abcdefghijklmnopqrstuvwxyz")
 }
 
-// labelRank orders the labels of overlapping spans: the merged span takes the
-// highest. A rule that knows the secret's format beats one that only saw a
-// key name, any secret beats PII, and anything beats the unlabelled sweep.
-func labelRank(label string) int {
-	switch {
-	case label == "":
-		return 0
-	case strings.HasPrefix(label, "PII_"):
-		return 1
-	case label == genericLabel, label == passwordLabel:
-		return 2
-	}
-	return 3
-}
-
 // wordValueRe is the gitleaks allowlist for generic-api-key values: letters,
 // "_", "." and "-" with no digit make a word, not a key.
 var wordValueRe = regexp.MustCompile(`^[A-Za-z_.-]+$`)
@@ -108,4 +98,13 @@ func (r secretRule) comparedWord(text string, start, end int) bool {
 	// The rule allows at most 5 quotes or blanks before the value, so this
 	// trim stops within a few bytes.
 	return strings.HasSuffix(strings.TrimRight(text[:start], " \t\"'`"), "==")
+}
+
+// referenceWord reports a generic-api-key value that is a dotted path read
+// from a known receiver, as in process.env.SECRET_KEY or cfg.Secret: code
+// reading a key, not a key (#71). The value must also
+// be a word in the gitleaks allowlist sense, so a token with a digit is
+// still masked, whatever its shape.
+func (r secretRule) referenceWord(value string) bool {
+	return r.label == genericLabel && wordValueRe.MatchString(value) && referencePath(value)
 }
