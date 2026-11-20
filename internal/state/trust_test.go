@@ -272,12 +272,21 @@ func TestUserSecretRefusesFixedKey(t *testing.T) {
 	}
 }
 
+// The refusal must come from the secret check, not from the directory: a
+// good secret opens the same directory, so a loose t.TempDir() mode cannot
+// make the test pass.
 func TestOpenRejectsBadSecret(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
 	for _, secret := range [][]byte{nil, make([]byte, SecretBytes-1), make([]byte, SecretBytes+1)} {
-		if _, err := OpenWithSecret(t.TempDir(), secret); err == nil {
-			t.Errorf("Open with a %d-byte secret succeeded", len(secret))
+		if _, err := OpenWithSecret(dir, secret); !errors.Is(err, errSecretSize) {
+			t.Errorf("Open with a %d-byte secret err = %v; want errSecretSize", len(secret), err)
 		}
 	}
+	s, err := OpenWithSecret(dir, testSecret)
+	if err != nil {
+		t.Fatalf("Open with a good secret: %v", err)
+	}
+	_ = s.Close()
 }
 
 // A store without a key (the key store, or a zero Store) signs nothing and
