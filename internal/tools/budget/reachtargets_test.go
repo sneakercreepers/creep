@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -184,6 +186,70 @@ func TestReleaseShapeProblems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertOneProblem(t, releaseShapeProblems(tt.doc), tt.want)
+		})
+	}
+}
+
+var (
+	// buildEnvKnob finds environment that changes which files go compiles:
+	// GOFLAGS can carry -tags, GOEXPERIMENT sets goexperiment.* tags.
+	buildEnvKnob = regexp.MustCompile(`\b(GOFLAGS|GOEXPERIMENT)\b`)
+	cgoSetting   = regexp.MustCompile(`\bCGO_ENABLED\b\s*[:=]?\s*["']?([^\s"'}]*)`)
+)
+
+// buildEnvProblems reports build environment in a workflow or the release
+// config that reachTargets do not model. Setting cgo off is fine: every cgo
+// off build of a release GOOS and GOARCH is a target already.
+func buildEnvProblems(name, doc string) []string {
+	var problems []string
+	for _, m := range buildEnvKnob.FindAllString(doc, -1) {
+		problems = append(problems, fmt.Sprintf("%s sets %s; update reachTargets and this test", name, m))
+	}
+	for _, m := range cgoSetting.FindAllStringSubmatch(doc, -1) {
+		if m[1] != "0" {
+			problems = append(problems, fmt.Sprintf("%s sets CGO_ENABLED to %q; update reachTargets and this test", name, m[1]))
+		}
+	}
+	return problems
+}
+
+// Every workflow and the release config build only what reachTargets model.
+func TestBuildEnvMatchesReachTargets(t *testing.T) {
+	names := []string{".goreleaser.yaml"}
+	entries, err := os.ReadDir(filepath.Join(repoRoot, ".github", "workflows"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		names = append(names, ".github/workflows/"+e.Name())
+	}
+	for _, name := range names {
+		for _, why := range buildEnvProblems(name, readRepoFile(t, name)) {
+			t.Error(why)
+		}
+	}
+}
+
+func TestBuildEnvProblems(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  string
+		want string // substring of the single problem; "" means no drift
+	}{
+		{"cgo off in GITHUB_ENV", `run: echo "CGO_ENABLED=0" >> "$GITHUB_ENV"` + "\n", ""},
+		{"cgo off in goreleaser env", "    env:\n      - CGO_ENABLED=0\n", ""},
+		{"cgo off as a mapping", "    env:\n      CGO_ENABLED: '0'\n", ""},
+		{"GOFLAGS tags in release.yml env", "    env:\n      GOFLAGS: -tags=creepx\n", "sets GOFLAGS"},
+		{"GOFLAGS in GITHUB_ENV", `run: echo "GOFLAGS=-tags=x" >> "$GITHUB_ENV"` + "\n", "sets GOFLAGS"},
+		{"GOEXPERIMENT in goreleaser env", "    env:\n      - CGO_ENABLED=0\n      - GOEXPERIMENT=boringcrypto\n", "sets GOEXPERIMENT"},
+		{"GOEXPERIMENT in a workflow env", "    env:\n      GOEXPERIMENT: rangefunc\n", "sets GOEXPERIMENT"},
+		{"cgo on in goreleaser env", "    env:\n      - CGO_ENABLED=1\n", `sets CGO_ENABLED to "1"`},
+		{"cgo on as a mapping", "    env:\n      CGO_ENABLED: \"1\"\n", `sets CGO_ENABLED to "1"`},
+		{"cgo from an expression", "    env:\n      CGO_ENABLED: ${{ matrix.cgo }}\n", `sets CGO_ENABLED to "${{"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertOneProblem(t, buildEnvProblems("w.yml", tt.doc), tt.want)
 		})
 	}
 }
