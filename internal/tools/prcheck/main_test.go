@@ -20,10 +20,7 @@ func writeTemp(t *testing.T, name, content string) string {
 
 func eventJSON(t *testing.T, body any) string {
 	t.Helper()
-	data, err := json.Marshal(map[string]any{
-		"pull_request": map[string]any{"number": 7, "body": body},
-		"repository":   map[string]any{"full_name": repo},
-	})
+	data, err := json.Marshal(map[string]any{"pull_request": map[string]any{"number": 7, "body": body}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +28,6 @@ func eventJSON(t *testing.T, body any) string {
 }
 
 func TestRun(t *testing.T) {
-	links := tester + " " + auditor
 	tests := []struct {
 		name  string
 		event string
@@ -39,18 +35,17 @@ func TestRun(t *testing.T) {
 		code  int
 		want  string
 	}{
-		{"loop with links", eventJSON(t, loopLine+links), "internal/x.go\x00", 0, "prcheck: ok"},
-		{"loop without links", eventJSON(t, loopLine+"<!-- links -->"), "internal/x.go\x00", 1, "agent-loop box links 0"},
-		{"null body", eventJSON(t, nil), "", 0, "prcheck: ok"},
-		{"docs-only fits", eventJSON(t, docsLine+auditor), "README.md\x00docs/map.md\x00", 0, "prcheck: ok"},
-		{"docs-only with code", eventJSON(t, docsLine+auditor), "README.md\x00Makefile\x00", 1, `"Makefile" is code or a build file`},
-		{"docs-only with a policy file", eventJSON(t, docsLine+auditor), "CONTRIBUTING.md\x00", 1, `"CONTRIBUTING.md" is a policy file`},
-		{"docs-only with no files", eventJSON(t, docsLine+auditor), "", 1, "no changed file was listed"},
-		{"files ignored without docs-only", eventJSON(t, "no boxes"), "Makefile\x00", 0, "prcheck: ok"},
+		{"null body", eventJSON(t, nil), "Makefile\x00", 0, "prcheck: ok"},
+		{"no claim, code changed", eventJSON(t, "- [x] AI-assisted: ran the agent loop"), "Makefile\x00", 0, "prcheck: ok"},
+		{"docs-only fits", eventJSON(t, docsLine), "README.md\x00docs/map.md\x00", 0, "prcheck: ok"},
+		{"docs-only with code", eventJSON(t, docsLine), "README.md\x00Makefile\x00", 1, `"Makefile" is code or a build file`},
+		{"docs-only with a policy file", eventJSON(t, docsLine), "CONTRIBUTING.md\x00", 1, `"CONTRIBUTING.md" is a policy file`},
+		{"docs-only with the allowlist", eventJSON(t, docsLine), "docs/adr/dependencies.txt\x00", 1, "a setting make budget reads"},
+		{"docs-only with no files", eventJSON(t, docsLine), "", 1, "no changed file was listed"},
 		{"not JSON", "{", "", 2, "decode event"},
 		{"not a pull request event", `{"repository":{"full_name":"a/b"}}`, "", 2, "no pull request"},
-		{"no repository", `{"pull_request":{"number":7}}`, "", 2, "no pull request"},
-		{"body of the wrong type", `{"pull_request":{"number":7,"body":5},"repository":{"full_name":"a/b"}}`, "", 2, "decode event"},
+		{"no number", `{"pull_request":{"body":"x"}}`, "", 2, "no pull request"},
+		{"body of the wrong type", `{"pull_request":{"number":7,"body":5}}`, "", 2, "decode event"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -20,12 +20,14 @@ func readRepoFile(t *testing.T, name string) string {
 }
 
 // The check is only a gate when CI runs it on body edits, lists renames as
-// both paths, and the main ruleset requires the job.
-func TestPRBodyJobIsRequired(t *testing.T) {
+// both paths, keeps a read-only job, and the main ruleset requires it.
+func TestDocsOnlyJobIsRequired(t *testing.T) {
 	wf := readRepoFile(t, ".github/workflows/pr.yml")
 	for _, want := range []string{
 		"types: [opened, edited, reopened, synchronize]",
-		"\n  pr-body:\n",
+		"\npermissions: {}\n",
+		"\n  docs-only:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n",
+		"persist-credentials: false",
 		"git diff --no-renames --name-only -z HEAD^1 HEAD",
 		`go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files`,
 	} {
@@ -33,6 +35,13 @@ func TestPRBodyJobIsRequired(t *testing.T) {
 			t.Errorf(".github/workflows/pr.yml lacks %q", want)
 		}
 	}
+	if !requiredCheck(t, "docs-only") {
+		t.Error(".github/rulesets/main.json: docs-only is not a required status check")
+	}
+}
+
+func requiredCheck(t *testing.T, context string) bool {
+	t.Helper()
 	var rs struct {
 		Rules []struct {
 			Type       string `json:"type"`
@@ -46,16 +55,16 @@ func TestPRBodyJobIsRequired(t *testing.T) {
 	}
 	for _, r := range rs.Rules {
 		for _, c := range r.Parameters.Checks {
-			if r.Type == "required_status_checks" && c.Context == "pr-body" {
-				return
+			if r.Type == "required_status_checks" && c.Context == context {
+				return true
 			}
 		}
 	}
-	t.Error(".github/rulesets/main.json: pr-body is not a required status check")
+	return false
 }
 
 // The classification must say what AGENTS.md says: when its docs-only rule
-// changes, this test points at policyNames and docsOnlyReason.
+// changes, this test points at policyNames, settingsFiles and docsOnlyReason.
 func TestDocsOnlyMatchesAgents(t *testing.T) {
 	var rule string
 	for _, line := range strings.Split(readRepoFile(t, "AGENTS.md"), "\n") {
@@ -63,7 +72,11 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 			rule = line
 		}
 	}
-	for _, want := range []string{"only `*.md` files or `docs/`", "not code, workflows, settings, Makefile or the policy files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, PR template)"} {
+	for _, want := range []string{
+		"only `*.md` files or `docs/`",
+		"not code, workflows, settings (including `docs/adr/dependencies.txt`, which `make budget` reads), Makefile or the policy files (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, PR template)",
+		"The required `docs-only` CI check",
+	} {
 		if !strings.Contains(rule, want) {
 			t.Errorf("AGENTS.md docs-only rule changed (lacks %q): update prcheck to match", want)
 		}
@@ -71,26 +84,18 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 	if len(policyNames) != 4 {
 		t.Errorf("policyNames has %d entries, AGENTS.md names 4 policy files", len(policyNames))
 	}
+	if len(settingsFiles) != 1 || !settingsFiles["docs/adr/dependencies.txt"] {
+		t.Errorf("settingsFiles %v differs from the one file AGENTS.md names", settingsFiles)
+	}
 }
 
-// Each loop box of the PR template, once ticked, must be the box prcheck
-// checks; rewording the template must not turn the check off.
-func TestTemplateBoxesAreRecognized(t *testing.T) {
-	template := readRepoFile(t, ".github/PULL_REQUEST_TEMPLATE.md")
-	want := map[box]bool{loopBox: false, externalBox: false, docsBox: false}
-	for _, line := range strings.Split(template, "\n") {
-		if !strings.HasPrefix(line, "- [ ] ") {
-			continue
-		}
-		for b := range tickedItems(strings.Replace(line, "[ ]", "[x]", 1)) {
-			if _, ok := want[b]; ok {
-				want[b] = true
-			}
+// The template's Documentation-only box, once ticked, must be the box
+// prcheck looks for; rewording the template must not turn the check off.
+func TestTemplateBoxIsRecognized(t *testing.T) {
+	for _, line := range strings.Split(readRepoFile(t, ".github/PULL_REQUEST_TEMPLATE.md"), "\n") {
+		if strings.HasPrefix(line, "- [ ] ") && docsOnlyClaimed(strings.Replace(line, "[ ]", "[x]", 1)) {
+			return
 		}
 	}
-	for b, seen := range want {
-		if !seen {
-			t.Errorf("no PR template box is recognized as box %d", b)
-		}
-	}
+	t.Error("no PR template box is recognized as the Documentation-only box")
 }

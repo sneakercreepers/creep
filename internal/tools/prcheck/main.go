@@ -42,7 +42,7 @@ func check(eventPath, filesPath string) ([]string, error) {
 	if eventPath == "" || filesPath == "" {
 		return nil, errors.New("both -event and -files are required")
 	}
-	pr, err := readEvent(eventPath)
+	body, err := readBody(eventPath)
 	if err != nil {
 		return nil, err
 	}
@@ -50,40 +50,36 @@ func check(eventPath, filesPath string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	problems := bodyProblems(pr)
-	if len(tickedItems(pr.body)[docsBox]) > 0 {
-		problems = append(problems, docsOnlyProblems(files)...)
+	if !docsOnlyClaimed(body) {
+		return nil, nil
 	}
-	return problems, nil
+	return docsOnlyProblems(files), nil
 }
 
-// readEvent decodes the pull request from a GitHub event payload. A payload
-// without one (another event) fails rather than passing unchecked.
-func readEvent(name string) (pullRequest, error) {
+// readBody returns the pull request body from a GitHub event payload. A
+// payload without a pull request (another event) fails rather than passing
+// unchecked; a pull request with no body claims nothing.
+func readBody(name string) (string, error) {
 	data, err := readBounded(name)
 	if err != nil {
-		return pullRequest{}, fmt.Errorf("read event: %w", err)
+		return "", fmt.Errorf("read event: %w", err)
 	}
 	var ev struct {
 		PullRequest *struct {
 			Number int     `json:"number"`
 			Body   *string `json:"body"`
 		} `json:"pull_request"`
-		Repository struct {
-			FullName string `json:"full_name"`
-		} `json:"repository"`
 	}
 	if err := json.Unmarshal(data, &ev); err != nil {
-		return pullRequest{}, fmt.Errorf("decode event: %w", err)
+		return "", fmt.Errorf("decode event: %w", err)
 	}
-	if ev.PullRequest == nil || ev.PullRequest.Number <= 0 || ev.Repository.FullName == "" {
-		return pullRequest{}, errors.New("event has no pull request number or repository")
+	if ev.PullRequest == nil || ev.PullRequest.Number <= 0 {
+		return "", errors.New("event has no pull request")
 	}
-	pr := pullRequest{repo: ev.Repository.FullName, number: ev.PullRequest.Number}
-	if ev.PullRequest.Body != nil {
-		pr.body = *ev.PullRequest.Body
+	if ev.PullRequest.Body == nil {
+		return "", nil
 	}
-	return pr, nil
+	return *ev.PullRequest.Body, nil
 }
 
 // readFiles splits git's NUL-separated path list; -z keeps odd names intact.

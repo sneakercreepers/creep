@@ -34,6 +34,10 @@ var buildNames = map[string]bool{
 // settingsDirs hold workflows, rulesets, repository and agent settings.
 var settingsDirs = []string{".github/", ".claude/"}
 
+// settingsFiles sit under docs/ but are settings: make budget reads the
+// dependency allowlist that backs invariant 6.
+var settingsFiles = map[string]bool{"docs/adr/dependencies.txt": true}
+
 // docsOnlyReason says why a changed path is outside the docs-only shortcut,
 // or returns "" when it fits: only *.md or docs/, and not code, workflows,
 // settings, a Makefile or a policy file.
@@ -41,6 +45,9 @@ func docsOnlyReason(p string) string {
 	lower := strings.ToLower(p)
 	if policyNames[path.Base(lower)] || hasDir(lower, policyDir) {
 		return "a policy file"
+	}
+	if settingsFiles[lower] {
+		return "a setting make budget reads"
 	}
 	for _, dir := range settingsDirs {
 		if strings.HasPrefix(lower, dir) {

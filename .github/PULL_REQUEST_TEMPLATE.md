@@ -37,6 +37,6 @@ Closes #
 
 - [ ] No AI assistance
 - [ ] AI-assisted (tool/model: ______ ). I reviewed and understand every line I'm signing off.
-- [ ] AI-assisted: ran the agent loop developer → tester → pentester → auditor. Tester verdict, security review and auditor decision: <!-- links to comments on this PR; the pr-body check needs them -->
+- [ ] AI-assisted: ran the agent loop developer → tester → pentester → auditor. Tester verdict, security review and auditor decision: <!-- links -->
 - [ ] External contributor: the pentester ran with no shared context. Maintainer PRs: skipped; the release pentest covers this change (ADR 0004).
-- [ ] Documentation-only (`*.md` or `docs/`): ran only the auditor. Auditor decision: <!-- link to a comment on this PR; the pr-body check needs it and fails on any path outside `*.md` or `docs/` -->
+- [ ] Documentation-only (`*.md` or `docs/`): ran only the auditor. Auditor decision: <!-- link; the docs-only check fails on any path outside the shortcut -->
