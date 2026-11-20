@@ -17,7 +17,7 @@ EXE := .exe
 endif
 BIN := bin/creep$(EXE)
 
-.PHONY: build test check fmt-check tidy vet budget map map-check protections rulesets clean
+.PHONY: build test check fmt-check tidy vet test386 budget map map-check protections rulesets clean
 
 # VERSION and COMMIT reach the recipe through the environment, never as shell
 # text, and are filtered to SAFE_CHARS before use.
@@ -31,7 +31,7 @@ build:
 test:
 	go test -timeout $(TEST_TIMEOUT) $(PKG)
 
-check: fmt-check tidy vet budget map-check
+check: fmt-check tidy vet test386 budget map-check
 	@# -race needs cgo; Go disables cgo when no C compiler is found (common on Windows).
 	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
 		echo "go test -race -timeout $(TEST_TIMEOUT) ./..."; go test -race -timeout $(TEST_TIMEOUT) ./...; \
@@ -52,6 +52,13 @@ tidy:
 vet:
 	go vet ./...
 	GOARCH=386 go vet ./...
+
+# Runs the packages whose bounds depend on int width as 32-bit binaries:
+# vet compiles them but cannot catch an int conversion that wraps at run
+# time (a hostile git index count, a budget limit). amd64 Linux and Windows
+# run 386 binaries natively; cgo is off, as cross builds need.
+test386:
+	CGO_ENABLED=0 GOARCH=386 go test -timeout $(TEST_TIMEOUT) ./internal/gitindex/ ./internal/gateway/
 
 # Dependency allowlist, network/exec import rules, architecture layer table,
 # non-Go sources and workspace files, module and binary caps, file length,
