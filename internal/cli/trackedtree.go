@@ -90,7 +90,7 @@ func (t *trackedIndex) tracks(root *os.Root, dir string) bool {
 // resolvesTo reports whether a tracked name in byParent, under an alias of
 // dir's parent, resolves to dir, or whether that cannot be told.
 func (t *trackedIndex) resolvesTo(root *os.Root, dir string, byParent map[string][]string) bool {
-	target, err := root.Lstat(dir)
+	target, err := recoverStat(root.Lstat)(dir)
 	if err != nil {
 		return true
 	}
@@ -100,7 +100,7 @@ func (t *trackedIndex) resolvesTo(root *os.Root, dir string, byParent map[string
 		return true
 	}
 	for _, n := range names {
-		r := cachedStat(t.lstats, root.Lstat, n)
+		r := cachedStat(t.lstats, recoverStat(root.Lstat), n)
 		switch {
 		case errors.Is(r.err, fs.ErrNotExist):
 		case r.err != nil, os.SameFile(r.info, target):
@@ -125,7 +125,7 @@ func (t *trackedIndex) aliasesOf(root *os.Root, dir string) ([]string, bool) {
 }
 
 func (t *trackedIndex) findAliases(root *os.Root, dir string) aliasResult {
-	target, err := root.Stat(dir)
+	target, err := recoverStat(root.Stat)(dir)
 	if err != nil {
 		return aliasResult{}
 	}
@@ -136,7 +136,7 @@ func (t *trackedIndex) findAliases(root *os.Root, dir string) aliasResult {
 	}
 	out := []string{}
 	for _, n := range names {
-		r := cachedStat(t.stats, root.Stat, n)
+		r := cachedStat(t.stats, recoverStat(root.Stat), n)
 		switch {
 		case errors.Is(r.err, fs.ErrNotExist):
 		case r.err != nil:
