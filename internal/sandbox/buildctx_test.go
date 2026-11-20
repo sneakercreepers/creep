@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"testing"
-	"time"
 )
 
 // secretPaths are repository files that must never reach a builder.
@@ -150,6 +149,8 @@ func TestCtrlCWhileStagingIsInterrupted(t *testing.T) {
 	s := testSandbox(t, rec)
 	var sig chan<- os.Signal
 	s.notify = func(c chan<- os.Signal) { sig = c }
+	caught := make(chan struct{})
+	s.caught = func() { close(caught) }
 	repo := (&memRepo{files: map[string]string{"Dockerfile": plainDockerfile, "a.txt": "a", "b.txt": "b"}}).repo()
 	read, reads := repo.Read, 0
 	repo.Read = func(p string) ([]byte, error) {
@@ -157,7 +158,7 @@ func TestCtrlCWhileStagingIsInterrupted(t *testing.T) {
 			t.Error("no Ctrl+C hook while staging")
 		} else if reads == 2 {
 			sig <- os.Interrupt
-			time.Sleep(100 * time.Millisecond)
+			<-caught // the build's context is canceled before the next file
 		}
 		return read(p)
 	}

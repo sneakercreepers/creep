@@ -56,6 +56,7 @@ type Sandbox struct {
 	canaries atomic.Uint64
 	notify   func(chan<- os.Signal) // signal.Notify for os.Interrupt; tests replace it
 	stop     func(chan<- os.Signal)
+	caught   func()                                       // called once Ctrl+C has canceled the context; tests wait on it
 	netArgs  func(st Status, name, runID string) []string // networkArgs; tests replace it
 	buildFor time.Duration                                // buildTimeout; tests shorten it
 
@@ -197,6 +198,9 @@ func (s *Sandbox) interruptible(ctx context.Context) (context.Context, func()) {
 		select {
 		case <-sig:
 			cancel(ErrInterrupted)
+			if s.caught != nil {
+				s.caught()
+			}
 		case <-finished:
 		}
 	}()

@@ -128,10 +128,9 @@ Why names, not `os.Root.Stat`: on Windows, Go 1.27.4's `os.Root` panics when it 
 
 | Option | Pros | Cons |
 |---|---|---|
-| A. Text, Markdown and SARIF only; JSON v1 unchanged | Follows the rule above (v0.1.0 is released, so v1 gains no field); every other format shows the reason, as with discovery's inventory (ADR 0017 D3) | A JSON consumer cannot read the reason until report v2 |
+| A. Text, Markdown and SARIF only; JSON v1 unchanged | Follows the rule above (v0.1.0 is released, so v1 gains no field); every other format shows the reason, as with discovery's inventory (ADR 0017 D3) | A JSON consumer cannot read the reason; it sees only the finding statuses |
 | B. A `run.verification` object in JSON v1 | Every format carries it | Breaks the rule above: fields are added only with a `schema_version` bump |
-| C. Report v2 now | Clean contract | A second schema and fixture for one optional field, before PoCs (#24, #25) settle what verification needs in JSON |
-| D. The reason in each probable finding's `reason` | No schema change | `reason` means why a not-evaluated finding was not decided; `creep why` and gate consumers would read verification as a gap |
+| C. The reason in each probable finding's `reason` | No schema change | `reason` means why a not-evaluated finding was not decided; `creep why` and gate consumers would read verification as a gap |
 
 **Decision:** option A.
 
@@ -139,4 +138,4 @@ Why names, not `os.Root.Stat`: on Windows, Go 1.27.4's `os.Root` panics when it 
 - The text summary prints `sandbox: verification unavailable (<reason>[: <detail>]); findings stay probable`, or that the app was built offline and PoC verification is not built yet; with another `--format` the line goes to stderr. Markdown adds a Verification section and SARIF a `creep/verification/<status>` note. With `sandbox.enabled` false nothing is printed, and every report is as before.
 - **The outcome never changes the exit code and never makes a run incomplete.** Without verification a finding stays `probable`, which is what a run without a sandbox reports (ADR 0007). A build failure that made the run incomplete would let a repository force exit 4 with a broken Dockerfile, and would make `sandbox.enabled` change results. So the build runs after the scan deadline's timer is disarmed, under its own context that ends at the same deadline: a slow build is `budget` here and never cuts the analysis.
 
-JSON v1 and its schema do not change, and no report v2 is opened for this: the maintainer decided on #278 (2026-11-20) that JSON v1 stays unchanged and rejected option C. A JSON consumer reads the sandbox's effect only through finding statuses (`verified` once PoCs exist, #24, #25); the reason stays in text, Markdown and SARIF.
+JSON v1 and its schema stay unchanged, by the maintainer's decision on #278 (2026-11-20). A JSON consumer reads the sandbox's effect only through finding statuses (`verified` once PoCs exist, #24, #25); the reason stays in text, Markdown and SARIF.
