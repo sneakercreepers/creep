@@ -110,19 +110,21 @@ var lookupNames = map[string]bool{
 // makes it read like a password.
 var referencePathRe = regexp.MustCompile(`^[A-Za-z_$]{1,32}(?:\.[A-Za-z_$]{1,32})+$`)
 
-// referenceReceivers are the objects config and request values are read
+// referenceReceivers are the config and environment objects values are read
 // from, as the whole first segment of a path, spelled exactly so: a
-// capitalized word (This.Is.Sparta) starts a passphrase, not code.
+// capitalized word (This.Is.Sparta) starts a passphrase, not code. Words a
+// passphrase starts with (self, this, app, my) are left out, so
+// self.password and this.is.sparta are masked (auditor A1 on #71).
 var referenceReceivers = map[string]bool{
-	"cfg": true, "config": true, "conf": true, "settings": true, "self": true, "this": true,
-	"os": true, "process": true, "env": true, "request": true, "req": true, "args": true,
-	"options": true, "opts": true, "params": true, "app": true, "ctx": true, "props": true,
+	"cfg": true, "config": true, "conf": true, "settings": true, "os": true,
+	"process": true, "env": true, "environ": true, "options": true, "opts": true,
+	"params": true, "args": true, "request": true, "props": true,
 }
 
 // referencePath reports a dotted path read from a known receiver:
-// process.env.SECRET_KEY, cfg.Secret, self.password. Any other dotted
-// value (monkey.island.sunset, user.password) may be a passphrase and is
-// masked.
+// process.env.SECRET_KEY, cfg.Secret. Any other dotted value
+// (monkey.island.sunset, user.password, self.password) may be a passphrase
+// and is masked.
 func referencePath(value string) bool {
 	first, _, _ := strings.Cut(value, ".")
 	return referencePathRe.MatchString(value) && referenceReceivers[first]

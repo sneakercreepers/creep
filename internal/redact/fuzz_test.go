@@ -67,12 +67,17 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], pw), pw
 	},
 	// A passphrase of dotted words with no digit, the shape of a config
-	// path (tester F1 on #71). Words of five letters or more cannot be a
-	// receiver name such as cfg or os.
+	// path (tester F1 on #71). Random words of five letters or more cannot be
+	// a receiver such as cfg or os; half the time a word a passphrase starts
+	// with that is not a receiver comes first (auditor A1 and A3).
 	func(rng *rand.Rand) (string, string) {
 		words := make([]string, 2+rng.IntN(3))
 		for i := range words {
 			words[i] = fakeToken(rng, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 5+rng.IntN(5))
+		}
+		if rng.IntN(2) == 0 {
+			lookalikes := []string{"self", "this", "app", "req", "ctx", "my", "Config", "ENV", "Self", "This"}
+			words = append([]string{lookalikes[rng.IntN(len(lookalikes))]}, words...)
 		}
 		pw := strings.Join(words, ".")
 		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}

@@ -57,9 +57,10 @@
 //     (PASSWORD_MIN_LENGTH = 12; DB_PASSWORD=123456 and PASSWORD_ADMIN=1234
 //     are masked); a known type name after ":", alone or around another one
 //     (password: string, Optional[str]); a dotted path of names, no digit,
-//     whose first segment is a known receiver such as cfg, config, settings,
-//     self, this, os, process, env or req (process.env.SECRET_KEY,
-//     cfg.Secret); a call or subscript left open, its arguments so far names
+//     whose first segment is, spelled exactly so, one of the config and
+//     environment receivers cfg, config, conf, settings, os, process, env,
+//     environ, options, opts, params, args, request and props
+//     (process.env.SECRET_KEY, cfg.Secret; self.password is masked); a call or subscript left open, its arguments so far names
 //     without digits, ending at a comma or a quote and closed later on the
 //     line (GenerateFromPassword(pw, cost), os.environ["X"]); a shell
 //     variable right before a path, no blank ("$PWD:/src"). The literals
@@ -68,7 +69,7 @@
 //     of a lookup, which names what it reads; the read stops at a comment
 //     and reads each line once. A value in a shape that only resembles code
 //     (hunter(2), real(PW99 + x), Optional[x99], monkey.island.sunset,
-//     user.password) is masked.
+//     this.is.sparta, user.password) is masked.
 //   - The generic-api-key rule skips a word compared with == or === (key ===
 //     "constructor"): letters, "_", "." and "-" only, as in the gitleaks
 //     allowlist. Assigned values, and compared values with any digit or other
@@ -140,6 +141,9 @@
 //     literal after "#" or "//" outside a string, read as a comment
 //     (cfg.Secret || this.#x || "..."); a literal glued to a kept value
 //     (None"..."); a no-break space before "=", and curly quotes.
+//   - A digit-free dotted passphrase that starts with one of the receivers
+//     above (config.is.sparta, env.monkey.island) reads as a config path and
+//     is sent; the password and generic rules both keep it (#71).
 //   - A value repeated in the same input: a value a rule finds only by its
 //     context (a URL password, a key's value) and that shows up again
 //     without that context later in the same Redact or File call is not
