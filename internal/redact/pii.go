@@ -12,6 +12,7 @@ var piiDetectors = []patternDetector{
 	{
 		label: "PII_EMAIL",
 		re:    regexp.MustCompile(`[^A-Za-z0-9._%+-]([A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,24})[^A-Za-z0-9-]`),
+		valid: notGitRemote,
 	},
 	{
 		label: "PII_CARD",
@@ -38,6 +39,22 @@ var piiDetectors = []patternDetector{
 		re:    regexp.MustCompile(`[^0-9A-Za-z_.-]([0-9]{3}\.?[0-9]{3}\.?[0-9]{3}-?[0-9]{2})[^0-9A-Za-z_]`),
 		valid: validCPF,
 	},
+}
+
+// gitHosts are the hosts whose SSH remotes are git@<host>.
+var gitHosts = map[string]bool{
+	"github.com": true, "gitlab.com": true, "bitbucket.org": true, "codeberg.org": true,
+	"gitea.com": true, "ssh.dev.azure.com": true, "vs-ssh.visualstudio.com": true,
+	"heroku.com": true, "git.sr.ht": true,
+}
+
+// notGitRemote rejects the user part of an SSH remote, git@github.com:org/r:
+// the user git at a well-known git host, or at a host whose first label
+// starts with "git" (git.example.com, gitlab.corp.example). No person owns
+// it. Any other address at those hosts is a person's and is masked (#71).
+func notGitRemote(email string) bool {
+	user, host, _ := strings.Cut(strings.ToLower(email), "@")
+	return user != "git" || !gitHosts[host] && !strings.HasPrefix(host, "git")
 }
 
 func digitsOnly(s string) string {

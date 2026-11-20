@@ -58,6 +58,14 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		forms := []string{"%s=%s", "%s: %s", "%s = \"%s\"", "%s := '%s'", "\"%s\": \"%s\"", "%s => `%s`"}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], keys[rng.IntN(len(keys))], pw), pw
 	},
+	// A literal after a value kept as code (#71): a fallback, a lookup's
+	// default, an initializer after a type.
+	func(rng *rand.Rand) (string, string) {
+		pw := fakePassword(rng)
+		forms := []string{`password = None or "%s"`, `SECRET = os.environ.get("X", "%s")`,
+			`password: str = '%s'`, `secret := cfg.Secret + "%s"`, "password = decrypt(`%s`)"}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], pw), pw
+	},
 }
 
 // fakePassword mixes letters, digits and the punctuation people put in

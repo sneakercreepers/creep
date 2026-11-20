@@ -41,12 +41,13 @@ func TestRedactURLCredentials(t *testing.T) {
 }
 
 // The email detector also matches the tail of the password ("x@db.internal");
-// the merged span must cover the whole password and keep the secret label.
+// the merged span must cover the whole password and the host, and the
+// password keeps its own marker (#71).
 func TestRedactURLPasswordOverlappingEmail(t *testing.T) {
 	r := newRedactor(t)
 	pw := urlPassword + "x"
 	out := mustRedact(t, r, "postgres://admin:"+pw+"@db.internal\n")
-	if out != "postgres://admin:<SECRET_URL_PASSWORD_1>\n" {
+	if out != "postgres://admin:<SECRET_URL_PASSWORD_1><PII_EMAIL_1>\n" {
 		t.Fatalf("got %q", out)
 	}
 	// The password alone in a later fragment is still known.

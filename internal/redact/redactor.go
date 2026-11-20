@@ -111,7 +111,7 @@ func (r *Redactor) finish(text string, found []span) (string, error) {
 	}
 	r.state.call = callShare{}
 	found = append(found, withoutFormat(text, r.state.index.find)...)
-	out := r.state.render(text, mergeSpans(found))
+	out := r.state.render(text, mergeSpans(found), found)
 	r.state.rememberParts(text, found)
 	switch {
 	case r.state.full:
@@ -125,8 +125,8 @@ func (r *Redactor) finish(text string, found []span) (string, error) {
 }
 
 // rememberParts gives a marker to each value that was masked only as part of
-// a merged span (a URL password run into an email), so the sweep still masks
-// it when it shows up alone in a later fragment.
+// a merged span (a GitHub token found inside a longer generic value), so the
+// sweep still masks it when it shows up alone in a later fragment.
 //
 // A private key's body inside the same key with its header is not stored
 // again: it would double the bytes an unterminated key costs the run (#105),
@@ -240,46 +240,6 @@ func (s detectorSet) find(text string) []span {
 		found = append(found, d.scan(text)...)
 	}
 	return append(found, s.findEncoded(text)...)
-}
-
-// mergeSpans sorts spans and joins overlapping ones, so every secret byte is
-// covered even when two rules disagree on the bounds. The most specific label
-// (labelRank) names the merged span, so a URL password that runs into an
-// email is one secret, and a GitHub token is not called a generic key.
-func mergeSpans(spans []span) []span {
-	sort.Slice(spans, func(i, j int) bool {
-		if spans[i].start != spans[j].start {
-			return spans[i].start < spans[j].start
-		}
-		return spans[i].end > spans[j].end
-	})
-	var out []span
-	for _, s := range spans {
-		last := len(out) - 1
-		if last >= 0 && s.start < out[last].end {
-			out[last].end = max(out[last].end, s.end)
-			if labelRank(s.label) > labelRank(out[last].label) {
-				out[last].label = s.label
-			}
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-// render writes the escaped text with each span replaced by its marker.
-func (s *runState) render(text string, spans []span) string {
-	var b strings.Builder
-	b.Grow(len(text))
-	prev := 0
-	for _, sp := range spans {
-		writeEscaped(&b, text[prev:sp.start])
-		b.WriteString(s.marker(text[sp.start:sp.end], sp.label))
-		prev = sp.end
-	}
-	writeEscaped(&b, text[prev:])
-	return b.String()
 }
 
 // marker returns the value's marker, assigning the next number for its label
