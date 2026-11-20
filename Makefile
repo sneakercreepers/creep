@@ -47,8 +47,11 @@ fmt-check:
 tidy:
 	go mod tidy -diff
 
+# GOARCH=386 keeps 32-bit builds compilable: an untyped constant above
+# 2^31-1 in an int position fails there and nowhere else (#145).
 vet:
 	go vet ./...
+	GOARCH=386 go vet ./...
 
 # Dependency allowlist, network/exec import rules, architecture layer table,
 # non-Go sources and workspace files, module and binary caps, file length,

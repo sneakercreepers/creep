@@ -302,7 +302,7 @@ func planBudget(maxTokens int, tier reader.Tier) planner.Budget {
 	}
 	tokens := uint32(0)
 	if maxTokens > 0 {
-		tokens = uint32(min(maxTokens, math.MaxUint32)) //nolint:gosec // G115: clamped to the uint32 range
+		tokens = uint32(min(uint64(maxTokens), math.MaxUint32)) //nolint:gosec // G115: clamped to the uint32 range
 	}
 	return planner.Budget{Tokens: tokens, StepTokens: uint32(call + replyTokens)} //nolint:gosec // G115: a few thousand
 }

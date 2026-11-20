@@ -52,6 +52,13 @@ func (m *modelServer) serve(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/v1", http.StatusTemporaryRedirect)
 		return
 	}
+	if r.URL.Path == "/truncated" {
+		// A 200 whose body ends early: the client's read fails after the status.
+		w.Header().Set("Content-Length", strconv.Itoa(len(m.reply)+1))
+		_, _ = io.WriteString(w, m.reply)
+		w.(http.Flusher).Flush()
+		panic(http.ErrAbortHandler)
+	}
 	if code, ok := strings.CutPrefix(r.URL.Path, "/status/"); ok {
 		status, _ := strconv.Atoi(code)
 		w.WriteHeader(status)
