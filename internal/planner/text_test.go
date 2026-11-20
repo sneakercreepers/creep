@@ -43,7 +43,7 @@ func textCapable(t reflect.Type, path string, seen map[reflect.Type]bool) string
 // fails.
 func TestInputCarriesNoText(t *testing.T) {
 	if p := textCapable(reflect.TypeFor[Input](), "Input", map[reflect.Type]bool{}); p != "" {
-		t.Fatalf("Input can carry text through %s; the planner must receive only IDs, enums and booleans", p)
+		t.Fatalf("Input can carry text through %s; the planner must receive only IDs, enums, booleans and bounded numbers", p)
 	}
 }
 

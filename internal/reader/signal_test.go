@@ -44,7 +44,7 @@ func textCapable(t reflect.Type, path string, seen map[reflect.Type]bool) string
 // hold model text is ever added to Signal, directly or nested, this fails.
 func TestSignalCarriesNoText(t *testing.T) {
 	if p := textCapable(reflect.TypeFor[Signal](), "Signal", map[reflect.Type]bool{}); p != "" {
-		t.Fatalf("Signal can carry text through %s; the planner must receive only IDs, enums and numbers", p)
+		t.Fatalf("Signal can carry text through %s; the planner must receive only IDs, enums, booleans and bounded numbers", p)
 	}
 }
 

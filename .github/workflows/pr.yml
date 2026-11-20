@@ -1,0 +1,39 @@
+name: PR
+
+# The docs-only check (#57) fails a PR whose body ticks the
+# Documentation-only box but changes more than documentation. It reads the
+# body from the event payload on disk and the changed files from git: no API
+# call. It runs again when the body is edited, so ticking the box later is
+# checked too. Never pull_request_target: PR code must not run with a write
+# token or secrets.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-only:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Depth 2 holds the merge commit and both parents: HEAD^1 is the base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # --no-renames lists a renamed file under both paths, so moving code
+      # into docs/ still shows the code path it left.
+      - name: Changed files
+        run: git diff --no-renames --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+      - name: Docs-only scope
+        run: go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files "$RUNNER_TEMP/changed"

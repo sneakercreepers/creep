@@ -1,5 +1,5 @@
 // Package planner decides which route→sink hypotheses the reader checks,
-// and in which order, from IDs, enums and booleans only.
+// and in which order, from IDs, enums, booleans and bounded numbers only.
 //
 // It exists because the step that decides what to investigate must not be
 // steerable by the scanned repository (invariant 3, docs/architecture.md

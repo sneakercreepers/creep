@@ -116,8 +116,8 @@ func productionTransport() scanDeps {
 // secret, every request the endpoint received is in egress.log, every
 // logged call went to the replayed endpoint and the replay opened no
 // connection, the planner input built from the repository holds only IDs,
-// enums and booleans, and both runs exit with the code the exit-code table
-// gives the verdict. TestHolisticCatchesBrokenRun shows each check failing.
+// enums, booleans and bounded numbers, and both runs exit with the code the
+// exit-code table gives the verdict. TestHolisticCatchesBrokenRun shows each check failing.
 func TestHolisticReplayProtections(t *testing.T) {
 	tests := []struct {
 		name     string

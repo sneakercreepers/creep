@@ -60,21 +60,34 @@ var requiredPolicy = map[string][]string{
 	"CLAUDE.md":                        {"@AGENTS.md"},
 }
 
-// htmlComment hides text from readers, so phrases inside it do not count.
-var htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+// htmlComment hides text from readers, so phrases inside it do not count. A
+// <!-- with no closing tag hides the rest of the file in Markdown, so it ends
+// at the end of the text (#58).
+var htmlComment = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
 
 func policyProblems(cfg config) ([]string, error) {
 	return checkPolicy(cfg.root, readPolicyFile)
 }
 
-// readPolicyFile reads a regular file only; symlinks could point the guard elsewhere.
-func readPolicyFile(path string) ([]byte, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", path)
+// readPolicyFile reads root/name only when every component below root is a
+// plain directory and the last a regular file: a symlink at any level, not
+// only the last, could point the guard at another file (#58).
+func readPolicyFile(root, name string) ([]byte, error) {
+	path := root
+	parts := strings.Split(name, "/")
+	for i, part := range parts {
+		path = filepath.Join(path, part)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, err
+		}
+		last := i == len(parts)-1
+		if last && !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s is not a regular file", path)
+		}
+		if !last && info.Mode().Type() != fs.ModeDir {
+			return nil, fmt.Errorf("%s is not a plain directory", path)
+		}
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -85,7 +98,7 @@ func readPolicyFile(path string) ([]byte, error) {
 }
 
 // checkPolicy reports policy files that are missing or lost a required phrase.
-func checkPolicy(root string, read func(string) ([]byte, error)) ([]string, error) {
+func checkPolicy(root string, read func(root, name string) ([]byte, error)) ([]string, error) {
 	names := make([]string, 0, len(requiredPolicy))
 	for name := range requiredPolicy {
 		names = append(names, name)
@@ -93,7 +106,7 @@ func checkPolicy(root string, read func(string) ([]byte, error)) ([]string, erro
 	sort.Strings(names)
 	var problems []string
 	for _, name := range names {
-		data, err := read(filepath.Join(root, filepath.FromSlash(name)))
+		data, err := read(root, name)
 		if errors.Is(err, fs.ErrNotExist) {
 			problems = append(problems, fmt.Sprintf("policy: %s is missing", name))
 			continue
