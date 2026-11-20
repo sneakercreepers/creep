@@ -201,32 +201,91 @@ func setOpenHook(t *testing.T, hook func(string)) {
 	t.Cleanup(func() { testHookBeforeOpen = old })
 }
 
-// Acceptance (#113): the run directory is resolved by path once. Moving it
-// away and planting another directory at its path while the log is being
-// opened changes nothing: egress.log is created in the directory first
-// opened, never in the planted one.
-func TestRunDirResolvedOnce(t *testing.T) {
+func setDirOpenHook(t *testing.T, hook func(string)) {
+	t.Helper()
+	old := testHookBeforeDirOpen
+	testHookBeforeDirOpen = hook
+	t.Cleanup(func() { testHookBeforeDirOpen = old })
+}
+
+// A directory swapped in at the run directory's path between its Lstat and
+// its open is refused by the same-directory check (#113).
+func TestRunDirSwapRefused(t *testing.T) {
 	dir := runDir(t)
-	moved := filepath.Join(t.TempDir(), "moved")
-	setOpenHook(t, func(string) {
-		if err := os.Rename(dir, moved); err != nil {
-			t.Skipf("cannot move an open directory here: %v", err)
+	setDirOpenHook(t, func(path string) {
+		if path != dir {
+			return
+		}
+		if err := os.Rename(dir, filepath.Join(t.TempDir(), "moved")); err != nil {
+			t.Fatal(err)
 		}
 		if err := os.Mkdir(dir, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	})
 	l, err := OpenEgressLog(dir, nil, nil)
-	if err != nil {
-		t.Fatalf("OpenEgressLog: %v", err)
+	if err == nil {
+		_ = l.Close()
 	}
-	t.Cleanup(func() { _ = l.Close() })
-	if _, err := os.Lstat(filepath.Join(dir, egressLogName)); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("planted directory got egress.log (err = %v)", err)
+	if !errors.Is(err, ErrUnsafeLogPath) {
+		t.Fatalf("err = %v, want ErrUnsafeLogPath", err)
 	}
-	if _, err := os.Lstat(filepath.Join(moved, egressLogName)); err != nil {
-		t.Errorf("egress.log not in the directory first opened: %v", err)
+}
+
+// Acceptance (#113): the run directory is resolved by path once. Moving it
+// away and planting another directory (with its own payloads) at its path
+// after it is opened changes nothing: payloads and egress.log are used in
+// the directory first opened, never in the planted one. Windows cannot
+// rename a directory while creep holds a handle on it, so the swap is
+// impossible there and the test skips; Linux CI runs it.
+func TestRunDirResolvedOnce(t *testing.T) {
+	stages := []struct {
+		name string
+		arm  func(t *testing.T, swap func(string))
+	}{
+		{"before payloads", func(t *testing.T, swap func(string)) {
+			setDirOpenHook(t, func(path string) {
+				if filepath.Base(path) == payloadDirName {
+					swap(path)
+				}
+			})
+		}},
+		{"before egress.log", func(t *testing.T, swap func(string)) { setOpenHook(t, swap) }},
 	}
+	for _, st := range stages {
+		t.Run(st.name, func(t *testing.T) {
+			dir := runDir(t)
+			moved := filepath.Join(t.TempDir(), "moved")
+			st.arm(t, func(string) { plantRunDir(t, dir, moved) })
+			l, err := OpenEgressLog(dir, nil, nil)
+			if err != nil {
+				t.Fatalf("OpenEgressLog: %v", err)
+			}
+			t.Cleanup(func() { _ = l.Close() })
+			payload, err := l.writePayload("swap", []byte("x"))
+			if err != nil {
+				t.Fatalf("writePayload: %v", err)
+			}
+			for _, name := range []string{egressLogName, payload} {
+				if _, err := os.Lstat(filepath.Join(dir, name)); !errors.Is(err, fs.ErrNotExist) {
+					t.Errorf("planted directory got %s (err = %v)", name, err)
+				}
+				if _, err := os.Lstat(filepath.Join(moved, name)); err != nil {
+					t.Errorf("%s not in the directory first opened: %v", name, err)
+				}
+			}
+		})
+	}
+}
+
+// plantRunDir moves the run directory to moved and plants a private one,
+// with an empty payloads directory, at its path.
+func plantRunDir(t *testing.T, dir, moved string) {
+	if err := os.Rename(dir, moved); err != nil {
+		t.Skipf("cannot move an open directory here: %v", err)
+	}
+	mkdir(t, filepath.Dir(dir), filepath.Base(dir))
+	mkdir(t, dir, payloadDirName)
 }
 
 // A log with a second hard link is refused on every OS: the count is read

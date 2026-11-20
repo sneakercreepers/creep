@@ -206,6 +206,8 @@ func TestPublicAddrISATAP(t *testing.T) {
 		{"2001:470::300:5efe:c0a8:101", false},  // 192.168.1.1, both bits
 		{"2001:470::5efe:5db8:d822", true},      // a public IPv4
 		{"2001:470::400:5efe:a00:1", true},      // first byte not 00-03: not ISATAP
+		{"2001:470::1:5efe:a00:1", true},        // second byte not 00: not ISATAP
+		{"2001:470::5dfe:a00:1", true},          // 5d, not 5e: not ISATAP
 		{"2001:470::5eff:a00:1", true},          // not 5efe: not ISATAP
 		{"fe80::5efe:5db8:d822", false},         // public IPv4, link-local prefix
 		{"2001:470:64::7f00:1", true},           // undecodable NAT64 prefix: known limit

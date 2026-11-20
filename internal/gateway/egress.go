@@ -29,6 +29,10 @@ var ErrUnsafeLogPath = errors.New("unsafe egress log path")
 // tests can swap the file in that window.
 var testHookBeforeOpen = func(string) {}
 
+// testHookBeforeDirOpen runs between the Lstat of the run or payload
+// directory and its open, so tests can swap the directory in that window.
+var testHookBeforeDirOpen = func(string) {}
+
 // EgressLog appends one JSON line per event to <run>/egress.log. It is safe
 // for concurrent use; each line is written with a single append and synced
 // before Send continues.
@@ -123,6 +127,7 @@ func openRunDir(path string) (*os.Root, error) {
 	if err := checkDir(path, before, 0o022); err != nil {
 		return nil, err
 	}
+	testHookBeforeDirOpen(path)
 	root, err := os.OpenRoot(path)
 	if err != nil {
 		return nil, fmt.Errorf("egress log dir: %w", err)
@@ -135,6 +140,7 @@ func openRunDir(path string) (*os.Root, error) {
 // entry itself, so the identity compared is never loaded later by path.
 func openPayloadDir(run *os.Root) (*os.Root, error) {
 	name := filepath.Join(run.Name(), payloadDirName)
+	testHookBeforeDirOpen(name)
 	err := run.Mkdir(payloadDirName, payloadDirMode)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return nil, fmt.Errorf("egress payload dir: %w", err)
