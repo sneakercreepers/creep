@@ -3,9 +3,9 @@
 - **Status:** Accepted
 - **Date:** 2026-11-13
 - **Deciders:** @Ludocius
-- **Amended by:** [ADR 0004](0004-pentester-per-release.md) (pentester once per version and on external pull requests), [ADR 0005](0005-auditor-architecture-review.md) (auditor duties)
+- **Amended by:** [ADR 0004](0004-pentester-per-release.md) (pentester once per version and on external pull requests), [ADR 0005](0005-auditor-architecture-review.md) (auditor duties), [ADR 0006](0006-three-features-in-flight.md) (merge concurrency)
 
-> **Amended.** The pentester scope below ("only on security-sensitive issues") is replaced by [ADR 0004](0004-pentester-per-release.md); [ADR 0005](0005-auditor-architecture-review.md) adds the auditor's architecture review. Shared context for the developer, tester and auditor, and the pentester's isolation, still stand. This record is kept as decided.
+> **Amended.** The pentester scope below ("only on security-sensitive issues") is replaced by [ADR 0004](0004-pentester-per-release.md); [ADR 0005](0005-auditor-architecture-review.md) adds the auditor's architecture review; [ADR 0006](0006-three-features-in-flight.md) allows up to three features in flight. Shared context for the developer, tester and auditor, and the pentester's isolation, still stand. This record is kept as decided.
 
 ## Context
 
