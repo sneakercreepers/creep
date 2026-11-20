@@ -96,6 +96,8 @@ A package may import only packages in **lower** layers and only those listed in 
 
 These follow semver once v1.0 ships. Before then, any change needs a note in the PR and, if the change breaks a contract, an ADR.
 
+One exception is settled so later PRs need not decide it: narrowing what the project file (the scanned repository's `creep.yaml`, the untrusted layer) may set or raise is a security fix, not a contract break. It needs no new ADR; it is recorded in the PR contract note, the `breaking` label when an existing `creep.yaml` stops loading, and the threat model (R4, R5, with the test that pins it), and an ADR whose decision it changes gets an `Amended by` line (as ADR 0013 by #62). Changing which keys or values the operator's layers (user file, `--config`, policy) accept still needs an ADR when it breaks the contract.
+
 | Contract | Where | Versioning |
 |---|---|---|
 | CLI flags and exit codes | `cli`, `exitcode` | semver |
@@ -142,7 +144,7 @@ Evidence from 2026-11-13 (lines are source/test, churn is commits on `main`).
 
 ## 8. Engineering principles
 
-The developer follows these and the auditor checks every PR against them ([ADR 0005](adr/0005-auditor-architecture-review.md)). They are defaults, not rules to force: a deviation with a stated reason is fine.
+The developer follows these and the auditor checks every PR against them ([ADR 0005](adr/0005-auditor-architecture-review.md)). The principles below are defaults, not rules to force: a deviation from one of them with a stated reason is fine. The layer table (§3), the stable contracts (§4) and the AGENTS.md invariants are not defaults, and no stated reason waives them: a new package adds its own row to the layer table, but loosening an existing row, breaking a contract or changing an invariant needs an ADR first ([ADR 0003](adr/0003-architecture-layers.md)).
 
 - **Patterns** only where they remove real duplication or coupling. Name the problem first; never add a pattern for its own sake.
 - **Modularity.** Small packages with one reason to exist (`doc.go` says which). Deep modules: a narrow exported API hiding real work. The layer table in §3 is respected.
@@ -158,7 +160,7 @@ Automated checks that guard an architectural property. A new property needs a ch
 | Property | Check | Where it runs |
 |---|---|---|
 | Only `gateway` reaches the network (invariant 1) | Net/exec/syscall/`go/build` import rules (`internal/tools/budget/imports.go`, `procs.go`); transitive reach of package net and of process starts over the import graphs of every release build (linux, darwin, windows × amd64, arm64, cgo off; `TestReachTargetsMatchRelease` fails when `.goreleaser.yaml` or the CI matrix drifts) and of the Linux CI build (cgo on) (`listing.go`, `reach.go`, `procreach.go`: per package, deliberately conservative: reaching `os/exec`, `internal/tools`, or a third-party package with any raw-call import, `os.StartProcess`, or a non-Go file such as assembly or a `.syso` (unless reviewed in `nonGoAllowed`, empty today) counts, #43). **Residual:** a main-module file for another platform (freebsd) or a custom build tag, and a third-party import found only in a dependency's ignored files, are outside those graphs; none reaches a release binary or a CI run; depguard as editor feedback | `make budget`, CI `budget` and `lint` |
-| No dependency without an ADR (invariant 6) | Dependency allowlist vs `docs/adr/dependencies.txt` for direct requires and `tool` directives; a versioned `replace` to another module needs that module's entry (#45, #46); `go mod tidy -diff` | `make check`, CI `budget` |
+| No dependency without an ADR (invariant 6) | Dependency allowlist vs `docs/adr/dependencies.txt` for direct requires and `tool` directives; a versioned `replace` to another module needs that module's entry (#45, #46); `go mod tidy -diff`, so a used module cannot hide as `// indirect` (`make check` must run it: `internal/tools/budget/gateway_rule_test.go:TestMakeCheckRunsBudget`) | Allowlist: `make budget`, CI `budget`; `go mod tidy -diff`: `make check`, CI `test` |
 | Small, auditable build | Module-graph and release-binary caps; no non-Go sources, `go.work`, `vendor/` or local replace | `make budget` |
 | Small files | Go file cap of 400 lines, build-tagged files included (`lineProblems`) | `make budget` |
 | Agent loop cannot erode | Pinned policy phrases in AGENTS.md, CONTRIBUTING.md, PR template (`policy.go`) | `make budget` |

@@ -3,6 +3,7 @@
 - **Status:** Proposed | Accepted | Superseded by ADR-NNNN
 - **Date:** YYYY-MM-DD
 - **Deciders:** @handle
+- **Amends:** ADR-NNNN (only when this ADR changes part of an earlier one; add a matching **Amended by:** line to that ADR's header)
 
 ## Context
 
