@@ -8,7 +8,7 @@ import (
 )
 
 // htmlComment hides text from readers. A <!-- with no closing tag hides the
-// rest of the body in Markdown, so it ends at the end of the text.
+// rest of the text in Markdown, so it ends at the end of the text.
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
 
 // taskItem matches a task-list item; group 1 is the box, group 2 the text.
@@ -48,14 +48,16 @@ type pullRequest struct {
 	body   string
 }
 
-// tickedItems returns the visible text of each ticked task item, with its
-// continuation lines, keyed by the loop box it names.
+// tickedItems returns the text of each ticked task item, with its
+// continuation lines, keyed by the loop box it names. Boxes are found in the
+// raw body: a parser that guessed a comment where GitHub renders code (a
+// `<!--` code span) would otherwise hide a ticked box and pass. Links are
+// read only from visible text (countLinks).
 func tickedItems(body string) map[box][]string {
-	visible := htmlComment.ReplaceAllString(strings.ReplaceAll(body, "\r\n", "\n"), "")
 	items := map[box][]string{}
 	current := -1
 	var texts []string
-	for _, line := range strings.Split(visible, "\n") {
+	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
 		if m := taskItem.FindStringSubmatch(line); m != nil {
 			current = -1
 			if m[1] != " " {
@@ -89,10 +91,12 @@ func classifyItem(text string) box {
 	return noBox
 }
 
-// countLinks counts distinct links to comments on this PR in text.
+// countLinks counts distinct links to comments on this PR in the visible
+// part of text: a link inside an HTML comment, closed or not, is no link.
 func countLinks(text string, pr pullRequest) int {
 	seen := map[string]bool{}
-	for _, m := range commentLink.FindAllStringSubmatch(text, -1) {
+	visible := htmlComment.ReplaceAllString(text, "")
+	for _, m := range commentLink.FindAllStringSubmatch(visible, -1) {
 		n, err := strconv.Atoi(m[2])
 		if err != nil || n != pr.number || !strings.EqualFold(m[1], pr.repo) {
 			continue

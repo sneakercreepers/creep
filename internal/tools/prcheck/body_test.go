@@ -42,6 +42,8 @@ func TestBodyProblems(t *testing.T) {
 		{"loop links to the PR, not a comment", loopLine + "https://github.com/sneakercreepers/creep/pull/7 https://github.com/sneakercreepers/creep/pull/7/files", "links 0 comment(s)"},
 		{"loop links after a blank line", loopLine + "\n\n" + tester + " " + auditor, "links 0 comment(s)"},
 		{"loop links in the next item", loopLine + "\n- " + tester + " " + auditor, "links 0 comment(s)"},
+		{"code span that opens a comment before the box", "Strip from an unclosed `<!--` on.\n" + loopLine + "pending", "agent-loop box links 0"},
+		{"box inside a comment still counts", "<!--\n" + loopLine + "pending\n-->", "agent-loop box links 0"},
 		{"free-form loop box", "- [X] **AI-assisted:** agent loop developer → tester → auditor.", "agent-loop box links 0"},
 		{"loop box with another bullet", "* [x] AI-assisted: loop", "agent-loop box links 0"},
 		{"external needs the security review", loopLine + tester + " " + auditor + "\n" + externalLine, "it needs 3"},

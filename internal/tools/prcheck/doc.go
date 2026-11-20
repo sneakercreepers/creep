@@ -18,8 +18,10 @@
 // It reads only the event payload GitHub writes to disk and the changed-file
 // list from git, so it makes no network call. A link counts when it names
 // this repository, this PR and a comment, review or review comment anchor; a
-// placeholder, a bare URL or a link to another PR does not. Text inside HTML
-// comments, including an unclosed one, is invisible and never counts.
+// placeholder, a bare URL or a link to another PR does not, nor does a link
+// inside an HTML comment, closed or not. A ticked box counts wherever it is,
+// even where a comment might hide it, so hiding text never switches the
+// check off.
 //
 // It is a static backstop for honest mistakes, not proof: it cannot see that
 // a linked comment exists or which head it judged, and a PR controls the code
