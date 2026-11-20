@@ -70,8 +70,9 @@ func TestEmbeddedCatalogCoversEveryClassAndLanguage(t *testing.T) {
 // from the guard that refuses other input down to the sink is checked, so
 // caller input cannot come back on a line that builds the sink's argument:
 // the command twins send only an allowlisted value, the fetch twins the
-// URL they checked (host and port fixed), and the SQL twin binds a scalar
-// scoped to the logged-in owner.
+// URL they checked (host and port fixed), the SQL twin binds a scalar
+// scoped to the logged-in owner, and the merge twin writes only into own,
+// prototype-free objects.
 func TestSafeTwinsCleanInEveryClass(t *testing.T) {
 	cat, err := defaultCatalog()
 	if err != nil {
@@ -88,6 +89,10 @@ func TestSafeTwinsCleanInEveryClass(t *testing.T) {
 		{"py-ssrf-fetch", "abort(400)", []string{"raw", "request.", placeholderMark}, []string{`urlunsplit(("https", parts.hostname`, "requests.get(rebuilt"}},
 		{"js-ssrf-fetch", `target.port !== ""`, []string{"req.", placeholderMark}, []string{"fetch(target,"}},
 		{"js-sqli-concat", "requireLogin, (req, res)", []string{"[req.query.", ", req.query."}, []string{"[req.session.ownerId, String(req.query."}},
+		// Recursing into an inherited key would merge into a shared
+		// built-in (Object.prototype.toString), so only own objects are
+		// merged into and new levels have no prototype.
+		{"js-prototype-merge", `key === "__proto__"`, []string{"|| {}", "= {}"}, []string{"Object.hasOwn(target, key)", "Object.create(null)", "(next, source[key])"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {

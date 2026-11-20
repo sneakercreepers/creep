@@ -32,7 +32,8 @@
 //     penalize the best models (#162). Caller input reaches a sink only in
 //     a form the sink cannot misread: an allowlisted value, the value that
 //     was checked, a bound scalar parameter or a path confined to a root;
-//     a twin that reads per-owner rows scopes them to the logged-in owner.
+//     a twin that reads per-owner rows scopes them to the logged-in owner,
+//     and a merge writes only into own, prototype-free objects.
 //
 // Templates hold no real secret or hostname; hosts use the reserved
 // .invalid top-level domain.
