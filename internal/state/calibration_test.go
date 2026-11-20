@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -123,6 +124,46 @@ func TestCalibrationLinkRefused(t *testing.T) {
 	}
 	if _, ok, err := s.LoadCalibration(calKeyA); ok || !errors.Is(err, ErrUnsafePath) {
 		t.Fatalf("load via link: ok=%v err=%v; want ErrUnsafePath", ok, err)
+	}
+}
+
+// A calibrations/ directory that is a link or a file is a hard error on
+// load and on save, never followed, and the error names the absolute path
+// to remove (#180): recalibrating cannot replace it.
+func TestUnsafeCalibrationDirNamesPath(t *testing.T) {
+	tests := []struct {
+		name  string
+		plant func(t *testing.T, dir string)
+	}{
+		{"link to a directory outside", func(t *testing.T, dir string) {
+			if err := os.Symlink(t.TempDir(), dir); err != nil {
+				t.Skipf("symlink: %v", err)
+			}
+		}},
+		{"link to a directory inside", func(t *testing.T, dir string) {
+			inside := filepath.Join(filepath.Dir(dir), "elsewhere")
+			if err := os.Mkdir(inside, dirMode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(inside, dir); err != nil {
+				t.Skipf("symlink: %v", err)
+			}
+		}},
+		{"a file", func(t *testing.T, dir string) { writeFile(t, dir, []byte("not a directory")) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := openStore(t)
+			dir := filepath.Join(s.dir, calibrationsDir)
+			tt.plant(t, dir)
+			_, ok, loadErr := s.LoadCalibration(calKeyA)
+			saveErr := s.SaveCalibration(calKeyA, Calibration{At: calAt, Result: json.RawMessage(`{}`)})
+			for op, err := range map[string]error{"load": loadErr, "save": saveErr} {
+				if ok || !errors.Is(err, ErrUnsafePath) || !strings.Contains(err.Error(), strconv.Quote(dir)) {
+					t.Errorf("%s: ok=%v err=%v; want ErrUnsafePath naming %q", op, ok, err, dir)
+				}
+			}
+		})
 	}
 }
 

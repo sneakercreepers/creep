@@ -187,6 +187,8 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `--price-in <n>` / `--price-out <n>` | `estimate` and `--stats`: price per 1M input/output tokens, for a cost |
 | `--format`, `--log-level` | Output format (`text`, `json`, `sarif`, `markdown`) and log level |
 
+**Calibration cache.** A calibration is kept in your user cache directory for `calibration.cache_days` (default 30) and reused only for the same contract, endpoint, model name, structured-output mode, max output tokens and retries, and the same creep task set and prompts; changing any of them calibrates again. creep cannot see which snapshot a model name points to: a dated name (`model-2025-06-01`) gets its own entry, but an alias such as `-latest` that the provider moves to a new snapshot keeps its cached tier until the entry expires. Pin a dated model name, or pass `--recalibrate` after the provider updates the alias. The `calibration:` line of `creep scan` shows the tier and, when the context probe stopped early, the size and reason (for example `8 KiB probe: HTTP 400`, which holds the model at tier S). A `calibrations/` cache directory that is a link or junction is refused before any model call, also with `--recalibrate`; the error names the directory to remove.
+
 ## Output and exit codes
 
 `creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason.

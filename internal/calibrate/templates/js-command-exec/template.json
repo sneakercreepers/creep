@@ -9,5 +9,5 @@
     "field": ["dir", "folder", "source", "project", "workspace", "subdir"]
   },
   "vulnerable": {"sink_line": 6, "marker": "exec(\""},
-  "safe": {"sink_line": 6, "marker": "execFile(\""}
+  "safe": {"sink_line": 9, "marker": "execFile(\""}
 }

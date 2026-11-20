@@ -195,6 +195,12 @@ func TestUntrustedCacheRecalibrates(t *testing.T) {
 				return regexpReplace(s, `"task_set":"[0-9a-f]+"`, `"task_set":"00"`)
 			}))
 		}},
+		{"context stop forged", func(t *testing.T, _ *cacheEnv, path string) {
+			b, _ := os.ReadFile(path)
+			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {
+				return regexpReplace(s, `"effective_bytes":131072`, `"effective_bytes":131072,"status":400`)
+			}))
+		}},
 		{"unknown result field", func(t *testing.T, _ *cacheEnv, path string) {
 			b, _ := os.ReadFile(path)
 			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {

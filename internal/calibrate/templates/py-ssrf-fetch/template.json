@@ -10,5 +10,5 @@
     "field": ["url", "link", "src", "target", "location", "feed"]
   },
   "vulnerable": {"sink_line": 16, "marker": "requests.get(raw, timeout=5)"},
-  "safe": {"sink_line": 16, "marker": "allow_redirects=False"}
+  "safe": {"sink_line": 17, "marker": "allow_redirects=False"}
 }

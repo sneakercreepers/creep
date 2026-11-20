@@ -16,7 +16,9 @@ import (
 // with no network and no key. The fixture is a tier-M model: it misses two
 // prototype_pollution tasks, points one sqli answer three lines off, flags
 // one safe idor twin, answers one ssrf twin invalidly twice, passes every
-// tool probe and fails the 128 KiB context probe.
+// tool probe and answers the 128 KiB context probe wrongly. #162 changed
+// only the request hashes of the eleven calls that send a rewritten safe
+// twin; every reply, and so the tier, is the one recorded for #90.
 func TestRunReplayIsDeterministic(t *testing.T) {
 	var first Result
 	for i := range 2 {
@@ -59,7 +61,7 @@ func checkFixtureResult(t *testing.T, r Result) {
 	}
 	checks := r.Structured == StructuredCheck{Total: 100, Invalid: 1, Passed: true} &&
 		r.Tools == ToolCheck{Probes: 3, Correct: 3, Passed: true} &&
-		r.Context.EffectiveBytes == 32<<10
+		r.Context == ContextCheck{EffectiveBytes: 32 << 10, StoppedAt: 128 << 10, Stop: ContextStopWrongAnswer}
 	if !checks {
 		t.Errorf("checks = %+v %+v %+v", r.Structured, r.Tools, r.Context)
 	}
@@ -241,26 +243,59 @@ func failContextCall(o oracle, n, status int, err error) models.SendFunc {
 	}
 }
 
+// contextReply answers like o, except that every attempt at context probe
+// n (0 for 8 KiB, 1 for 32 KiB, 2 for 128 KiB), retries included, gets
+// content.
+func contextReply(o oracle, n int, content string) models.SendFunc {
+	rep := answering(o.answer)
+	return func(ctx context.Context, call gateway.Call) (*gateway.Reply, error) {
+		if call.Purpose == purposeContext && contextProbeIndex(call.Payload) == n {
+			return &gateway.Reply{ID: "fixed", Status: 200, Body: openAIBody(content)}, nil
+		}
+		return rep.send(ctx, call)
+	}
+}
+
+// contextProbeIndex tells the probes apart by payload size: a probe is
+// just over its size, and a retry that repeats it stays below the next.
+func contextProbeIndex(payload []byte) int {
+	switch {
+	case len(payload) < 32<<10:
+		return 0
+	case len(payload) < 128<<10:
+		return 1
+	}
+	return 2
+}
+
 // A context probe refused for its size (400, 413, budget) measures the
 // context: the smaller sizes' result stands and the run gets a tier. A
-// refusal that is not about size still ends the run.
+// refusal that is not about size still ends the run. Every stop records
+// its size and reason (#174), so a 400 on the 8 KiB probe, which leaves
+// the model at tier S, is visible in the Result.
 func TestContextProbeRefusals(t *testing.T) {
 	o := newOracle(t, 1)
+	stop := func(effective, at int, why ContextStop, status int) ContextCheck {
+		return ContextCheck{EffectiveBytes: effective << 10, StoppedAt: at << 10, Stop: why, Status: status}
+	}
 	tests := []struct {
-		name      string
-		send      models.SendFunc
-		effective int
-		tier      Tier
-		want      error
+		name  string
+		send  models.SendFunc
+		check ContextCheck
+		tier  Tier
+		want  error
 	}{
-		{"400 at 128 KiB", failContextCall(o, 2, 400, nil), 32 << 10, TierM, nil},
-		{"413 at 32 KiB", failContextCall(o, 1, 413, nil), 8 << 10, TierS, nil},
-		{"400 at 8 KiB", failContextCall(o, 0, 400, nil), 0, TierS, nil},
-		{"budget at 128 KiB", failContextCall(o, 2, 0, &gateway.BudgetError{}), 32 << 10, TierM, nil},
-		{"503 at 128 KiB", failContextCall(o, 2, 503, nil), 0, "", models.ErrStatus},
-		{"not allowed at 128 KiB", failContextCall(o, 2, 0, gateway.ErrNotAllowed), 0, "", gateway.ErrNotAllowed},
-		{"no consent at 128 KiB", failContextCall(o, 2, 0, gateway.ErrNoConsent), 0, "", gateway.ErrNoConsent},
-		{"egress write at 128 KiB", failContextCall(o, 2, 0, gateway.ErrUnsafeLogPath), 0, "", gateway.ErrUnsafeLogPath},
+		{"every size answered", answering(o.answer).send, ContextCheck{EffectiveBytes: 128 << 10}, TierL, nil},
+		{"400 at 128 KiB", failContextCall(o, 2, 400, nil), stop(32, 128, ContextStopStatus, 400), TierM, nil},
+		{"413 at 32 KiB", failContextCall(o, 1, 413, nil), stop(8, 32, ContextStopStatus, 413), TierS, nil},
+		{"400 at 8 KiB", failContextCall(o, 0, 400, nil), stop(0, 8, ContextStopStatus, 400), TierS, nil},
+		{"budget at 128 KiB", failContextCall(o, 2, 0, &gateway.BudgetError{}), stop(32, 128, ContextStopBudget, 0), TierM, nil},
+		{"wrong answer at 32 KiB", contextReply(o, 1, `{"value":"wrong-value-0000"}`), stop(8, 32, ContextStopWrongAnswer, 0), TierS, nil},
+		{"invalid output at 8 KiB", contextReply(o, 0, "not json"), stop(0, 8, ContextStopInvalidOutput, 0), TierS, nil},
+		{"503 at 128 KiB", failContextCall(o, 2, 503, nil), ContextCheck{}, "", models.ErrStatus},
+		{"not allowed at 128 KiB", failContextCall(o, 2, 0, gateway.ErrNotAllowed), ContextCheck{}, "", gateway.ErrNotAllowed},
+		{"no consent at 128 KiB", failContextCall(o, 2, 0, gateway.ErrNoConsent), ContextCheck{}, "", gateway.ErrNoConsent},
+		{"egress write at 128 KiB", failContextCall(o, 2, 0, gateway.ErrUnsafeLogPath), ContextCheck{}, "", gateway.ErrUnsafeLogPath},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -274,8 +309,11 @@ func TestContextProbeRefusals(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.Context.EffectiveBytes != tt.effective || r.Tier != tt.tier {
-				t.Errorf("effective %d tier %s, want %d %s", r.Context.EffectiveBytes, r.Tier, tt.effective, tt.tier)
+			if r.Context != tt.check || r.Tier != tt.tier {
+				t.Errorf("context %+v tier %s, want %+v %s", r.Context, r.Tier, tt.check, tt.tier)
+			}
+			if !r.Context.consistent() {
+				t.Errorf("context %+v is not consistent", r.Context)
 			}
 		})
 	}

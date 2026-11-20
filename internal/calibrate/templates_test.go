@@ -1,6 +1,7 @@
 package calibrate
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -62,6 +63,44 @@ func TestEmbeddedCatalogCoversEveryClassAndLanguage(t *testing.T) {
 	// Every template must contribute at least one pair to a run.
 	if 2*len(cat.templates) > TaskCount {
 		t.Errorf("%d templates do not fit in %d tasks", len(cat.templates), TaskCount)
+	}
+}
+
+// A safe twin has no defensible finding in any class (#162): the command
+// twins send only a value from a fixed allowlist, never a caller-chosen
+// path or name, and the fetch twin sends the URL it checked, rebuilt from
+// the parsed parts, never the raw string a second parser would read.
+func TestSafeTwinSinksTakeNoCallerValue(t *testing.T) {
+	cat, err := defaultCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		id        string
+		forbidden []string // caller input that must not reach the sink line
+		guard     string   // the line before the sink that refuses other input
+	}{
+		{"js-command-exec", []string{"req.", placeholderMark}, "sendStatus(404)"},
+		{"py-command-shell", []string{"request.", placeholderMark}, "abort(404)"},
+		{"py-ssrf-fetch", []string{"raw", "request.", placeholderMark}, "urlunsplit((\"https\", parts.hostname"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			i := slices.IndexFunc(cat.templates, func(tpl template) bool { return tpl.id == tt.id })
+			if i < 0 {
+				t.Fatalf("no template %s", tt.id)
+			}
+			safe := cat.templates[i].safe
+			sink := safe.lines[safe.sinkLine-1]
+			for _, bad := range tt.forbidden {
+				if strings.Contains(sink, bad) {
+					t.Errorf("safe sink %q passes caller input %q", sink, bad)
+				}
+			}
+			if !strings.Contains(strings.Join(safe.lines[:safe.sinkLine-1], "\n"), tt.guard) {
+				t.Errorf("safe twin lacks the guard %q before its sink", tt.guard)
+			}
+		})
 	}
 }
 
