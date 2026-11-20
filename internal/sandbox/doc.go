@@ -63,7 +63,9 @@
 //     with one fixed command line: --network=none, no build arguments,
 //     secrets, SSH agent, extra hosts or entitlements, no pull, creep's
 //     labels. Anything that stops the build is a closed reason
-//     (verification unavailable), never an error. StartApp runs the built
+//     (verification unavailable), never an error; creep scan builds once
+//     per run when the sandbox is enabled, with its own file list and
+//     reader, and reports the reason (internal/cli). StartApp runs the built
 //     image on the run network, after the canary, with the hardened
 //     profile.
 //   - Every container carries creep's labels, its run ID and its own name

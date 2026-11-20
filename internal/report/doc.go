@@ -28,6 +28,10 @@
 //   - A finding path is relative, slash-separated and clean, with no
 //     backslash or drive letter (ValidPath), so no SARIF location resolves
 //     outside %SRCROOT%; New and ReadJSON refuse any other.
+//   - The sandbox's outcome (Verification: the app was built, or
+//     verification is unavailable and why, as IDs) is stated in Markdown,
+//     SARIF and the text summary, never in JSON v1, which is frozen (ADR
+//     0009), and never makes a run incomplete: findings stay probable.
 //   - Output is deterministic (no clock, sorted findings), so a replayed run
 //     renders byte-identical reports.
 //   - ReadJSON reads a report back for `creep why` as strictly as New

@@ -53,7 +53,7 @@ type modelLink struct {
 func productionDeps() scanDeps {
 	return scanDeps{
 		connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now,
-		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean, images: sandbox.Images},
+		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean, images: sandbox.Images, open: openSandbox},
 	}
 }
 
