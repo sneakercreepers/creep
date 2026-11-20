@@ -72,8 +72,11 @@ func verify(k macKey, domain, line []byte) ([]byte, error) {
 	if n < 2 || !bytes.Equal(line[n:n+len(macField)], []byte(macField)) || !bytes.HasSuffix(line, []byte(`"}`)) {
 		return nil, fmt.Errorf("no mac: %w", ErrUnauthenticated)
 	}
-	got, err := hex.DecodeString(string(line[n+len(macField) : len(line)-2]))
-	if err != nil {
+	// Only the lowercase hex sign writes is accepted, so one line has
+	// exactly one valid encoding.
+	raw := line[n+len(macField) : len(line)-2]
+	got, err := hex.DecodeString(string(raw))
+	if err != nil || !bytes.Equal(hex.AppendEncode(nil, got), raw) {
 		return nil, fmt.Errorf("bad mac: %w", ErrUnauthenticated)
 	}
 	body := append(bytes.Clone(line[:n]), '}')

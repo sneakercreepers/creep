@@ -69,9 +69,11 @@ func OpenWithSecret(dir string, secret []byte) (*Store, error) {
 	return open(dir, secret)
 }
 
+var errSecretSize = fmt.Errorf("state dir: secret must be %d bytes", SecretBytes)
+
 func open(dir string, secret []byte) (*Store, error) {
 	if len(secret) != SecretBytes {
-		return nil, fmt.Errorf("state dir: secret must be %d bytes", SecretBytes)
+		return nil, errSecretSize
 	}
 	s, err := openDir(dir)
 	if err != nil {

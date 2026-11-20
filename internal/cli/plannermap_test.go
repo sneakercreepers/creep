@@ -94,7 +94,7 @@ func TestMethodMappingIsExhaustive(t *testing.T) {
 // planner tier is reached; an unknown tier fails closed.
 func TestTierMappingIsExhaustive(t *testing.T) {
 	reached := map[planner.Tier]bool{}
-	for _, tier := range []calibrate.Tier{calibrate.TierS, calibrate.TierM, calibrate.TierL} {
+	for _, tier := range calibrate.Tiers() {
 		p, err := plannerTier(tier)
 		if err != nil {
 			t.Fatalf("tier %s: %v", tier, err)
@@ -102,6 +102,9 @@ func TestTierMappingIsExhaustive(t *testing.T) {
 		r, err := readerTier(tier)
 		if err != nil || string(r) != string(tier) {
 			t.Fatalf("reader tier %s = %q, %v", tier, r, err)
+		}
+		if d, err := discoverTier(tier); err != nil || string(d) != string(tier) {
+			t.Fatalf("discover tier %s = %q, %v", tier, d, err)
 		}
 		reached[p] = true
 	}
@@ -165,4 +168,32 @@ func readerReportName(c reader.Class) string {
 		return string(calibrate.ClassSQLi)
 	}
 	return c.String()
+}
+
+// planBudget clamps budget.max_tokens (only checked positive by config) to
+// the planner's uint32 range: nothing at or above 2^32 wraps to a small or
+// zero budget, and nothing below 1 grants one.
+func TestPlanBudgetClampsTokens(t *testing.T) {
+	tests := []struct {
+		in   int64
+		want uint32
+	}{
+		{-1, 0},
+		{0, 0},
+		{1, 1},
+		{math.MaxInt32, math.MaxInt32},
+		{math.MaxUint32 - 1, math.MaxUint32 - 1},
+		{math.MaxUint32, math.MaxUint32},
+		{math.MaxUint32 + 1, math.MaxUint32},
+		{math.MaxInt64, math.MaxUint32},
+	}
+	for _, tt := range tests {
+		if tt.in > math.MaxInt {
+			continue // a 32-bit int cannot hold it
+		}
+		b := planBudget(int(tt.in), reader.TierS)
+		if b.Tokens != tt.want || b.StepTokens == 0 {
+			t.Errorf("planBudget(%d) = %+v; want Tokens %d and a step cost", tt.in, b, tt.want)
+		}
+	}
 }

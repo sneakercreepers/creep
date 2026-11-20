@@ -117,6 +117,16 @@ func (c ContextCheck) consistent() bool {
 	return false
 }
 
+// Tiers lists every tier assignTier can return (the default and one per
+// rule), so a package that maps tiers can test that it covers each one.
+func Tiers() []Tier {
+	tiers := []Tier{TierS}
+	for _, rule := range tierRules() {
+		tiers = append(tiers, rule.tier)
+	}
+	return tiers
+}
+
 // assignTier returns the highest tier whose rule r meets, or TierS. It
 // reads only counts and integers, so a recorded run always gets the same
 // tier on every platform.

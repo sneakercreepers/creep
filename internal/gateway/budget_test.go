@@ -55,7 +55,7 @@ func TestSendRefusesOverBudget(t *testing.T) {
 		{"run tokens, reported usage charged", BudgetOptions{MaxTokens: 150, MaxCalls: 9}, 50, usageOf(140), LimitRunTokens},
 		{"endpoint tokens", BudgetOptions{MaxTokens: 1000, MaxCalls: 9, EndpointMaxTokens: 150}, 100, nil, LimitEndpointTokens},
 		{"reported usage overflowing is capped", BudgetOptions{MaxTokens: 1000, MaxCalls: 9}, 1, func([]byte) (Usage, bool) {
-			return Usage{InputTokens: 1 << 62, OutputTokens: 1 << 62}, true
+			return Usage{InputTokens: math.MaxInt, OutputTokens: math.MaxInt}, true
 		}, LimitRunTokens},
 	}
 	for _, tt := range tests {
@@ -122,19 +122,59 @@ func TestSendNeedsBudgetAndReservation(t *testing.T) {
 }
 
 func TestNewBudgetRejects(t *testing.T) {
+	// Incremented at run time: on GOARCH=386 the constant maxBudgetLimit+1
+	// does not fit an int, and the wrapped value is refused as negative.
+	over := maxBudgetLimit
+	over++
 	for _, opts := range []BudgetOptions{
 		{MaxCalls: 1},
 		{MaxTokens: 1},
 		{MaxTokens: 1, MaxCalls: 1, EndpointMaxTokens: -1},
 		{MaxTokens: 1, MaxCalls: 1, MaxConcurrency: -1},
-		{MaxTokens: math.MaxInt, MaxCalls: 1},
-		{MaxTokens: 1, MaxCalls: maxBudgetLimit + 1},
-		{MaxTokens: 1, MaxCalls: 1, EndpointMaxTokens: maxBudgetLimit + 1},
-		{MaxTokens: 1, MaxCalls: 1, MaxConcurrency: maxBudgetLimit + 1},
+		{MaxTokens: over, MaxCalls: 1},
+		{MaxTokens: 1, MaxCalls: over},
+		{MaxTokens: 1, MaxCalls: 1, EndpointMaxTokens: over},
+		{MaxTokens: 1, MaxCalls: 1, MaxConcurrency: over},
 	} {
 		if _, err := NewBudget(opts); err == nil {
 			t.Errorf("NewBudget(%+v) succeeded", opts)
 		}
+	}
+}
+
+// Every limit is inclusive: a reservation that uses up exactly what is left
+// is admitted, and one more token is refused naming that limit.
+func TestReserveUpToTheLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		opts  BudgetOptions
+		first int
+		want  BudgetLimit
+	}{
+		{"run tokens", BudgetOptions{MaxTokens: 100, MaxCalls: 9}, 60, LimitRunTokens},
+		{"endpoint tokens", BudgetOptions{MaxTokens: 1000, MaxCalls: 9, EndpointMaxTokens: 100}, 60, LimitEndpointTokens},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newBudget(t, tt.opts)
+			for i, n := range []int{tt.first, 100 - tt.first} {
+				if err := b.reserve("k", n); err != nil {
+					t.Fatalf("reservation %d of %d tokens: %v", i, n, err)
+				}
+			}
+			var be *BudgetError
+			if err := b.reserve("k", 1); !errors.As(err, &be) || be.Limit != tt.want {
+				t.Fatalf("one token past the limit = %v, want %s", err, tt.want)
+			}
+		})
+	}
+}
+
+// MaxConcurrency 0 means a ceiling of four calls in flight per origin.
+func TestDefaultMaxConcurrency(t *testing.T) {
+	b := newBudget(t, BudgetOptions{MaxTokens: 1, MaxCalls: 1})
+	if got := b.limiter("k").max; got != 4 {
+		t.Fatalf("default AIMD ceiling = %d, want 4", got)
 	}
 }
 
@@ -223,8 +263,8 @@ func TestSpentTokens(t *testing.T) {
 		{10, 20, 100, 30},
 		{60, 40, 100, 100},
 		{100, 0, 100, 100},
-		{1 << 62, 1 << 62, 100, 100},
-		{0, 1<<63 - 1, 100, 100},
+		{math.MaxInt, math.MaxInt, 100, 100},
+		{0, math.MaxInt, 100, 100},
 	}
 	for _, tt := range tests {
 		if got := spentTokens(Usage{tt.in, tt.out}, tt.limit); got != tt.want {

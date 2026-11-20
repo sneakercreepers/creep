@@ -23,6 +23,7 @@ func TestNextLimit(t *testing.T) {
 		{"500 halves", 4, 8, http.StatusInternalServerError, 2},
 		{"halving stops at one", 1, 4, http.StatusTooManyRequests, 1},
 		{"client error keeps", 3, 4, http.StatusBadRequest, 3},
+		{"3xx keeps", 3, 4, http.StatusMultipleChoices, 3},
 		{"no signal keeps", 3, 4, 0, 3},
 	}
 	for _, tt := range tests {
@@ -42,6 +43,7 @@ func TestCongestionSignal(t *testing.T) {
 		{http.StatusOK, ErrResponseTooLarge, 0},
 		{http.StatusTooManyRequests, nil, http.StatusTooManyRequests},
 		{http.StatusBadGateway, errors.New("read body"), http.StatusBadGateway},
+		{http.StatusInternalServerError, errors.New("read body"), http.StatusInternalServerError},
 		{0, errors.New("dial"), 0},
 	}
 	for _, tt := range tests {
@@ -75,6 +77,27 @@ func TestSendAdjustsConcurrency(t *testing.T) {
 		if got != s.want {
 			t.Fatalf("step %d: after %d limit = %d, want %d", i, s.status, got, s.want)
 		}
+	}
+}
+
+// A 2xx whose body could not be read is no success: through Send it leaves
+// the concurrency limit where it was instead of growing it.
+func TestUnreadSuccessKeepsConcurrency(t *testing.T) {
+	m := newModelServer(t, `{}`)
+	b := newBudget(t, BudgetOptions{MaxTokens: 1 << 20, MaxCalls: 9, MaxConcurrency: 4})
+	dir := runDir(t)
+	l := openBudgetLog(t, dir, b)
+	if _, err := l.Send(context.Background(), m.client(t), testCall(m.url("/truncated"))); err == nil {
+		t.Fatal("Send of a truncated reply succeeded")
+	}
+	if lines := readLines(t, dir); len(lines) != 2 || lines[1]["status"] != float64(http.StatusOK) {
+		t.Fatalf("log = %v; want a result line with status 200", lines)
+	}
+	slot := b.limiter("http://127.0.0.1:" + m.port)
+	slot.mu.Lock()
+	defer slot.mu.Unlock()
+	if slot.limit != 1 {
+		t.Fatalf("limit after an unread 200 = %d, want 1", slot.limit)
 	}
 }
 

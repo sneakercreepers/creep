@@ -1,6 +1,14 @@
 package calibrate
 
-import "testing"
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+)
 
 // perfectResult is a full-marks calibration over 100 tasks.
 func perfectResult() Result {
@@ -52,4 +60,95 @@ func TestAssignTier(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Every Tier constant declared in this package is one assignTier can
+// return, so Tiers() is complete and a mapping test built on it (the CLI's
+// TestTierMappingIsExhaustive) fails when a tier is added without a mapping.
+func TestTiersListsEveryDeclaredTier(t *testing.T) {
+	listed := map[Tier]bool{}
+	for _, tier := range Tiers() {
+		if listed[tier] {
+			t.Errorf("tier %s listed twice", tier)
+		}
+		listed[tier] = true
+	}
+	declared := declaredTiers(t)
+	for _, tier := range declared {
+		if !listed[tier] {
+			t.Errorf("tier %s is declared but no tier rule returns it", tier)
+		}
+	}
+	if len(declared) != len(listed) {
+		t.Errorf("declared tiers %v, Tiers() %v", declared, Tiers())
+	}
+}
+
+// declaredTiers reads the value of every constant of type Tier in the
+// package's non-test sources.
+func declaredTiers(t *testing.T) []Tier {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tiers []Tier
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tiers = append(tiers, tierConsts(t, f)...)
+	}
+	return tiers
+}
+
+// tierConsts finds both spellings of a Tier value, `X Tier = "x"` and
+// `X = Tier("x")`. A Tier whose value is anything but a string literal
+// fails the test rather than being skipped.
+func tierConsts(t *testing.T, f *ast.File) []Tier {
+	t.Helper()
+	var tiers []Tier
+	ast.Inspect(f, func(n ast.Node) bool {
+		spec, ok := n.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		typed := isTier(spec.Type)
+		if typed && len(spec.Values) != len(spec.Names) {
+			t.Fatalf("Tier %s without a literal value", spec.Names[0])
+		}
+		for _, v := range spec.Values {
+			converted := false
+			if call, ok := v.(*ast.CallExpr); ok && isTier(call.Fun) && len(call.Args) == 1 {
+				v, converted = call.Args[0], true
+			}
+			if typed || converted {
+				tiers = append(tiers, tierLiteral(t, v))
+			}
+		}
+		return true
+	})
+	return tiers
+}
+
+func tierLiteral(t *testing.T, v ast.Expr) Tier {
+	t.Helper()
+	lit, ok := v.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		t.Fatalf("Tier with a non-literal value at %v", v.Pos())
+	}
+	s, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Tier(s)
+}
+
+func isTier(e ast.Expr) bool {
+	id, ok := e.(*ast.Ident)
+	return ok && id.Name == "Tier"
 }

@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"math"
 	"regexp"
 	"regexp/syntax"
 	"slices"
@@ -9,8 +10,9 @@ import (
 	"unicode/utf8"
 )
 
-// unbounded stands for a length no finite input bounds.
-const unbounded = 1 << 40
+// unbounded stands for a length no finite input bounds. Twice it still fits
+// a 32-bit int, so addLen cannot overflow on GOARCH=386.
+const unbounded = math.MaxInt32 / 2
 
 // extent bounds the matches of a regex node, in bytes. lead is the longest
 // run from the match start through a newline that more of the match follows;

@@ -55,6 +55,10 @@ type Call struct {
 	// ReserveTokens is charged to the Budget before anything is written or
 	// sent: the payload's input tokens plus the most output the request
 	// allows. Must be positive. The provider's reported Usage replaces it.
+	// The request's output cap (max_tokens) must not exceed the reservation:
+	// the gateway cannot read it from the payload, and an under-reserving
+	// caller can overspend by up to MaxConcurrency x MaxTokens per origin
+	// before the next call is refused.
 	ReserveTokens int
 	// Usage extracts token counts from the reply body for the result line.
 	// Provider adapters supply it; nil records no tokens.
