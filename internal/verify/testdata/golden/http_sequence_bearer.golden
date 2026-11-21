@@ -1,2 +1,2 @@
 auth "POST /api/login HTTP/1.1\r\nHost: app:8080\r\nContent-Type: application/json\r\nContent-Length: 35\r\nConnection: close\r\n\r\n{\"user\":\"creep\",\"password\":\"creep\"}"
-request "PUT /api/profile HTTP/1.1\r\nHost: app:8080\r\nAuthorization: Bearer tok.abc-123\r\nContent-Type: application/json\r\nContent-Length: 46\r\nConnection: close\r\n\r\n{\"bio\":\"<b>creep0123456789abcdef01234567</b>\"}"
+request "PUT /api/profile HTTP/1.1\r\nHost: app:8080\r\nAuthorization: Bearer tok.abc-123\r\nContent-Type: application/json\r\nContent-Length: 67\r\nConnection: close\r\n\r\n{\"bio\":\"<b>'\\\"\\u003e\\u003ccreep0123456789abcdef01234567\\u003e</b>\"}"

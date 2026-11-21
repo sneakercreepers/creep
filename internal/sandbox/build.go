@@ -183,7 +183,9 @@ func (s *Sandbox) recordImage(id string) {
 // StartApp starts an image this sandbox built on the run's internal
 // network as "app", detached, with the hardened profile, until Close. The
 // canary runs first, as before every batch: the run phase has no route
-// out. One app per run.
+// out. A file of fresh random content is mounted read-only at
+// AppCanaryFile, for a path_payload PoC to prove a read (AppCanary). One
+// app per run.
 func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 	if !app.Built() || !s.builtHere(app.Image) {
 		return fmt.Errorf("start app: not an image this sandbox built: %w", ErrSpec)
@@ -194,7 +196,11 @@ func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 	if err := s.claimApp(); err != nil {
 		return err
 	}
-	res, err := s.start(ctx, Spec{Image: app.Image, networked: true, alias: appAlias, detach: true})
+	canary, err := s.plantCanary()
+	if err != nil {
+		return fmt.Errorf("start app: %w", err)
+	}
+	res, err := s.start(ctx, Spec{Image: app.Image, Mounts: []Mount{canary}, networked: true, alias: appAlias, detach: true})
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}

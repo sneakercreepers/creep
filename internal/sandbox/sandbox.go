@@ -60,13 +60,14 @@ type Sandbox struct {
 	netArgs  func(st Status, name, runID string) []string // networkArgs; tests replace it
 	buildFor time.Duration                                // buildTimeout; tests shorten it
 
-	mu       sync.Mutex
-	network  string    // the run's network once created
-	database bool      // StartDatabase ran
-	ready    *Database // the database StartDatabase seeded, once ready
-	app      bool      // StartApp ran
-	images   []string  // image IDs Build made
-	aborted  error     // why the run was aborted (a canary failure); sticky
+	mu         sync.Mutex
+	network    string    // the run's network once created
+	database   bool      // StartDatabase ran
+	ready      *Database // the database StartDatabase seeded, once ready
+	app        bool      // StartApp ran
+	fileCanary string    // the content of the app's canary file, once planted
+	images     []string  // image IDs Build made
+	aborted    error     // why the run was aborted (a canary failure); sticky
 }
 
 // Open prepares a sandbox for runID on a usable runtime from Detect.

@@ -32,57 +32,61 @@ func header(name, value string) func(c *Call) {
 	return func(c *Call) { c.Headers = append(c.Headers, Header{Name: name, Value: value}) }
 }
 
-const reflectFixture, statusFixture = "http_request_reflect", "http_request_status"
-
 func invalidRequests() map[string]mutation {
 	m := map[string]mutation{
-		"unknown template":         {statusFixture, func(r *Request) { r.Template = "shell_EVIL" }},
-		"template in upper case":   {statusFixture, func(r *Request) { r.Template = "HTTP_REQUEST" }},
-		"template of other params": {statusFixture, func(r *Request) { r.Template = TemplateSQLPayload }},
-		"no parameters":            {statusFixture, func(r *Request) { r.HTTPRequest = nil }},
-		"two parameter sets":       {statusFixture, func(r *Request) { r.PathPayload = &PathPayload{} }},
-		"method CONNECT":           onCall(statusFixture, func(c *Call) { c.Method = "CONNECT" }),
-		"method lower case":        onCall(statusFixture, func(c *Call) { c.Method = "get" }),
-		"method with a line":       onCall(statusFixture, func(c *Call) { c.Method = "GET /EVIL HTTP/1.1\r\nHost: evil.example\r\n\r\nGET" }),
-		"absolute URL":             onCall(statusFixture, func(c *Call) { c.Path = "http://evil.example/EVIL" }),
-		"scheme-relative path":     onCall(statusFixture, func(c *Call) { c.Path = "//evil.example/EVIL" }),
-		"no leading slash":         onCall(statusFixture, func(c *Call) { c.Path = "evil.example/EVIL" }),
-		"empty path":               onCall(statusFixture, func(c *Call) { c.Path = "" }),
-		"space in path":            onCall(statusFixture, func(c *Call) { c.Path = "/a HTTP/1.1\r\nHost: evil.example\r\nX: EVIL" }),
-		"line break in path":       onCall(statusFixture, func(c *Call) { c.Path = "/a\nEVIL" }),
-		"fragment":                 onCall(statusFixture, func(c *Call) { c.Path = "/a#EVIL" }),
-		"backslash":                onCall(statusFixture, func(c *Call) { c.Path = "/\\\\evil.example\\EVIL" }),
-		"bad escape":               onCall(statusFixture, func(c *Call) { c.Path = "/%zzEVIL" }),
-		"cut escape":               onCall(statusFixture, func(c *Call) { c.Path = "/EVIL%4" }),
-		"path too long":            onCall(statusFixture, func(c *Call) { c.Path = "/" + strings.Repeat("a", maxPath) }),
-		"Host header":              onCall(statusFixture, header("Host", "evil.example")),
-		"host header lower case":   onCall(statusFixture, header("host", "evil.example")),
-		"Content-Length header":    onCall(statusFixture, header("Content-Length", "0")),
-		"Transfer-Encoding":        onCall(statusFixture, header("Transfer-Encoding", "chunked")),
-		"Connection header":        onCall(statusFixture, header("Connection", "keep-alive")),
-		"unknown header":           onCall(statusFixture, header("X-EVIL", "1")),
+		"unknown template":         {headerFixture, func(r *Request) { r.Template = "shell_EVIL" }},
+		"template in upper case":   {headerFixture, func(r *Request) { r.Template = "HTTP_REQUEST" }},
+		"template of other params": {headerFixture, func(r *Request) { r.Template = TemplateSQLPayload }},
+		"no parameters":            {headerFixture, func(r *Request) { r.HTTPRequest = nil }},
+		"two parameter sets":       {headerFixture, func(r *Request) { r.PathPayload = &PathPayload{} }},
+		"method CONNECT":           onCall(headerFixture, func(c *Call) { c.Method = "CONNECT" }),
+		"method lower case":        onCall(headerFixture, func(c *Call) { c.Method = "get" }),
+		"method with a line":       onCall(headerFixture, func(c *Call) { c.Method = "GET /EVIL HTTP/1.1\r\nHost: evil.example\r\n\r\nGET" }),
+		"absolute URL":             onCall(headerFixture, func(c *Call) { c.Path = "http://evil.example/EVIL" }),
+		"scheme-relative path":     onCall(headerFixture, func(c *Call) { c.Path = "//evil.example/EVIL" }),
+		"no leading slash":         onCall(headerFixture, func(c *Call) { c.Path = "evil.example/EVIL" }),
+		"empty path":               onCall(headerFixture, func(c *Call) { c.Path = "" }),
+		"space in path":            onCall(headerFixture, func(c *Call) { c.Path = "/a HTTP/1.1\r\nHost: evil.example\r\nX: EVIL" }),
+		"line break in path":       onCall(headerFixture, func(c *Call) { c.Path = "/a\nEVIL" }),
+		"fragment":                 onCall(headerFixture, func(c *Call) { c.Path = "/a#EVIL" }),
+		"backslash":                onCall(headerFixture, func(c *Call) { c.Path = "/\\\\evil.example\\EVIL" }),
+		"bad escape":               onCall(headerFixture, func(c *Call) { c.Path = "/%zzEVIL" }),
+		"cut escape":               onCall(headerFixture, func(c *Call) { c.Path = "/EVIL%4" }),
+		"path too long":            onCall(headerFixture, func(c *Call) { c.Path = "/" + strings.Repeat("a", maxPath) }),
+		"Host header":              onCall(headerFixture, header("Host", "evil.example")),
+		"host header lower case":   onCall(headerFixture, header("host", "evil.example")),
+		"Content-Length header":    onCall(headerFixture, header("Content-Length", "0")),
+		"Transfer-Encoding":        onCall(headerFixture, header("Transfer-Encoding", "chunked")),
+		"Connection header":        onCall(headerFixture, header("Connection", "keep-alive")),
+		"unknown header":           onCall(headerFixture, header("X-EVIL", "1")),
+		"X-Forwarded-For":          onCall(headerFixture, header("X-Forwarded-For", "127.0.0.1")),
+		"X-Forwarded-Host":         onCall(headerFixture, header("X-Forwarded-Host", "evil.example")),
+		"X-Forwarded-Proto":        onCall(headerFixture, header("X-Forwarded-Proto", "https")),
+		"Forwarded":                onCall(headerFixture, header("Forwarded", "host=evil.example")),
+		"X-Original-URL":           onCall(headerFixture, header("X-Original-URL", "/EVIL")),
+		"X-Http-Method-Override":   onCall(headerFixture, header("X-Http-Method-Override", "DELETE")),
 		"duplicate header":         onCall(reflectFixture, header("Accept", "*/*")),
-		"too many headers": onCall(statusFixture, func(c *Call) {
+		"too many headers": onCall(headerFixture, func(c *Call) {
 			for _, h := range allowedHeaders[:maxHeaders+1] {
 				c.Headers = append(c.Headers, Header{Name: h, Value: "x"})
 			}
 		}),
-		"header value with a line": onCall(statusFixture, header("Accept", "x\r\nHost: evil.example")),
-		"header value with LF":     onCall(statusFixture, header("Accept", "x\nEVIL")),
-		"empty header value":       onCall(statusFixture, header("Accept", "")),
-		"padded header value":      onCall(statusFixture, header("Accept", " EVIL")),
-		"non-ASCII header value":   onCall(statusFixture, header("Accept", "EVILé")),
-		"header value too long":    onCall(statusFixture, header("Accept", strings.Repeat("a", maxHeaderValue+1))),
-		"body without type":        onCall(statusFixture, func(c *Call) { c.Method, c.Body = "POST", "EVIL" }),
-		"unknown content type":     onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", "application/x-sh", "EVIL" }),
-		"type without body":        onCall(statusFixture, func(c *Call) { c.Method, c.ContentType = "POST", contentText }),
-		"GET with body":            onCall(statusFixture, func(c *Call) { c.ContentType, c.Body = contentText, "EVIL" }),
-		"invalid JSON":             onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentJSON, "{EVIL" }),
-		"form with space":          onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentForm, "a=EVIL b" }),
-		"body too long":            onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, strings.Repeat("a", maxBody+1) }),
-		"body with NUL":            onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, "EVIL\x00" }),
-		"body not UTF-8":           onCall(statusFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, "EVIL\xff" }),
-		"payload in http_request":  onCall(statusFixture, func(c *Call) { c.Path = "/a?b=" + PayloadPlaceholder }),
+		"header value with a line": onCall(headerFixture, header("Accept", "x\r\nHost: evil.example")),
+		"header value with LF":     onCall(headerFixture, header("Accept", "x\nEVIL")),
+		"empty header value":       onCall(headerFixture, header("Accept", "")),
+		"padded header value":      onCall(headerFixture, header("Accept", " EVIL")),
+		"non-ASCII header value":   onCall(headerFixture, header("Accept", "EVILé")),
+		"header value too long":    onCall(headerFixture, header("Accept", strings.Repeat("a", maxHeaderValue+1))),
+		"body without type":        onCall(headerFixture, func(c *Call) { c.Method, c.Body = "POST", "EVIL" }),
+		"unknown content type":     onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", "application/x-sh", "EVIL" }),
+		"type without body":        onCall(headerFixture, func(c *Call) { c.Method, c.ContentType = "POST", contentText }),
+		"GET with body":            onCall(headerFixture, func(c *Call) { c.ContentType, c.Body = contentText, "EVIL" }),
+		"invalid JSON":             onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentJSON, "{EVIL" }),
+		"form with space":          onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentForm, "a=EVIL b" }),
+		"body too long":            onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, strings.Repeat("a", maxBody+1) }),
+		"body with NUL":            onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, "EVIL\x00" }),
+		"body not UTF-8":           onCall(headerFixture, func(c *Call) { c.Method, c.ContentType, c.Body = "POST", contentText, "EVIL\xff" }),
+		"payload in http_request":  onCall(headerFixture, func(c *Call) { c.Path = "/a?b=" + PayloadPlaceholder }),
 	}
 	for name, mu := range oracleMutations() {
 		m[name] = mu
@@ -95,13 +99,17 @@ func invalidRequests() map[string]mutation {
 
 func oracleMutations() map[string]mutation {
 	return map[string]mutation{
-		"unknown oracle":     {statusFixture, func(r *Request) { r.HTTPRequest.Oracle.Kind = "always" }},
-		"status 0":           {statusFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = 0 }},
-		"status 600":         {statusFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = 600 }},
-		"status with nonce":  onCall(statusFixture, func(c *Call) { c.Path = "/a?b=" + NoncePlaceholder }),
-		"reflect, no nonce":  onCall(reflectFixture, func(c *Call) { c.Path = "/search" }),
-		"reflect and status": {reflectFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = 200 }},
-		"five nonces":        onCall(reflectFixture, func(c *Call) { c.Path = "/s?" + strings.Repeat(NoncePlaceholder, 5) }),
+		"unknown oracle":    {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Kind = "always" }},
+		"status oracle":     {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Kind = "status" }},
+		"no oracle kind":    {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Kind = "" }},
+		"status 99":         {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = 99 }},
+		"status 600":        {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = 600 }},
+		"negative status":   {headerFixture, func(r *Request) { r.HTTPRequest.Oracle.Status = -1 }},
+		"reflect, no nonce": onCall(reflectFixture, func(c *Call) { c.Path = "/search" }),
+		"five nonces":       onCall(reflectFixture, func(c *Call) { c.Path = "/s?" + strings.Repeat(NoncePlaceholder, 5) }),
+		"sequence status oracle": {"http_sequence_cookie", func(r *Request) {
+			r.HTTPSequence.Oracle = Oracle{Kind: "status", Status: 200}
+		}},
 	}
 }
 
@@ -154,7 +162,7 @@ func TestInvalidPoCRejectedBeforeRun(t *testing.T) {
 	for name, mu := range invalidRequests() {
 		t.Run(name, func(t *testing.T) {
 			req := loadRequest(t, mu.fixture)
-			if _, err := build(req, testNonce); err != nil {
+			if _, err := Build(req); err != nil {
 				t.Fatalf("the fixture itself fails: %v", err)
 			}
 			mu.change(&req)
@@ -171,7 +179,7 @@ func TestInvalidPoCRejectedBeforeRun(t *testing.T) {
 	if _, err := Run(context.Background(), runner, Target{Port: testPort}, PoC{}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("Run of a zero PoC: %v", err)
 	}
-	poc := mustBuild(t, loadRequest(t, statusFixture))
+	poc := mustBuild(t, loadRequest(t, headerFixture))
 	for _, port := range []int{0, -1, 65536} {
 		if _, err := Run(context.Background(), runner, Target{Port: port}, poc); !errors.Is(err, ErrInvalid) {
 			t.Errorf("Run on port %d: %v", port, err)
@@ -193,7 +201,7 @@ func TestBuildCopiesTheRequest(t *testing.T) {
 	if _, err := Run(context.Background(), runner, Target{Port: testPort}, poc); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(runner.requests()[0]); strings.Contains(got, "evil.example") {
+	if got := string(runner.requests()[0]); strings.Contains(got, "evil.example") || !strings.Contains(got, "\r\nHost: app:8080\r\n") {
 		t.Errorf("a change after Build reached the request: %q", got)
 	}
 }

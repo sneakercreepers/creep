@@ -1,3 +1,0 @@
-{"template": "http_request", "http_request": {
-  "request": {"method": "GET", "path": "/admin/export", "headers": [], "content_type": "", "body": ""},
-  "oracle": {"kind": "status", "status": 200}}}

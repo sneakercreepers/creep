@@ -1,0 +1,2 @@
+baseline "GET /static?f=creep-baseline.txt HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"
+payload "GET /static?f=/etc/creep-canary HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"

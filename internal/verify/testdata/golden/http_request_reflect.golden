@@ -1,1 +1,1 @@
-request "GET /search?q=creep0123456789abcdef01234567 HTTP/1.1\r\nHost: app:8080\r\nAccept: text/html\r\nConnection: close\r\n\r\n"
+request "GET /search?q=%27%22%3E%3Ccreep0123456789abcdef01234567%3E HTTP/1.1\r\nHost: app:8080\r\nAccept: text/html\r\nConnection: close\r\n\r\n"

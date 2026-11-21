@@ -116,3 +116,20 @@ func dechunk(body []byte) ([]byte, bool) {
 		body = bytes.TrimPrefix(bytes.TrimPrefix(rest[size:], []byte("\r")), []byte("\n"))
 	}
 }
+
+// html reports whether the response names a Content-Type and every one it
+// names is HTML: only there is creep's probe, unescaped, markup a browser
+// would parse.
+func (r response) html() bool {
+	types := r.values("Content-Type")
+	if len(types) == 0 {
+		return false
+	}
+	for _, v := range types {
+		media, _, _ := strings.Cut(v, ";")
+		if m := strings.ToLower(strings.TrimSpace(media)); m != "text/html" && m != "application/xhtml+xml" {
+			return false
+		}
+	}
+	return true
+}

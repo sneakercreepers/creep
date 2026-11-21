@@ -16,15 +16,16 @@ var contentTypes = map[string]string{
 	contentText: "text/plain; charset=utf-8",
 }
 
-// value is what replaces the payload placeholder: wire in a path or a
-// form body, where it must stay URL-encoded, text in a JSON string or a
+// value is what replaces a placeholder: wire in a path or a form body,
+// where it must stay URL-encoded, text in a header, a JSON string or a
 // text body.
 type value struct{ wire, text string }
 
-// fill is creep's side of one request: the nonce, the payload (or the
-// baseline's harmless value) and the session header of a sequence.
+// fill is creep's side of one request: the reflection probe, the payload
+// (or the baseline's harmless value) and the session header of a
+// sequence.
 type fill struct {
-	nonce   string
+	nonce   value
 	payload value
 	session *Header
 }
@@ -34,13 +35,13 @@ type fill struct {
 // parameter can send it anywhere else; every header line is checked text
 // (Validate, session), so none can end early.
 func render(c Call, port int, f fill) []byte {
-	path := strings.ReplaceAll(c.Path, NoncePlaceholder, f.nonce)
+	path := strings.ReplaceAll(c.Path, NoncePlaceholder, f.nonce.wire)
 	path = strings.ReplaceAll(path, PayloadPlaceholder, f.payload.wire)
 	var b strings.Builder
 	b.WriteString(c.Method + " " + path + " HTTP/1.1\r\n")
 	b.WriteString("Host: " + sandbox.AppHost + ":" + strconv.Itoa(port) + "\r\n")
 	for _, h := range c.Headers {
-		b.WriteString(h.Name + ": " + strings.ReplaceAll(h.Value, NoncePlaceholder, f.nonce) + "\r\n")
+		b.WriteString(h.Name + ": " + strings.ReplaceAll(h.Value, NoncePlaceholder, f.nonce.text) + "\r\n")
 	}
 	if f.session != nil {
 		b.WriteString(f.session.Name + ": " + f.session.Value + "\r\n")
@@ -55,17 +56,20 @@ func render(c Call, port int, f fill) []byte {
 	return []byte(b.String())
 }
 
-// renderBody places the nonce and the payload in the body, encoded for
+// renderBody places the probe and the payload in the body, encoded for
 // its content type.
 func renderBody(c Call, f fill) string {
-	body := strings.ReplaceAll(c.Body, NoncePlaceholder, f.nonce)
 	switch c.ContentType {
 	case contentForm:
-		return strings.ReplaceAll(body, PayloadPlaceholder, f.payload.wire)
+		return placeBoth(c.Body, f.nonce.wire, f.payload.wire)
 	case contentJSON:
-		return strings.ReplaceAll(body, PayloadPlaceholder, jsonText(f.payload.text))
+		return placeBoth(c.Body, jsonText(f.nonce.text), jsonText(f.payload.text))
 	}
-	return strings.ReplaceAll(body, PayloadPlaceholder, f.payload.text)
+	return placeBoth(c.Body, f.nonce.text, f.payload.text)
+}
+
+func placeBoth(body, nonce, payload string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(body, NoncePlaceholder, nonce), PayloadPlaceholder, payload)
 }
 
 // jsonText is s escaped for the inside of a JSON string.

@@ -1,1 +1,0 @@
-request "GET /admin/export HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"

@@ -31,10 +31,11 @@ var methods = []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 // allowedHeaders are the only header names a model may set, spelled
 // exactly so. Host, Content-Type, Content-Length, Connection, Transfer-
-// Encoding and every other framing or routing header are creep's.
+// Encoding, every X-Forwarded-* and Forwarded header and every other
+// framing or routing header are creep's or not sent at all.
 var allowedHeaders = []string{
 	"Accept", "Accept-Language", "Authorization", "Cookie", "Origin", "Referer",
-	"User-Agent", "X-Api-Key", "X-Csrf-Token", "X-Forwarded-For", "X-Requested-With",
+	"User-Agent", "X-Api-Key", "X-Csrf-Token", "X-Requested-With",
 }
 
 // pathByte is the alphabet of a path and query: RFC 3986 unreserved,
@@ -122,21 +123,20 @@ func (p *PathPayload) validate() error {
 	return nil
 }
 
-// validateOracle: status names a status code and holds no nonce; reflect
-// needs the nonce placeholder in the request, at most maxNonces times.
-// Neither has a payload.
+// validateOracle: the only oracle is reflect, which needs the nonce
+// placeholder in the request, at most maxNonces times, and no payload. A
+// status is optional and only narrows it: alone it would let a harmless
+// request pass for an exploited one.
 func validateOracle(o Oracle, c Call) error {
 	if placeholders(c, PayloadPlaceholder).total() > 0 {
 		return errors.New("request must not hold the payload placeholder")
 	}
 	n := placeholders(c, NoncePlaceholder).total()
-	switch {
-	case o.Kind == OracleStatus && o.Status >= 100 && o.Status <= 599 && n == 0:
-		return nil
-	case o.Kind == OracleReflect && o.Status == 0 && n >= 1 && n <= maxNonces:
+	statusOK := o.Status == 0 || o.Status >= 100 && o.Status <= 599
+	if o.Kind == OracleReflect && statusOK && n >= 1 && n <= maxNonces {
 		return nil
 	}
-	return fmt.Errorf("oracle must be status with a status from 100 to 599 and no nonce placeholder, or reflect with status 0 and the nonce placeholder 1 to %d times", maxNonces)
+	return fmt.Errorf("oracle must be reflect, with status 0 or a status from 100 to 599 the response must also have, and the nonce placeholder 1 to %d times", maxNonces)
 }
 
 // validatePayloadCall: one payload placeholder, in the path or the body,

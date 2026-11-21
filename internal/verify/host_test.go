@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 // creepHeaders are the header names creep writes itself.
@@ -110,7 +109,7 @@ func FuzzBuiltRequestStaysOnApp(f *testing.F) {
 			Request: Call{Method: "POST", Path: path, Headers: []Header{{Name: "Accept", Value: value}}, ContentType: contentJSON, Body: body},
 			Oracle:  Oracle{Kind: OracleReflect},
 		}}
-		poc, err := build(req, testNonce)
+		poc, err := Build(req)
 		if err != nil {
 			return
 		}
@@ -122,63 +121,4 @@ func FuzzBuiltRequestStaysOnApp(f *testing.F) {
 			t.Fatalf("%q: %v", runner.requests()[0], p)
 		}
 	})
-}
-
-// TestOraclesCannotBeFaked is the protection test for the oracles: an
-// app (or a model's choice of request) that always looks vulnerable is
-// not verified. A reflection must carry this PoC's nonce, not the
-// placeholder or another nonce; a delay must exceed the baseline's; the
-// file marker must be missing from the baseline; the database marker is
-// creep's table, not one the app names; no database or no answer is
-// never verified.
-func TestOraclesCannotBeFaked(t *testing.T) {
-	slow := func(string, map[string]bool) (string, time.Duration) { return ok("[]"), 3100 * time.Millisecond }
-	otherTable := func(_ string, tables map[string]bool) (string, time.Duration) {
-		tables["creep_ffffffffffffffffffffffff"], tables["items"] = true, true
-		return ok(""), fast
-	}
-	passwd := passwdApp("")
-	silentBaseline := func(req string, tables map[string]bool) (string, time.Duration) {
-		if strings.Contains(req, baselineFile) {
-			return "", fast
-		}
-		return passwd(req, tables)
-	}
-	tests := map[string]struct {
-		fixture string
-		app     app
-		target  Target
-		want    Outcome
-	}{
-		"placeholder echoed":    {reflectFixture, always(ok(NoncePlaceholder)), Target{Port: testPort}, NotVerified},
-		"another nonce":         {reflectFixture, always(ok("creepffffffffffffffffffffffff")), Target{Port: testPort}, NotVerified},
-		"nonce only in headers": {reflectFixture, always("HTTP/1.1 200 OK\r\nX-Echo: " + testNonce + "\r\n\r\n"), Target{Port: testPort}, NotVerified},
-		"slow on every request": {"sql_payload_delay", slow, Target{Port: testPort}, NotVerified},
-		"passwd everywhere":     {"path_payload_relative", passwd, Target{Port: testPort}, NotVerified},
-		"another table":         {"sql_payload_marker", otherTable, Target{Port: testPort, Database: true}, NotVerified},
-		"no database":           {"sql_payload_marker", otherTable, Target{Port: testPort}, NoDatabase},
-		"empty answer":          {statusFixture, always(""), Target{Port: testPort}, NoResponse},
-		"not HTTP":              {statusFixture, always("SSH-2.0-OpenSSH\r\n\r\n"), Target{Port: testPort}, NoResponse},
-		"no baseline answer":    {"path_payload_relative", silentBaseline, Target{Port: testPort}, NoResponse},
-		"auth refused":          {"http_sequence_cookie", always("HTTP/1.1 401 Unauthorized\r\nSet-Cookie: s=1\r\n\r\n"), Target{Port: testPort}, AuthFailed},
-		"auth without session":  {"http_sequence_cookie", always(ok("")), Target{Port: testPort}, AuthFailed},
-		"auth not HTTP":         {"http_sequence_bearer", always("garbage"), Target{Port: testPort}, NoResponse},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			runner := newFake(tt.app)
-			res, err := Run(context.Background(), runner, tt.target, mustBuild(t, loadRequest(t, tt.fixture)))
-			if err != nil || res.Outcome != tt.want {
-				t.Fatalf("Run = %s, %v; want %s", res.Outcome, err, tt.want)
-			}
-			if tt.want == NoDatabase && len(runner.sent) != 0 {
-				t.Errorf("a marker payload was sent with no database")
-			}
-			for _, table := range runner.looked {
-				if table != "creep_"+testNonce[len("creep"):] {
-					t.Errorf("looked up %s, not creep's marker", table)
-				}
-			}
-		})
-	}
 }

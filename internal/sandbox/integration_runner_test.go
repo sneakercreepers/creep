@@ -8,14 +8,15 @@ import (
 )
 
 // echoApp is a test app built offline from the pinned BusyBox: httpd
-// serves a CGI script that reflects its query string and one that answers
-// after three seconds.
+// serves a CGI script that reflects its query string, one that answers
+// after three seconds and one that reads the canary file StartApp planted.
 func echoApp() Repo {
 	return (&memRepo{files: map[string]string{
 		"Dockerfile": "FROM " + CanaryImage + "\nCOPY www /www\nRUN chmod -R a+rx /www\n" +
 			"CMD [\"httpd\", \"-f\", \"-p\", \"8080\", \"-h\", \"/www\"]\n",
-		"www/cgi-bin/echo": "#!/bin/sh\necho 'Content-Type: text/plain'\necho\necho \"q=$QUERY_STRING\"\n",
-		"www/cgi-bin/slow": "#!/bin/sh\nsleep 3\necho 'Content-Type: text/plain'\necho\necho slow\n",
+		"www/cgi-bin/echo":   "#!/bin/sh\necho 'Content-Type: text/plain'\necho\necho \"q=$QUERY_STRING\"\n",
+		"www/cgi-bin/slow":   "#!/bin/sh\nsleep 3\necho 'Content-Type: text/plain'\necho\necho slow\n",
+		"www/cgi-bin/canary": "#!/bin/sh\necho 'Content-Type: text/plain'\necho\ncat " + AppCanaryFile + "\n",
 	}}).repo()
 }
 
@@ -50,12 +51,23 @@ func TestRealRunnerReachesTheApp(t *testing.T) {
 		if r := string(got[1].Response); !strings.Contains(r, "slow") || got[1].Elapsed < 2500*time.Millisecond {
 			t.Errorf("slow: %q in %s", r, got[1].Elapsed)
 		}
+		checkCanaryRead(t, s)
 		closed, err := s.Exchange(ctx, 9, [][]byte{get("/")})
 		if err != nil || len(closed) != 1 || len(closed[0].Response) != 0 {
 			t.Errorf("closed port: %+v, %v", closed, err)
 		}
 		checkMarkerLookup(t, s)
 	})
+}
+
+// checkCanaryRead: the app's user can read the planted canary file, and
+// its content is the sandbox's.
+func checkCanaryRead(t *testing.T, s *Sandbox) {
+	t.Helper()
+	got, err := s.Exchange(context.Background(), 8080, [][]byte{get("/cgi-bin/canary")})
+	if err != nil || len(got) != 1 || len(s.AppCanary()) < 16 || !strings.Contains(string(got[0].Response), s.AppCanary()) {
+		t.Errorf("canary read: %+v, %v", got, err)
+	}
 }
 
 func checkMarkerLookup(t *testing.T, s *Sandbox) {

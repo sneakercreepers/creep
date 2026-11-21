@@ -1,2 +1,2 @@
 auth "POST /login HTTP/1.1\r\nHost: app:8080\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 29\r\nConnection: close\r\n\r\nusername=creep&password=creep"
-request "GET /orders/2 HTTP/1.1\r\nHost: app:8080\r\nAccept: application/json\r\nCookie: session=s3ss10n\r\nConnection: close\r\n\r\n"
+request "POST /comments HTTP/1.1\r\nHost: app:8080\r\nAccept: text/html\r\nCookie: session=s3ss10n\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 49\r\nConnection: close\r\n\r\ntext=%27%22%3E%3Ccreep0123456789abcdef01234567%3E"

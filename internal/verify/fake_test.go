@@ -13,8 +13,11 @@ import (
 	"github.com/sneakercreepers/creep/internal/sandbox"
 )
 
-// testNonce is the nonce of every PoC the tests build.
+// testNonce is the nonce of every run the tests make through runOnce.
 const testNonce = "creep0123456789abcdef01234567"
+
+// testCanary is the content of the fake app's canary file.
+const testCanary = "creep-canary-00112233445566778899aabbccddeeff"
 
 const testPort = 8080
 
@@ -27,13 +30,16 @@ type app func(req string, tables map[string]bool) (string, time.Duration)
 type fakeRunner struct {
 	app    app
 	tables map[string]bool
+	canary string
 	ports  []int
 	sent   [][][]byte
 	looked []string
 	err    error
 }
 
-func newFake(a app) *fakeRunner { return &fakeRunner{app: a, tables: map[string]bool{}} }
+func newFake(a app) *fakeRunner {
+	return &fakeRunner{app: a, tables: map[string]bool{}, canary: testCanary}
+}
 
 func (f *fakeRunner) Exchange(_ context.Context, port int, requests [][]byte) ([]sandbox.Exchange, error) {
 	f.ports = append(f.ports, port)
@@ -54,6 +60,8 @@ func (f *fakeRunner) DatabaseHasTable(_ context.Context, table string) (bool, er
 	return f.tables[table], nil
 }
 
+func (f *fakeRunner) AppCanary() string { return f.canary }
+
 // requests is every request the runner was sent, in order.
 func (f *fakeRunner) requests() [][]byte {
 	var all [][]byte
@@ -64,6 +72,11 @@ func (f *fakeRunner) requests() [][]byte {
 }
 
 func ok(body string) string { return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n" + body }
+
+// page is an HTML answer: the only kind a reflection verifies in.
+func page(body string) string {
+	return "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" + body
+}
 
 func status(code string) string { return "HTTP/1.1 " + code + "\r\n\r\n" }
 
@@ -87,11 +100,16 @@ func loadRequest(t *testing.T, name string) Request {
 
 func mustBuild(t *testing.T, r Request) PoC {
 	t.Helper()
-	p, err := build(r, testNonce)
+	p, err := Build(r)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
 	return p
+}
+
+// runOnce runs p with testNonce, so its requests are the golden ones.
+func runOnce(r Runner, target Target, p PoC) (Result, error) {
+	return run(context.Background(), r, target, p, testNonce)
 }
 
 // always answers every request with resp, at once.

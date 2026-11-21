@@ -11,19 +11,23 @@
 //
 //   - The model picks a method, a path, headers and a body, each from a
 //     closed enum or a bounded string over a fixed alphabet. It never
-//     picks a host, a scheme or a port: every request goes to
-//     sandbox.AppHost on the port the caller gives, and creep writes Host,
-//     Content-Type, Content-Length and Connection itself.
+//     picks a host, a scheme, a port or a forwarding header: every
+//     request goes to sandbox.AppHost on the port the caller gives, and
+//     creep writes Host, Content-Type, Content-Length and Connection
+//     itself.
 //   - Payloads are creep's: the model marks where one goes
-//     (__CREEP_PAYLOAD__) and picks its kind from an enum, and creep
-//     writes minimal, non-destructive text (a pg_sleep, an empty marker
-//     table, a read of /etc/passwd). A fresh nonce (__CREEP_NONCE__) is
-//     the only value a reflection oracle accepts, so no answer the app
-//     always gives can pass for a verified one.
-//   - Oracles are creep's: a status the model expects, the nonce
-//     reflected, a delay measured against a baseline request in the same
-//     runner, the file's marker absent from the baseline, or the marker
-//     table in the run's database.
+//     (__CREEP_PAYLOAD__ or __CREEP_NONCE__) and picks its kind from an
+//     enum, and creep writes minimal, non-destructive text (a pg_sleep,
+//     an empty marker table, a read of the canary file it planted in the
+//     app, an inert tag around a fresh nonce).
+//   - Oracles are creep's, per template, never the model's: the probe
+//     unescaped in an HTML response, a delay measured against baselines
+//     sent before and after it by the same runner, the canary file's
+//     content absent from the baseline, or the marker table in the run's
+//     database. A status the model expects only narrows the reflect
+//     oracle: a harmless request can return it too, so it never verifies
+//     on its own. Each run has a fresh nonce, so repeated runs are
+//     independent.
 //
 // Run sends the requests only through a Runner, which *sandbox.Sandbox
 // implements: one hardened runner container on the run's internal

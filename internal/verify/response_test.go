@@ -96,10 +96,12 @@ func (f failingRunner) Exchange(_ context.Context, _ int, requests [][]byte) ([]
 
 func (f failingRunner) DatabaseHasTable(context.Context, string) (bool, error) { return false, f.err }
 
+func (failingRunner) AppCanary() string { return testCanary }
+
 // TestRunnerErrorsAreErrors: a sandbox error (the canary aborted the run)
 // or a runner that lost an answer is an error, never an outcome.
 func TestRunnerErrorsAreErrors(t *testing.T) {
-	for _, fixture := range []string{statusFixture, "http_sequence_cookie", "sql_payload_delay", "sql_payload_marker", "path_payload_relative"} {
+	for _, fixture := range []string{headerFixture, "http_sequence_cookie", "sql_payload_delay", "sql_payload_marker", "path_payload_relative"} {
 		poc := mustBuild(t, loadRequest(t, fixture))
 		target := Target{Port: testPort, Database: true}
 		if _, err := Run(context.Background(), failingRunner{err: sandbox.ErrNetworkLeak}, target, poc); !errors.Is(err, sandbox.ErrNetworkLeak) {
