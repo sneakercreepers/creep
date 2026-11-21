@@ -28,7 +28,7 @@ Run `creep why <id>` for the evidence behind a finding.
 
 ## Not evaluated
 
-8 files were not evaluated in full; do not read this report as covering them.
+10 files were not evaluated in full; do not read this report as covering them.
 
 | File | Reason |
 |---|---|
@@ -37,6 +37,8 @@ Run `creep why <id>` for the evidence behind a finding.
 | `bidi\u202egnp.exe` | `read failed` |
 | `c1\x9b31mcsi.py` | `redact failed` |
 | `del\x7fete.py` | `read failed` |
+| `tag\U000e00411.py` | `read failed` |
+| `lit\\u202egnp.exe` | `read failed` |
 | `node_modules/pkg/index.js` | `vendor` |
 | `node_modules/pkg/lib.js` | `vendor` |
 | `api_pb2.py` | `generated` |

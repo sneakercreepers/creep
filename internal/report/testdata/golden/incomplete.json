@@ -104,6 +104,14 @@
         "reason": "read_failed"
       },
       {
+        "path": "tag\udb40\udc411.py",
+        "reason": "read_failed"
+      },
+      {
+        "path": "lit\\u202egnp.exe",
+        "reason": "read_failed"
+      },
+      {
         "path": "node_modules/pkg/index.js",
         "reason": "vendor"
       },

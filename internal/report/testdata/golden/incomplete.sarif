@@ -149,6 +149,44 @@
             },
             {
               "descriptor": {
+                "id": "creep/not-evaluated/read_failed"
+              },
+              "level": "warning",
+              "message": {
+                "text": "file not evaluated: read_failed"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "tag%F3%A0%81%811.py",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "descriptor": {
+                "id": "creep/not-evaluated/read_failed"
+              },
+              "level": "warning",
+              "message": {
+                "text": "file not evaluated: read_failed"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "lit%5Cu202egnp.exe",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "descriptor": {
                 "id": "creep/not-evaluated/vendor"
               },
               "level": "warning",
@@ -398,6 +436,14 @@
             },
             {
               "path": "del\u007fete.py",
+              "reason": "read_failed"
+            },
+            {
+              "path": "tag\udb40\udc411.py",
+              "reason": "read_failed"
+            },
+            {
+              "path": "lit\\u202egnp.exe",
               "reason": "read_failed"
             },
             {

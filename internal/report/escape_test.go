@@ -23,10 +23,39 @@ func TestCodeSpan(t *testing.T) {
 		{"zw\u200bj", "`zw\\u200bj`"},
 		{"bad\xff", "`bad\\xff`"},
 		{"<script>[x](y)", "`<script>[x](y)`"},
+		{`back\slash`, "`back\\\\slash`"},
+		{`a\u202eb`, "`a\\\\u202eb`"},
+		{"a" + string(rune(0x202e)) + "b", "`a\\u202eb`"},
+		{"tag\U000E0041.py", "`tag\\U000e0041.py`"},
+		{"tag\U000E0041" + "1", "`tag\\U000e00411`"},
+		{"pua" + string(rune(0xe004)) + "1", "`pua\\ue0041`"},
+		{`\U000e0041`, "`\\\\U000e0041`"},
+		{`a\|b`, "`a\\\\\\|b`"},
+		{`bad\xff`, "`bad\\\\xff`"},
+		{"emoji\U0001F600", "`emoji\U0001F600`"},
 	}
 	for _, tt := range tests {
 		if got := codeSpan(tt.in); got != tt.want {
 			t.Errorf("codeSpan(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// A name that spells an escape and the rune that escape stands for must
+// never render alike, or a reader cannot tell a hostile name from an
+// innocent one.
+func TestCodeSpanEscapesAreUnambiguous(t *testing.T) {
+	tests := []struct{ a, b string }{
+		{`a\u202eb`, "a" + string(rune(0x202e)) + "b"},
+		{`a\x1bb`, "a\x1bb"},
+		{`a\xffb`, "a\xffb"},
+		{`a\|b`, "a|b"},
+		{`a\U000e0041b`, "a\U000E0041b"},
+		{"a" + string(rune(0xe004)) + "1b", "a\U000E0041b"},
+	}
+	for _, tt := range tests {
+		if x, y := codeSpan(tt.a), codeSpan(tt.b); x == y {
+			t.Errorf("codeSpan(%q) and codeSpan(%q) both render %q", tt.a, tt.b, x)
 		}
 	}
 }
