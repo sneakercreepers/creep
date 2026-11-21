@@ -39,13 +39,16 @@ func TestProtectionsAreRequired(t *testing.T) {
 
 // TestNonRaceTestJobIsRequired pins the job that runs the redact tests -race
 // skips or samples in full (#76 A2): the test matrix keeps windows-latest,
-// cgo stays off there so make check runs without -race, and the main ruleset
-// requires that job. Losing any of them would drop that coverage silently.
+// cgo stays off there, every matrix job runs make check, which then runs
+// without -race, and the main ruleset requires that job. Losing any of them
+// would drop that coverage silently.
 func TestNonRaceTestJobIsRequired(t *testing.T) {
 	ci := strings.ReplaceAll(readRepoFile(t, ".github/workflows/ci.yml"), "\r\n", "\n")
 	for what, re := range map[string]string{
 		"a windows-latest test job": `(?m)^  test:\n(    .*\n|\n)*?        os: \[[^\]\n]*\bwindows-latest\b[^\]\n]*\]$`,
 		"cgo disabled on Windows":   `(?m)^      - name: Disable cgo on Windows\n        if: runner\.os == 'Windows'\n        run: echo "CGO_ENABLED=0" >> "\$GITHUB_ENV"$`,
+		// The step has no "if", so the Windows job runs it too (reviewer on #293).
+		"make check in every test job": `(?m)^      - name: make check\n        run: \|\n(          .*\n)*?          "\$make_bin" check$`,
 	} {
 		if !regexp.MustCompile(re).MatchString(ci) {
 			t.Errorf("ci.yml: no %s", what)

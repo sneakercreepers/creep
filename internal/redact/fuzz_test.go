@@ -93,9 +93,10 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
 	},
-	// A short password compared, below the generic rule's 10 bytes.
+	// A short password compared, below the generic rule's 10 bytes; 8 bytes or
+	// more, since the sweep leaves shorter values alone when repeated (#70).
 	func(rng *rand.Rand) (string, string) {
-		v := fakeToken(rng, alnum, 3) + fakeToken(rng, digits, 1) + fakeToken(rng, alnum, 2)
+		v := fakeToken(rng, alnum, 4) + fakeToken(rng, digits, 1) + fakeToken(rng, alnum, 3)
 		forms := []string{`if password == "%s":`, `if (secret !== '%s') {}`, `if (pwd.equals("%s")) {`}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
 	},
