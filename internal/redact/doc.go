@@ -246,7 +246,15 @@
 // run's context is done (the scan deadline, #260) and returns no text.
 // Values from earlier fragments are re-masked through
 // an index of 8-byte windows, linear in the input however many values the run
-// knows. A rule whose matches overlap densely (a block of .env lines with
+// knows: each byte checks at most 272 values (16 under its window, 256 in the
+// overflow list), a value whose last occurrence covers the byte is skipped
+// before any hash, and an occurrence nested in a kept one of the same label is
+// dropped, which renders the same text (sweep_scan.go). Past about one kept
+// span per 4 bytes the call fails closed with ErrTooManyValues, so memory
+// stays linear; the sweep stops on the run's context too. With the overflow
+// list full of runs of one byte, File at MaxFileBytes takes about 1.2 to 1.8 s
+// on an i7-10510U and allocates at most about 100 MiB (BenchmarkFileOverflowFull,
+// #106), twice that with a format character. A rule whose matches overlap densely (a block of .env lines with
 // long names) stops searching again after a fixed multiple of the input,
 // masks the rest of the current line and searches the next lines with a
 // budget of the bytes it masked, so the dense block hides only its own lines

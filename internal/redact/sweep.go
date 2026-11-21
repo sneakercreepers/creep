@@ -49,23 +49,31 @@ type sweepIndex struct {
 	windows       map[uint64][]int // window bytes -> value ids
 	overflow      [256][]int       // first byte -> ids of values whose every window was full
 	overflowCount int
+	labels        []string       // label id -> the label of the values' markers
+	labelIDs      map[string]int // label -> label id
+	scans         uint64         // finds so far: tells a value's occurrence end from an earlier find's
 }
 
 // sweepValue is a known value: its length, where its window starts, its hash
-// and base^length, which lifts a prefix hash past it. overflowed says it is
-// in the overflow list instead of under a window.
+// and base^length, which lifts a prefix hash past it, and the id of its
+// marker's label. overflowed says it is in the overflow list instead of under
+// a window. lastEnd is where its last occurrence ends in find number scan.
 type sweepValue struct {
 	length, offset int
 	hash, scale    uint64
+	label          int
 	overflowed     bool
+	scan           uint64
+	lastEnd        int
 }
 
 // newSweepIndex picks a random hash base, so input cannot be crafted to
 // collide. A collision would only mask more.
 func newSweepIndex() sweepIndex {
 	return sweepIndex{
-		base:    randomBase(),
-		windows: map[uint64][]int{},
+		base:     randomBase(),
+		windows:  map[uint64][]int{},
+		labelIDs: map[string]int{},
 	}
 }
 
@@ -78,9 +86,10 @@ func randomBase() uint64 {
 
 // add indexes value under its least crowded window, or in the overflow list
 // when every window already holds maxWindowValues values and overflowRoom is
-// set. It reports whether the value went to the overflow list, and false for
-// ok when it was not indexed: the list is full or overflowRoom is unset.
-func (x *sweepIndex) add(value string, overflowRoom bool) (overflowed, ok bool) {
+// set. label is the label of the value's marker. It reports whether the value
+// went to the overflow list, and false for ok when it was not indexed: the
+// list is full or overflowRoom is unset.
+func (x *sweepIndex) add(value, label string, overflowRoom bool) (overflowed, ok bool) {
 	offset, crowd := 0, maxWindowValues
 	for i := 0; i+minSweepLen <= len(value) && crowd > 0; i++ {
 		if n := len(x.windows[window(value, i)]); n < crowd {
@@ -100,8 +109,22 @@ func (x *sweepIndex) add(value string, overflowRoom bool) (overflowed, ok bool) 
 		return false, false
 	}
 	hash, scale := x.hashOf(value)
-	x.values = append(x.values, sweepValue{length: len(value), offset: offset, hash: hash, scale: scale, overflowed: overflowed})
+	x.values = append(x.values, sweepValue{
+		length: len(value), offset: offset, hash: hash, scale: scale,
+		label: x.labelID(label), overflowed: overflowed,
+	})
 	return overflowed, true
+}
+
+// labelID returns the id of label, numbering a new one. Labels are never
+// forgotten: they are the rules' and detectors' labels, a fixed set.
+func (x *sweepIndex) labelID(label string) int {
+	if id, ok := x.labelIDs[label]; ok {
+		return id
+	}
+	x.labelIDs[label] = len(x.labels)
+	x.labels = append(x.labels, label)
+	return len(x.labels) - 1
 }
 
 // removeLast drops the value added last, which must be value, from the index.
@@ -120,48 +143,6 @@ func (x *sweepIndex) removeLast(value string) {
 		return
 	}
 	delete(x.windows, w)
-}
-
-// sweepScan is the state of one find: the text's prefix hashes and where
-// each value's last occurrence ends.
-type sweepScan struct {
-	x        *sweepIndex
-	text     string
-	prefix   []uint64
-	nextFree map[int]int // value id -> end of its last occurrence
-	found    []span
-}
-
-// find returns every occurrence of a known value in text. Like a search per
-// value, occurrences of one value do not overlap; occurrences of different
-// values may. Each position checks at most maxWindowValues values from its
-// window plus the overflow values that start with the byte at that position.
-func (x *sweepIndex) find(text string) []span {
-	if len(x.values) == 0 || len(text) < minSweepLen {
-		return nil
-	}
-	s := sweepScan{x: x, text: text, prefix: x.prefixHashes(text), nextFree: map[int]int{}}
-	for p := 0; p+minSweepLen <= len(text); p++ {
-		s.check(p, x.windows[window(text, p)])
-		s.check(p, x.overflow[text[p]])
-	}
-	return s.found
-}
-
-// check records each value among ids that occurs with its window at p.
-func (s *sweepScan) check(p int, ids []int) {
-	for _, id := range ids {
-		v := s.x.values[id]
-		start := p - v.offset
-		end := start + v.length
-		if start < 0 || end > len(s.text) || substringHash(s.prefix, start, end, v.scale) != v.hash {
-			continue
-		}
-		if start >= s.nextFree[id] {
-			s.found = append(s.found, span{start: start, end: end})
-			s.nextFree[id] = end
-		}
-	}
 }
 
 // window reads the 8 bytes of s at i as one map key.

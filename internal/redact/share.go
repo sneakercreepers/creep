@@ -21,7 +21,9 @@ const (
 
 // ErrTooManyValues is returned by Redact or File when the input holds more
 // new values than one call may add to the run (32768 values, 8 MiB, or 32
-// values that only the overflow list can index). The call returns no
+// values that only the overflow list can index), or more occurrences of the
+// run's known values than one call may keep (about one per 4 bytes, sweepLimit:
+// only text crafted against the sweep has as many). The call returns no
 // output and adds nothing to the run, which goes on: callers must list the
 // file as not scanned, never send it unredacted.
 var ErrTooManyValues = errors.New("redact: input holds more values than one call may add")
@@ -47,8 +49,8 @@ func (c *callShare) admits(value string) bool {
 // indexValue indexes value for the sweep. When only the overflow list has
 // room, the value takes one of the call's overflow slots; when the list is
 // full the run ends, and when the call's slots are gone the call fails.
-func (s *runState) indexValue(value string) bool {
-	overflowed, ok := s.index.add(value, s.call.overflow < maxCallOverflow)
+func (s *runState) indexValue(value, label string) bool {
+	overflowed, ok := s.index.add(value, label, s.call.overflow < maxCallOverflow)
 	switch {
 	case ok && overflowed:
 		s.call.overflow++

@@ -238,8 +238,8 @@ func TestMergedLabelIsFixed(t *testing.T) {
 		{"PII_EMAIL", genericLabel},
 	}
 	for _, p := range pairs {
-		a := mergeSpans([]span{{0, 4, p[0], false}, {0, 4, p[1], false}})
-		b := mergeSpans([]span{{0, 4, p[1], false}, {0, 4, p[0], false}})
+		a := mergeSpans([]span{{start: 0, end: 4, label: p[0]}, {start: 0, end: 4, label: p[1]}})
+		b := mergeSpans([]span{{start: 0, end: 4, label: p[1]}, {start: 0, end: 4, label: p[0]}})
 		if a[0].label != b[0].label {
 			t.Errorf("labels %v: %s in one order, %s in the other", p, a[0].label, b[0].label)
 		}
