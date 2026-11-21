@@ -23,6 +23,10 @@ func privateKeyWorstCases() map[string]string {
 		"literal arrays": fillFile("k := []string{\"" + strings.Repeat(body+"\", \"", 60) + body + "\"}\n"),
 		// The densest splits: a separator every five bytes.
 		"separators": fillFile("x := []string{" + strings.Repeat(`"a", `, 600) + "\"a\"}\n"),
+		// Adjacent literals split every four bytes; a near miss reads the
+		// most bytes a separator may hold before it fails (reviewer on #293).
+		"adjacent":  fillFile("x := (" + strings.Repeat(`"a" `, 600) + "\"a\")\n"),
+		"near miss": fillFile("x := " + strings.Repeat(`"    ,    bbx`, 300) + "\n"),
 	}
 }
 

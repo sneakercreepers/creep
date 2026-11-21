@@ -53,6 +53,16 @@ var arrayStyles = map[string]func(lines []string) string{
 	"python tuple": func(l []string) string { return `K = ('` + strings.Join(l, `', '`) + `')` },
 	"java array":   func(l []string) string { return `String[] k = {"` + strings.Join(l, `", "`) + `"};` },
 	"escapes":      func(l []string) string { return `k := []string{"` + strings.Join(l, `\n", "`) + `\n"}` },
+	// Near-miss separators (reviewer on #293).
+	"go raw":       func(l []string) string { return "k := []string{`" + strings.Join(l, "`, `") + "`}" },
+	"two blanks":   func(l []string) string { return `k := []string{"` + strings.Join(l, `",  "`) + `"}` },
+	"tab":          func(l []string) string { return `k := []string{"` + strings.Join(l, "\",\t\"") + `"}` },
+	"blank before": func(l []string) string { return `k := []string{"` + strings.Join(l, `" , "`) + `"}` },
+	"concat":       func(l []string) string { return `k := "` + strings.Join(l, `" + "`) + `"` },
+	"adjacent":     func(l []string) string { return `K = ("` + strings.Join(l, `" "`) + `")` },
+	"bytes":        func(l []string) string { return `K = [b"` + strings.Join(l, `", b"`) + `"]` },
+	"matlab":       func(l []string) string { return `k = ["` + strings.Join(l, `"; "`) + `"];` },
+	"json string":  func(l []string) string { return `{"v": "[\"` + strings.Join(l, `\", \"`) + `\"]"}` },
 }
 
 // A header-less key body in a one-line literal array is masked by Redact
@@ -84,11 +94,14 @@ func TestLiteralDetectorIgnoresCode(t *testing.T) {
 		"sri hashes":    "\"sha384-" + fakeToken(rng, base64Chars, 64) + "\" +\n\"sha384-" + fakeToken(rng, base64Chars, 64) + "\"\n",
 		"data uri":      "img := \"data:image/png;base64," + fakeToken(rng, base64Chars, 70) + "\"\n",
 		// One-line arrays split at each separator (#190) and stay unmasked.
-		"prose array": "words := []string{\"the quick brown fox jumps over the lazy dog\", \"pack my box with five dozen liquor jugs\"}\n",
-		"sql array":   "qs := []string{\"SELECT id, name FROM users WHERE id = $1\", \"DELETE FROM sessions WHERE expires_at < now()\"}\n",
-		"hex array":   "sums := []string{\"" + hex + "\", \"" + hex + "\", \"" + hex + "\"}\n",
-		"path array":  "paths := ['internal/redact/pem_literal_test.go','internal/redact/pem.go','docs/architecture.md']\n",
-		"sri array":   "integrity = [\"sha384-" + fakeToken(rng, base64Chars, 64) + "\", \"sha384-" + fakeToken(rng, base64Chars, 64) + "\"]\n",
+		"prose array":    "words := []string{\"the quick brown fox jumps over the lazy dog\", \"pack my box with five dozen liquor jugs\"}\n",
+		"sql array":      "qs := []string{\"SELECT id, name FROM users WHERE id = $1\", \"DELETE FROM sessions WHERE expires_at < now()\"}\n",
+		"hex array":      "sums := []string{\"" + hex + "\", \"" + hex + "\", \"" + hex + "\"}\n",
+		"path array":     "paths := ['internal/redact/pem_literal_test.go','internal/redact/pem.go','docs/architecture.md']\n",
+		"sri array":      "integrity = [\"sha384-" + fakeToken(rng, base64Chars, 64) + "\", \"sha384-" + fakeToken(rng, base64Chars, 64) + "\"]\n",
+		"sql one line":   "q := \"SELECT id, name, email FROM users WHERE id = $1 \" + \"AND deleted_at IS NULL ORDER BY created_at DESC\"\n",
+		"prose adjacent": "msg = (\"the quick brown fox jumps over the lazy dog \" \"pack my box with five dozen liquor jugs\")\n",
+		"hex concat":     "sum := \"" + hex + "\" + \"" + hex + "\"\n",
 	}
 	for name, text := range samples {
 		if got := findPrivateKeys(text); len(got) > 0 {

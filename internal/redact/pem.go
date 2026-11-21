@@ -193,24 +193,53 @@ func nextSplit(text string, from, glue int) (end, next int, ok bool) {
 	return 0, 0, false
 }
 
-// separatorLen returns the length of the literal separator at text[j:glue]
-// (`", "`, `","`, `', '` or `','`), or 0 when there is none.
+// separatorLen returns the length of the literal separator at text[j:glue],
+// or 0 when there is none: a closing quote, one ",", "+" or ";" or only
+// blanks (adjacent literals), at most maxSeparatorBlanks blanks on each side,
+// an optional string prefix (b, r, u, f) and an opening quote. It covers
+// "...", "...", '...','...', `...`, `...`, "..." + "...", "..." "...",
+// "...",  b"..." and \"...\", \"...\" in a string holding an array (#190).
+// The caps keep each check a few bytes long.
 func separatorLen(text string, j, glue int) int {
-	q := byte(0)
-	if j < glue {
-		q = text[j]
-	}
-	if q != '"' && q != '\'' || j+1 >= glue || text[j+1] != ',' {
-		return 0
-	}
-	k := j + 2
-	if k < glue && text[k] == ' ' {
+	k, escaped := j, j < glue && text[j] == '\\'
+	if escaped {
 		k++
 	}
-	if k >= glue || text[k] != q {
+	if k >= glue || !isQuote(text[k]) {
+		return 0
+	}
+	k = skipBlanks(text, k+1, glue)
+	switch {
+	case k < glue && strings.IndexByte(",+;", text[k]) >= 0:
+		k = skipBlanks(text, k+1, glue)
+	case text[k-1] != ' ' && text[k-1] != '\t':
+		return 0 // quotes with nothing between them close no literal
+	}
+	k = skipPrefix(text, k, glue)
+	if escaped && k < glue && text[k] == '\\' {
+		k++
+	}
+	if k >= glue || !isQuote(text[k]) {
 		return 0
 	}
 	return k + 1 - j
+}
+
+const maxSeparatorBlanks = 4
+
+func skipBlanks(text string, k, glue int) int {
+	for n := 0; k < glue && n < maxSeparatorBlanks && (text[k] == ' ' || text[k] == '\t'); n++ {
+		k++
+	}
+	return k
+}
+
+// skipPrefix skips a string literal prefix of up to two letters (b", rb', f").
+func skipPrefix(text string, k, glue int) int {
+	for n := 0; k < glue && n < 2 && strings.IndexByte("bBrRuUfF", text[k]) >= 0; n++ {
+		k++
+	}
+	return k
 }
 
 // glueChars may close a key line written as a string literal: blanks,

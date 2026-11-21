@@ -83,10 +83,20 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}
 		return fmt.Sprintf([]string{"%s = %s", "%s: %s", "%s=%s"}[rng.IntN(3)], keys[rng.IntN(len(keys))], pw), pw
 	},
-	// A value compared through "!=", "!==" or a subscript (#190).
+	// A value compared through "!=", "!==", a lookup or another operator
+	// the vendored rule misses (#190).
 	func(rng *rand.Rand) (string, string) {
 		v := fakeToken(rng, alnum, 15) + fakeToken(rng, digits, 1)
-		forms := []string{`if (secret !== "%s") {}`, `if token != '%s':`, `if os.environ["API_KEY"] == "%s":`, `if ENV['TOKEN'] != "%s"`}
+		forms := []string{
+			`if (secret !== "%s") {}`, `if token != '%s':`, `if os.environ["API_KEY"] == "%s":`, `if ENV['TOKEN'] != "%s"`,
+			`[ "$API_TOKEN" != "%s" ]`, `if os.getenv("API_KEY") != "%s":`, `if (token.equals("%s")) {`, `WHERE api_key <> '%s'`,
+		}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
+	},
+	// A short password compared, below the generic rule's 10 bytes.
+	func(rng *rand.Rand) (string, string) {
+		v := fakeToken(rng, alnum, 3) + fakeToken(rng, digits, 1) + fakeToken(rng, alnum, 2)
+		forms := []string{`if password == "%s":`, `if (secret !== '%s') {}`, `if (pwd.equals("%s")) {`}
 		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
 	},
 }

@@ -31,6 +31,8 @@ func largeInputs() map[string]string {
 		// Literal separators split a line like "\n" escapes (#190).
 		"separators": fill(`"a", `),
 		"compares":   fill(`x["api_key"] != "Ab3x9Ab3x9" || secret !== 'a' `),
+		"lookups":    fill(`os.getenv("api_key") <> "Ab3x9" || "$TOKEN" ≠ 'a' || pwd.equals("x1") `),
+		"adjacent":   fill(`"a" "b",  'c' + b"d"; `),
 		// Encoded separators run the URL-shaped rules a second time (#151).
 		"json slashes": fill("discord" + ".com\\/api\\/webhooks\\/" + strings.Repeat("1", 18) + "\\/" + strings.Repeat("Ab3x", 11) + "\\/"),
 		"percent":      fill("hooks.slack" + ".com%2Fservices%2F" + strings.Repeat("Ab3x", 12) + "%3a%2f"),

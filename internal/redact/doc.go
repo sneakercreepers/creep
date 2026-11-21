@@ -34,10 +34,13 @@
 //     a subscript whose key names a credential (x['SECRET_KEY'] = '…',
 //     headers["X-Api-Key"] = "…", config[:api_key] = '…'), which the
 //     vendored generic rule misses at the closing "]" (subscript.go). A
-//     value compared with such a key through "!=" or "!==", or through a
-//     subscript (secret !== "…", os.environ["API_KEY"] == "…"), which the
-//     generic rule misses too, when it has the generic rule's shape
-//     (compare.go).
+//     value compared with such a key where the generic rule misses it too
+//     (compare.go): through "!=", "!==", "<>", "≠" or ".equals(", through a
+//     subscript or a call with the key as its only argument (secret !==
+//     "…", os.environ["API_KEY"] == "…", os.getenv("TOKEN") != "…"), or
+//     behind a shell quote ("$API_TOKEN" != "…"), when it has the generic
+//     rule's shape; under a password or secret word at any length, as
+//     assigned (password == "hunter2!").
 //   - Private keys cut by a fragment boundary, which the gitleaks rule misses
 //     because it needs BEGIN and END in the same text (pem.go). After a BEGIN
 //     ... PRIVATE KEY line (any variant, PGP BLOCK included) everything is
@@ -50,14 +53,16 @@
 //     partial line; the run takes in a short line on either side. Prefixed digests
 //     (go.sum "h1:", "sha256:") and lowercase hex do not count. A line may be a
 //     string literal ("MIIE...\n" +, adjacent literals, a JSON value with "\n"
-//     escapes, which also end a line, or a one-line array of literals, whose
-//     separators ", " and ',' end a line the same way). A header or footer
+//     escapes, which also end a line, or a one-line array or concatenation
+//     of literals, whose separators end a line the same way: ", ", ','
+//     and "; " with up to four blanks, " + ", adjacent "..." "...", raw
+//     `...`, prefixed b"..." and escaped \", \" quotes). A header or footer
 //     line cut at the edge of the fragment ("-----END RSA PRIV") anchors the
 //     body lines next to it, even one shorter than 40 bytes (pem_edge.go).
 //     This can mask ordinary data, which is the safe side. Each line is read
-//     once; the densest splits (a separator every five bytes) cost about
-//     twice repository code per byte (BenchmarkPrivateKeysWorstCase against
-//     BenchmarkPrivateKeysRepoCode).
+//     once; the densest splits (a separator every four or five bytes) cost
+//     two to three times repository code per byte
+//     (BenchmarkPrivateKeysWorstCase against BenchmarkPrivateKeysRepoCode).
 //   - A quoted password value is masked unless it only points at one (${VAR},
 //     $VAR, {{ var }}, <placeholder>, %s, getPassword()). A bare one is kept
 //     only when it is code (reference.go, #71): None, null, nil, true and
@@ -82,8 +87,9 @@
 //     "constructor"): letters, "_", "." and "-" only, as in the gitleaks
 //     allowlist, so a passphrase of words compared with any credential key
 //     is sent (if password == "CorrectHorseBatteryStaple"); compare.go keeps
-//     the same exemption for "!=", "!==" and subscripts. Assigned values, and
-//     compared values with any digit or other character, are still masked.
+//     the same exemption for the comparisons it reads. Assigned values, and
+//     compared values with any digit or other character (under the generic
+//     words, from 10 bytes), are still masked.
 //     It also skips a dotted path of such words read from a known receiver
 //     (process.env.SECRET_KEY, cfg.Secret).
 //
@@ -143,6 +149,9 @@
 //     spaces, and homoglyphs (a Cyrillic er for the "p" of "ghp_") break a
 //     rule, and so do encodings other than the separators listed below.
 //   - A value split from its key by other text (see Performance).
+//   - A compared value before its key ("…" == token, "…".equals(token)), or
+//     in a triple-quoted literal; a key body in an array whose separator
+//     holds more than four blanks on a side or a no-break space.
 //   - Fragments only: a key body with no header or footer whose first line
 //     follows an assignment prefix (KEY = "MIIE..., {"private_key": "...)
 //     can leave that first line visible when Redact runs on a fragment cut
