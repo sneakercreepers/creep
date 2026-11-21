@@ -19,6 +19,7 @@ func scannedBytes(text string) int {
 // so a crafted file of the same size was scanned about 2.5 times as much as
 // ordinary code (issue #102). Counting bytes keeps the test exact.
 func TestChunkScanIsBounded(t *testing.T) {
+	skipUnderRace(t)
 	const maxRatio = 1.2
 	short := float64(scannedBytes(textWithLines(MaxFileBytes, 100)))
 	var shapes [][]int

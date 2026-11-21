@@ -10,9 +10,9 @@ import (
 // (MaxFileBytes), so a run deadline must reach inside a call, not only
 // between calls. A stopped call returns ctx's cause and no text: the spans it
 // found so far are incomplete, so its output is dropped and nothing it found
-// is remembered. Callers that hold the Redactor (the reader's slicer, the
-// gateway's FileScan) see an ordinary File error and list the file as not
-// scanned.
+// is remembered. Callers that hold the Redactor (the reader's slicer,
+// discovery, the gateway's FileScan) see an ordinary File error and list the
+// file as not scanned.
 func NewWithContext(ctx context.Context) (*Redactor, error) {
 	r, err := New()
 	if err != nil {

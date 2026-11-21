@@ -161,23 +161,91 @@ func bodyLines(text string) []bodyLine {
 // appendSegments adds the body lines of the text line text[from:to]. A "\n"
 // escape before the line's closing glue splits it, so a key written on one
 // line of a string literal (a JSON "private_key" value) is seen line by line,
-// while a "\n" in the glue of `"MIIE...\n" +` only ends the line (#72).
+// while a "\n" in the glue of `"MIIE...\n" +` only ends the line (#72). A
+// literal separator splits it the same way, so a key written as a one-line
+// array of literals ([]string{"MIIE...", "..."}) is seen line by line too
+// (#190).
 func appendSegments(lines []bodyLine, text string, from, to int) []bodyLine {
 	glue := glueStart(text, from, to)
 	for {
-		i := strings.Index(text[from:glue], `\n`)
-		if i < 0 {
+		end, next, ok := nextSplit(text, from, glue)
+		if !ok {
 			return append(lines, trailingToken(text, from, to))
 		}
-		lines = append(lines, trailingToken(text, from, from+i))
-		from += i + 2
+		lines = append(lines, trailingToken(text, from, end))
+		from = next
 	}
+}
+
+// nextSplit finds the first "\n" escape or literal separator in
+// text[from:glue] and returns where the segment before it ends and where the
+// next one starts. A separator right after a "\n" escape belongs to the same
+// split. Each call resumes after the previous split, so a line is read once.
+func nextSplit(text string, from, glue int) (end, next int, ok bool) {
+	for j := from; j+1 < glue; j++ {
+		if text[j] == '\\' && text[j+1] == 'n' {
+			return j, j + 2 + separatorLen(text, j+2, glue), true
+		}
+		if n := separatorLen(text, j, glue); n > 0 {
+			return j, j + n, true
+		}
+	}
+	return 0, 0, false
+}
+
+// separatorLen returns the length of the literal separator at text[j:glue],
+// or 0 when there is none: a closing quote, one ",", "+" or ";" or only
+// blanks (adjacent literals), at most maxSeparatorBlanks blanks on each side,
+// an optional string prefix (b, r, u, f) and an opening quote. It covers
+// "...", "...", '...','...', `...`, `...`, "..." + "...", "..." "...",
+// "...",  b"..." and \"...\", \"...\" in a string holding an array (#190).
+// The caps keep each check a few bytes long.
+func separatorLen(text string, j, glue int) int {
+	k, escaped := j, j < glue && text[j] == '\\'
+	if escaped {
+		k++
+	}
+	if k >= glue || !isQuote(text[k]) {
+		return 0
+	}
+	k = skipBlanks(text, k+1, glue)
+	switch {
+	case k < glue && strings.IndexByte(",+;", text[k]) >= 0:
+		k = skipBlanks(text, k+1, glue)
+	case text[k-1] != ' ' && text[k-1] != '\t':
+		return 0 // quotes with nothing between them close no literal
+	}
+	k = skipPrefix(text, k, glue)
+	if escaped && k < glue && text[k] == '\\' {
+		k++
+	}
+	if k >= glue || !isQuote(text[k]) {
+		return 0
+	}
+	return k + 1 - j
+}
+
+const maxSeparatorBlanks = 4
+
+func skipBlanks(text string, k, glue int) int {
+	for n := 0; k < glue && n < maxSeparatorBlanks && (text[k] == ' ' || text[k] == '\t'); n++ {
+		k++
+	}
+	return k
+}
+
+// skipPrefix skips a string literal prefix of up to two letters (b", rb', f").
+func skipPrefix(text string, k, glue int) int {
+	for n := 0; k < glue && n < 2 && strings.IndexByte("bBrRuUfF", text[k]) >= 0; n++ {
+		k++
+	}
+	return k
 }
 
 // glueChars may close a key line written as a string literal: blanks,
 // closing quotes and brackets, separators, "+" and a backslash whose escape
 // a boundary cut off.
-const glueChars = " \t\r\"'`,;)+\\"
+const glueChars = " \t\r\"'`,;)]}+\\"
 
 // glueStart returns where the closing glue of text[from:to] begins: glue
 // characters and "\n" or "\r" escapes, as in `"MIIE...\n" +` (#72).

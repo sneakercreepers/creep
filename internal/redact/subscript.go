@@ -18,11 +18,17 @@ const (
 // config[:api_key] =, ENV['TOKEN'] ||=, opts['token'] ??=,
 // s['token'] +=. Further subscripts on the same line may follow the key
 // (cfg['api_key']['prod'] =). "==" and "===" are comparisons: the operator
-// is then followed by "=", which no value accepts.
+// is then followed by "=", which no value accepts; compareDetectors read
+// them.
 func subscriptKey(words string) string {
+	return subscriptPath(words) + `[ \t]*(?:=|:=|\+=|\|\|=|\?\?=)[ \t]*`
+}
+
+// subscriptPath matches the subscripts of subscriptKey, up to the operator.
+func subscriptPath(words string) string {
 	return `(?i)\[[ \t]*[:"'` + "`" + `]?[A-Za-z0-9_.-]*` + words +
 		`[A-Za-z0-9_.-]*["'` + "`" + `]?[ \t]*\]` +
-		`(?:[ \t]*\[[^\]\r\n]*\])*[ \t]*(?:=|:=|\+=|\|\|=|\?\?=)[ \t]*`
+		`(?:[ \t]*\[[^\]\r\n]*\])*`
 }
 
 // quotedLiteral is a quoted literal with an optional b, f, r or u prefix.
@@ -97,13 +103,18 @@ var credentialWordRe = regexp.MustCompile(`(?i)` + anyValueWords + `|` + shapedV
 func harmlessKey(prefix string) bool {
 	for _, part := range strings.Split(prefix, "[")[1:] {
 		key, _, _ := strings.Cut(part, "]")
-		key = strings.Trim(key, " \t:\"'`")
-		if secretWordRe.MatchString(key) {
-			return false
-		}
-		if credentialWordRe.MatchString(key) && !harmlessWordRe.MatchString(key) {
+		if !harmlessName(strings.Trim(key, " \t:\"'`")) {
 			return false
 		}
 	}
 	return true
+}
+
+// harmlessName reports a key name that holds no credential word, or one
+// that only looks like a credential (api_version, token_type).
+func harmlessName(key string) bool {
+	if secretWordRe.MatchString(key) {
+		return false
+	}
+	return !credentialWordRe.MatchString(key) || harmlessWordRe.MatchString(key)
 }

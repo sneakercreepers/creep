@@ -83,6 +83,23 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}
 		return fmt.Sprintf([]string{"%s = %s", "%s: %s", "%s=%s"}[rng.IntN(3)], keys[rng.IntN(len(keys))], pw), pw
 	},
+	// A value compared through "!=", "!==", a lookup or another operator
+	// the vendored rule misses (#190).
+	func(rng *rand.Rand) (string, string) {
+		v := fakeToken(rng, alnum, 15) + fakeToken(rng, digits, 1)
+		forms := []string{
+			`if (secret !== "%s") {}`, `if token != '%s':`, `if os.environ["API_KEY"] == "%s":`, `if ENV['TOKEN'] != "%s"`,
+			`[ "$API_TOKEN" != "%s" ]`, `if os.getenv("API_KEY") != "%s":`, `if (token.equals("%s")) {`, `WHERE api_key <> '%s'`,
+		}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
+	},
+	// A short password compared, below the generic rule's 10 bytes; 8 bytes or
+	// more, since the sweep leaves shorter values alone when repeated (#70).
+	func(rng *rand.Rand) (string, string) {
+		v := fakeToken(rng, alnum, 4) + fakeToken(rng, digits, 1) + fakeToken(rng, alnum, 3)
+		forms := []string{`if password == "%s":`, `if (secret !== '%s') {}`, `if (pwd.equals("%s")) {`}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
+	},
 }
 
 // fakePassword mixes letters, digits and the punctuation people put in
@@ -163,6 +180,7 @@ func keyBodyLines(secret string) []string {
 // of real code larger than one chunk, at an offset the fuzzer picks, and
 // checks it never reaches the output of File, which must stay reversible.
 func FuzzFile(f *testing.F) {
+	skipUnderRace(f)
 	code := repoCode(f, MaxInputBytes+2*chunkOverlap)
 	f.Add("", "", uint64(1), uint8(9), uint16(0))
 	f.Add("x := `", "`", uint64(2), uint8(6), uint16(3000))
@@ -186,6 +204,9 @@ func FuzzFile(f *testing.F) {
 		}
 		if r.Unredact(out) != text {
 			t.Fatal("Unredact(File(x)) != x")
+		}
+		if strings.Count(out, "\n") > strings.Count(text, "\n") {
+			t.Fatal("File added a newline") // the reader's lines_shifted relies on it (#197)
 		}
 	})
 }

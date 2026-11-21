@@ -148,6 +148,7 @@ func assertFileHides(t *testing.T, r *Redactor, text string, plants []plant) {
 // around every boundary, in about three chunks of real code, never leak an
 // 8-byte substring, and File is reversible locally.
 func TestFileHidesSecretsAcrossChunks(t *testing.T) {
+	skipUnderRace(t)
 	base := repoCode(t, 3*MaxInputBytes)
 	rng := rand.New(rand.NewPCG(5, 5))
 	for _, frac := range []float64{0.05, 0.95} {
@@ -161,6 +162,7 @@ func TestFileHidesSecretsAcrossChunks(t *testing.T) {
 // overlap of every pair of chunks and in the last chunk: each copy gets the
 // same marker, and only once (no marker inside a marker).
 func TestFileSameMarkerAcrossChunks(t *testing.T) {
+	skipUnderRace(t)
 	base := repoCode(t, 3*MaxInputBytes)
 	pat := fakeGitHub(rand.New(rand.NewPCG(6, 6)))
 	line := "token := \"" + pat + "\"\n"

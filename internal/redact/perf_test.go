@@ -28,6 +28,11 @@ func largeInputs() map[string]string {
 		"url creds":  fill("a://b:c@"),
 		"aws 40":     "AKIA" + strings.Repeat("A", 16) + fill("Ab3/+")[20:],
 		"key body":   fill(strings.Repeat("Ab3/+9x", 10)[:64] + "\n"),
+		// Literal separators split a line like "\n" escapes (#190).
+		"separators": fill(`"a", `),
+		"compares":   fill(`x["api_key"] != "Ab3x9Ab3x9" || secret !== 'a' `),
+		"lookups":    fill(`os.getenv("api_key") <> "Ab3x9" || "$TOKEN" ≠ 'a' || pwd.equals("x1") `),
+		"adjacent":   fill(`"a" "b",  'c' + b"d"; `),
 		// Encoded separators run the URL-shaped rules a second time (#151).
 		"json slashes": fill("discord" + ".com\\/api\\/webhooks\\/" + strings.Repeat("1", 18) + "\\/" + strings.Repeat("Ab3x", 11) + "\\/"),
 		"percent":      fill("hooks.slack" + ".com%2Fservices%2F" + strings.Repeat("Ab3x", 12) + "%3a%2f"),
@@ -70,8 +75,9 @@ func withFormatChar(text string) string {
 }
 
 // RE2 is linear, so these finish quickly. The bound is generous for slow CI
-// runners and -race; it catches a quadratic regression, not small slowdowns.
+// runners; it catches a quadratic regression, not small slowdowns.
 func TestRedactLargeInputIsBounded(t *testing.T) {
+	skipUnderRace(t)
 	if testing.Short() {
 		t.Skip("slow")
 	}

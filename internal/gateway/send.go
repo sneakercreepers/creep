@@ -42,9 +42,17 @@ var ErrLabel = errors.New("model and purpose must be 1-256 bytes")
 // ErrResponseTooLarge means a reply exceeded maxResponseBytes.
 var ErrResponseTooLarge = errors.New("model response too large")
 
-// Call is one model request. Payload must already be redacted: repository
-// text comes from a FileScan Fragment, with its Redactions. It is sent and
-// stored byte for byte.
+// Call is one model request. Payload must already be redacted. This is the
+// one list of the producers whose repository text may reach it; each
+// redacts every file whole with the run's redact.File and cuts only that
+// output, never raw content (invariant 2):
+//   - FileScan fragments, with Fragment.Redactions;
+//   - reader.Slicer slices, sent by reader.Evaluate with Slice.Redactions;
+//   - discover batches of whole files, sent by discovery with the run's
+//     MarkerCounts of the prompt.
+//
+// A new producer is added here first. The payload is sent and stored byte
+// for byte.
 type Call struct {
 	Endpoint   string         // absolute http(s) URL; the client enforces egress.allow
 	Model      string         // logged

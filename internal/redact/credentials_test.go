@@ -140,6 +140,7 @@ func TestRedactAWSSecretKey(t *testing.T) {
 // File gates on the whole file, so a key id in its last chunk still masks a
 // bare secret key in its first: the ordering limit is only across files.
 func TestFileAWSSecretKeyIDInLaterChunk(t *testing.T) {
+	skipUnderRace(t)
 	rng := rand.New(rand.NewPCG(25, 26))
 	key := fakeToken(rng, alnum, 30) + "Ab/+" + fakeToken(rng, alnum, 6)
 	text := "sk: " + key + "\n" + repoCode(t, MaxInputBytes+2*chunkOverlap) + "id: " + fakeAWS(rng) + "\n"

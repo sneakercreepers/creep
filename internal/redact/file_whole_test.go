@@ -83,6 +83,7 @@ func wrap(s string, n int) string {
 // TestFileMasksAcrossCutAsRedact: a doc that no chunk holds whole is masked
 // by File exactly as Redact masks the doc alone, and its secret is gone.
 func TestFileMasksAcrossCutAsRedact(t *testing.T) {
+	skipUnderRace(t)
 	for name, tc := range wholeFileDocs(rand.New(rand.NewPCG(73, 73))) {
 		t.Run(name, func(t *testing.T) {
 			alone := mustRedact(t, newRedactor(t), tc.doc)
