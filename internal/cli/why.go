@@ -10,6 +10,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/state"
 )
 
 // maxWhyReportBytes caps the report why reads; scan writes far less.
@@ -46,10 +47,7 @@ func runWhy(e env, args []string) int {
 // through report.ReadJSON, which refuses anything scan would not write.
 func readLastReport() (*report.Report, error) {
 	name := reportNames["json"]
-	if _, err := os.Lstat(stateDir); err != nil {
-		return nil, fmt.Errorf("no scan report in this directory (run creep scan with json in report.formats): %w", err)
-	}
-	root, err := os.OpenRoot(stateDir)
+	root, err := openStateDir()
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +57,16 @@ func readLastReport() (*report.Report, error) {
 		return nil, fmt.Errorf("read %s: %w", path.Join(stateDir, name), err)
 	}
 	return report.ReadJSON(bytes.NewReader(data))
+}
+
+// openStateDir opens .creep for reading without creating it, through the
+// state store's own checks, so a .creep link, junction or file a cloned
+// repository planted is never read as the last scan (#209).
+func openStateDir() (*os.Root, error) {
+	if _, err := os.Lstat(stateDir); err != nil {
+		return nil, fmt.Errorf("no scan report in this directory (run creep scan with json in report.formats): %w", err)
+	}
+	return state.OpenExisting(stateDir)
 }
 
 func printWhy(w io.Writer, f report.Finding) {

@@ -93,10 +93,40 @@ func openDir(dir string) (*Store, error) {
 	if err := makeStateDir(abs); err != nil {
 		return nil, err
 	}
+	root, err := openChecked(abs)
+	if err != nil {
+		return nil, err
+	}
+	if err := ignoreAll(root); err != nil {
+		_ = root.Close()
+		return nil, err
+	}
+	return &Store{dir: abs, root: root}, nil
+}
+
+// OpenExisting opens an existing state directory for reading files the
+// store does not own, such as the report creep why reads. It never creates
+// dir and refuses what Open refuses: a link, a Windows junction, a file, a
+// directory others can write, or one swapped in while it opens (#209).
+func OpenExisting(dir string) (*os.Root, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("state dir: %w", err)
+	}
+	return openChecked(abs)
+}
+
+// openChecked opens abs as a root only if it passes checkDir and is still
+// the directory checkDir saw: os.OpenRoot follows links.
+func openChecked(abs string) (*os.Root, error) {
 	before, err := checkDir(abs, os.Lstat)
 	if err != nil {
 		return nil, err
 	}
+	return openSameDir(abs, before)
+}
+
+func openSameDir(abs string, before fs.FileInfo) (*os.Root, error) {
 	root, err := os.OpenRoot(abs)
 	if err != nil {
 		return nil, fmt.Errorf("state dir: %w", err)
@@ -106,16 +136,20 @@ func openDir(dir string) (*Store, error) {
 		_ = root.Close()
 		return nil, fmt.Errorf("state dir %q changed while opening: %w", abs, ErrUnsafePath)
 	}
-	if err := ignoreAll(root); err != nil {
-		_ = root.Close()
-		return nil, err
-	}
-	return &Store{dir: abs, root: root}, nil
+	return root, nil
 }
 
 // Close releases the directory handle.
 func (s *Store) Close() error {
 	return s.root.Close()
+}
+
+// Root is the directory handle Open checked (not a link, not writable by
+// others, the directory it statted), for files the store does not own, such
+// as scan's reports: reopening the directory by path could open a link
+// swapped in since (#209). The store closes it; callers must not.
+func (s *Store) Root() *os.Root {
+	return s.root
 }
 
 // makeStateDir creates abs if missing. A file or link planted in its place

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/state"
 )
 
 const plantedSARIF = `{"version":"2.1.0","runs":[{"results":[]}]}`
@@ -68,15 +71,74 @@ func TestScanRemovesPlantedReportLink(t *testing.T) {
 	}
 }
 
-// A report name that cannot be removed (a non-empty directory) stops the
-// scan before any model call.
-func TestScanRefusesUnremovableReport(t *testing.T) {
-	cfg := scanRepo(t, map[string]string{"app.py": "@flask", ".creep/report.md/x": "x"}, "")
-	m := &fakeModel{}
-	code, _, errOut := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--config", cfg)
-	if code != exitcode.ConfigError || !strings.Contains(errOut, "remove stale report.md") || m.calls != 0 {
-		t.Fatalf("exit %d after %d calls, stderr %q", code, m.calls, errOut)
+// Regression (#209): report names a repository planted as non-empty
+// directories cannot be removed or written, yet the run still prints its
+// result and incomplete mark, writes the formats it can, names each lost
+// file on stderr and never exits 0: it keeps its own code, or 2 when clean.
+func TestScanUnwritableReports(t *testing.T) {
+	tests := []struct {
+		name     string
+		planted  []string // report names planted as directories
+		extra    string
+		args     []string
+		model    *fakeModel
+		wantCode int
+		want     []string // in stdout
+		lost     []string // named on stderr
+		written  []string // report files written
+	}{
+		{"clean run exits 2", []string{"report.json", "report.md", "report.sarif"}, "", nil, &fakeModel{},
+			exitcode.ConfigError, []string{"findings: 0 verified"}, []string{"report.json", "report.md", "report.sarif"}, nil},
+		{"incomplete run keeps 4", []string{"report.json", "report.md", "report.sarif"}, "", nil,
+			&fakeModel{fail: map[string]error{"ssrf": errors.New("connection reset")}},
+			exitcode.Incomplete, []string{"INCOMPLETE RUN (reason send_failed)"}, []string{"report.json", "report.md", "report.sarif"}, nil},
+		{"gate run keeps 1", []string{"report.md"}, "", nil, &fakeModel{verdict: map[string]string{"sql_injection": "vulnerable"}},
+			exitcode.GateExceeded, []string{"reports: .creep/report.json .creep/report.sarif"}, []string{"report.md"}, []string{"report.json", "report.sarif"}},
+		{"formats not configured", []string{"report.md", "report.sarif"}, "report:\n  formats: [json]\n", nil, &fakeModel{},
+			exitcode.ConfigError, []string{"reports: .creep/report.json"}, []string{"remove stale report.md", "remove stale report.sarif"}, []string{"report.json"}},
+		{"json on stdout", []string{"report.json"}, "", []string{"--format", "json"}, &fakeModel{},
+			exitcode.ConfigError, []string{`"schema_version"`}, []string{"report.json not written"}, []string{"report.md", "report.sarif"}},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := map[string]string{"app.py": "@flask"}
+			for _, name := range tt.planted {
+				files[".creep/"+name+"/x"] = "x"
+			}
+			cfg := scanRepo(t, files, tt.extra)
+			args := append([]string{"scan", "--config", cfg}, tt.args...)
+			code, out, errOut := runScanWith(fakeDeps(tt.model, calibrate.TierM), args...)
+			if code != tt.wantCode || tt.model.calls == 0 {
+				t.Fatalf("exit %d after %d calls, want %d\nstdout:\n%s\nstderr:\n%s", code, tt.model.calls, tt.wantCode, out, errOut)
+			}
+			assertContains(t, "stdout", out, tt.want)
+			assertContains(t, "stderr", errOut, tt.lost)
+			var regular []string
+			for _, name := range reportFiles(t) {
+				if info, err := os.Lstat(filepath.Join(stateDir, name)); err == nil && info.Mode().IsRegular() {
+					regular = append(regular, name)
+				}
+			}
+			if strings.Join(regular, ",") != strings.Join(tt.written, ",") {
+				t.Fatalf("reports written = %v, want %v", regular, tt.written)
+			}
+		})
+	}
+}
+
+// A run that fails after opening its state (#209) still names the stale
+// report it could not remove, which is left on disk, and keeps its code.
+func TestFailedScanNamesStaleReports(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", ".creep/report.sarif/x": "x"}, "")
+	deps := fakeDeps(&fakeModel{}, calibrate.TierM)
+	deps.calibrate = func(context.Context, calibrate.CacheOptions) (calibrate.Calibration, error) {
+		return calibrate.Calibration{}, errors.New("model down")
+	}
+	code, _, errOut := runScanWith(deps, "scan", "--config", cfg)
+	if code != exitcode.ModelOrSandbox {
+		t.Fatalf("exit %d, want %d\nstderr:\n%s", code, exitcode.ModelOrSandbox, errOut)
+	}
+	assertContains(t, "stderr", errOut, []string{"creep scan: calibration: model down", "creep scan: reports: remove stale report.sarif"})
 }
 
 // reportFiles lists the report files in .creep.
@@ -89,4 +151,37 @@ func reportFiles(t *testing.T) []string {
 		}
 	}
 	return got
+}
+
+// Regression (#209 I2): reports go through the handle the state store
+// checked, never .creep reopened by path, so a directory swapped in under
+// the name after the store opened gets nothing.
+func TestWriteReportsUsesStoreRoot(t *testing.T) {
+	isolateUserConfig(t)
+	t.Chdir(t.TempDir())
+	store, err := state.OpenUser(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := os.Rename(stateDir, "checked"); err != nil {
+		t.Skipf("cannot rename an open directory here: %v", err)
+	}
+	if err := os.Mkdir(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := report.New(report.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	written, failed := writeReports(store.Root(), []string{"json", "markdown"}, rep)
+	if len(failed) != 0 || len(written) != 2 {
+		t.Fatalf("written %v, failed %v", written, failed)
+	}
+	if got := reportFiles(t); len(got) != 0 {
+		t.Fatalf("reports written into the swapped-in directory: %v", got)
+	}
+	if _, err := os.Lstat(filepath.Join("checked", "report.json")); err != nil {
+		t.Fatalf("report not in the checked directory: %v", err)
+	}
 }
