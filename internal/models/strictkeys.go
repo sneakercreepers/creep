@@ -13,7 +13,8 @@ const (
 	reasonDuplicateKey = "it had a duplicate key"
 	reasonKeyCase      = "it had a key that does not exactly match the schema"
 	// reasonAmbiguous is creep's bug, not the model's: the output type gives
-	// one JSON name to two fields, so every reply to it is refused.
+	// one JSON name to two fields, so every reply holding such an object is
+	// refused.
 	reasonAmbiguous = "its schema type gives one JSON name to two fields"
 )
 

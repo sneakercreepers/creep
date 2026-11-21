@@ -83,7 +83,7 @@ func readPastDeadline(t *testing.T, ctx context.Context, rs repoScan, read func(
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := planSinks(rs, ptier, planBudget(2_000_000, rtier), findings)
+	plan, err := planSinks(rs, ptier, planBudget(2_000_000, rtier), findings, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

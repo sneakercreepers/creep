@@ -13,6 +13,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway/gatewaytest"
+	"github.com/sneakercreepers/creep/internal/planner"
 )
 
 // plantedApp returns a Flask app whose injectable route holds secrets on
@@ -115,8 +116,8 @@ func productionTransport() scanDeps {
 // --replay. Together: egress.log and every payload file hold no planted
 // secret, every request the endpoint received is in egress.log, every
 // logged call went to the replayed endpoint and the replay opened no
-// connection, the planner input built from the repository holds only IDs,
-// enums, booleans and bounded numbers, and both runs exit with the code the
+// connection, the planner input each run passed holds only IDs, enums,
+// booleans and bounded numbers, and both runs exit with the code the
 // exit-code table gives the verdict. TestHolisticCatchesBrokenRun shows each check failing.
 func TestHolisticReplayProtections(t *testing.T) {
 	tests := []struct {
@@ -133,7 +134,10 @@ func TestHolisticReplayProtections(t *testing.T) {
 		seed++
 		t.Run(tt.name, func(t *testing.T) {
 			run := newFixtureRun(t, seed, tt.verdict)
-			code, recorded, errOut := runScanWith(productionTransport(), "scan", "--record", "--config", run.cfg)
+			var inputs []planner.Input
+			deps := productionTransport()
+			deps.planned = func(in planner.Input) { inputs = append(inputs, in) }
+			code, recorded, errOut := runScanWith(deps, "scan", "--record", "--config", run.cfg)
 			if code != tt.wantCode {
 				t.Fatalf("record: exit %d, want %d\n%s\n%s", code, tt.wantCode, recorded, errOut)
 			}
@@ -141,18 +145,34 @@ func TestHolisticReplayProtections(t *testing.T) {
 			if conns == 0 || !sentMaskedSink(bodies) {
 				t.Fatalf("record reached the endpoint over %d connections without the masked sink line; the check would be vacuous\n%s", conns, bodies)
 			}
-			code, replayed, errOut := runScanWith(productionTransport(), "scan", "--replay", "--config", run.cfg)
+			code, replayed, errOut := runScanWith(deps, "scan", "--replay", "--config", run.cfg)
 			if code != tt.wantCode || replayed != recorded {
 				t.Fatalf("replay: exit %d, want %d\nrecorded:\n%s\nreplayed:\n%s\n%s", code, tt.wantCode, recorded, replayed, errOut)
 			}
 			problems := replayConns(conns, run.endpoint.Conns())
 			problems = append(problems, runProblems(t, run.secrets, run.endpoint.URL()+"/v1/", run.endpoint.Bodies())...)
-			problems = append(problems, valueText(repoPlannerInput(t), "planner.Input")...)
+			problems = append(problems, plannedText(inputs)...)
 			if len(problems) != 0 {
 				t.Fatalf("protections broken:\n%s", strings.Join(problems, "\n"))
 			}
 		})
 	}
+}
+
+// plannedText walks the planner input of each run, record then replay. A
+// run that planned nothing, or no sink, would make the walk vacuous.
+func plannedText(inputs []planner.Input) []string {
+	if len(inputs) != 2 {
+		return []string{fmt.Sprintf("planner saw %d inputs, want one per run", len(inputs))}
+	}
+	var out []string
+	for i, in := range inputs {
+		if len(in.Sinks) == 0 {
+			out = append(out, fmt.Sprintf("planner input %d has no sink; the text check would be vacuous", i))
+		}
+		out = append(out, valueText(in, "planner.Input")...)
+	}
+	return out
 }
 
 // sentMaskedSink is true when a reader request carried the sink line with

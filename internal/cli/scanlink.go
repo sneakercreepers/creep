@@ -15,6 +15,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
+	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/sandbox"
 	"github.com/sneakercreepers/creep/internal/scanrun"
@@ -32,6 +33,9 @@ type scanDeps struct {
 	// code that starts a program (ADR 0013).
 	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result
 	sandbox    sandboxDeps
+	// planned sees the planner input scan builds; nil in production. The
+	// holistic protection test walks the real input through it (#188).
+	planned func(planner.Input)
 }
 
 // scannerRunner is runScanner, or scanrun.Run when none is set.

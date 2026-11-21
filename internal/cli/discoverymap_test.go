@@ -46,7 +46,7 @@ func TestUnmappedKindMakesRunIncomplete(t *testing.T) {
 		paths: []string{"app.js"},
 	}
 	findings := baseFindings(rs)
-	if _, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1}, findings); err != nil {
+	if _, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 10, StepTokens: 1}, findings, nil); err != nil {
 		t.Fatal(err)
 	}
 	reason := incompleteReason("", findings, nil)
