@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -84,9 +85,13 @@ func IgnoreReason(name string, src []byte) (Ignored, error) {
 	return 0, nil
 }
 
-// repoRelative normalizes a repo-relative name to a clean slash path.
+// repoRelative normalizes a repo-relative name to a clean slash path. The
+// separator follows the host, like the walk that produced the name: on
+// Windows '\' separates, and elsewhere it is a byte of a legal file name,
+// so vendor\x.py at the root of a Linux checkout is one file in no
+// directory (#194). A drive-letter name is refused on every host.
 func repoRelative(name string) (string, error) {
-	slash := strings.ReplaceAll(name, "\\", "/")
+	slash := filepath.ToSlash(name)
 	clean := path.Clean(slash)
 	switch {
 	case slash == "" || clean == ".":
@@ -131,10 +136,12 @@ func hasGeneratedMarker(fam family, src []byte) bool {
 // leadingComments returns the text of the comments before the first line of
 // code in the first generatedHeadBytes, without comment syntax. Python
 // comments start with '#'; other files use '//', '/* ... */' and a '#!'
-// first line.
+// first line. A block comment counts only once it closes on a line of its
+// own: "/* @generated */ var x;" shares its line with code, and a block the
+// head cuts off may close on code, so neither is a header (#194).
 func leadingComments(fam family, src []byte) []string {
 	head := bytes.TrimPrefix(src[:min(len(src), generatedHeadBytes)], []byte{0xef, 0xbb, 0xbf}) // UTF-8 BOM
-	var out []string
+	var out, block []string
 	inBlock := false
 	for i, raw := range strings.Split(string(head), "\n") {
 		line := strings.TrimSpace(raw)
@@ -157,13 +164,14 @@ func leadingComments(fam family, src []byte) []string {
 			return out
 		}
 		body, rest, closed := strings.Cut(line, "*/")
-		out = append(out, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(body), "*")))
-		if closed {
-			inBlock = false
-			if strings.TrimSpace(rest) != "" {
-				return out
-			}
+		block = append(block, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(body), "*")))
+		if !closed {
+			continue
 		}
+		if strings.TrimSpace(rest) != "" {
+			return out
+		}
+		out, block, inBlock = append(out, block...), nil, false
 	}
 	return out
 }

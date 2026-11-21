@@ -90,14 +90,24 @@ func runScanners(ctx context.Context, enabled []string, run func(context.Context
 			res := run(ctx, job)
 			status = runStatus(res.Outcome)
 			out.findings = append(out.findings, scannerFindings(c.Scanner, res.Findings)...)
-			if status == report.ScannerFailed {
-				out.failed = true
-				fmt.Fprintf(stderr, "creep scan: scanner %s failed: %s; its classes were not evaluated\n", c.Scanner, res.Failure)
-			}
+			out.failed = out.failed || status == report.ScannerFailed
+			noteRun(stderr, c.Scanner, res, status)
 		}
 		out.coverage = append(out.coverage, report.ScannerCoverage{Name: string(c.Scanner), Status: status, Classes: scannerClasses(c.Scanner)})
 	}
 	return out
+}
+
+// noteRun tells the operator why a scanner failed, or that the repository's
+// suppression file was left out (#226): the report schema is frozen, so
+// stderr is where that is said. Failure is a closed ID, safe to print.
+func noteRun(stderr io.Writer, s repofile.Scanner, res scanrun.Result, status report.ScannerStatus) {
+	switch {
+	case status == report.ScannerFailed:
+		fmt.Fprintf(stderr, "creep scan: scanner %s failed: %s; its classes were not evaluated\n", s, res.Failure)
+	case res.SkippedRepoIgnore:
+		fmt.Fprintf(stderr, "creep scan: scanner %s: the repository's .gitleaksignore was not applied, so it hid no finding\n", s)
+	}
 }
 
 // scannerFindings turns runner findings into probable report findings of

@@ -85,7 +85,7 @@ func fakeCLI(mode string) int {
 			time.Sleep(time.Minute)
 		}
 	case "late":
-		time.Sleep(3 * time.Second) // past -race builds' 1 s exit delay
+		time.Sleep(6 * time.Second) // past -race builds' 1 s exit delay and a slow taskkill on Windows
 		_ = os.WriteFile("late.txt", []byte("x"), 0o600)
 		_ = os.WriteFile(os.Getenv(fakeMarkEnv), []byte("x"), 0o600) //nolint:gosec // G703: the test sets this path in t.TempDir()
 	}

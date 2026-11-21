@@ -40,6 +40,8 @@ func fakeMain(mode string, args []string) int {
 	switch mode {
 	case "findings":
 		return writeFindings(args[0], report, repo)
+	case "echo":
+		echoSource(report, repo)
 	case "empty":
 		return 128
 	case "malformed":
@@ -121,6 +123,35 @@ func writeFindings(cmd, report, repo string) int {
 	return 1 // osv-scanner: advisories found
 }
 
+// echoSource logs the source it was given, one per line beside the fake,
+// and reports one finding in it: the source itself when it is a file, or
+// its config.py when it is a directory.
+func echoSource(report, source string) {
+	log, err := os.OpenFile(treeMarker("sources"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // G703: beside the fake, in t.TempDir()
+	if err == nil {
+		fmt.Fprintln(log, source)
+		_ = log.Close()
+	}
+	file := source
+	if info, err := os.Stat(source); err == nil && info.IsDir() { //nolint:gosec // G703: the runner's source, in t.TempDir()
+		file = filepath.Join(source, "config.py")
+	}
+	writeReport(report, gitleaksJSON(file))
+}
+
+// loggedSources is what echoSource logged, in order.
+func loggedSources(t *testing.T, bin string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(bin), "sources"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Split(strings.TrimSpace(strings.ReplaceAll(string(data), "\r\n", "\n")), "\n")
+}
+
 // gitleaksJSON is a redacted gitleaks report: two rules on one line, the
 // first repeated, so the runner must deduplicate.
 func gitleaksJSON(file string) []byte {
@@ -192,7 +223,7 @@ func startGrandchild(args []string) {
 
 func grandchild() int {
 	writeReport(treeMarker("started"), nil)
-	time.Sleep(2 * time.Second)
+	time.Sleep(6 * time.Second) // room for a slow taskkill on a loaded Windows host
 	writeReport(treeMarker("survived"), nil)
 	return 0
 }

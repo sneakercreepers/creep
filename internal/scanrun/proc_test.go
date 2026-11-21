@@ -1,5 +1,3 @@
-//go:build unix
-
 package scanrun
 
 import (
@@ -13,7 +11,8 @@ import (
 )
 
 // TestTimeoutKillsProcessTree: a helper the scanner started dies with it
-// on timeout, because the scanner runs in its own process group.
+// on timeout: on Unix the scanner runs in its own process group, and on
+// Windows taskkill /T kills the tree while the scanner is alive (#226).
 func TestTimeoutKillsProcessTree(t *testing.T) {
 	base := t.TempDir()
 	repo := filepath.Join(base, "repo")
@@ -31,7 +30,7 @@ func TestTimeoutKillsProcessTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "started")); err != nil {
 		t.Fatalf("the helper never started: %v", err)
 	}
-	time.Sleep(3 * time.Second) // past the helper's 2 s sleep
+	time.Sleep(7 * time.Second) // past the helper's 6 s sleep
 	if _, err := os.Stat(filepath.Join(dir, "survived")); err == nil {
 		t.Error("the helper outlived the timed-out scanner")
 	}

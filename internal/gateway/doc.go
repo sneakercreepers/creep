@@ -183,8 +183,11 @@
 // directory, where other users could plant files a CLI reads from parent
 // directories) and its own TMPDIR, a timeout and a stdout cap; stderr
 // is discarded. On Unix the CLI's whole process group is killed after it
-// exits or times out, before the working directory is checked; Windows
-// kills only the CLI (no job object without x/sys or unsafe). Anything
+// exits or times out, before the working directory is checked; on Windows
+// a timeout or the output cap kills the tree with taskkill /T /F while the
+// CLI is alive (no job object without x/sys or unsafe, #226), and after a
+// normal exit nothing is killed, since the freed process ID could be
+// reused (residual, threat model C3). Anything
 // left in the working directory means the CLI used a tool: the reply is
 // dropped with a *ToolUseError.
 package gateway

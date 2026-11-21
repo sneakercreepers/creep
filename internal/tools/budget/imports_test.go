@@ -21,6 +21,12 @@ func TestCheckImports(t *testing.T) {
 	}{
 		{"gateway may use net/http", "internal/gateway/client.go", "net/http", ""},
 		{"gateway subpackage may use net", "internal/gateway/tlsconf/t.go", "crypto/tls", ""},
+		{"gateway command file may run programs", "internal/gateway/command_run.go", "os/exec", ""},
+		{"gateway proc file may run programs", "internal/gateway/proc_windows.go", "os/exec", ""},
+		{"gateway test may run programs", "internal/gateway/fakecli_test.go", "os/exec", ""},
+		{"gateway client may not run programs", "internal/gateway/client.go", "os/exec", "only from its command files"},
+		{"gateway subpackage command file may not", "internal/gateway/sub/command.go", "os/exec", "only from its command files"},
+		{"gateway look-alike command name", "internal/gateway/xcommand.go", "os/exec", "only from its command files"},
 		{"nested look-alike gateway", "internal/cli/internal/gateway/g.go", "net/http", "network access"},
 		{"gateway name prefix look-alike", "internal/gatewayx/g.go", "net", "network access"},
 		{"net outside gateway", "internal/cli/x.go", "net", "network access"},
