@@ -155,6 +155,7 @@ func TestCheckNoExecution(t *testing.T) {
 		{"testdata skipped", fstest.MapFS{"testdata/apps/x/run.sh": {Data: []byte("node testdata/apps\n")}}, ""},
 		// #158: runner gaps, each one passed before the fix.
 		{"lower-case makefile", runner("makefile"), "makefile"},
+		{"gnu makefile", runner("GNUmakefile"), "GNUmakefile"},
 		{"lower-case dockerfile", runner("sub/dockerfile"), "dockerfile"},
 		{"capitalized compose", runner("Docker-compose.yml"), "Docker-compose.yml"},
 		{"upper-case compose extension", runner("compose.YAML"), "compose.YAML"},
@@ -175,6 +176,9 @@ func TestCheckNoExecution(t *testing.T) {
 		{"package testdata script", fstest.MapFS{"internal/p/testdata/run.sh": {Data: []byte("node ../../../testdata/apps/express/vulnerable/app.js\n")}}, "run.sh"},
 		{"only the root apps tree skipped", fstest.MapFS{"internal/p/testdata/apps/run.sh": {Data: []byte("node testdata/apps\n")}}, "run.sh"},
 		{"replay skipped", fstest.MapFS{"testdata/replay/x/run.sh": {Data: []byte("node testdata/apps\n")}}, ""},
+		{"only the root replay tree skipped", fstest.MapFS{"internal/p/testdata/replay/run.sh": {Data: []byte("node testdata/apps\n")}}, "run.sh"},
+		{"a plain comment may name the apps", fstest.MapFS{"p/a.go": {Data: []byte("package p\n\n// Reads testdata/apps; see go:generate.\n")}}, ""},
+		{"tasks.json outside .vscode is not run", runner("config/tasks.json"), ""},
 		{"go generate elsewhere is fine", fstest.MapFS{"p/gen.go": {Data: []byte("package p\n\n//go:generate stringer -type=Kind\n")}}, ""},
 		{"directive text in a string is fine", fstest.MapFS{"p/a.go": {Data: []byte("package p\n\nvar _ = \"//go:generate sh testdata/apps\"\n")}}, ""},
 		{"vscode settings are not run", runner(".vscode/settings.json"), ""},

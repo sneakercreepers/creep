@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -72,6 +73,9 @@ func TestGenerateListsOnlyModulePackages(t *testing.T) {
 // release platform with cgo off, whatever GOOS, GOARCH and C toolchain the
 // host has, so each CI job builds the same map.
 func TestGenerateIsTheSameOnEveryHost(t *testing.T) {
+	// A host without a C toolchain turns cgo off by itself; force it on so
+	// the cgo case fails on every host when pkgmap stops turning it off.
+	t.Setenv("CGO_ENABLED", "1")
 	only := func(constraint, pkg string) string { return "//go:build " + constraint + "\n\n" + docGo(pkg) }
 	tests := []struct {
 		name  string
@@ -215,5 +219,42 @@ func TestMakeCheckRunsMapCheck(t *testing.T) {
 		if !regexp.MustCompile(re).Match(data) {
 			t.Errorf("Makefile does not match %s", re)
 		}
+	}
+}
+
+// releaseList matches a goos or goarch flow list in .goreleaser.yaml.
+var releaseList = regexp.MustCompile(`(?m)^\s*(goos|goarch):\s*\[([^\]]*)\]`)
+
+// TestMapPlatformsMatchRelease fails when the release builds for a platform
+// mapPlatforms does not list, or no longer builds for one it lists (#117).
+// make budget guards its reachTargets the same way.
+func TestMapPlatformsMatchRelease(t *testing.T) {
+	data, err := os.ReadFile("../../../.goreleaser.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := string(data)
+	if !strings.Contains(release, "- CGO_ENABLED=0") {
+		t.Error(".goreleaser.yaml no longer builds with CGO_ENABLED=0; update goList")
+	}
+	lists := map[string][][]string{}
+	for _, m := range releaseList.FindAllStringSubmatch(release, -1) {
+		lists[m[1]] = append(lists[m[1]], strings.FieldsFunc(m[2], func(r rune) bool { return r == ',' || r == ' ' }))
+	}
+	if len(lists["goos"]) != 1 || len(lists["goarch"]) != 1 {
+		t.Fatalf(".goreleaser.yaml goos/goarch lists = %q, want one build", lists)
+	}
+	want := map[[2]string]bool{}
+	for _, goos := range lists["goos"][0] {
+		for _, goarch := range lists["goarch"][0] {
+			want[[2]string{goos, goarch}] = true
+		}
+	}
+	got := map[[2]string]bool{}
+	for _, p := range mapPlatforms {
+		got[p] = true
+	}
+	if !maps.Equal(got, want) || len(got) != len(mapPlatforms) {
+		t.Errorf("mapPlatforms = %v, want the release targets %v", mapPlatforms, want)
 	}
 }
