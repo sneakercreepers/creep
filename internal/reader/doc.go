@@ -82,16 +82,18 @@
 // tiers S, M and L, in the internal/state cache format, keyed by the SHA-256
 // of the exact request body. replay_test.go runs every app's vulnerable and
 // safe variants at every tier through Slicer.Build and Evaluate from those
-// recordings, with no network and no key, and checks
-// the verdicts expected.json implies: vulnerable citing the sink line on the
-// vulnerable variant, not_vulnerable on the safe twin. The replies are
-// synthesized from expected.json, not recorded from a live model, so they
-// pin the reader path (slicing, prompt, request, decoding, projection), not
-// a model's judgement; replies recorded from a live model replace them in
-// #204, which needs a maintainer's key. They are signed with a fixed public test secret, so a
-// real run, which uses the user's own secret, never serves them. A missing,
-// torn, edited, foreign or stale recording fails the test (replay_fail_test.go).
-// After changing a prompt, the schema, slicing or an app, regenerate them:
+// recordings, with no network and no key, and checks the verdicts
+// expected.json implies: vulnerable citing the sink line on the vulnerable
+// variant, not_vulnerable on the safe twin. The replies are synthesized from
+// expected.json, not recorded from a live model, so they pin the reader path
+// (slicing, prompt, request, decoding, projection), not a model's judgement.
+// -update only writes synthesized replies; replacing them with live replies
+// (#204) needs a live-record mode, which does not exist yet, run by a
+// maintainer with a key. They are signed with a fixed public test secret,
+// so a real run, which uses the user's own secret, never serves them. A
+// missing, torn, edited, foreign or stale recording fails the test
+// (replay_fail_test.go). After changing a prompt, the schema, slicing or an
+// app, regenerate them:
 //
 //	go test ./internal/reader -run TestAppsReplay -update
 package reader

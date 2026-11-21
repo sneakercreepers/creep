@@ -35,7 +35,7 @@ Run `creep why <id>` for the evidence behind a finding.
 | `www.evil.example/[link](http://x)<script>.js` | `too large` |
 | `ok\x1b[31mred\x0anewline.py` | `line too long` |
 | `bidi\u202egnp.exe` | `read failed` |
-| `c1\x9b31mcsi.py` | `redact failed` |
+| `c1\u009b31mcsi.py` | `redact failed` |
 | `del\x7fete.py` | `read failed` |
 | `tag\U000e00411.py` | `read failed` |
 | `lit\\u202egnp.exe` | `read failed` |

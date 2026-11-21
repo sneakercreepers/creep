@@ -13,9 +13,11 @@ import (
 // so a table cell cannot be split, and every rune that is not printable
 // (controls, bidi overrides, zero-width and other format runes, invalid
 // UTF-8) is shown as a Go escape, so the text reads the same in a terminal,
-// an editor and a renderer. A literal backslash is doubled and runes above
-// U+FFFF use the fixed-width \U form, so each escape reads only one way: a
-// file really named a\u202eb.py never looks like one holding U+202E.
+// an editor and a renderer. A literal backslash is doubled, \x stands only
+// for one byte (an ASCII control or invalid UTF-8) and every other rune uses
+// \u, or the fixed-width \U above U+FFFF, so each escape reads only one way:
+// a file really named a\u202eb.py never looks like one holding U+202E, and
+// the rune U+009B never looks like the stray byte 0x9b.
 func codeSpan(s string) string {
 	body := visible(s)
 	fence := strings.Repeat("`", longestRun(body, '`')+1)
@@ -40,7 +42,7 @@ func visible(s string) string {
 			b.WriteString(`\\`)
 		case r == ' ' || (unicode.IsPrint(r) && !unicode.Is(unicode.Cf, r)):
 			b.WriteRune(r)
-		case r < 0x100:
+		case r < utf8.RuneSelf:
 			fmt.Fprintf(&b, `\x%02x`, r)
 		case r <= 0xffff:
 			fmt.Fprintf(&b, `\u%04x`, r)
