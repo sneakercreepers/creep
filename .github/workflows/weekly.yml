@@ -1,0 +1,71 @@
+name: Weekly
+
+# Temporal fitness functions (#137, docs/architecture.md §9): a vulnerability
+# published between PRs, and fuzz inputs the per-PR seed corpus never reaches.
+# A failure fails the run, which notifies the maintainer; the workflow never
+# commits, opens issues or holds a write token.
+on:
+  schedule:
+    - cron: "17 3 * * 3"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  vuln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  fuzz:
+    runs-on: ubuntu-latest
+    # 10 minutes of fuzzing per target plus build and minimization.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: ./internal/redact
+            target: FuzzRedactSecrets
+          - pkg: ./internal/redact
+            target: FuzzFile
+          # About 7 exec/s, so the 30 s per-PR run explores little (#228 audit).
+          - pkg: ./internal/gateway
+            target: FuzzScanSendsNoSecret
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: fuzz
+        env:
+          FUZZ_PKG: ${{ matrix.pkg }}
+          FUZZ_TARGET: ${{ matrix.target }}
+        run: go test -run '^$' -fuzz "^${FUZZ_TARGET}\$" -fuzztime 10m "$FUZZ_PKG"
+      # go test writes the failing input under the package's testdata/fuzz;
+      # the fix PR commits it there so the seed corpus replays it.
+      - name: upload crasher
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crasher-${{ matrix.target }}
+          path: internal/*/testdata/fuzz/${{ matrix.target }}/
+          retention-days: 7

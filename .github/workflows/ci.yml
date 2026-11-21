@@ -181,3 +181,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: make protections
+      # A failed fuzz run leaves its input under testdata/fuzz (#137).
+      - name: upload fuzz crasher
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crasher
+          path: internal/*/testdata/fuzz/
+          retention-days: 7
