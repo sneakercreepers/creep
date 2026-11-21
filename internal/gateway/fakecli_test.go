@@ -62,12 +62,8 @@ func fakeCLI(mode string) int {
 		_ = os.WriteFile(os.Getenv("TMPDIR")+string(os.PathSeparator)+"cache", []byte("x"), 0o600) //nolint:gosec // G703: the gateway sets TMPDIR
 		fmt.Print(`{"ok":true}`)
 	case "huge":
-		chunk := bytes.Repeat([]byte("A"), 64<<10)
-		for {
-			if _, err := os.Stdout.Write(chunk); err != nil {
-				return 1
-			}
-		}
+		flood()
+		return 1
 	case "sleep":
 		time.Sleep(time.Minute)
 	case "drip":
@@ -84,24 +80,59 @@ func fakeCLI(mode string) int {
 		if mode == "spawnhang" {
 			time.Sleep(time.Minute)
 		}
+	case "spawnhuge":
+		startLateWriter()
+		flood()
 	case "late":
-		time.Sleep(3 * time.Second) // past -race builds' 1 s exit delay
-		_ = os.WriteFile("late.txt", []byte("x"), 0o600)
-		_ = os.WriteFile(os.Getenv(fakeMarkEnv), []byte("x"), 0o600) //nolint:gosec // G703: the test sets this path in t.TempDir()
+		beat()
 	}
 	return 0
 }
 
-// fakeMarkEnv names the file a late writer creates outside its working
-// directory, so a test can see whether it outlived the run.
+// flood writes to stdout until the pipe closes.
+func flood() {
+	chunk := bytes.Repeat([]byte("A"), 64<<10)
+	for {
+		if _, err := os.Stdout.Write(chunk); err != nil {
+			return
+		}
+	}
+}
+
+// fakeMarkEnv names the beat file a late writer rewrites outside its
+// working directory, so a test can see whether it outlived the run.
 const fakeMarkEnv = "CREEP_FAKE_MARK"
 
-// startLateWriter starts a detached background child that writes after
-// its parent has exited, like a CLI helper process left behind.
+// beatEvery is how often a live late writer rewrites its beat file.
+const beatEvery = 10 * time.Millisecond
+
+// beat rewrites the beat file until the process is killed, so a test can
+// tell a live helper from a dead one without guessing how long a kill
+// takes. It stops on its own after half a minute, in case a test leaves it.
+func beat() {
+	mark := os.Getenv(fakeMarkEnv)
+	for range 30 * time.Second / beatEvery {
+		_ = os.WriteFile(mark, []byte("x"), 0o600) //nolint:gosec // G703: the test sets this path in t.TempDir()
+		time.Sleep(beatEvery)
+	}
+}
+
+// startLateWriter starts a detached background child that keeps writing
+// after its parent has exited, like a CLI helper process left behind. It
+// returns once the child beats, so neither an exit nor the timeout can
+// win the race against its start.
 func startLateWriter() {
 	child := exec.Command(os.Args[0]) //nolint:gosec // G204: this test binary
 	child.Env = append(os.Environ(), fakeCLIEnv+"=late")
-	_ = child.Start()
+	if child.Start() != nil {
+		return
+	}
+	for range 250 {
+		if _, err := os.Stat(os.Getenv(fakeMarkEnv)); err == nil { //nolint:gosec // G703: the test sets this path in t.TempDir()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // fakeCommand returns a Command that re-runs this test binary in mode.
