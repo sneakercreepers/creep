@@ -202,6 +202,7 @@ func TestRedactRunFull(t *testing.T) {
 // value up to the end of the file; the byte cap ends the run instead of
 // growing memory, and no body is ever returned.
 func TestFileUnterminatedKeysStayWithinCap(t *testing.T) {
+	skipUnderRace(t)
 	rng := rand.New(rand.NewPCG(69, 5))
 	r := newRedactor(t)
 	r.state.bytes = maxRunBytes - 3*(64<<10) // as if many such files came before

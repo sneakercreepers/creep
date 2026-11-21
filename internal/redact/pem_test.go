@@ -10,15 +10,30 @@ import (
 
 const base64Chars = alnum + "+/"
 
-// raceStride thins the every-offset tests under -race (issue #203): they try
-// every 11th offset, and as 11 shares no factor with the 64, 70 and 76-byte
-// line widths, over 11 lines or more those offsets still fall at every
-// position within a line. The job without -race (windows-latest) still tries
-// every offset.
+// raceStride thins the every-offset tests under -race (#203, #76): they try
+// every 11th offset, times the shard count where a test shards its offsets.
+// What that still reaches differs by test (#76 A1):
+//   - TestRedactSplitPrivateKey and TestRedactKeyBodyWindows: every position
+//     within a body line, since their strides (88, 11) share no factor with
+//     the 65 and 71-byte line periods and the keys span 11 lines or more.
+//   - TestRedactSplitLiteralKey: a sample. Its body has 7 lines, and the
+//     json style's 66-byte period is a multiple of 11, so its stride of 44
+//     hits 12 of 66 columns there.
+//   - TestRedactKeyWindowsInCalls: a sample, 20 to 47 of the 65 start
+//     columns for its 300 to 600-byte windows.
+//   - Splits inside a header or footer line: a sample in every test.
+//
+// Only the test job without -race (windows-latest, pinned by the budget
+// tool's TestNonRaceTestJobIsRequired) tries every offset.
 const raceStride = 11
 
 // offsetStep is the step between the offsets an every-offset test tries.
-func offsetStep() int { return underRace(1, raceStride) }
+func offsetStep() int {
+	if raceEnabled {
+		return raceStride
+	}
+	return 1
+}
 
 // Header and footer are split so this file holds no literal key pattern.
 func pemLine(edge, kind string) string {

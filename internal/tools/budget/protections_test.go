@@ -37,6 +37,29 @@ func TestProtectionsAreRequired(t *testing.T) {
 	}
 }
 
+// TestNonRaceTestJobIsRequired pins the job that runs the redact tests -race
+// skips or samples in full (#76 A2): the test matrix keeps windows-latest,
+// cgo stays off there so make check runs without -race, and the main ruleset
+// requires that job. Losing any of them would drop that coverage silently.
+func TestNonRaceTestJobIsRequired(t *testing.T) {
+	ci := strings.ReplaceAll(readRepoFile(t, ".github/workflows/ci.yml"), "\r\n", "\n")
+	for what, re := range map[string]string{
+		"a windows-latest test job": `(?m)^  test:\n(    .*\n|\n)*?        os: \[[^\]\n]*\bwindows-latest\b[^\]\n]*\]$`,
+		"cgo disabled on Windows":   `(?m)^      - name: Disable cgo on Windows\n        if: runner\.os == 'Windows'\n        run: echo "CGO_ENABLED=0" >> "\$GITHUB_ENV"$`,
+	} {
+		if !regexp.MustCompile(re).MatchString(ci) {
+			t.Errorf("ci.yml: no %s", what)
+		}
+	}
+	makefile := readRepoFile(t, "Makefile")
+	if !strings.Contains(makefile, `without -race"; go test -timeout $(TEST_TIMEOUT) ./...;`) {
+		t.Error("Makefile: check no longer runs go test ./... without -race when cgo is off")
+	}
+	if !requiredCheck(t, "test (windows-latest)") {
+		t.Error(".github/rulesets/main.json: test (windows-latest) is not a required status check")
+	}
+}
+
 func readRepoFile(t *testing.T, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(name)))

@@ -73,8 +73,9 @@ func withFormatChar(text string) string {
 }
 
 // RE2 is linear, so these finish quickly. The bound is generous for slow CI
-// runners and -race; it catches a quadratic regression, not small slowdowns.
+// runners; it catches a quadratic regression, not small slowdowns.
 func TestRedactLargeInputIsBounded(t *testing.T) {
+	skipUnderRace(t)
 	if testing.Short() {
 		t.Skip("slow")
 	}

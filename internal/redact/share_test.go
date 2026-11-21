@@ -63,9 +63,9 @@ func snap(s *runState) snapshot {
 // Acceptance (#105): one crafted file cannot fill the run. It fails alone
 // with ErrTooManyValues and no output, leaves the run as it was, and every
 // later file is still redacted, its values re-masked in later fragments.
-// Under -race the many-lengths file holds 500 values, still several chunks.
 func TestCraftedFileCannotFillRun(t *testing.T) {
-	many := underRace(1000, 500)
+	skipUnderRace(t)
+	many := 1000
 	tests := []struct {
 		name string
 		file string
@@ -179,6 +179,7 @@ func TestCallShareBounds(t *testing.T) {
 // is not stored again apart from its header), so the byte cap holds about 32
 // files at MaxFileBytes. A quarter of MaxFileBytes keeps the test fast.
 func TestFileKeyCountsOnce(t *testing.T) {
+	skipUnderRace(t)
 	rng := rand.New(rand.NewPCG(105, 2))
 	body := fakeBody(rng, MaxFileBytes/4, 64)
 	file := pemEdge("BEGIN", "RSA") + "\n" + strings.Join(body, "\n")

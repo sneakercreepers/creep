@@ -169,6 +169,7 @@ func keyBodyLines(secret string) []string {
 // of real code larger than one chunk, at an offset the fuzzer picks, and
 // checks it never reaches the output of File, which must stay reversible.
 func FuzzFile(f *testing.F) {
+	skipUnderRace(f)
 	code := repoCode(f, MaxInputBytes+2*chunkOverlap)
 	f.Add("", "", uint64(1), uint8(9), uint16(0))
 	f.Add("x := `", "`", uint64(2), uint8(6), uint16(3000))
