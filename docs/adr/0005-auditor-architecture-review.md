@@ -29,3 +29,11 @@ What decided it: the auditor already holds the issue, diff and verdicts, so the 
 - A new architectural property needs a fitness function in §9, not only prose.
 - The testing convention in AGENTS.md now asks for edge cases, failure paths and security protections, not trivial happy paths.
 - The release process (#19) gains the architecture review and the wiki update as a step next to the release pentest.
+
+## Amendment: benchmark trend and emergent fitness functions (#138)
+
+- **Status:** Accepted with the merge of #292 (spec: #138)
+- **Date:** 2026-11-21
+- **Changes:** two steps of the per-version architecture review, written in the release process (`CONTRIBUTING.md`, Releasing step 1) and in `docs/architecture.md` §9. Roles, order, context and blocking rules of the loop are unchanged.
+
+The review records the benchmark results for the release on the wiki Architecture page, so a regression shows as a trend, and asks "Which findings of this version could become automated checks?", so a recurring review lesson becomes a §9 row or a `make budget` check, or the audit says why it cannot be objective. §9 also lists this review as a manual, triggered fitness function.
