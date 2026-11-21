@@ -19,10 +19,10 @@
 // template) that is still a regular file after the change (#56, ADR 0018
 // amendment). Policy here means CLAUDE.md, CONTRIBUTING.md, the PR template,
 // a nested AGENTS.md, internal/tools/budget/policy*.go,
-// internal/tools/prcheck and ADRs 0002 and 0018; the root AGENTS.md counts
-// only when its "## Workflow (spec-driven)" section differs from the base,
-// so a Current state update needs no ADR. Which ADR, and whether it records
-// the change, stays with review.
+// internal/tools/prcheck and the loop ADRs 0002, 0004, 0005, 0006 and 0018;
+// the root AGENTS.md counts unless only its "## Current state" section
+// differs from the base, so the update after each merge needs no ADR. Which
+// ADR, and whether it records the change, stays with review.
 //
 // It reads only the event payload GitHub writes to disk, the changed-file
 // list and the base AGENTS.md from git, and the checked-out tree, so it

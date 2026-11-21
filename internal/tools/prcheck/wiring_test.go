@@ -93,20 +93,20 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 	}
 }
 
-// The section the ADR rule compares must be the one that holds the loop, or
-// editing the loop would pass as a Current state update (#56).
-func TestLoopSectionHoldsTheLoop(t *testing.T) {
-	section, ok := loopSection(readRepoFile(t, rootAgents))
+// The loop, the invariants and the conventions must sit outside Current
+// state, the one part of AGENTS.md that changes without an ADR (#56).
+func TestCurrentStateHoldsNoPolicy(t *testing.T) {
+	rest, ok := withoutState(readRepoFile(t, rootAgents))
 	if !ok {
-		t.Fatalf("AGENTS.md must hold %q exactly once", loopHeading)
+		t.Fatalf("AGENTS.md must hold %q exactly once", stateHeading)
 	}
-	for _, want := range []string{"developer → tester → pentester → auditor", "Changing or removing this loop needs an ADR", "Documentation-only changes run only the auditor"} {
-		if !strings.Contains(section, want) {
-			t.Errorf("the AGENTS.md loop section lacks %q", want)
+	for _, want := range []string{
+		"## Invariants", "## Conventions", "## Workflow (spec-driven)", "## Do not read",
+		"developer → tester → pentester → auditor", "Changing or removing this loop needs an ADR", "Documentation-only changes run only the auditor",
+	} {
+		if !strings.Contains(rest, want) {
+			t.Errorf("AGENTS.md outside Current state lacks %q", want)
 		}
-	}
-	if strings.Contains(section, "## Current state") {
-		t.Error("the loop section runs into Current state")
 	}
 }
 

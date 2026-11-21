@@ -11,24 +11,27 @@ import (
 	"strings"
 )
 
-// rootAgents is the AGENTS.md whose loop section is compared; every other
-// policy file counts as changed whenever git lists it (#56).
+// rootAgents is the AGENTS.md compared without its Current state; every
+// other policy file counts as changed whenever git lists it (#56).
 const rootAgents = "AGENTS.md"
 
-// loopHeading opens the AGENTS.md section that holds the agent loop. The
-// section runs to the next level-2 heading, so "Current state", updated after
-// every merge, stays outside it.
-const loopHeading = "## Workflow (spec-driven)"
+// stateHeading opens the AGENTS.md section updated after every merge. It runs
+// to the next level-2 heading and is the only part of AGENTS.md that changes
+// without an ADR: the loop, invariants and conventions do not.
+const stateHeading = "## Current state"
 
 // guardFiles are the policy guard's own code and the ADRs that set the loop,
 // lowercase prefixes.
-var guardFiles = []string{"internal/tools/prcheck/", "docs/adr/0002-", "docs/adr/0018-"}
+var guardFiles = []string{
+	"internal/tools/prcheck/",
+	"docs/adr/0002-", "docs/adr/0004-", "docs/adr/0005-", "docs/adr/0006-", "docs/adr/0018-",
+}
 
 // adrFile is a decision record; the template and dependencies.txt are not.
 var adrFile = regexp.MustCompile(`^docs/adr/[0-9]{4}-[^/]+\.md$`)
 
 // isPolicyPath reports whether p is a policy file or the guard that pins it;
-// policyChanges compares the root AGENTS.md by section before asking.
+// policyChanges compares the root AGENTS.md without its Current state first.
 func isPolicyPath(p string) bool {
 	lower := strings.ToLower(p)
 	base := path.Base(lower)
@@ -70,21 +73,21 @@ func policyChanges(files []string, root, baseAgents string) ([]string, error) {
 			}
 			continue
 		}
-		moved, err := loopMoved(root, baseAgents)
+		moved, err := agentsMoved(root, baseAgents)
 		if err != nil {
 			return nil, err
 		}
 		if moved {
-			changed = append(changed, f+" (agent-loop section)")
+			changed = append(changed, f+" (outside Current state)")
 		}
 	}
 	return changed, nil
 }
 
-// loopMoved reports whether the loop section differs from the base. A
-// deleted AGENTS.md, or a loop heading missing or repeated on either side,
-// counts as a change.
-func loopMoved(root, baseAgents string) (bool, error) {
+// agentsMoved reports whether AGENTS.md outside its Current state differs
+// from the base. A deleted AGENTS.md, or a Current state heading missing or
+// repeated on either side, counts as a change.
+func agentsMoved(root, baseAgents string) (bool, error) {
 	head, err := readRegular(filepath.Join(root, rootAgents))
 	if errors.Is(err, fs.ErrNotExist) {
 		return true, nil
@@ -92,19 +95,19 @@ func loopMoved(root, baseAgents string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", rootAgents, err)
 	}
-	before, okBefore := loopSection(baseAgents)
-	after, okAfter := loopSection(string(head))
+	before, okBefore := withoutState(baseAgents)
+	after, okAfter := withoutState(string(head))
 	return !okBefore || !okAfter || before != after, nil
 }
 
-// loopSection returns the lines from loopHeading to the next level-2
-// heading. A heading planted inside the section shortens it, so the
-// extracted text still differs from the base.
-func loopSection(text string) (string, bool) {
+// withoutState returns text minus the lines from stateHeading to the next
+// level-2 heading. A heading planted inside Current state ends it early, so
+// what follows that heading is compared like the rest of the file.
+func withoutState(text string) (string, bool) {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	start, count := 0, 0
 	for i, line := range lines {
-		if line == loopHeading {
+		if line == stateHeading {
 			start, count = i, count+1
 		}
 	}
@@ -118,7 +121,7 @@ func loopSection(text string) (string, bool) {
 			break
 		}
 	}
-	return strings.Join(lines[start:end], "\n"), true
+	return strings.Join(append(lines[:start:start], lines[end:]...), "\n"), true
 }
 
 // hasADR reports whether the PR adds or modifies an ADR: a listed decision

@@ -26,7 +26,10 @@ func TestIsPolicyPath(t *testing.T) {
 		{"internal/tools/prcheck/testdata/x.json", true},
 		{"docs/adr/0002-agent-loop-scope.md", true},
 		{"docs/adr/0018-docs-only-exclusions.md", true},
-		{"AGENTS.md", true}, // policyChanges compares the root one by its loop section first
+		{"docs/adr/0004-pentester-per-release.md", true},
+		{"docs/adr/0005-auditor-architecture-review.md", true},
+		{"docs/adr/0006-three-features-in-flight.md", true},
+		{"AGENTS.md", true}, // policyChanges compares the root one without its Current state first
 		{"README.md", false},
 		{"Makefile", false},
 		{"internal/tools/budget/main.go", false},
@@ -45,10 +48,10 @@ func TestIsPolicyPath(t *testing.T) {
 	}
 }
 
-const loopChanged = "# AGENTS.md\n\n" + loopHeading + "\n\n- developer → auditor\n\n## Current state\n\n- v0.1\n"
+var loopChanged = strings.Replace(baseAgentsText, "developer → tester", "developer → auditor", 1)
 
 func TestADRProblems(t *testing.T) {
-	stateOnly := strings.Replace(baseAgentsText, "- v0.1", "- v0.2", 1)
+	stateOnly := strings.Replace(baseAgentsText, "- v0.1", "- v0.2\n- the pentester is optional", 1)
 	tests := []struct {
 		name  string
 		files []string
@@ -63,18 +66,23 @@ func TestADRProblems(t *testing.T) {
 		{"policy file with a new ADR", []string{"CONTRIBUTING.md", "docs/adr/0019-x.md"}, baseAgentsText, []string{"docs/adr/0019-x.md"}, ""},
 		{"policy ADR amended", []string{"docs/adr/0018-docs-only-exclusions.md"}, baseAgentsText, []string{"docs/adr/0018-docs-only-exclusions.md"}, ""},
 		{"ADR deleted", []string{"CLAUDE.md", "docs/adr/0019-x.md"}, baseAgentsText, nil, `"CLAUDE.md"`},
+		{"loop ADR deleted", []string{"docs/adr/0004-pentester-per-release.md"}, baseAgentsText, nil, `"docs/adr/0004-pentester-per-release.md"`},
 		{"only the ADR template", []string{"CLAUDE.md", "docs/adr/0000-template.md"}, baseAgentsText, []string{"docs/adr/0000-template.md"}, `"CLAUDE.md"`},
 		{"only the dependency allowlist", []string{"CLAUDE.md", "docs/adr/dependencies.txt"}, baseAgentsText, []string{"docs/adr/dependencies.txt"}, `"CLAUDE.md"`},
 		{"ADR in a subfolder", []string{"CLAUDE.md", "docs/adr/old/0019-x.md"}, baseAgentsText, []string{"docs/adr/old/0019-x.md"}, `"CLAUDE.md"`},
 		{"ADR in another case", []string{"CLAUDE.md", "Docs/ADR/0019-x.md"}, baseAgentsText, []string{"Docs/ADR/0019-x.md"}, `"CLAUDE.md"`},
 		{"AGENTS.md current state only", []string{"AGENTS.md"}, stateOnly, nil, ""},
 		{"AGENTS.md line endings only", []string{"AGENTS.md"}, strings.ReplaceAll(baseAgentsText, "\n", "\r\n"), nil, ""},
-		{"AGENTS.md loop changed", []string{"AGENTS.md"}, loopChanged, nil, "agent-loop section"},
+		{"AGENTS.md loop changed", []string{"AGENTS.md"}, loopChanged, nil, "outside Current state"},
 		{"AGENTS.md loop changed with an ADR", []string{"AGENTS.md", "docs/adr/0019-x.md"}, loopChanged, []string{"docs/adr/0019-x.md"}, ""},
-		{"AGENTS.md loop heading renamed", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, loopHeading, "## Workflow", 1), nil, "agent-loop section"},
-		{"AGENTS.md loop heading repeated", []string{"AGENTS.md"}, baseAgentsText + loopHeading + "\n", nil, "agent-loop section"},
-		{"AGENTS.md heading planted in the loop", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, "- developer", "## Note\n- developer", 1), nil, "agent-loop section"},
-		{"AGENTS.md deleted", []string{"AGENTS.md"}, "", nil, "agent-loop section"},
+		{"AGENTS.md section after Current state", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, "- bin/", "- bin/, docs/", 1), nil, "outside Current state"},
+		{"AGENTS.md section appended", []string{"AGENTS.md"}, baseAgentsText + "\n## Exceptions\n\n- skip the pentester\n", nil, "outside Current state"},
+		{"AGENTS.md title changed", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, "# AGENTS.md", "# Agents", 1), nil, "outside Current state"},
+		{"AGENTS.md state heading renamed", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, stateHeading, "## State", 1), nil, "outside Current state"},
+		{"AGENTS.md state heading repeated", []string{"AGENTS.md"}, baseAgentsText + stateHeading + "\n", nil, "outside Current state"},
+		{"AGENTS.md heading planted in Current state", []string{"AGENTS.md"}, strings.Replace(baseAgentsText, "- v0.1", "- v0.1\n## Note\n- skip the tester", 1), nil, "outside Current state"},
+		{"AGENTS.md loop moved into Current state", []string{"AGENTS.md"}, strings.Replace(strings.Replace(baseAgentsText, "- developer → tester\n\n", "", 1), "- v0.1", "- v0.1\n- developer → tester", 1), nil, "outside Current state"},
+		{"AGENTS.md deleted", []string{"AGENTS.md"}, "", nil, "outside Current state"},
 		{"AGENTS.md changed but not listed", []string{"README.md"}, loopChanged, nil, ""},
 	}
 	for _, tt := range tests {
@@ -104,14 +112,27 @@ func TestADRProblems(t *testing.T) {
 	}
 }
 
-// The base AGENTS.md must hold exactly one loop heading too: otherwise the
-// comparison has no anchor and counts as a change.
-func TestADRProblemsBaseWithoutLoop(t *testing.T) {
+// The base AGENTS.md must hold exactly one Current state heading too:
+// otherwise the comparison has no anchor and counts as a change.
+func TestADRProblemsBaseWithoutState(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, rootAgents, baseAgentsText)
 	problems, err := adrProblems([]string{rootAgents}, root, "# AGENTS.md\n")
 	if err != nil || len(problems) != 1 {
 		t.Fatalf("problems %v, err %v; want one", problems, err)
+	}
+}
+
+// A symlinked AGENTS.md fails closed: later edits to its target, which is
+// not a policy path, would otherwise change the loop without an ADR.
+func TestADRProblemsRejectsSymlinkedAgents(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, "docs/agents-copy.txt", baseAgentsText)
+	if err := os.Symlink(filepath.Join(root, "docs", "agents-copy.txt"), filepath.Join(root, rootAgents)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := adrProblems([]string{rootAgents}, root, baseAgentsText); err == nil {
+		t.Fatal("a symlinked AGENTS.md must fail the check")
 	}
 }
 

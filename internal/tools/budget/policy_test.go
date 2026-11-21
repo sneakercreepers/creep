@@ -4,9 +4,22 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// The guard counts only while make budget runs it. main.go is not a policy
+// file, so dropping the step there would need no ADR; this test is (#56).
+func TestPolicyIsABudgetStep(t *testing.T) {
+	want := reflect.ValueOf(policyProblems).Pointer()
+	for _, step := range steps {
+		if reflect.ValueOf(step).Pointer() == want {
+			return
+		}
+	}
+	t.Fatal("steps in main.go must run policyProblems")
+}
 
 // writePolicy creates every policy file with all required phrases under a temp root.
 func writePolicy(t *testing.T) string {
@@ -105,6 +118,12 @@ func TestCheckPolicyHiddenByLinkDefinition(t *testing.T) {
 		{"indented definition", "   [x]: # (" + phrase + ")", true},
 		{"inside a blockquote", "> [x]: # (" + phrase + ")", true},
 		{"escaped bracket in the label", `[a\]b]: # (` + phrase + ")", true},
+		{"bullet list item", "- [x]: # (" + phrase + ")", true},
+		{"ordered list item", "1. [x]: # (" + phrase + ")", true},
+		{"list item in a blockquote", "> * [x]: # (" + phrase + ")", true},
+		{"label over two lines", "[x\n" + phrase + "]: #", true},
+		{"task list item", "- [ ] " + phrase, false},
+		{"list item link", "- [x](https://example.com) " + phrase, false},
 		{"CRLF title line", "[x]: https://example.com\r\n\"" + phrase + "\"\r\n", true},
 		{"after a blank line", "[x]: https://example.com\n\n" + phrase, false},
 		{"after a CRLF blank line", "[x]: https://example.com\r\n\r\n" + phrase, false},

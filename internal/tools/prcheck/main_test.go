@@ -27,8 +27,9 @@ func eventJSON(t *testing.T, body any) string {
 	return string(data)
 }
 
-// baseAgentsText is an AGENTS.md with a loop section and a current state.
-const baseAgentsText = "# AGENTS.md\n\n" + loopHeading + "\n\n- developer → tester\n\n## Current state\n\n- v0.1\n"
+// baseAgentsText is an AGENTS.md with a loop, a Current state and a section after it.
+const baseAgentsText = "# AGENTS.md\n\n## Workflow (spec-driven)\n\n- developer → tester\n\n" +
+	stateHeading + "\n\n- v0.1\n\n## Do not read\n\n- bin/\n"
 
 // newInputs writes the event, the file list, the base AGENTS.md and a tree
 // whose AGENTS.md and docs/adr/ match the base.

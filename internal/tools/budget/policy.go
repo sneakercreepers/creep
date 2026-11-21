@@ -80,8 +80,9 @@ var htmlComment = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
 // `[x]: <url> "title"`, which GitHub does not render (#101). It runs through
 // the next blank line so a title on a following line is hidden too; a
 // paragraph right after it with no blank line is dropped as well, which can
-// only fail the guard, never pass it.
-var linkDefinition = regexp.MustCompile(`(?m)^[ \t>]*\[(?:\\.|[^\\\]\n])+\]:.*(?:\n[ \t>]*\S.*)*`)
+// only fail the guard, never pass it. GitHub also hides a definition that
+// opens a list item and one whose label spans lines, so both count.
+var linkDefinition = regexp.MustCompile(`(?m)^(?:[ \t>]|[-*+][ \t]|[0-9]{1,9}[.)][ \t])*\[(?:\\.|[^\\\]])+\]:.*(?:\n[ \t>]*\S.*)*`)
 
 func policyProblems(cfg config) ([]string, error) {
 	return checkPolicy(cfg.root, readPolicyFile)
