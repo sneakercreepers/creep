@@ -18,7 +18,7 @@ func TestProjectCannotLoosenInheritedGate(t *testing.T) {
 	tests := []struct {
 		name      string
 		in        Inputs
-		key, want string // want is the value, or the error with wantErr
+		key, want string // want is the value, or the error with wantErr; a trailing $ anchors it at the end
 		wantErr   bool
 	}{
 		{"pr looser than user", Inputs{User: user("gates:\n  pr: probable:medium\n"), Project: project("gates:\n  pr: probable:critical\n")},
@@ -57,6 +57,16 @@ func TestProjectCannotLoosenInheritedGate(t *testing.T) {
 			"gates.nightly", `use "probable:info" or a stricter gate`, true},
 		{"limit broken: no operator hint", Inputs{Policy: policy("limits:\n  gates:\n    pr: verified:low\n"), Project: project("gates:\n  pr: probable:medium\n")},
 			"gates.pr", `gates.pr "probable:medium" is looser than the limit "verified:low" set by policy "org.yaml"; the project file may only make gates stricter, use "probable:low" or a stricter gate`, true},
+		{"unordered limit and built-in floor are both named", Inputs{Policy: policy("limits:\n  gates:\n    pr: verified:low\n"), Project: project("gates:\n  pr: verified:critical\n")},
+			"gates.pr", `gates.pr "verified:critical" is looser than the limit "verified:low" set by policy "org.yaml" and the built-in floor "probable:critical" set by default; the project file may only make gates stricter, use "probable:low" or a stricter gate`, true},
+		{"operator hint names the layer that set the gate", Inputs{User: user("gates:\n  pr: probable:low\n"), Project: project("gates:\n  pr: probable:high\n")},
+			"gates.pr", `use "probable:low" or a stricter gate, or set a looser gate in user "~/.creep/config.yaml"`, true},
+		{"operator hint names a policy default", Inputs{Policy: policy("defaults:\n  gates:\n    pr: probable:low\n"), Project: project("gates:\n  pr: probable:high\n")},
+			"gates.pr", `use "probable:low" or a stricter gate, or set a looser gate in policy "org.yaml"`, true},
+		{"built-in floor broken: no operator hint", Inputs{User: user("gates:\n  pr: none\n"), Project: project("gates:\n  pr: verified:critical\n")},
+			"gates.pr", `gates.pr "verified:critical" is looser than the built-in floor "probable:critical" set by default; the project file may only make gates stricter, use "probable:critical" or a stricter gate$`, true},
+		{"stricter user gate hides a broken built-in floor: no operator hint", Inputs{User: user("gates:\n  pr: probable:low\n"), Project: project("gates:\n  pr: none\n")},
+			"gates.pr", `gates.pr "none" is looser than the gate "probable:low" set by user "~/.creep/config.yaml"; the project file may only make gates stricter, use "probable:low" or a stricter gate$`, true},
 		{"locked pr cannot be restated", Inputs{Policy: policy("locked: [gates.pr]\ndefaults:\n  gates:\n    pr: probable:medium\n"), Project: project("gates:\n  pr: probable:medium\n")},
 			"gates.pr", `key "gates.pr" is locked by policy "org.yaml"`, true},
 		{"locked pr, nightly still floored", Inputs{Policy: policy("locked: [gates.pr]\n"), User: user("gates:\n  nightly: probable:high\n"), Project: project("gates:\n  nightly: verified:high\n")},
@@ -67,7 +77,8 @@ func TestProjectCannotLoosenInheritedGate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r, err := Load(tt.in)
 			if tt.wantErr {
-				if err == nil || !strings.Contains(err.Error(), tt.want) {
+				want, anchored := strings.CutSuffix(tt.want, "$")
+				if err == nil || !strings.Contains(err.Error(), want) || anchored && !strings.HasSuffix(err.Error(), want) {
 					t.Fatalf("err = %v, want containing %q", err, tt.want)
 				}
 				return
@@ -84,8 +95,10 @@ func TestProjectCannotLoosenInheritedGate(t *testing.T) {
 
 // Every gate the error suggests passes: for each user gate or policy limit
 // and each project gate, a rejected project gate names a gate that Load
-// then accepts at the same layers, and the operator hint appears only when
-// no policy limit was broken (#249, auditor A1).
+// then accepts at the same layers. The operator hint appears exactly when
+// following it passes: setting the user gate to the project's value (#249,
+// auditor A1; #64). A policy limit, which no operator layer loosens, never
+// gets the hint.
 func TestSuggestedProjectGateIsAccepted(t *testing.T) {
 	gates := []string{gateNone}
 	for _, st := range gateStatuses {
@@ -95,26 +108,27 @@ func TestSuggestedProjectGateIsAccepted(t *testing.T) {
 	}
 	suggestion := regexp.MustCompile(`use "([^"]+)" or a stricter gate`)
 	for _, layer := range []string{"user", "limit"} {
-		for _, floor := range gates {
-			inputs := func(project string) Inputs {
-				in := Inputs{Project: file("creep.yaml", "gates:\n  pr: "+project+"\n")}
-				if layer == "user" {
-					in.User = file("u", "gates:\n  pr: "+floor+"\n")
-				} else {
-					in.Policy = file("org.yaml", "limits:\n  gates:\n    pr: "+floor+"\n")
-				}
-				return in
+		inputs := func(floor, project string) Inputs {
+			in := Inputs{Project: file("creep.yaml", "gates:\n  pr: "+project+"\n")}
+			if layer == "user" {
+				in.User = file("u", "gates:\n  pr: "+floor+"\n")
+			} else {
+				in.Policy = file("org.yaml", "limits:\n  gates:\n    pr: "+floor+"\n")
 			}
+			return in
+		}
+		for _, floor := range gates {
 			for _, value := range gates {
-				checkSuggestion(t, suggestion, inputs, layer+" "+floor+", project "+value, value)
+				checkSuggestion(t, suggestion, inputs, layer, floor, value)
 			}
 		}
 	}
 }
 
-func checkSuggestion(t *testing.T, suggestion *regexp.Regexp, inputs func(string) Inputs, name, value string) {
+func checkSuggestion(t *testing.T, suggestion *regexp.Regexp, inputs func(floor, project string) Inputs, layer, floor, value string) {
 	t.Helper()
-	_, err := Load(inputs(value))
+	name := layer + " " + floor + ", project " + value
+	_, err := Load(inputs(floor, value))
 	if err == nil {
 		return
 	}
@@ -122,11 +136,16 @@ func checkSuggestion(t *testing.T, suggestion *regexp.Regexp, inputs func(string
 	if m == nil {
 		t.Fatalf("%s: no suggestion in %v", name, err)
 	}
-	if _, err := Load(inputs(m[1])); err != nil {
+	if _, err := Load(inputs(floor, m[1])); err != nil {
 		t.Errorf("%s: suggested %s fails: %v", name, m[1], err)
 	}
-	limitBroken := strings.Contains(err.Error(), "the limit")
-	if hinted := strings.Contains(err.Error(), "set a looser gate"); hinted == limitBroken {
-		t.Errorf("%s: operator hint %v with limit broken %v: %v", name, hinted, limitBroken, err)
+	_, loosened := Load(inputs(value, value))
+	wantHint := layer == "user" && loosened == nil
+	if hinted := strings.Contains(err.Error(), "set a looser gate"); hinted != wantHint {
+		t.Errorf("%s: operator hint %v, want %v: %v", name, hinted, wantHint, err)
+	}
+	// No gate flag exists, so the hint must not offer one (#64).
+	if strings.Contains(err.Error(), "flag") {
+		t.Errorf("%s: hint offers a flag: %v", name, err)
 	}
 }

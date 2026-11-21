@@ -2,17 +2,17 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
-	"strings"
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/gateway"
 )
 
-// Evaluate sends the tier's system prompt and the slice with its redaction
-// counts, so egress.log can account for them, and refuses an unknown tier
-// before any call.
+// Evaluate sends the tier's system prompt, Slice.Text as the user turn and
+// the slice's redaction counts, so egress.log can account for them, and
+// refuses an unknown tier or a slice cut for another tier before any call.
 func TestEvaluateCall(t *testing.T) {
 	slice := Slice{
 		Hypothesis: 3,
@@ -25,17 +25,23 @@ func TestEvaluateCall(t *testing.T) {
 	tests := []struct {
 		name    string
 		tier    Tier
+		sliced  Tier // the tier the slice was cut for
 		partial bool // the slice was cut to fit
 		answer  appHypothesis
 		verdict Verdict
 		want    error
 	}{
-		{"tier M", TierM, false, vulnerable, VerdictVulnerable, nil},
-		{"tier S", TierS, false, vulnerable, VerdictVulnerable, nil},
+		{"tier M", TierM, TierM, false, vulnerable, VerdictVulnerable, nil},
+		{"tier S", TierS, TierS, false, vulnerable, VerdictVulnerable, nil},
+		{"tier L", TierL, TierL, false, safe, VerdictNotVulnerable, nil},
 		// #175: a not_vulnerable from a cut slice keeps Partial, so the
 		// report can show partial coverage instead of a clean verdict.
-		{"partial slice not vulnerable", TierM, true, safe, VerdictNotVulnerable, nil},
-		{"unknown tier", Tier("XL"), false, vulnerable, 0, ErrTier},
+		{"partial slice not vulnerable", TierM, TierM, true, safe, VerdictNotVulnerable, nil},
+		{"unknown tier", Tier("XL"), Tier("XL"), false, vulnerable, 0, ErrTier},
+		// #204: an M-budget slice under the S prompt, or the reverse.
+		{"M slice under S prompt", TierS, TierM, false, vulnerable, 0, ErrTier},
+		{"S slice under L prompt", TierL, TierS, false, vulnerable, 0, ErrTier},
+		{"slice with no tier", TierM, "", false, vulnerable, 0, ErrTier},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,7 +55,7 @@ func TestEvaluateCall(t *testing.T) {
 				t.Fatal(err)
 			}
 			in := slice
-			in.Partial = tt.partial
+			in.Partial, in.Tier = tt.partial, tt.sliced
 			sig, err := Evaluate(context.Background(), client, tt.tier, in)
 			if tt.want != nil {
 				if !errors.Is(err, tt.want) || len(calls) != 0 {
@@ -63,17 +69,30 @@ func TestEvaluateCall(t *testing.T) {
 			if len(calls) != 1 {
 				t.Fatalf("%d calls, want 1", len(calls))
 			}
-			system, _ := System(tt.tier)
-			c := calls[0]
-			if c.Purpose != "reader" || !maps.Equal(c.Redactions, slice.Redactions) ||
-				!strings.Contains(string(c.Payload), firstLine(system)) {
-				t.Fatalf("call = purpose %q, redactions %v", c.Purpose, c.Redactions)
-			}
+			checkCall(t, calls[0], tt.tier, slice)
 		})
 	}
 }
 
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-	return line
+// checkCall fails unless c carries exactly the tier's system prompt and
+// s.Text as the only user turn, with s's redaction counts.
+func checkCall(t *testing.T, c gateway.Call, tier Tier, s Slice) {
+	t.Helper()
+	system, err := System(tier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Messages []struct{ Role, Content string } `json:"messages"`
+	}
+	if err := json.Unmarshal(c.Payload, &body); err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	m := body.Messages
+	if len(m) != 2 || m[0].Role != "system" || m[0].Content != system || m[1].Role != "user" || m[1].Content != s.Text {
+		t.Fatalf("messages = %+v, want the %s system prompt and Slice.Text as the user turn", m, tier)
+	}
+	if c.Purpose != "reader" || !maps.Equal(c.Redactions, s.Redactions) {
+		t.Fatalf("call = purpose %q, redactions %v", c.Purpose, c.Redactions)
+	}
 }

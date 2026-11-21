@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,6 +76,16 @@ func TestRun(t *testing.T) {
 		{"help flag with invalid format", []string{"--format=bad", "--help"}, exitcode.ConfigError, nil, []string{`invalid --format "bad"`}},
 		{"invalid format after help flag", []string{"--help", "--format=bad"}, exitcode.ConfigError, nil, []string{`invalid --format "bad"`}},
 		{"command help flag with invalid format", []string{"scan", "--help", "--log-level=trace"}, exitcode.ConfigError, nil, []string{`invalid --log-level "trace"`}},
+		{"help flag, invalid flag after command", []string{"-h", "version", "--format", "bad"}, exitcode.ConfigError, nil, []string{`invalid --format "bad"`}},
+		{"help flag, unknown flag after command", []string{"-h", "version", "--bogus"}, exitcode.ConfigError, nil, []string{"bogus", "Usage:"}},
+		{"help flag, missing config after positional", []string{"-h", "scan", ".", "--config", missing}, exitcode.ConfigError, nil, []string{"does not exist"}},
+		{"help flag, valid flags after command", []string{"-h", "version", "--format", "json"}, exitcode.OK, []string{"Usage:"}, nil},
+		{"empty config with equals", []string{"--config=", "version"}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
+		{"empty config as separate value", []string{"--config", "", "version"}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
+		{"empty config after command", []string{"version", "--config="}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
+		{"empty config overrides a path", []string{"--config", cfg, "version", "--config", ""}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
+		{"empty config with help command", []string{"help", "--config="}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
+		{"empty config with help flag", []string{"--config=", "-h"}, exitcode.ConfigError, nil, []string{"--config needs a file path"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,6 +212,86 @@ func TestErrorsEscapeControlBytes(t *testing.T) {
 				}
 			}
 			assertContains(t, "stderr", stderr, []string{`\x1b]0;PWN`})
+		})
+	}
+}
+
+// YAML decode errors print on one line (no \x0a) while terminal escapes in
+// the file still come out escaped (#64).
+func TestConfigDecodeErrorsReadable(t *testing.T) {
+	tests := []struct {
+		name, yaml string
+		want       []string
+	}{
+		{"one wrong type", "budget:\n  max_tokens: lots\n", []string{"unmarshal errors: line 2: "}},
+		{"two wrong types", "budget:\n  max_tokens: lots\n  max_calls: many\n", []string{"line 2: ", "; line 3: "}},
+		{"escape in a wrong type", "budget:\n  max_tokens: \"\\e]0;PWN\\a\"\n  max_calls: many\n", []string{`\x1b]0;PWN\x07`, "; line 3: "}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := filepath.Join(t.TempDir(), "creep.yaml")
+			if err := os.WriteFile(cfg, []byte(tt.yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			code, _, stderr := run("config", "explain", "--config", cfg)
+			if code != exitcode.ConfigError {
+				t.Fatalf("exit code = %d, want %d: %s", code, exitcode.ConfigError, stderr)
+			}
+			if strings.Contains(stderr, `\x0a`) || strings.Count(stderr, "\n") != 1 {
+				t.Errorf("error is not one readable line: %q", stderr)
+			}
+			if strings.ContainsAny(stderr, "\x1b\a") {
+				t.Errorf("stderr has raw control bytes: %q", stderr)
+			}
+			assertContains(t, "stderr", stderr, tt.want)
+		})
+	}
+}
+
+// errWriter fails every write, like stdout redirected to /dev/full.
+type errWriter struct{}
+
+func (errWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+// A lost stdout never exits 0, on commands and help alike (#41); a command
+// that already failed keeps its own code and reports the error once.
+func TestStdoutWriteError(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "creep.yaml")
+	if err := os.WriteFile(cfg, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const lost = "creep: write stdout: no space left on device"
+	tests := []struct {
+		name       string
+		args       []string
+		stdout     io.Writer
+		wantCode   int
+		wantStderr string
+	}{
+		{"version", []string{"version"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help flag", []string{"--help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help flag before a command", []string{"-h", "version"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help command", []string{"help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help for a command", []string{"help", "scan"}, errWriter{}, exitcode.ConfigError, lost},
+		{"command help flag", []string{"scan", "--help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"config explain reports its own error", []string{"config", "explain", "--config", cfg}, errWriter{}, exitcode.ConfigError, "creep config explain: "},
+		{"failed command keeps its error", []string{"init"}, errWriter{}, exitcode.ConfigError, "not implemented yet"},
+		{"stdout works", []string{"version"}, &bytes.Buffer{}, exitcode.OK, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			code := runWith(tt.args, tt.stdout, &stderr, noModelDeps)
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d: %s", code, tt.wantCode, stderr.String())
+			}
+			got := stderr.String()
+			if !strings.Contains(got, tt.wantStderr) || tt.wantStderr == "" && got != "" {
+				t.Errorf("stderr = %q, want %q", got, tt.wantStderr)
+			}
+			if strings.Count(got, "no space left") > 1 {
+				t.Errorf("write error reported twice: %q", got)
+			}
 		})
 	}
 }
