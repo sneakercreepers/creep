@@ -174,8 +174,7 @@ func runOnce(ctx context.Context, job Job, t tool, bin string, tmp workspace, so
 	cmd := exec.CommandContext(ctx, bin, t.args(tmp, source)...) //nolint:gosec // G204, see above
 	cmd.Dir, cmd.Env = tmp.work, environment(tmp, job)
 	cmd.WaitDelay = time.Second
-	killTreeOnCancel(cmd)
-	err := cmd.Run()
+	err := runTree(cmd)
 	if ctx.Err() != nil {
 		return failed(FailTimeout)
 	}

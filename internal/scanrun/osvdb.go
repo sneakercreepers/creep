@@ -68,7 +68,10 @@ func osvPlan(ctx context.Context, job Job) (runPlan, Failure) {
 	return runPlan{sources: []string{job.Repo}}, FailNone
 }
 
-// repoEcosystems names the ecosystem of every regular lockfile under repo.
+// repoEcosystems names the ecosystem of every lockfile name under repo. A
+// link or special file by such a name counts too, the strict side, since
+// osv-scanner may open a lockfile through a link; a linked directory is
+// not entered.
 func repoEcosystems(ctx context.Context, repo string) (map[string]bool, Failure) {
 	found := map[string]bool{}
 	err := filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
@@ -79,7 +82,7 @@ func repoEcosystems(ctx context.Context, repo string) (map[string]bool, Failure)
 			return ctx.Err()
 		case d.IsDir() && d.Name() == ".git" && path != repo:
 			return fs.SkipDir
-		case d.Type().IsRegular() && lockfileEcosystem(d.Name()) != "":
+		case !d.IsDir() && lockfileEcosystem(d.Name()) != "":
 			found[lockfileEcosystem(d.Name())] = true
 		}
 		return nil

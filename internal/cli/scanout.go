@@ -306,7 +306,11 @@ func printScanners(w io.Writer, scanners []report.ScannerCoverage) {
 		if s.Status == report.ScannerEvaluated {
 			verb = "evaluated"
 		}
-		fmt.Fprintf(w, "scanner %s: %s; %s: %s\n", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))
+		line := fmt.Sprintf("scanner %s: %s; %s: %s", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))
+		if note := s.SkipNote(); note != "" {
+			line += "; " + note
+		}
+		fmt.Fprintln(w, line)
 	}
 }
 

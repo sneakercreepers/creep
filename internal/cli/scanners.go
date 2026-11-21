@@ -84,16 +84,17 @@ func runScanners(ctx context.Context, enabled []string, run func(context.Context
 	})
 	var out scannerRun
 	for _, c := range checks {
-		status := scannerStatus(c.State)
+		status, skipped := scannerStatus(c.State), false
 		if c.State == repofile.ScannerFound {
 			job := scanrun.Job{Scanner: c.Scanner, Bin: c.Path, Repo: repo, OSVDB: os.Getenv(osvDBEnv), Limits: scanrun.DefaultLimits()}
 			res := run(ctx, job)
 			status = runStatus(res.Outcome)
 			out.findings = append(out.findings, scannerFindings(c.Scanner, res.Findings)...)
 			out.failed = out.failed || status == report.ScannerFailed
+			skipped = res.SkippedRepoIgnore && status == report.ScannerEvaluated
 			noteRun(stderr, c.Scanner, res, status)
 		}
-		out.coverage = append(out.coverage, report.ScannerCoverage{Name: string(c.Scanner), Status: status, Classes: scannerClasses(c.Scanner)})
+		out.coverage = append(out.coverage, report.ScannerCoverage{Name: string(c.Scanner), Status: status, Classes: scannerClasses(c.Scanner), RepoIgnoreSkipped: skipped})
 	}
 	return out
 }

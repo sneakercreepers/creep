@@ -125,12 +125,16 @@ func writeFindings(cmd, report, repo string) int {
 
 // echoSource logs the source it was given, one per line beside the fake,
 // and reports one finding in it: the source itself when it is a file, or
-// its config.py when it is a directory.
+// its config.py when it is a directory. A source named silent gets no
+// report, so a test can see that the previous one is not read again.
 func echoSource(report, source string) {
 	log, err := os.OpenFile(treeMarker("sources"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // G703: beside the fake, in t.TempDir()
 	if err == nil {
 		fmt.Fprintln(log, source)
 		_ = log.Close()
+	}
+	if filepath.Base(source) == "silent" {
+		return
 	}
 	file := source
 	if info, err := os.Stat(source); err == nil && info.IsDir() { //nolint:gosec // G703: the runner's source, in t.TempDir()
@@ -208,7 +212,7 @@ func ran(bin string) bool {
 }
 
 // startGrandchild starts a helper the way a tool might, then leaves it
-// running. It marks itself started, and survived if no one killed it.
+// running. It marks itself started, then beats until someone kills it.
 func startGrandchild(args []string) {
 	cmd := exec.Command(os.Args[0], args...) //nolint:gosec // G204: the test binary itself
 	cmd.Env = append(os.Environ(), "FAKE_GRANDCHILD=1")
@@ -221,12 +225,20 @@ func startGrandchild(args []string) {
 	}
 }
 
+// grandchild rewrites its beat file every beatEvery, so a test can tell a
+// live helper from a dead one without guessing how long a kill takes. It
+// stops on its own after half a minute, in case a test leaves it behind.
 func grandchild() int {
 	writeReport(treeMarker("started"), nil)
-	time.Sleep(6 * time.Second) // room for a slow taskkill on a loaded Windows host
-	writeReport(treeMarker("survived"), nil)
+	for range 30 * time.Second / beatEvery {
+		writeReport(treeMarker("beat"), nil)
+		time.Sleep(beatEvery)
+	}
 	return 0
 }
+
+// beatEvery is how often a live helper rewrites its beat file.
+const beatEvery = 10 * time.Millisecond
 
 func treeMarker(name string) string { return filepath.Join(filepath.Dir(os.Args[0]), name) }
 

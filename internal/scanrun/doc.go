@@ -21,15 +21,18 @@
 //     both are not run.
 //   - The repository cannot suppress a finding (#226). gitleaks always
 //     reads <source>/.gitleaksignore, so when the repository root holds one
-//     it is left out, never honored: gitleaks runs once per other root
-//     entry (at most 256; links and .git skipped), the result says the file
-//     was skipped and the CLI prints that. A root directory holding its own
+//     it is never honored: gitleaks runs once per root entry (at most 256;
+//     links and .git skipped; the ignore file scanned as a file of its own),
+//     the result says the file was not applied, and the CLI says so on
+//     stderr and in the text, Markdown and SARIF reports (the JSON v1
+//     schema is frozen). A root directory holding its own
 //     .gitleaksignore, or more entries, leaves no clean source: failed,
 //     unstarted, the run incomplete. Fail toward visibility: a run either
 //     shows every finding or is incomplete.
 //   - osv-scanner matches a lockfile only against its ecosystem's database
 //     and reports nothing on a miss, so every lockfile ecosystem in the
-//     repository (lockfileEcosystems, a walk that follows no link) needs a
+//     repository (lockfileEcosystems, a walk that enters no linked
+//     directory and counts a linked lockfile name) needs a
 //     non-empty <db>/osv-scanner/<ecosystem>/all.zip; otherwise it is
 //     failed (missing_ecosystem_db) and not started (#226). A lockfile
 //     format the map lacks is the residual.
@@ -41,10 +44,15 @@
 //   - On timeout the whole tree dies. Unix kills the scanner's process
 //     group. Windows has no job object without x/sys or unsafe (no new
 //     dependency, invariant 6), so the system's taskkill.exe /T /F, by
-//     absolute path under SystemRoot with fixed arguments and no shell,
-//     kills the tree while the scanner is alive (its handle pins the
-//     process ID), then the scanner itself is killed (#226). A helper whose
-//     parent already exited is no longer in the tree (residual).
+//     absolute path under a drive-letter SystemRoot, with fixed arguments,
+//     no shell and System32 as its working directory, kills the tree, then
+//     the scanner itself is killed (#226). os/exec closes its handle as
+//     soon as the scanner exits, so a second handle opened right after the
+//     start pins the process ID until Wait returns; taskkill runs only
+//     while that pin is held, so it cannot reach an unrelated process that
+//     reused the ID. Residual: a helper whose parent already exited is no
+//     longer in the tree, and taskkill matches children by parent ID, so a
+//     process whose long-gone parent once had the scanner's ID is in it.
 //   - A timeout, a byte cap on the report and a cap on findings bound each
 //     run. The report is decoded into closed structs; paths must lie inside
 //     the repository, and rule names, advisories and matches are hashed into

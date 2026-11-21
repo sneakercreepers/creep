@@ -15,12 +15,14 @@ import (
 
 // TestRunLeavesOutRepoGitleaksIgnore (#226): the scanned repository is
 // untrusted, so its root .gitleaksignore never hides a finding. gitleaks
-// runs once per other root entry, the run says the file was skipped, and
-// a repository that leaves no clean way to scan fails closed unstarted.
+// runs once per root entry, the ignore file scanned as a file of its own,
+// the run says the file was not applied, and a repository that leaves no
+// clean way to scan fails closed unstarted.
 func TestRunLeavesOutRepoGitleaksIgnore(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func(t *testing.T, repo string)
+		mode     string // the fake's mode; "" is echo
 		want     Outcome
 		failure  Failure
 		sources  []string // logged by the fake, repository-relative; nil when never started
@@ -31,38 +33,54 @@ func TestRunLeavesOutRepoGitleaksIgnore(t *testing.T) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "README.md:generic-api-key:3\napp/config.py:aws-access-token:3\n")
 			writeFile(t, filepath.Join(repo, "README.md"), "x")
 			writeFile(t, filepath.Join(repo, "app", "config.py"), "x")
-		}, Evaluated, FailNone, []string{"README.md", "app"}, []string{"README.md", "README.md", "app/config.py", "app/config.py"}, true},
-		{"ignore directory is left out", func(t *testing.T, repo string) {
+		}, "", Evaluated, FailNone, []string{".gitleaksignore", "README.md", "app"}, []string{".gitleaksignore", ".gitleaksignore", "README.md", "README.md", "app/config.py", "app/config.py"}, true},
+		{"ignore directory is scanned like any directory", func(t *testing.T, repo string) {
 			mkdir(t, filepath.Join(repo, ".gitleaksignore"))
 			writeFile(t, filepath.Join(repo, "app", "config.py"), "x")
-		}, Evaluated, FailNone, []string{"app"}, []string{"app/config.py", "app/config.py"}, true},
+		}, "", Evaluated, FailNone, []string{".gitleaksignore", "app"}, []string{".gitleaksignore/config.py", ".gitleaksignore/config.py", "app/config.py", "app/config.py"}, true},
+		{"ignore directory holding an ignore file fails closed", func(t *testing.T, repo string) {
+			writeFile(t, filepath.Join(repo, ".gitleaksignore", ".gitleaksignore"), "config.py:generic-api-key:3\n")
+		}, "", Failed, FailRepoIgnore, nil, nil, false},
 		{".git is not a source", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
 			writeFile(t, filepath.Join(repo, ".git", "config"), "x")
 			writeFile(t, filepath.Join(repo, "app", "config.py"), "x")
-		}, Evaluated, FailNone, []string{"app"}, []string{"app/config.py", "app/config.py"}, true},
-		{"only the ignore file: nothing to start", func(t *testing.T, repo string) {
+		}, "", Evaluated, FailNone, []string{".gitleaksignore", "app"}, []string{".gitleaksignore", ".gitleaksignore", "app/config.py", "app/config.py"}, true},
+		{"only the ignore file: it alone is scanned", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
-		}, Evaluated, FailNone, nil, nil, true},
+		}, "", Evaluated, FailNone, []string{".gitleaksignore"}, []string{".gitleaksignore", ".gitleaksignore"}, true},
 		{"root link is never followed", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
 			outside := filepath.Join(filepath.Dir(repo), "outside")
 			writeFile(t, filepath.Join(outside, "config.py"), "x")
 			linkDir(t, outside, filepath.Join(repo, "link"))
-		}, Evaluated, FailNone, nil, nil, true},
+		}, "", Evaluated, FailNone, []string{".gitleaksignore"}, []string{".gitleaksignore", ".gitleaksignore"}, true},
 		{"a root directory with its own ignore file fails closed", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
 			writeFile(t, filepath.Join(repo, "app", ".gitleaksignore"), "app/config.py:generic-api-key:3\n")
-		}, Failed, FailRepoIgnore, nil, nil, false},
+		}, "", Failed, FailRepoIgnore, nil, nil, false},
 		{"more root entries than the cap fail closed", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
 			for i := range maxGitleaksSources {
 				writeFile(t, filepath.Join(repo, fmt.Sprintf("f%03d.txt", i)), "x")
 			}
-		}, Failed, FailRepoIgnore, nil, nil, false},
+		}, "", Failed, FailRepoIgnore, nil, nil, false},
 		{"a nested ignore file alone is not read: one run", func(t *testing.T, repo string) {
 			writeFile(t, filepath.Join(repo, "app", ".gitleaksignore"), "")
-		}, Evaluated, FailNone, []string{"."}, []string{"config.py", "config.py"}, false},
+		}, "", Evaluated, FailNone, []string{"."}, []string{"config.py", "config.py"}, false},
+		{"a source without a report never reuses the previous one", func(t *testing.T, repo string) {
+			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
+			mkdir(t, filepath.Join(repo, "silent"))
+		}, "", Failed, FailMalformed, []string{".gitleaksignore", "silent"}, nil, false},
+		{"the finding cap spans every source", func(t *testing.T, repo string) {
+			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
+			for i := range 5 {
+				writeFile(t, filepath.Join(repo, fmt.Sprintf("f%d.txt", i)), "x")
+			}
+		}, "", Failed, FailTooMany, []string{".gitleaksignore", "f0.txt", "f1.txt", "f2.txt", "f3.txt", "f4.txt"}, nil, false},
+		{"a failed run says nothing of the skip", func(t *testing.T, repo string) {
+			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "")
+		}, "exit3", Failed, FailExit, nil, nil, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,7 +88,11 @@ func TestRunLeavesOutRepoGitleaksIgnore(t *testing.T) {
 			repo := filepath.Join(base, "repo")
 			mkdir(t, repo)
 			tc.setup(t, repo)
-			bin := installFake(t, base, "echo", "gitleaks")
+			mode := tc.mode
+			if mode == "" {
+				mode = "echo"
+			}
+			bin := installFake(t, base, mode, "gitleaks")
 			got := Run(context.Background(), Job{Scanner: repofile.ScannerGitleaks, Bin: bin, Repo: repo, Limits: testLimits()})
 			if got.Outcome != tc.want || got.Failure != tc.failure || got.SkippedRepoIgnore != tc.skipped {
 				t.Fatalf("Run = %+v, want outcome %d, failure %s, skipped %v", got, tc.want, tc.failure, tc.skipped)

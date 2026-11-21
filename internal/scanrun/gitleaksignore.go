@@ -18,13 +18,15 @@ const maxGitleaksSources = 256
 // gitleaksPlan scans the repository root in one run, unless the root holds
 // a .gitleaksignore (of any type, or one creep cannot rule out). The
 // repository is untrusted, so that file must not hide findings (#226):
-// gitleaks then runs once per other root entry, each a source whose root
-// holds no such file, and the plan records that the file was skipped. A
+// gitleaks then runs once per root entry, each a source whose root holds
+// no such file, and the plan records that the file was not applied. The
+// ignore file is scanned as a file of its own, as one run would scan it,
+// so it cannot hide a secret written into it either. A
 // root directory with its own .gitleaksignore, or more than
 // maxGitleaksSources entries, leaves no clean way to scan: gitleaks is not
 // started and the run is incomplete (FailRepoIgnore).
 func gitleaksPlan(_ context.Context, job Job) (runPlan, Failure) {
-	ignore, err := os.Lstat(filepath.Join(job.Repo, gitleaksIgnoreName))
+	_, err := os.Lstat(filepath.Join(job.Repo, gitleaksIgnoreName))
 	if os.IsNotExist(err) {
 		return runPlan{sources: []string{job.Repo}}, FailNone
 	}
@@ -37,7 +39,7 @@ func gitleaksPlan(_ context.Context, job Job) (runPlan, Failure) {
 	}
 	plan := runPlan{skippedIgnore: true}
 	for _, e := range entries {
-		source, ok := gitleaksSource(filepath.Join(job.Repo, e.Name()), ignore)
+		source, ok := gitleaksSource(filepath.Join(job.Repo, e.Name()))
 		if !ok {
 			return runPlan{}, FailRepoIgnore
 		}
@@ -48,19 +50,16 @@ func gitleaksPlan(_ context.Context, job Job) (runPlan, Failure) {
 	return plan, FailNone
 }
 
-// gitleaksSource decides one root entry: "" leaves it out (the ignore file
-// itself, compared by identity so a case variant on a case-insensitive
-// file system is caught; a link or special file, which a single run would
-// not follow either; the .git directory, which gitleaks skips); ok is
-// false when the entry is a directory that holds a .gitleaksignore of its
-// own.
-func gitleaksSource(path string, ignore os.FileInfo) (string, bool) {
+// gitleaksSource decides one root entry: a regular file is its own source
+// (gitleaks loads no ignore file for a file source); "" leaves out a link
+// or special file, which a single run would not follow either, and the
+// .git directory, which gitleaks skips; ok is false when the entry is a
+// directory that holds a .gitleaksignore of its own.
+func gitleaksSource(path string) (string, bool) {
 	info, err := os.Lstat(path)
 	switch {
 	case err != nil:
 		return "", false
-	case os.SameFile(info, ignore):
-		return "", true
 	case info.Mode().IsRegular():
 		return path, true
 	case !info.IsDir(), info.Name() == ".git":

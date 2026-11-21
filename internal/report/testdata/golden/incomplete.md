@@ -51,7 +51,7 @@ Only a scanner marked evaluated ran offline and evaluated its classes; for every
 
 | Scanner | Status | Classes |
 |---|---|---|
-| `gitleaks` | `evaluated` | `hardcoded_secret` |
+| `gitleaks` | `evaluated`; the repository's suppression file was not applied, so it hid no finding | `hardcoded_secret` |
 | `osv-scanner` | `failed` | `vulnerable_dependency` |
 | `semgrep` | `refused` | `xss`, `insecure_deserialization` |
 

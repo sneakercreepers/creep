@@ -2,6 +2,7 @@ package scanrun
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -70,6 +71,31 @@ func TestRepoEcosystemsFollowsNoLink(t *testing.T) {
 	got, failure := repoEcosystems(context.Background(), repo)
 	if failure != FailNone || len(got) != 0 {
 		t.Errorf("repoEcosystems = %v, %s; want none", got, failure)
+	}
+}
+
+// TestRepoEcosystemsCountsLinkedLockfile: a lockfile name that is a link
+// counts, since osv-scanner may read the file through it; the walk asks
+// for one database too many rather than one too few.
+func TestRepoEcosystemsCountsLinkedLockfile(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo")
+	mkdir(t, repo)
+	writeFile(t, filepath.Join(base, "real"), "module x\n")
+	if err := os.Symlink(filepath.Join(base, "real"), filepath.Join(repo, "go.mod")); err != nil {
+		t.Skipf("symlink: %v", err)
+	}
+	got, failure := repoEcosystems(context.Background(), repo)
+	if failure != FailNone || !got["Go"] {
+		t.Errorf("repoEcosystems = %v, %s; want Go", got, failure)
+	}
+}
+
+// TestRepoEcosystemsFailsOnWalkError: a walk that cannot read the tree
+// never reads as "no lockfile".
+func TestRepoEcosystemsFailsOnWalkError(t *testing.T) {
+	if _, failure := repoEcosystems(context.Background(), filepath.Join(t.TempDir(), "missing")); failure != FailStart {
+		t.Errorf("failure %s, want %s", failure, FailStart)
 	}
 }
 

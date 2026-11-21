@@ -225,7 +225,7 @@ Any of these is a configuration error (exit `2`) that names the project file and
 
 Enable them in your user config, `--config` or the policy: `scanners: { enabled: [gitleaks, osv-scanner] }`. creep runs an installed scanner only from outside the repository, offline, with fixed arguments and no shell ([ADR 0013](docs/adr/0013-scanner-runner.md)):
 
-- **gitleaks** scans files (not git history) with `--redact`. The scanned repository cannot hide a finding: a root `.gitleaksignore` is not applied (creep scans every other root entry on its own and says so on stderr). If a root directory holds its own `.gitleaksignore`, or the root has more than 256 entries, gitleaks is not run and the run is incomplete.
+- **gitleaks** scans files (not git history) with `--redact`. The scanned repository cannot hide a finding: a root `.gitleaksignore` is not applied (creep scans every root entry on its own, the ignore file included, and says so on stderr and in the report). If a root directory holds its own `.gitleaksignore`, or the root has more than 256 entries, gitleaks is not run and the run is incomplete.
 - **osv-scanner** runs with `--offline --no-ignore` against a local database in `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` (download it once with `osv-scanner --download-offline-databases`); without one it is not run. The database must hold every ecosystem the repository's lockfiles use (for example `Go` for `go.mod`, `npm` for `package-lock.json`); if one is missing, osv-scanner is not run and the run is incomplete (`missing_ecosystem_db`).
 - **semgrep** is detected only; creep ships no local rules ([ADR 0010](docs/adr/0010-optional-scanners-detect-only.md)).
 
