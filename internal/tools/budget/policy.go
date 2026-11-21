@@ -21,21 +21,32 @@ const docsOnlyRule = "Documentation-only changes run only the auditor"
 
 const auditorTriage = "The auditor triages every open finding"
 
-// pentesterScope, releaseGate and pentesterIsolation pin ADR 0002 and ADR 0004:
-// the pentester stays independent and gates each release and every external PR.
+// pentesterScope and releaseGate pin ADR 0004: the pentester gates each
+// release and every external PR.
 const pentesterScope = "The pentester runs once per version, over the whole version diff before the release is tagged, and on every pull request from an external contributor"
 
 const releaseGate = "A confirmed Critical or High from the release pentest blocks the release"
 
-const pentesterIsolation = "The pentester gets no shared context"
+// sharedContext, pentesterIsolation and auditorEscalation pin ADR 0002 as
+// whole sentences, so a trailing clause cannot be dropped or bent (#101):
+// AGENTS.md carries the long form, CONTRIBUTING.md the short one. The
+// escalation is the backstop for a missing label.
+const (
+	sharedContext          = "Developer, tester and auditor share context (issue, diff, test output, earlier verdicts)."
+	sharedContextShort     = "Developer, tester and auditor share context."
+	pentesterIsolation     = "The pentester gets no shared context: only the issue, the diff and the repository, so its review stays independent."
+	pentesterIsolationNote = "The pentester gets no shared context."
+	auditorEscalation      = "If the auditor sees security impact in an unlabeled change, it asks a maintainer to add the label so the release pentest covers it."
+)
 
-// sharedContext and auditorEscalation complete ADR 0002: the escalation is the
-// backstop for a missing label, so dropping it must fail CI like the rest.
-const sharedContext = "Developer, tester and auditor share context"
+// checkbox marks a phrase that must be a whole line of its own, so the
+// template's promises cannot survive outside their checkbox (#101).
+const checkbox = "- [ ] "
 
-const auditorEscalation = "If the auditor sees security impact in an unlabeled change, it asks a maintainer to add the label"
-
-const templateSkip = "the release pentest covers this change"
+const (
+	templateLoop = checkbox + "AI-assisted: ran the agent loop " + agentLoop + ". Tester verdict, security review and auditor decision:"
+	templateSkip = checkbox + "External contributor: the pentester ran with no shared context. Maintainer PRs: skipped; the release pentest covers this change (ADR 0004)."
+)
 
 // maxPolicyBytes bounds reads so a huge policy file cannot stall CI.
 const maxPolicyBytes = 1 << 20
@@ -55,8 +66,8 @@ var requiredPolicy = map[string][]string{
 		docsOnlyRule,
 		auditorTriage,
 	},
-	"CONTRIBUTING.md":                  {agentLoop, sharedContext, pentesterIsolation, pentesterScope, releaseGate, auditorEscalation, "Changing or removing this loop needs an ADR", docsOnlyRule, auditorTriage},
-	".github/PULL_REQUEST_TEMPLATE.md": {agentLoop, "no shared context", templateSkip},
+	"CONTRIBUTING.md":                  {agentLoop, sharedContextShort, pentesterIsolationNote, pentesterScope, releaseGate, auditorEscalation, "Changing or removing this loop needs an ADR", docsOnlyRule, auditorTriage},
+	".github/PULL_REQUEST_TEMPLATE.md": {templateLoop, templateSkip},
 	"CLAUDE.md":                        {"@AGENTS.md"},
 }
 
@@ -64,6 +75,13 @@ var requiredPolicy = map[string][]string{
 // <!-- with no closing tag hides the rest of the file in Markdown, so it ends
 // at the end of the text (#58).
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
+
+// linkDefinition is a link-reference definition such as `[//]: # (text)` or
+// `[x]: <url> "title"`, which GitHub does not render (#101). It runs through
+// the next blank line so a title on a following line is hidden too; a
+// paragraph right after it with no blank line is dropped as well, which can
+// only fail the guard, never pass it.
+var linkDefinition = regexp.MustCompile(`(?m)^[ \t>]*\[(?:\\.|[^\\\]\n])+\]:.*(?:\n[ \t>]*\S.*)*`)
 
 func policyProblems(cfg config) ([]string, error) {
 	return checkPolicy(cfg.root, readPolicyFile)
@@ -114,12 +132,26 @@ func checkPolicy(root string, read func(root, name string) ([]byte, error)) ([]s
 		if err != nil {
 			return nil, fmt.Errorf("policy %s: %w", name, err)
 		}
-		visible := htmlComment.ReplaceAllString(string(data), "")
+		visible := linkDefinition.ReplaceAllString(htmlComment.ReplaceAllString(string(data), ""), "")
 		for _, phrase := range requiredPolicy[name] {
-			if !strings.Contains(visible, phrase) {
+			if !hasPhrase(visible, phrase) {
 				problems = append(problems, fmt.Sprintf("policy: %s must contain %q", name, phrase))
 			}
 		}
 	}
 	return problems, nil
+}
+
+// hasPhrase reports whether text shows phrase; a checkbox phrase must be a
+// whole unindented line, so it stays a top-level task item.
+func hasPhrase(text, phrase string) bool {
+	if !strings.HasPrefix(phrase, checkbox) {
+		return strings.Contains(text, phrase)
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimRight(line, " \t\r") == phrase {
+			return true
+		}
+	}
+	return false
 }

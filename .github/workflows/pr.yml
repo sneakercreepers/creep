@@ -1,7 +1,8 @@
 name: PR
 
 # The docs-only check (#57) fails a PR whose body ticks the
-# Documentation-only box but changes more than documentation. It reads the
+# Documentation-only box but changes more than documentation, and one that
+# changes the agent-loop policy without an ADR (#56). It reads the
 # body from the event payload on disk and the changed files from git: no API
 # call. It runs again when the body is edited, so ticking the box later is
 # checked too. Never pull_request_target: PR code must not run with a write
@@ -35,5 +36,9 @@ jobs:
       # into docs/ still shows the code path it left.
       - name: Changed files
         run: git diff --no-renames --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
-      - name: Docs-only scope
-        run: go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files "$RUNNER_TEMP/changed"
+      # The ADR-on-policy rule (#56) compares the AGENTS.md loop section with
+      # the base.
+      - name: Base AGENTS.md
+        run: git show HEAD^1:AGENTS.md > "$RUNNER_TEMP/base-agents.md"
+      - name: Docs-only scope and ADR on policy changes
+        run: go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files "$RUNNER_TEMP/changed" -base-agents "$RUNNER_TEMP/base-agents.md"
