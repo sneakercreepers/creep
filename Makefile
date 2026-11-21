@@ -17,7 +17,7 @@ EXE := .exe
 endif
 BIN := bin/creep$(EXE)
 
-.PHONY: build test check fmt-check tidy vet test386 budget map map-check protections rulesets repo-settings repo-settings-check clean
+.PHONY: build test check fmt-check lint tidy vet test386 budget map map-check protections rulesets repo-settings repo-settings-check clean
 
 # VERSION and COMMIT reach the recipe through the environment, never as shell
 # text, and are filtered to SAFE_CHARS before use.
@@ -31,7 +31,7 @@ build:
 test:
 	go test -timeout $(TEST_TIMEOUT) $(PKG)
 
-check: fmt-check tidy vet test386 budget map-check
+check: fmt-check lint tidy vet test386 budget map-check
 	@# -race needs cgo; Go disables cgo when no C compiler is found (common on Windows).
 	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
 		echo "go test -race -timeout $(TEST_TIMEOUT) ./..."; go test -race -timeout $(TEST_TIMEOUT) ./...; \
@@ -41,6 +41,16 @@ check: fmt-check tidy vet test386 budget map-check
 
 fmt-check:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed on:"; echo "$$out"; exit 1; fi
+
+# CI lint is the required gate; running it here too catches a lint failure,
+# such as the gocognit ratchet (#136), before the PR. Skipped, with a note,
+# where golangci-lint is not installed (the CI test job).
+lint:
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		echo "golangci-lint run ./..."; golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed: skipped; CI lint runs it"; \
+	fi
 
 # Fails when go.mod or go.sum differ from what go mod tidy would write, so a
 # used dependency cannot hide behind a stale // indirect comment.
