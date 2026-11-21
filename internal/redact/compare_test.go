@@ -29,6 +29,25 @@ func TestGenericKeyComparedWord(t *testing.T) {
 		{"compared with digit", `if (apiKey == 'hunter2hunter2') {}`, true},
 		{"compared base64", `if token == "B64"`, true},
 		{"assign then compare", "key = \"HEX\"\nif (key === \"constructor\") {}", true},
+		// Item 3 of #190, by design: a plain word compared is not a key.
+		{"password compared word", `if password == "CorrectHorseBatteryStaple":`, false},
+		// Item 4 of #190: "!=", "!==" and subscripts the vendored rule misses.
+		{"strict not equal", `if (secret !== "B64") {}`, true},
+		{"not equal", `if token != "HEX" {`, true},
+		{"not equal, no blanks", `if(apiKey!=='HEX'){}`, true},
+		{"subscript compare", `if os.environ["API_KEY"] == "B64":`, true},
+		{"subscript strict compare", `if (process.env['TOKEN'] === 'HEX') {}`, true},
+		{"subscript not equal", `if ENV['SECRET'] != "B64"`, true},
+		{"not equal word", `if (typeof secret !== "undefined") {}`, false},
+		{"subscript compare word", `if os.environ["API_KEY"] == "production":`, false},
+		{"not equal short", `if secret != "abc123" {`, false},
+		{"not equal reference", `if token != "${TOKEN}" {`, false},
+		{"not equal harmless key", `if key_type != "rsa-sha2-512" {`, false},
+		{"subscript harmless key", `if cfg["api_version"] == "2024-01-01":`, false},
+		{"not equal nil", `if err != nil && token != nil {`, false},
+		{"not equal prose", `msg := "the token != the key" + "\n"`, false},
+		{"sql not equal", `q := "SELECT id FROM users WHERE api_key != '' AND id = $1"`, false},
+		{"hex digest compare", `if sum != "HEX" {`, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

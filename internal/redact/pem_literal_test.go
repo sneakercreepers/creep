@@ -44,6 +44,34 @@ func TestRedactKeyBodyInLiterals(t *testing.T) {
 	}
 }
 
+// arrayStyles write a key body as a one-line array of literals with no
+// header or footer (#190 item 1).
+var arrayStyles = map[string]func(lines []string) string{
+	"go slice":     func(l []string) string { return `var k = []string{"` + strings.Join(l, `", "`) + `"}` },
+	"js array":     func(l []string) string { return `const k = ['` + strings.Join(l, `','`) + `'];` },
+	"python list":  func(l []string) string { return `K = ["` + strings.Join(l, `","`) + `"]` },
+	"python tuple": func(l []string) string { return `K = ('` + strings.Join(l, `', '`) + `')` },
+	"java array":   func(l []string) string { return `String[] k = {"` + strings.Join(l, `", "`) + `"};` },
+	"escapes":      func(l []string) string { return `k := []string{"` + strings.Join(l, `\n", "`) + `\n"}` },
+}
+
+// A header-less key body in a one-line literal array is masked by Redact
+// and by File, alone and between lines of code.
+func TestRedactKeyBodyInLiteralArray(t *testing.T) {
+	rng := rand.New(rand.NewPCG(190, 1))
+	for name, style := range arrayStyles {
+		for _, width := range []int{64, 70, 76} {
+			t.Run(fmt.Sprint(name, "/", width), func(t *testing.T) {
+				body := fakeBody(rng, 1200, width)
+				for _, text := range []string{style(body), "package x\n\n" + style(body) + "\n\nfunc f() {}\n", style(body[:2])} {
+					assertNoBody(t, body, mustRedact(t, newRedactor(t), text))
+					assertNoBody(t, body, mustFile(t, newRedactor(t), text))
+				}
+			})
+		}
+	}
+}
+
 // Ordinary string literals must not look like a key body.
 func TestLiteralDetectorIgnoresCode(t *testing.T) {
 	rng := rand.New(rand.NewPCG(43, 44))
@@ -55,6 +83,12 @@ func TestLiteralDetectorIgnoresCode(t *testing.T) {
 		"hex digests":   "sums := \"" + hex + "\\n\" +\n\t\"" + hex + "\\n\"\n",
 		"sri hashes":    "\"sha384-" + fakeToken(rng, base64Chars, 64) + "\" +\n\"sha384-" + fakeToken(rng, base64Chars, 64) + "\"\n",
 		"data uri":      "img := \"data:image/png;base64," + fakeToken(rng, base64Chars, 70) + "\"\n",
+		// One-line arrays split at each separator (#190) and stay unmasked.
+		"prose array": "words := []string{\"the quick brown fox jumps over the lazy dog\", \"pack my box with five dozen liquor jugs\"}\n",
+		"sql array":   "qs := []string{\"SELECT id, name FROM users WHERE id = $1\", \"DELETE FROM sessions WHERE expires_at < now()\"}\n",
+		"hex array":   "sums := []string{\"" + hex + "\", \"" + hex + "\", \"" + hex + "\"}\n",
+		"path array":  "paths := ['internal/redact/pem_literal_test.go','internal/redact/pem.go','docs/architecture.md']\n",
+		"sri array":   "integrity = [\"sha384-" + fakeToken(rng, base64Chars, 64) + "\", \"sha384-" + fakeToken(rng, base64Chars, 64) + "\"]\n",
 	}
 	for name, text := range samples {
 		if got := findPrivateKeys(text); len(got) > 0 {

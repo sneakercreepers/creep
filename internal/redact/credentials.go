@@ -2,6 +2,7 @@ package redact
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ const valueStop = "\\s\"'`,;"
 
 // credentialDetectors cover credentials the gitleaks rules miss because they
 // have no fixed format: they are recognized by where they sit, not by shape.
-var credentialDetectors = append([]patternDetector{
+var credentialDetectors = slices.Concat([]patternDetector{
 	{
 		// scheme://[user]:password@host. The password runs to the last "@"
 		// before a space or quote, so a raw "@" or "/" inside it cannot end
@@ -51,7 +52,7 @@ var credentialDetectors = append([]patternDetector{
 		valid: mixedCase,
 		when:  regexp.MustCompile(`(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}`),
 	},
-}, subscriptDetectors...)
+}, subscriptDetectors, compareDetectors)
 
 // callRe matches a value that is a call without arguments in code, not a
 // literal password: getPassword(). A call with arguments is judged by

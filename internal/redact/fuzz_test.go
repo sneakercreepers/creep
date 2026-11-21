@@ -83,6 +83,12 @@ var credentialMakers = []func(*rand.Rand) (string, string){
 		keys := []string{"password", "client_secret", "api_key", "token", "DB_PASSWORD"}
 		return fmt.Sprintf([]string{"%s = %s", "%s: %s", "%s=%s"}[rng.IntN(3)], keys[rng.IntN(len(keys))], pw), pw
 	},
+	// A value compared through "!=", "!==" or a subscript (#190).
+	func(rng *rand.Rand) (string, string) {
+		v := fakeToken(rng, alnum, 15) + fakeToken(rng, digits, 1)
+		forms := []string{`if (secret !== "%s") {}`, `if token != '%s':`, `if os.environ["API_KEY"] == "%s":`, `if ENV['TOKEN'] != "%s"`}
+		return fmt.Sprintf(forms[rng.IntN(len(forms))], v), v
+	},
 }
 
 // fakePassword mixes letters, digits and the punctuation people put in
