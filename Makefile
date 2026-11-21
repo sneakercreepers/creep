@@ -17,7 +17,7 @@ EXE := .exe
 endif
 BIN := bin/creep$(EXE)
 
-.PHONY: build test check fmt-check tidy vet test386 budget map map-check protections rulesets clean
+.PHONY: build test check fmt-check lint tidy vet test386 budget map map-check protections rulesets repo-settings repo-settings-check clean
 
 # VERSION and COMMIT reach the recipe through the environment, never as shell
 # text, and are filtered to SAFE_CHARS before use.
@@ -31,7 +31,7 @@ build:
 test:
 	go test -timeout $(TEST_TIMEOUT) $(PKG)
 
-check: fmt-check tidy vet test386 budget map-check
+check: fmt-check lint tidy vet test386 budget map-check
 	@# -race needs cgo; Go disables cgo when no C compiler is found (common on Windows).
 	@if [ "$$(go env CGO_ENABLED)" = "1" ]; then \
 		echo "go test -race -timeout $(TEST_TIMEOUT) ./..."; go test -race -timeout $(TEST_TIMEOUT) ./...; \
@@ -41,6 +41,16 @@ check: fmt-check tidy vet test386 budget map-check
 
 fmt-check:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt needed on:"; echo "$$out"; exit 1; fi
+
+# CI lint is the required gate; running it here too catches a lint failure,
+# such as the gocognit ratchet (#136), before the PR. Skipped, with a note,
+# where golangci-lint is not installed (the CI test job).
+lint:
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		echo "golangci-lint run ./..."; golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not installed: skipped; CI lint runs it"; \
+	fi
 
 # Fails when go.mod or go.sum differ from what go mod tidy would write, so a
 # used dependency cannot hide behind a stale // indirect comment.
@@ -85,11 +95,14 @@ protections:
 map-check:
 	go run ./internal/tools/pkgmap -check
 
-# Creates or updates each ruleset in .github/rulesets (file name = ruleset name),
-# then applies .github/settings, so re-running after a reviewed change is safe.
+# Reports drift, applies .github/settings, creates or updates each ruleset in
+# .github/rulesets (file name = ruleset name), then checks again, so a setting
+# GitHub did not take fails the run. Re-running after a reviewed change is safe.
 # Needs gh authenticated as an admin.
 REPO ?= sneakercreepers/creep
-rulesets: repo-settings
+rulesets:
+	@rc=0; bash .github/scripts/settings-drift.sh "$(REPO)" || rc=$$?; [ "$$rc" -le 1 ] || exit "$$rc"
+	@$(MAKE) --no-print-directory repo-settings
 	@for f in .github/rulesets/*.json; do \
 		name="$$(basename "$$f" .json)"; \
 		id="$$(gh api "repos/$(REPO)/rulesets" --jq ".[] | select(.name == \"$$name\") | .id")" || exit 1; \
@@ -99,16 +112,34 @@ rulesets: repo-settings
 			echo "create $$name"; gh api -X POST "repos/$(REPO)/rulesets" --input "$$f" >/dev/null || exit 1; \
 		fi; \
 	done
+	@bash .github/scripts/settings-drift.sh "$(REPO)"
 
-# The release environment only deploys v* tags. The tag policy is added only when
-# missing because POSTing a duplicate fails.
+# The release environment only deploys v* tags: any other deployment policy
+# fails the run before Actions settings change, and the tag policy is added
+# only when missing because POSTing a duplicate fails. allowed_actions must be
+# selected before the allowlist is accepted. immutable-releases.json records
+# the expected state for the drift check; code never turns immutable releases off.
 repo-settings:
-	@echo "update actions permissions"; gh api -X PUT "repos/$(REPO)/actions/permissions" --input .github/settings/actions-permissions.json >/dev/null
 	@echo "update environment release"; gh api -X PUT "repos/$(REPO)/environments/release" --input .github/settings/release-environment.json >/dev/null
+	@extra="$$(gh api --paginate "repos/$(REPO)/environments/release/deployment-branch-policies" --jq '.branch_policies[] | select(.name != "v*" or .type != "tag") | "\(.type) \(.name)"')" || exit 1; \
+	if [ -n "$$extra" ]; then \
+		echo "environment release has deployment policies other than the v* tag; remove them in its settings:" >&2; \
+		printf '%s\n' "$$extra" | LC_ALL=C tr -c '[:graph:]\n' ' ' >&2; exit 1; \
+	fi
 	@n="$$(gh api "repos/$(REPO)/environments/release/deployment-branch-policies" --jq '[.branch_policies[] | select(.name == "v*" and .type == "tag")] | length')" || exit 1; \
 	if [ "$$n" = 0 ]; then \
 		echo "add tag policy v*"; gh api -X POST "repos/$(REPO)/environments/release/deployment-branch-policies" -f name='v*' -f type=tag >/dev/null || exit 1; \
 	fi
+	@echo "update actions permissions"; gh api -X PUT "repos/$(REPO)/actions/permissions" --input .github/settings/actions-permissions.json >/dev/null
+	@echo "update allowed actions"; gh api -X PUT "repos/$(REPO)/actions/permissions/selected-actions" --input .github/settings/actions-selected.json >/dev/null
+	@echo "update workflow permissions"; gh api -X PUT "repos/$(REPO)/actions/permissions/workflow" --input .github/settings/workflow-permissions.json >/dev/null
+	@echo "enable immutable releases"; gh api -X PUT "repos/$(REPO)/immutable-releases" >/dev/null
+
+# Read-only: reports every difference between .github/rulesets,
+# .github/settings and the live repository; exits 1 on drift, 2 when a setting
+# cannot be read. Not in make check: it needs an admin gh token CI does not have.
+repo-settings-check:
+	@bash .github/scripts/settings-drift.sh "$(REPO)"
 
 clean:
 	rm -f bin/creep bin/creep.exe coverage.out

@@ -35,6 +35,24 @@ func TestConfigRejectsFIFO(t *testing.T) {
 	}
 }
 
+// A FIFO planted as .creep/report.json is refused at once (#209): why never
+// waits for a writer, and exits 2.
+func TestWhyRejectsFIFOReport(t *testing.T) {
+	isolateUserConfig(t)
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(stateDir, "report.json"), 0o600); err != nil {
+		t.Skipf("mkfifo unsupported here: %v", err)
+	}
+	code, stderr := runWithTimeout(t, "why", "sink-1")
+	if code != exitcode.ConfigError {
+		t.Errorf("exit code = %d, want %d\nstderr: %s", code, exitcode.ConfigError, stderr)
+	}
+	assertContains(t, "stderr", stderr, []string{"not a regular file"})
+}
+
 func runWithTimeout(t *testing.T, args ...string) (int, string) {
 	t.Helper()
 	type result struct {

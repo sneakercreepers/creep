@@ -26,26 +26,32 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 	done := s.stats.start(phaseReport)
 	rep, err := s.buildReport(cal, res)
 	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
-	written, err := writeReports(s.cfg.Report.Formats, rep)
+	written, unwritten := writeReports(s.store.Root(), s.cfg.Report.Formats, rep)
 	done()
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
 	gate, err := gateExceeded(s.cfg.Gates.PR, rep.Findings)
 	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
 	if err := printScan(e, s.cfg.Output.Format, cal, rep, written); err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
 	s.printStats(e)
-	return exitcode.ForReport(rep.Run.Incomplete, gate)
+	return reportCode(e, exitcode.ForReport(rep.Run.Incomplete, gate), append(s.staleReports, unwritten...))
+}
+
+// reportCode names on stderr, after the result, each report file the run
+// could not remove or write, and keeps the run's exit code, never 0 for a
+// lost report: a clean run whose report is missing exits 2 (#209).
+func reportCode(e env, code int, failed []error) int {
+	for _, err := range failed {
+		printError(e.stderr, "creep scan: reports", err)
+	}
+	if len(failed) > 0 && code == exitcode.OK {
+		return exitcode.ConfigError
+	}
+	return code
 }
 
 func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*report.Report, error) {
@@ -89,31 +95,36 @@ func dataHandling(egress string) (report.DataHandling, error) {
 	return report.SummarizeEgress(f)
 }
 
-// writeReports writes each configured format into .creep. Each file is
-// removed and created anew, never opened through a link a cloned
-// repository planted there, and the root keeps every write inside .creep.
-func writeReports(formats []string, rep *report.Report) ([]string, error) {
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		return nil, fmt.Errorf("reports: %w", err)
-	}
-	defer root.Close()
-	var written []string
+// writeReports writes each configured format into .creep through root, the
+// state store's checked handle. Each file is removed and created anew, never
+// opened through a link a cloned repository planted there, and the root
+// keeps every write inside .creep. A format that cannot be written is
+// skipped and returned, so the others and the result are not lost (#209).
+func writeReports(root *os.Root, formats []string, rep *report.Report) (written []string, failed []error) {
 	for _, format := range formats {
-		name, ok := reportNames[format]
-		if !ok {
-			return nil, fmt.Errorf("reports: unknown format %q", format)
-		}
-		var b bytes.Buffer
-		if err := renderReport(&b, format, rep); err != nil {
-			return nil, err
-		}
-		if err := replaceInRoot(root, name, b.Bytes()); err != nil {
-			return nil, fmt.Errorf("reports: %w", err)
+		name, err := writeReport(root, format, rep)
+		if err != nil {
+			failed = append(failed, err)
+			continue
 		}
 		written = append(written, path.Join(stateDir, name))
 	}
-	return written, nil
+	return written, failed
+}
+
+func writeReport(root *os.Root, format string, rep *report.Report) (string, error) {
+	name, ok := reportNames[format]
+	if !ok {
+		return "", fmt.Errorf("unknown format %q", format)
+	}
+	var b bytes.Buffer
+	if err := renderReport(&b, format, rep); err != nil {
+		return "", fmt.Errorf("%s not written: %w", name, err)
+	}
+	if err := replaceInRoot(root, name, b.Bytes()); err != nil {
+		return "", fmt.Errorf("%s not written: %w", name, err)
+	}
+	return name, nil
 }
 
 func replaceInRoot(root *os.Root, name string, data []byte) error {
@@ -191,15 +202,43 @@ func (s *session) printStats(e env) {
 	s.stats.print(w, pricingFor(s.opts, s.cfg.Model.Contract))
 }
 
-// incompleteMark states the reason and how much was not evaluated.
+// fail ends a run that stopped before its result: the error, the stale
+// reports it could not remove (still on disk, so a pipeline must not take
+// them for this run's), then, with --stats, what the run spent until then,
+// all on stderr. A run that fails after spending tokens is when the cost
+// matters most (#222).
+func (s *session) fail(e env, prefix string, err error, code int) int {
+	printError(e.stderr, prefix, err)
+	code = reportCode(e, code, s.staleReports)
+	if s.opts.stats {
+		s.stats.print(e.stderr, pricingFor(s.opts, s.cfg.Model.Contract))
+	}
+	return code
+}
+
+// incompleteMark states the reason and counts the gaps (files and sinks not
+// evaluated, verdicts from partial slices) apart from what was left out by
+// design (vendor, generated and minified files, tier S's low-risk skips),
+// which never makes a run incomplete (#209).
 func incompleteMark(rep *report.Report) string {
-	n := len(rep.Coverage.NotEvaluated)
-	for _, f := range rep.Findings {
-		if f.Status == report.StatusNotEvaluated {
-			n++
+	gaps, byDesign := 0, 0
+	for _, g := range rep.Coverage.NotEvaluated {
+		if g.Reason.ByDesign() {
+			byDesign++
+		} else {
+			gaps++
 		}
 	}
-	return fmt.Sprintf("INCOMPLETE RUN (reason %s): %d not evaluated; this is not a clean result", rep.Run.Reason, n)
+	for _, f := range rep.Findings {
+		switch {
+		case findingGap(f) != "":
+			gaps++
+		case f.Status == report.StatusNotEvaluated:
+			byDesign++
+		}
+	}
+	return fmt.Sprintf("INCOMPLETE RUN (reason %s): %d not evaluated or partial, %d left out by design; this is not a clean result",
+		rep.Run.Reason, gaps, byDesign)
 }
 
 // printDiscovery prints the inventory, discovery's whole-file egress and
@@ -229,9 +268,15 @@ func printFindings(w io.Writer, findings []report.Finding) {
 	fmt.Fprintf(w, "findings: %d verified, %d probable, %d discarded, %d not evaluated\n",
 		counts[report.StatusVerified], counts[report.StatusProbable], counts[report.StatusDiscarded], counts[report.StatusNotEvaluated])
 	for _, f := range findings {
-		if f.Status == report.StatusVerified || f.Status == report.StatusProbable {
-			fmt.Fprintf(w, "  %s  %s  %s  %s\n", f.ID, f.Status, f.Class, escapeControl(location(f)))
+		if f.Status != report.StatusVerified && f.Status != report.StatusProbable {
+			continue
 		}
+		partial := ""
+		if f.Partial {
+			// A verdict from a cut slice covers only part of the flow (#209).
+			partial = "  partial slice"
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), partial)
 	}
 }
 

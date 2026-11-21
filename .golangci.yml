@@ -8,6 +8,7 @@ linters:
   enable:
     - depguard
     - errcheck
+    - gocognit
     - govet
     - gosec
     - ineffassign
@@ -46,6 +47,11 @@ linters:
               desc: "foreign code can open sockets"
             - pkg: "unsafe"
               desc: "unchecked code (go:linkname) can open sockets"
+    gocognit:
+      # Ratchet (#136): today's maximum over non-test code (parseLayers in
+      # internal/tools/budget), measured for linux, darwin and windows. Lower
+      # it on purpose at the per-version review; never raise it.
+      min-complexity: 19
     gosec:
       excludes:
         # G304 (file path from a variable): creep reads files the user points
@@ -66,6 +72,9 @@ linters:
       - path: _test\.go
         linters: [gosec]
         text: "G204|G404|G702"
+      # Table-driven tests are long by design.
+      - path: _test\.go
+        linters: [gocognit]
 
 formatters:
   enable:
