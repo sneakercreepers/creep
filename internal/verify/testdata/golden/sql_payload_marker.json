@@ -1,0 +1,3 @@
+{"template": "sql_payload", "sql_payload": {
+  "request": {"method": "POST", "path": "/api/items/lookup", "headers": [], "content_type": "json", "body": "{\"id\":\"__CREEP_PAYLOAD__\"}"},
+  "context": "numeric", "technique": "marker"}}

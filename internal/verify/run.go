@@ -1,0 +1,266 @@
+package verify
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/sneakercreepers/creep/internal/sandbox"
+)
+
+// Runner is what Run needs of the sandbox: the runner container that
+// sends raw requests to the app on the run network, and the marker lookup
+// in the run's database. *sandbox.Sandbox implements it.
+type Runner interface {
+	Exchange(ctx context.Context, port int, requests [][]byte) ([]sandbox.Exchange, error)
+	DatabaseHasTable(ctx context.Context, table string) (bool, error)
+}
+
+var _ Runner = (*sandbox.Sandbox)(nil)
+
+// Target is the app under test. Its host is always sandbox.AppHost.
+type Target struct {
+	Port     int  // the app's port on the run network
+	Database bool // the run's database is up (sandbox.StartDatabase)
+}
+
+// Outcome is how one run of a PoC ended. Only Verified means the oracle
+// held.
+type Outcome string
+
+const (
+	Verified    Outcome = "verified"
+	NotVerified Outcome = "not_verified" // the app answered; the oracle did not hold
+	NoResponse  Outcome = "no_response"  // a request got no HTTP response
+	AuthFailed  Outcome = "auth_failed"  // http_sequence: the auth request gave no session
+	NoDatabase  Outcome = "no_database"  // sql_payload marker without a run database
+)
+
+// Oracle names in a Result, beside OracleStatus and OracleReflect.
+const (
+	OracleDelay      = "delay"       // sql_payload delay: payload slower than baseline
+	OracleDBMarker   = "db_marker"   // sql_payload marker: the table exists
+	OracleFileMarker = "file_marker" // path_payload: /etc/passwd in the payload response only
+)
+
+// Step roles.
+const (
+	RoleAuth     = "auth"
+	RoleRequest  = "request"
+	RoleBaseline = "baseline"
+	RolePayload  = "payload"
+)
+
+// Step is one request the runner sent and what came back, in order: what
+// a reproduction bundle keeps (#25).
+type Step struct {
+	Role      string
+	Request   []byte
+	Response  []byte
+	Truncated bool
+	Elapsed   time.Duration
+}
+
+// Result is one run of a PoC.
+type Result struct {
+	Template string
+	Oracle   string
+	Outcome  Outcome
+	Steps    []Step
+}
+
+// ErrRunner marks a runner that answered a different number of requests
+// than it was sent.
+var ErrRunner = errors.New("verify runner answer")
+
+// Run runs the PoC once against the target through r and judges it with
+// the template's oracle. A sandbox error (the canary aborted the run, a
+// timeout, Ctrl+C) is returned as is; how the app answered is the Outcome.
+func Run(ctx context.Context, r Runner, t Target, p PoC) (Result, error) {
+	if p.nonce == "" {
+		return Result{}, fmt.Errorf("run: not a PoC from Build: %w", ErrInvalid)
+	}
+	if t.Port < 1 || t.Port > 65535 {
+		return Result{}, fmt.Errorf("run: port %d: %w", t.Port, ErrInvalid)
+	}
+	switch req := p.req; {
+	case req.HTTPRequest != nil:
+		return runRequest(ctx, r, t, p)
+	case req.HTTPSequence != nil:
+		return runSequence(ctx, r, t, p)
+	case req.SQLPayload != nil:
+		return runSQL(ctx, r, t, p)
+	}
+	return runPath(ctx, r, t, p)
+}
+
+func runRequest(ctx context.Context, r Runner, t Target, p PoC) (Result, error) {
+	params := p.req.HTTPRequest
+	res := Result{Template: TemplateHTTPRequest, Oracle: params.Oracle.Kind}
+	steps, err := exchange(ctx, r, t.Port, Step{Role: RoleRequest, Request: render(params.Request, t.Port, fill{nonce: p.nonce})})
+	if err != nil {
+		return Result{}, err
+	}
+	res.Steps, res.Outcome = steps, judgeCall(params.Oracle, steps[0], p.nonce)
+	return res, nil
+}
+
+func runSequence(ctx context.Context, r Runner, t Target, p PoC) (Result, error) {
+	params := p.req.HTTPSequence
+	res := Result{Template: TemplateHTTPSequence, Oracle: params.Oracle.Kind}
+	auth, err := exchange(ctx, r, t.Port, Step{Role: RoleAuth, Request: render(params.Auth, t.Port, fill{})})
+	if err != nil {
+		return Result{}, err
+	}
+	res.Steps = auth
+	answer, ok := parseResponse(auth[0].Response)
+	if !ok {
+		res.Outcome = NoResponse
+		return res, nil
+	}
+	sess, ok := session(params.Session, params.TokenField, answer)
+	if answer.status >= 400 || !ok {
+		res.Outcome = AuthFailed
+		return res, nil
+	}
+	steps, err := exchange(ctx, r, t.Port, Step{Role: RoleRequest, Request: render(params.Request, t.Port, fill{nonce: p.nonce, session: &sess})})
+	if err != nil {
+		return Result{}, err
+	}
+	res.Steps, res.Outcome = append(res.Steps, steps...), judgeCall(params.Oracle, steps[0], p.nonce)
+	return res, nil
+}
+
+// judgeCall is the oracle of http_request and http_sequence.
+func judgeCall(o Oracle, s Step, nonce string) Outcome {
+	answer, ok := parseResponse(s.Response)
+	switch {
+	case !ok:
+		return NoResponse
+	case o.Kind == OracleStatus && answer.status == o.Status:
+		return Verified
+	case o.Kind == OracleReflect && bytes.Contains(answer.body, []byte(nonce)):
+		return Verified
+	}
+	return NotVerified
+}
+
+// runSQL sends a baseline and the payload in one runner for delay, or the
+// payload alone for marker, then looks for the marker table.
+func runSQL(ctx context.Context, r Runner, t Target, p PoC) (Result, error) {
+	params := p.req.SQLPayload
+	payload := sqlValue(sqlPayload(params.Context, params.Technique, p.marker()))
+	if params.Technique == "delay" {
+		return runDelay(ctx, r, t, params, payload)
+	}
+	res := Result{Template: TemplateSQLPayload, Oracle: OracleDBMarker, Outcome: NoDatabase}
+	if !t.Database {
+		return res, nil
+	}
+	steps, err := exchange(ctx, r, t.Port, Step{Role: RolePayload, Request: render(params.Request, t.Port, fill{payload: payload})})
+	if err != nil {
+		return Result{}, err
+	}
+	if res.Outcome, err = judgeMarker(ctx, r, p.marker(), steps[0]); err != nil {
+		return Result{}, err
+	}
+	res.Steps = steps
+	return res, nil
+}
+
+func runDelay(ctx context.Context, r Runner, t Target, params *SQLPayload, payload value) (Result, error) {
+	res, err := baselineAndPayload(ctx, r, t, params.Request, sqlValue(sqlBaseline[params.Context]), payload)
+	if err != nil {
+		return Result{}, err
+	}
+	res.Template, res.Oracle = TemplateSQLPayload, OracleDelay
+	if res.Outcome == "" {
+		res.Outcome = judgeDelay(res.Steps[0], res.Steps[1])
+	}
+	return res, nil
+}
+
+func judgeDelay(baseline, payload Step) Outcome {
+	if payload.Elapsed-baseline.Elapsed >= delayMargin {
+		return Verified
+	}
+	return NotVerified
+}
+
+// judgeMarker: the table is the oracle. Without it, a payload that got no
+// answer at all is no response.
+func judgeMarker(ctx context.Context, r Runner, table string, s Step) (Outcome, error) {
+	found, err := r.DatabaseHasTable(ctx, table)
+	if err != nil {
+		return "", fmt.Errorf("run: %w", err)
+	}
+	switch _, answered := parseResponse(s.Response); {
+	case found:
+		return Verified, nil
+	case !answered:
+		return NoResponse, nil
+	}
+	return NotVerified, nil
+}
+
+func runPath(ctx context.Context, r Runner, t Target, p PoC) (Result, error) {
+	params := p.req.PathPayload
+	payload := pathPayload(params.Style, params.Depth)
+	res, err := baselineAndPayload(ctx, r, t, params.Request, value{wire: baselineFile, text: baselineFile}, payload)
+	if err != nil {
+		return Result{}, err
+	}
+	res.Template, res.Oracle = TemplatePathPayload, OracleFileMarker
+	if res.Outcome != "" {
+		return res, nil
+	}
+	base, _ := parseResponse(res.Steps[0].Response)
+	got, _ := parseResponse(res.Steps[1].Response)
+	res.Outcome = NotVerified
+	if bytes.Contains(got.body, []byte(passwdMarker)) && !bytes.Contains(base.body, []byte(passwdMarker)) {
+		res.Outcome = Verified
+	}
+	return res, nil
+}
+
+// baselineAndPayload sends the request with a harmless value, then with
+// the payload, from one runner. Outcome is NoResponse if either got no
+// HTTP response, else left for the oracle.
+func baselineAndPayload(ctx context.Context, r Runner, t Target, c Call, baseline, payload value) (Result, error) {
+	steps, err := exchange(ctx, r, t.Port,
+		Step{Role: RoleBaseline, Request: render(c, t.Port, fill{payload: baseline})},
+		Step{Role: RolePayload, Request: render(c, t.Port, fill{payload: payload})})
+	if err != nil {
+		return Result{}, err
+	}
+	res := Result{Steps: steps}
+	for _, s := range steps {
+		if _, ok := parseResponse(s.Response); !ok {
+			res.Outcome = NoResponse
+		}
+	}
+	return res, nil
+}
+
+// exchange sends each step's request through the runner, in one
+// container, and fills in what came back.
+func exchange(ctx context.Context, r Runner, port int, steps ...Step) ([]Step, error) {
+	requests := make([][]byte, len(steps))
+	for i, s := range steps {
+		requests[i] = s.Request
+	}
+	got, err := r.Exchange(ctx, port, requests)
+	if err != nil {
+		return nil, fmt.Errorf("run: %w", err)
+	}
+	if len(got) != len(steps) {
+		return nil, fmt.Errorf("run: %d answers to %d requests: %w", len(got), len(steps), ErrRunner)
+	}
+	for i := range steps {
+		s := &steps[i]
+		s.Response, s.Truncated, s.Elapsed = got[i].Response, got[i].Truncated, got[i].Elapsed
+	}
+	return steps, nil
+}

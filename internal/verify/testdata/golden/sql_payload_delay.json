@@ -1,0 +1,3 @@
+{"template": "sql_payload", "sql_payload": {
+  "request": {"method": "GET", "path": "/items?name=__CREEP_PAYLOAD__", "headers": [], "content_type": "", "body": ""},
+  "context": "string", "technique": "delay"}}
