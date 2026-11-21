@@ -253,25 +253,44 @@ type errWriter struct{}
 
 func (errWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
 
-func TestVersionWriteError(t *testing.T) {
+// A lost stdout never exits 0, on commands and help alike (#41); a command
+// that already failed keeps its own code and reports the error once.
+func TestStdoutWriteError(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "creep.yaml")
+	if err := os.WriteFile(cfg, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const lost = "creep: write stdout: no space left on device"
 	tests := []struct {
 		name       string
+		args       []string
 		stdout     io.Writer
 		wantCode   int
 		wantStderr string
 	}{
-		{"stdout fails", errWriter{}, exitcode.ConfigError, "creep version: write stdout: no space left on device"},
-		{"stdout works", &bytes.Buffer{}, exitcode.OK, ""},
+		{"version", []string{"version"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help flag", []string{"--help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help flag before a command", []string{"-h", "version"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help command", []string{"help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"help for a command", []string{"help", "scan"}, errWriter{}, exitcode.ConfigError, lost},
+		{"command help flag", []string{"scan", "--help"}, errWriter{}, exitcode.ConfigError, lost},
+		{"config explain reports its own error", []string{"config", "explain", "--config", cfg}, errWriter{}, exitcode.ConfigError, "creep config explain: "},
+		{"failed command keeps its error", []string{"init"}, errWriter{}, exitcode.ConfigError, "not implemented yet"},
+		{"stdout works", []string{"version"}, &bytes.Buffer{}, exitcode.OK, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stderr bytes.Buffer
-			code := runWith([]string{"version"}, tt.stdout, &stderr, noModelDeps)
+			code := runWith(tt.args, tt.stdout, &stderr, noModelDeps)
 			if code != tt.wantCode {
-				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+				t.Errorf("exit code = %d, want %d: %s", code, tt.wantCode, stderr.String())
 			}
-			if !strings.Contains(stderr.String(), tt.wantStderr) || tt.wantStderr == "" && stderr.Len() > 0 {
-				t.Errorf("stderr = %q, want %q", stderr.String(), tt.wantStderr)
+			got := stderr.String()
+			if !strings.Contains(got, tt.wantStderr) || tt.wantStderr == "" && got != "" {
+				t.Errorf("stderr = %q, want %q", got, tt.wantStderr)
+			}
+			if strings.Count(got, "no space left") > 1 {
+				t.Errorf("write error reported twice: %q", got)
 			}
 		})
 	}

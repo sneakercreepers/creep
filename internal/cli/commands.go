@@ -58,10 +58,6 @@ func runVersion(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	info := buildinfo.Get()
-	// A full disk or closed pipe must not exit 0 with nothing printed.
-	if _, err := fmt.Fprintf(e.stdout, "creep %s\ncommit: %s\ngo: %s\n", info.Version, info.Commit, info.GoVersion); err != nil {
-		printError(e.stderr, "creep version", fmt.Errorf("write stdout: %w", err))
-		return exitcode.ConfigError
-	}
+	fmt.Fprintf(e.stdout, "creep %s\ncommit: %s\ngo: %s\n", info.Version, info.Commit, info.GoVersion)
 	return exitcode.OK
 }

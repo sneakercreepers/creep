@@ -18,6 +18,38 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // runWith is Run with the scan's outside dependencies passed in, so tests
 // drive every command through the same path with fakes.
 func runWith(args []string, stdout, stderr io.Writer, deps scanDeps) int {
+	out := &recordingWriter{w: stdout}
+	return checkStdout(dispatch(args, out, stderr, deps), out, stderr)
+}
+
+// recordingWriter keeps the first write error, so no command or help path
+// has to check every print to stdout itself.
+type recordingWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (r *recordingWriter) Write(p []byte) (int, error) {
+	n, err := r.w.Write(p)
+	if err != nil && r.err == nil {
+		r.err = err
+	}
+	return n, err
+}
+
+// checkStdout turns a successful run whose stdout was lost (a full disk, a
+// closed pipe on Windows) into exit 2, as config explain and a scan report
+// already do, so nothing exits 0 with its output missing (#41). A failing
+// code is kept: the run already reported why it failed.
+func checkStdout(code int, out *recordingWriter, stderr io.Writer) int {
+	if out.err == nil || code != exitcode.OK {
+		return code
+	}
+	printError(stderr, "creep", fmt.Errorf("write stdout: %w", out.err))
+	return exitcode.ConfigError
+}
+
+func dispatch(args []string, stdout, stderr io.Writer, deps scanDeps) int {
 	opts := defaultOptions()
 	fs := newFlagSet("creep", &opts)
 	wantHelp, err := parseFlags(fs, args)
