@@ -155,7 +155,7 @@ func TestPlannerRejectionFailsClosed(t *testing.T) {
 		paths: []string{"app.py"},
 	}
 	findings := baseFindings(rs)
-	_, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 1 << 20, StepTokens: 1}, findings)
+	_, err := planSinks(rs, planner.TierM, planner.Budget{Tokens: 1 << 20, StepTokens: 1}, findings, nil)
 	if !errors.Is(err, planner.ErrInput) {
 		t.Fatalf("planSinks err = %v, want planner.ErrInput", err)
 	}

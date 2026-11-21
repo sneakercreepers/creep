@@ -167,7 +167,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 		return t, err
 	}
 	findings := baseFindings(rs)
-	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings)
+	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings, nil)
 	if errors.Is(err, planner.ErrInput) {
 		rejected := rejectedScan(findings, rs.gaps)
 		t.skipped[reasonPlannerRejected] = len(rejected.findings)

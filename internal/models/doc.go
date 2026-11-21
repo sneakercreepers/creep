@@ -25,7 +25,10 @@
 //     caller's closed struct with unknown fields refused, after a size cap,
 //     and never executed. A second token pass (strictkeys.go) refuses
 //     duplicate keys and keys that differ from a json tag only in case, at
-//     any depth, which encoding/json would otherwise accept. A reply that
+//     any depth, which encoding/json would otherwise accept, and every
+//     reply holding an object of a type that gives one JSON name to two
+//     fields (promoted from embedded structs), whose precedence it does
+//     not copy. A reply that
 //     does not parse, is cut off, is a refusal or fails the struct's
 //     Validate is retried at most Retries times, each retry carrying the
 //     reason as context; then Complete returns an *InvalidOutputError. The

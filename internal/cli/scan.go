@@ -264,7 +264,7 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 	}
 	findings := baseFindings(rs)
 	done := s.stats.start(phasePlan)
-	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings)
+	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings, s.deps.planned)
 	done()
 	if errors.Is(err, planner.ErrInput) {
 		return rejectedScan(findings, rs.gaps), nil

@@ -12,6 +12,10 @@ import (
 const (
 	reasonDuplicateKey = "it had a duplicate key"
 	reasonKeyCase      = "it had a key that does not exactly match the schema"
+	// reasonAmbiguous is creep's bug, not the model's: the output type gives
+	// one JSON name to two fields, so every reply holding such an object is
+	// refused.
+	reasonAmbiguous = "its schema type gives one JSON name to two fields"
 )
 
 // strictKeys reports why content, already decoded into a t, must still be
@@ -42,7 +46,10 @@ func walkValue(dec *json.Decoder, t reflect.Type) string {
 }
 
 func walkObject(dec *json.Decoder, t reflect.Type) string {
-	fields, closed := objectFields(t)
+	fields, closed, ok := objectFields(t)
+	if !ok {
+		return reasonAmbiguous
+	}
 	seen := map[string]bool{}
 	for dec.More() {
 		tok, err := dec.Token()
@@ -84,18 +91,21 @@ func walkArray(dec *json.Decoder, elem reflect.Type) string {
 var unmarshalerType = reflect.TypeFor[json.Unmarshaler]()
 
 // objectFields maps each exact JSON name of struct t to its field type.
-// closed is false when t is not a struct, so any key is allowed.
-func objectFields(t reflect.Type) (map[string]reflect.Type, bool) {
+// closed is false when t is not a struct, so any key is allowed. ok is false
+// when two fields share a JSON name: encoding/json would pick one by depth
+// and tags, and refusing the type is simpler than copying that rule.
+func objectFields(t reflect.Type) (fields map[string]reflect.Type, closed, ok bool) {
 	t = deref(t)
 	if t == nil || t.Kind() != reflect.Struct || reflect.PointerTo(t).Implements(unmarshalerType) {
-		return nil, false
+		return nil, false, true
 	}
-	fields := map[string]reflect.Type{}
-	addFields(fields, t)
-	return fields, true
+	fields = map[string]reflect.Type{}
+	return fields, true, addFields(fields, t)
 }
 
-func addFields(fields map[string]reflect.Type, t reflect.Type) {
+// addFields adds t's JSON names to fields, promoting those of embedded
+// structs, and reports false when a name is already taken.
+func addFields(fields map[string]reflect.Type, t reflect.Type) bool {
 	for i := range t.NumField() {
 		f := t.Field(i)
 		tag := f.Tag.Get("json")
@@ -104,15 +114,21 @@ func addFields(fields map[string]reflect.Type, t reflect.Type) {
 		case tag == "-":
 			continue
 		case f.Anonymous && name == "" && deref(f.Type).Kind() == reflect.Struct:
-			addFields(fields, deref(f.Type))
+			if !addFields(fields, deref(f.Type)) {
+				return false
+			}
 			continue
 		case !f.IsExported():
 			continue
 		case name == "":
 			name = f.Name
 		}
+		if _, taken := fields[name]; taken {
+			return false
+		}
 		fields[name] = f.Type
 	}
+	return true
 }
 
 func deref(t reflect.Type) reflect.Type {

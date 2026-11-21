@@ -66,6 +66,13 @@ type openAIToolChoice struct {
 }
 
 // openAIResponse holds only the fields creep reads; others are ignored.
+// Arguments is a string, as the OpenAI contract defines it. Some compatible
+// servers send a JSON object instead; that fails the envelope decode as
+// ErrMalformedReply and is not retried (#157). Creep fails closed on
+// purpose: a server that breaks the envelope contract may break it in other
+// ways too, and a retry would only spend more budget. Such a server works
+// with structured "json_schema", "gbnf" or "prompt", which read message
+// content.
 type openAIResponse struct {
 	Choices []struct {
 		Message struct {
