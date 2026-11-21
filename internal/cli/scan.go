@@ -39,6 +39,9 @@ type session struct {
 	red   *redact.Redactor
 	repo  *os.Root
 	stats *runStats
+	// staleReports are the report names the run could not remove when it
+	// opened its state; the scan goes on and fails its exit code (#209).
+	staleReports []error
 }
 
 // scanResult is what the pipeline decided, for the report.
@@ -80,25 +83,21 @@ func runScan(e env, args []string) int {
 	warnPreset(e.stderr, resolved.Config.Model)
 	files, err := s.walk(ctx, e.stderr)
 	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
 	if err := s.checkTools(ctx); err != nil {
-		printError(e.stderr, "creep scan: tool canary", err)
-		return failureCode(err)
+		return s.fail(e, "creep scan: tool canary", err, failureCode(err))
 	}
 	done := s.stats.start(phaseCalibrate)
 	cal, err := s.calibrate(ctx)
 	done()
 	if err != nil {
-		printError(e.stderr, "creep scan: calibration", err)
-		return failureCode(err)
+		return s.fail(e, "creep scan: calibration", err, failureCode(err))
 	}
 	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
 	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
 	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
 	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline)
 	return s.finish(e, cal, res)
@@ -167,7 +166,8 @@ func (s *session) openState() error {
 	if s.run, err = s.store.NewRun(s.mode()); err != nil {
 		return err
 	}
-	return removeReports()
+	s.staleReports = removeReports(s.store.Root())
+	return nil
 }
 
 func (s *session) mode() state.Mode {
