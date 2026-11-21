@@ -84,7 +84,7 @@ func (s *state) checkProjectGate(key string, inherited gateFloor) error {
 	}
 	hint := fmt.Sprintf("the project file may only make gates stricter, use %q or a stricter gate", passingGate(value, floors))
 	if !slices.ContainsFunc(broken, func(f gateFloor) bool { return f.what == "the limit" }) {
-		hint += ", or set a looser gate in the user file, --config or a flag"
+		hint += ", or set a looser gate in the user file, --config or policy"
 	}
 	return fmt.Errorf("%s %q is looser than %s; %s", key, value, floorNames(broken), hint)
 }

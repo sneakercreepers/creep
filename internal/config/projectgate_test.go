@@ -57,6 +57,10 @@ func TestProjectCannotLoosenInheritedGate(t *testing.T) {
 			"gates.nightly", `use "probable:info" or a stricter gate`, true},
 		{"limit broken: no operator hint", Inputs{Policy: policy("limits:\n  gates:\n    pr: verified:low\n"), Project: project("gates:\n  pr: probable:medium\n")},
 			"gates.pr", `gates.pr "probable:medium" is looser than the limit "verified:low" set by policy "org.yaml"; the project file may only make gates stricter, use "probable:low" or a stricter gate`, true},
+		{"unordered limit and built-in floor are both named", Inputs{Policy: policy("limits:\n  gates:\n    pr: verified:low\n"), Project: project("gates:\n  pr: verified:critical\n")},
+			"gates.pr", `gates.pr "verified:critical" is looser than the limit "verified:low" set by policy "org.yaml" and the built-in floor "probable:critical" set by default; the project file may only make gates stricter, use "probable:low" or a stricter gate`, true},
+		{"operator hint names only layers that set gates", Inputs{User: user("gates:\n  pr: probable:low\n"), Project: project("gates:\n  pr: probable:high\n")},
+			"gates.pr", `use "probable:low" or a stricter gate, or set a looser gate in the user file, --config or policy`, true},
 		{"locked pr cannot be restated", Inputs{Policy: policy("locked: [gates.pr]\ndefaults:\n  gates:\n    pr: probable:medium\n"), Project: project("gates:\n  pr: probable:medium\n")},
 			"gates.pr", `key "gates.pr" is locked by policy "org.yaml"`, true},
 		{"locked pr, nightly still floored", Inputs{Policy: policy("locked: [gates.pr]\n"), User: user("gates:\n  nightly: probable:high\n"), Project: project("gates:\n  nightly: verified:high\n")},
@@ -128,5 +132,9 @@ func checkSuggestion(t *testing.T, suggestion *regexp.Regexp, inputs func(string
 	limitBroken := strings.Contains(err.Error(), "the limit")
 	if hinted := strings.Contains(err.Error(), "set a looser gate"); hinted == limitBroken {
 		t.Errorf("%s: operator hint %v with limit broken %v: %v", name, hinted, limitBroken, err)
+	}
+	// No gate flag exists, so the hint must not offer one (#64).
+	if strings.Contains(err.Error(), "flag") {
+		t.Errorf("%s: hint offers a flag: %v", name, err)
 	}
 }

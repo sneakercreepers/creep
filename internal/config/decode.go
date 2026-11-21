@@ -78,7 +78,18 @@ func decodeStrict(data []byte, out any) ([]string, error) {
 	strict := yaml.NewDecoder(bytes.NewReader(data))
 	strict.KnownFields(true)
 	if err := strict.Decode(out); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		return nil, fmt.Errorf("decode: %w", oneLine(err))
 	}
 	return keys, nil
+}
+
+// oneLine joins yaml's multi-line type errors with "; ": the CLI escapes
+// every control character in an error, so a newline would print as \x0a.
+// The file text inside the message is still left to that escaping.
+func oneLine(err error) error {
+	var te *yaml.TypeError
+	if !errors.As(err, &te) {
+		return err
+	}
+	return fmt.Errorf("yaml: unmarshal errors: %s", strings.Join(te.Errors, "; "))
 }

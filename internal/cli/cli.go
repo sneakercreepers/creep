@@ -26,11 +26,7 @@ func runWith(args []string, stdout, stderr io.Writer, deps scanDeps) int {
 	}
 	markExplicit(fs, &opts)
 	if wantHelp {
-		if invalidOptions(opts, stderr) {
-			return exitcode.ConfigError
-		}
-		printUsage(stdout)
-		return exitcode.OK
+		return runGlobalHelp(fs.Args(), opts, stdout, stderr)
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
@@ -85,6 +81,20 @@ func runHelp(args []string, opts globalOptions, stdout, stderr io.Writer) int {
 	default:
 		return usageError("creep help", fmt.Errorf("unexpected arguments: %q", positional[1:]), stderr)
 	}
+}
+
+// runGlobalHelp handles "creep -h ...". The flag package stops at the first
+// positional, so the flags after it are parsed here: "creep -h version
+// --format bad" must fail like "creep version -h --format bad" does.
+func runGlobalHelp(rest []string, opts globalOptions, stdout, stderr io.Writer) int {
+	if _, _, err := parseArgs("creep", rest, &opts); err != nil {
+		return usageError("creep", err, stderr)
+	}
+	if invalidOptions(opts, stderr) {
+		return exitcode.ConfigError
+	}
+	printUsage(stdout)
+	return exitcode.OK
 }
 
 func printHelpFor(name string, stdout, stderr io.Writer) int {
