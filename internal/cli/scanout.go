@@ -202,11 +202,14 @@ func (s *session) printStats(e env) {
 	s.stats.print(w, pricingFor(s.opts, s.cfg.Model.Contract))
 }
 
-// fail ends a run that stopped before its result: the error, then, with
-// --stats, what the run spent until then, both on stderr. A run that fails
-// after spending tokens is when the cost matters most (#222).
+// fail ends a run that stopped before its result: the error, the stale
+// reports it could not remove (still on disk, so a pipeline must not take
+// them for this run's), then, with --stats, what the run spent until then,
+// all on stderr. A run that fails after spending tokens is when the cost
+// matters most (#222).
 func (s *session) fail(e env, prefix string, err error, code int) int {
 	printError(e.stderr, prefix, err)
+	code = reportCode(e, code, s.staleReports)
 	if s.opts.stats {
 		s.stats.print(e.stderr, pricingFor(s.opts, s.cfg.Model.Contract))
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/state"
 )
 
 // maxWhyReportBytes caps the report why reads; scan writes far less.
@@ -58,38 +59,14 @@ func readLastReport() (*report.Report, error) {
 	return report.ReadJSON(bytes.NewReader(data))
 }
 
-// openStateDir opens .creep for reading without creating it. A link or any
-// other non-directory there is refused, as the state store refuses it, so a
-// .creep link a cloned repository planted is never read as the last scan
-// (#209).
+// openStateDir opens .creep for reading without creating it, through the
+// state store's own checks, so a .creep link, junction or file a cloned
+// repository planted is never read as the last scan (#209).
 func openStateDir() (*os.Root, error) {
-	before, err := os.Lstat(stateDir)
-	if err != nil {
+	if _, err := os.Lstat(stateDir); err != nil {
 		return nil, fmt.Errorf("no scan report in this directory (run creep scan with json in report.formats): %w", err)
 	}
-	// Pin the Windows file ID now; SameFile would otherwise read it by path
-	// later, after a swap.
-	os.SameFile(before, before)
-	if !before.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory (a link, junction or file); creep reads only the directory scan makes", stateDir)
-	}
-	return openSameDir(stateDir, before)
-}
-
-// openSameDir opens name as a root only if it is still the directory before
-// describes: os.OpenRoot follows links, so one swapped in after the Lstat
-// opens another directory, and that is refused.
-func openSameDir(name string, before os.FileInfo) (*os.Root, error) {
-	root, err := os.OpenRoot(name)
-	if err != nil {
-		return nil, err
-	}
-	after, err := root.Stat(".")
-	if err != nil || !os.SameFile(before, after) {
-		_ = root.Close()
-		return nil, fmt.Errorf("%s changed while opening it", name)
-	}
-	return root, nil
+	return state.OpenExisting(stateDir)
 }
 
 func printWhy(w io.Writer, f report.Finding) {

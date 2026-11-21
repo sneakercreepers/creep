@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -93,8 +94,8 @@ func TestScanUnwritableReports(t *testing.T) {
 			exitcode.Incomplete, []string{"INCOMPLETE RUN (reason send_failed)"}, []string{"report.json", "report.md", "report.sarif"}, nil},
 		{"gate run keeps 1", []string{"report.md"}, "", nil, &fakeModel{verdict: map[string]string{"sql_injection": "vulnerable"}},
 			exitcode.GateExceeded, []string{"reports: .creep/report.json .creep/report.sarif"}, []string{"report.md"}, []string{"report.json", "report.sarif"}},
-		{"format not configured", []string{"report.sarif"}, "report:\n  formats: [json]\n", nil, &fakeModel{},
-			exitcode.ConfigError, []string{"reports: .creep/report.json"}, []string{"remove stale report.sarif"}, []string{"report.json"}},
+		{"formats not configured", []string{"report.md", "report.sarif"}, "report:\n  formats: [json]\n", nil, &fakeModel{},
+			exitcode.ConfigError, []string{"reports: .creep/report.json"}, []string{"remove stale report.md", "remove stale report.sarif"}, []string{"report.json"}},
 		{"json on stdout", []string{"report.json"}, "", []string{"--format", "json"}, &fakeModel{},
 			exitcode.ConfigError, []string{`"schema_version"`}, []string{"report.json not written"}, []string{"report.md", "report.sarif"}},
 	}
@@ -123,6 +124,21 @@ func TestScanUnwritableReports(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A run that fails after opening its state (#209) still names the stale
+// report it could not remove, which is left on disk, and keeps its code.
+func TestFailedScanNamesStaleReports(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", ".creep/report.sarif/x": "x"}, "")
+	deps := fakeDeps(&fakeModel{}, calibrate.TierM)
+	deps.calibrate = func(context.Context, calibrate.CacheOptions) (calibrate.Calibration, error) {
+		return calibrate.Calibration{}, errors.New("model down")
+	}
+	code, _, errOut := runScanWith(deps, "scan", "--config", cfg)
+	if code != exitcode.ModelOrSandbox {
+		t.Fatalf("exit %d, want %d\nstderr:\n%s", code, exitcode.ModelOrSandbox, errOut)
+	}
+	assertContains(t, "stderr", errOut, []string{"creep scan: calibration: model down", "creep scan: reports: remove stale report.sarif"})
 }
 
 // reportFiles lists the report files in .creep.

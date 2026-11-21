@@ -148,35 +148,3 @@ func TestWhyRefusesLinkedStateDir(t *testing.T) {
 		})
 	}
 }
-
-// The race the Lstat leaves (#209): a directory swapped in under the name
-// after it was checked is not the one checked, and is refused; the same
-// directory opens.
-func TestOpenSameDirRefusesSwap(t *testing.T) {
-	t.Chdir(t.TempDir())
-	if err := os.Mkdir("dir", 0o700); err != nil {
-		t.Fatal(err)
-	}
-	before, err := os.Lstat("dir")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.SameFile(before, before)
-	root, err := openSameDir("dir", before)
-	if err != nil {
-		t.Fatalf("same directory refused: %v", err)
-	}
-	_ = root.Close()
-	if err := os.Rename("dir", "checked"); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir("dir", 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if root, err := openSameDir("dir", before); err == nil || !strings.Contains(err.Error(), "changed while opening") {
-		if root != nil {
-			_ = root.Close()
-		}
-		t.Fatalf("swapped directory opened: %v", err)
-	}
-}
