@@ -153,6 +153,36 @@ func TestCheckNoExecution(t *testing.T) {
 		{"docs may mention", fstest.MapFS{"CONTRIBUTING.md": {Data: []byte("creep scan testdata/apps/flask\n")}, ".github/ISSUE_TEMPLATE/x.yml": {Data: []byte("testdata/apps\n")}}, ""},
 		{"nested module skipped", fstest.MapFS{"w/go.mod": {Data: []byte("module w\n")}, "w/Makefile": {Data: []byte("run:\n\tpython testdata/apps/x\n")}}, ""},
 		{"testdata skipped", fstest.MapFS{"testdata/apps/x/run.sh": {Data: []byte("node testdata/apps\n")}}, ""},
+		// #158: runner gaps, each one passed before the fix.
+		{"lower-case makefile", runner("makefile"), "makefile"},
+		{"gnu makefile", runner("GNUmakefile"), "GNUmakefile"},
+		{"lower-case dockerfile", runner("sub/dockerfile"), "dockerfile"},
+		{"capitalized compose", runner("Docker-compose.yml"), "Docker-compose.yml"},
+		{"upper-case compose extension", runner("compose.YAML"), "compose.YAML"},
+		{"containerfile", runner("Containerfile"), "Containerfile"},
+		{"containerfile variant", runner("build/Containerfile.dev"), "Containerfile.dev"},
+		{"justfile", runner("Justfile"), "Justfile"},
+		{"hidden justfile", runner(".justfile"), ".justfile"},
+		{"taskfile", runner("Taskfile.yml"), "Taskfile.yml"},
+		{"taskfile dist", runner("taskfile.dist.yaml"), "taskfile.dist.yaml"},
+		{"pre-commit hook", runner(".pre-commit-config.yaml"), ".pre-commit-config.yaml"},
+		{"goreleaser yml", runner(".goreleaser.yml"), ".goreleaser.yml"},
+		{"goreleaser yaml", runner(".goreleaser.yaml"), ".goreleaser.yaml"},
+		{"devcontainer json", runner(".devcontainer/devcontainer.json"), "devcontainer.json"},
+		{"devcontainer script", runner(".devcontainer/scripts/post-create"), "post-create"},
+		{"devcontainer root file", runner(".devcontainer.json"), ".devcontainer.json"},
+		{"vscode tasks", runner(".vscode/tasks.json"), "tasks.json"},
+		{"go generate without exec", fstest.MapFS{"p/gen.go": {Data: []byte("package p\n\n//go:generate sh -c \"python ../testdata/apps/flask/vulnerable/app.py\"\n")}}, "go:generate"},
+		{"package testdata script", fstest.MapFS{"internal/p/testdata/run.sh": {Data: []byte("node ../../../testdata/apps/express/vulnerable/app.js\n")}}, "run.sh"},
+		{"only the root apps tree skipped", fstest.MapFS{"internal/p/testdata/apps/run.sh": {Data: []byte("node testdata/apps\n")}}, "run.sh"},
+		{"replay skipped", fstest.MapFS{"testdata/replay/x/run.sh": {Data: []byte("node testdata/apps\n")}}, ""},
+		{"only the root replay tree skipped", fstest.MapFS{"internal/p/testdata/replay/run.sh": {Data: []byte("node testdata/apps\n")}}, "run.sh"},
+		{"a plain comment may name the apps", fstest.MapFS{"p/a.go": {Data: []byte("package p\n\n// Reads testdata/apps; see go:generate.\n")}}, ""},
+		{"tasks.json outside .vscode is not run", runner("config/tasks.json"), ""},
+		{"go generate elsewhere is fine", fstest.MapFS{"p/gen.go": {Data: []byte("package p\n\n//go:generate stringer -type=Kind\n")}}, ""},
+		{"directive text in a string is fine", fstest.MapFS{"p/a.go": {Data: []byte("package p\n\nvar _ = \"//go:generate sh testdata/apps\"\n")}}, ""},
+		{"vscode settings are not run", runner(".vscode/settings.json"), ""},
+		{"plain yaml is not run", runner("config/settings.yml"), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -163,6 +193,11 @@ func TestCheckNoExecution(t *testing.T) {
 			assertProblems(t, problems, tt.want)
 		})
 	}
+}
+
+// runner is a repository holding one file, at name, that names the apps.
+func runner(name string) fstest.MapFS {
+	return fstest.MapFS{name: {Data: []byte("python testdata/apps/flask/vulnerable/app.py\n")}}
 }
 
 func assertProblems(t *testing.T, problems []string, want string) {

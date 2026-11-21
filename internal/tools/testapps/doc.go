@@ -43,9 +43,14 @@
 // scripts, test files a Python or JS runner would collect, Go files or
 // symlinks. Only the sandbox builds that Dockerfile, offline
 // (internal/sandbox TestEveryTestAppBuilds and TestRealTestAppsBuild).
-// TestNothingExecutesApps fails when a Makefile, workflow, composite action,
-// Dockerfile, compose file, package.json (its scripts run under npm) or shell
-// script mentions testdata/apps, or when Go code that can start programs (os/exec, syscall,
-// os.StartProcess) names it. Like make budget, it is a static backstop that
-// reads text; review stays required.
+// TestNothingExecutesApps fails when a Makefile, Justfile, Taskfile,
+// workflow, composite action, Dockerfile or Containerfile, compose file,
+// package.json (its scripts run under npm), pre-commit or GoReleaser config,
+// dev container file, VS Code tasks.json or shell script mentions
+// testdata/apps (base names in any case, and inside every testdata tree but
+// the apps and testdata/replay), when a //go:generate directive names it, or
+// when Go code that can start programs (os/exec, syscall, os.StartProcess)
+// names it. Like make budget, it is a static backstop that reads text;
+// review stays required. TestClassesMatchCalibrate keeps the classes in step
+// with calibrate.Classes().
 package testapps

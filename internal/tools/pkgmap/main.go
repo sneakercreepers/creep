@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -70,11 +71,7 @@ func checkFresh(cfg config, want []byte, out io.Writer) int {
 }
 
 func generate(cfg config) ([]byte, error) {
-	listed, err := goList(cfg.root)
-	if err != nil {
-		return nil, err
-	}
-	dirs, err := parseList(listed)
+	dirs, err := listDirs(cfg.root)
 	if err != nil {
 		return nil, err
 	}
@@ -93,18 +90,49 @@ func generate(cfg config) ([]byte, error) {
 	return render(pkgs), nil
 }
 
+// mapPlatforms are the GOOS/GOARCH pairs the map lists packages for: the
+// release targets in .goreleaser.yaml. A package built only for one of them
+// (say every file is //go:build linux) is in the map on every host, so the
+// map is the same on every OS (#117).
+var mapPlatforms = [][2]string{
+	{"darwin", "amd64"}, {"darwin", "arm64"},
+	{"linux", "amd64"}, {"linux", "arm64"},
+	{"windows", "amd64"}, {"windows", "arm64"},
+}
+
+// listDirs returns the union, sorted, of the package directories go list
+// finds for each of mapPlatforms.
+func listDirs(root string) ([]string, error) {
+	var all []string
+	for _, p := range mapPlatforms {
+		listed, err := goList(root, p[0], p[1])
+		if err != nil {
+			return nil, err
+		}
+		dirs, err := parseList(listed)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, dirs...)
+	}
+	slices.Sort(all)
+	return slices.Compact(all), nil
+}
+
 // goList prints "<module path> <import path>" for every package of the
-// module rooted at root.
-func goList(root string) ([]byte, error) {
+// module rooted at root, built for goos/goarch.
+func goList(root, goos, goarch string) ([]byte, error) {
 	cmd := exec.Command("go", "list", "-f", "{{.Module.Path}} {{.ImportPath}}", "./...")
 	cmd.Dir = root
-	// A go.work above the root must not change which packages are listed.
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	// A go.work above the root must not change which packages are listed,
+	// and cgo, which Go turns off when cross-listing, must not depend on
+	// whether the host is one of the platforms.
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("go list: %w\n%s", err, bytes.TrimSpace(stderr.Bytes()))
+		return nil, fmt.Errorf("go list (GOOS=%s GOARCH=%s): %w\n%s", goos, goarch, err, bytes.TrimSpace(stderr.Bytes()))
 	}
 	return out, nil
 }

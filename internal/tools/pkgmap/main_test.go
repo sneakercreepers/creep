@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,6 +69,49 @@ func TestGenerateListsOnlyModulePackages(t *testing.T) {
 	}
 }
 
+// TestGenerateIsTheSameOnEveryHost pins #117: packages are listed for every
+// release platform with cgo off, whatever GOOS, GOARCH and C toolchain the
+// host has, so each CI job builds the same map.
+func TestGenerateIsTheSameOnEveryHost(t *testing.T) {
+	// A host without a C toolchain turns cgo off by itself; force it on so
+	// the cgo case fails on every host when pkgmap stops turning it off.
+	t.Setenv("CGO_ENABLED", "1")
+	only := func(constraint, pkg string) string { return "//go:build " + constraint + "\n\n" + docGo(pkg) }
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  []string // tooling packages listed besides internal/a
+	}{
+		{name: "linux only", files: map[string]string{"internal/tools/l/doc.go": only("linux", "l")}, want: []string{"l"}},
+		{name: "windows only", files: map[string]string{"internal/tools/w/doc.go": only("windows", "w")}, want: []string{"w"}},
+		{name: "darwin only", files: map[string]string{"internal/tools/d/doc.go": only("darwin", "d")}, want: []string{"d"}},
+		{name: "linux by file name", files: map[string]string{"internal/tools/n/doc.go": only("linux", "n"), "internal/tools/n/n_linux.go": "package n\n"}, want: []string{"n"}},
+		{name: "arm64 only", files: map[string]string{"internal/tools/r/doc.go": only("arm64", "r")}, want: []string{"r"}},
+		{name: "every OS at once", files: map[string]string{
+			"internal/tools/l/doc.go": only("linux", "l"), "internal/tools/w/doc.go": only("windows", "w"), "internal/tools/d/doc.go": only("darwin", "d"),
+		}, want: []string{"d", "l", "w"}},
+		{name: "cgo only is never listed", files: map[string]string{"internal/tools/c/doc.go": only("cgo", "c")}},
+		{name: "unix outside the targets is never listed", files: map[string]string{"internal/tools/f/doc.go": only("freebsd", "f")}},
+		{name: "ignored is never listed", files: map[string]string{"internal/tools/i/doc.go": only("ignore", "i")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.files["internal/a/doc.go"] = docGo("a")
+			out, err := generate(config{root: writeModule(t, tt.files), out: "docs/map.md", architecture: "docs/architecture.md"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := mapHeader + "| 0 | [`internal/a`](../internal/a/doc.go) | Package a exists. |\n"
+			for _, p := range tt.want {
+				want += "| - | [`internal/tools/" + p + "`](../internal/tools/" + p + "/doc.go) | Package " + p + " exists. |\n"
+			}
+			if string(out) != want {
+				t.Errorf("map:\n%s\nwant:\n%s", out, want)
+			}
+		})
+	}
+}
+
 func TestGenerateFailsClosed(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -78,6 +122,8 @@ func TestGenerateFailsClosed(t *testing.T) {
 		{name: "package without a layers row", files: map[string]string{"internal/z/doc.go": docGo("z")}, wantErr: "internal/z has no row"},
 		{name: "no layers block", files: map[string]string{"internal/a/doc.go": docGo("a"), "docs/architecture.md": "# none\n"}, wantErr: "docs/architecture.md: no closed"},
 		{name: "two packages in one directory", files: map[string]string{"internal/a/doc.go": docGo("a"), "internal/a/b.go": "package b\n"}, wantErr: "go list"},
+		{name: "two packages on one platform only", files: map[string]string{"internal/a/doc.go": docGo("a"), "internal/a/b_windows.go": "package b\n"}, wantErr: "GOOS=windows GOARCH=amd64"},
+		{name: "doc.go missing on one platform only", files: map[string]string{"internal/a/doc.go": docGo("a"), "internal/tools/l/l_linux.go": "package l\n"}, wantErr: "internal/tools/l: every package needs a doc.go"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,5 +219,42 @@ func TestMakeCheckRunsMapCheck(t *testing.T) {
 		if !regexp.MustCompile(re).Match(data) {
 			t.Errorf("Makefile does not match %s", re)
 		}
+	}
+}
+
+// releaseList matches a goos or goarch flow list in .goreleaser.yaml.
+var releaseList = regexp.MustCompile(`(?m)^\s*(goos|goarch):\s*\[([^\]]*)\]`)
+
+// TestMapPlatformsMatchRelease fails when the release builds for a platform
+// mapPlatforms does not list, or no longer builds for one it lists (#117).
+// make budget guards its reachTargets the same way.
+func TestMapPlatformsMatchRelease(t *testing.T) {
+	data, err := os.ReadFile("../../../.goreleaser.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := string(data)
+	if !strings.Contains(release, "- CGO_ENABLED=0") {
+		t.Error(".goreleaser.yaml no longer builds with CGO_ENABLED=0; update goList")
+	}
+	lists := map[string][][]string{}
+	for _, m := range releaseList.FindAllStringSubmatch(release, -1) {
+		lists[m[1]] = append(lists[m[1]], strings.FieldsFunc(m[2], func(r rune) bool { return r == ',' || r == ' ' }))
+	}
+	if len(lists["goos"]) != 1 || len(lists["goarch"]) != 1 {
+		t.Fatalf(".goreleaser.yaml goos/goarch lists = %q, want one build", lists)
+	}
+	want := map[[2]string]bool{}
+	for _, goos := range lists["goos"][0] {
+		for _, goarch := range lists["goarch"][0] {
+			want[[2]string{goos, goarch}] = true
+		}
+	}
+	got := map[[2]string]bool{}
+	for _, p := range mapPlatforms {
+		got[p] = true
+	}
+	if !maps.Equal(got, want) || len(got) != len(mapPlatforms) {
+		t.Errorf("mapPlatforms = %v, want the release targets %v", mapPlatforms, want)
 	}
 }
