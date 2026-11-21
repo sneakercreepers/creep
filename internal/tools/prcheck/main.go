@@ -13,17 +13,26 @@ import (
 // maxInputBytes bounds each input so a huge payload or file list cannot stall CI.
 const maxInputBytes = 32 << 20
 
+// inputs name what the check reads: the event payload, the changed paths,
+// AGENTS.md as it was on the base, and the checked-out tree.
+type inputs struct {
+	event, files, baseAgents, root string
+}
+
 func main() {
-	eventPath := flag.String("event", "", "pull_request event payload ($GITHUB_EVENT_PATH)")
-	filesPath := flag.String("files", "", "changed paths, NUL-separated (git diff --name-only -z)")
+	var in inputs
+	flag.StringVar(&in.event, "event", "", "pull_request event payload ($GITHUB_EVENT_PATH)")
+	flag.StringVar(&in.files, "files", "", "changed paths, NUL-separated (git diff --name-only -z)")
+	flag.StringVar(&in.baseAgents, "base-agents", "", "AGENTS.md on the base commit (git show HEAD^1:AGENTS.md)")
+	flag.StringVar(&in.root, "root", ".", "checked-out pull request tree")
 	flag.Parse()
-	os.Exit(run(*eventPath, *filesPath, os.Stdout))
+	os.Exit(run(in, os.Stdout))
 }
 
 // run prints the problems and returns 0 when there are none, 1 when there
 // are, and 2 when an input cannot be read, so the check fails closed.
-func run(eventPath, filesPath string, out io.Writer) int {
-	problems, err := check(eventPath, filesPath)
+func run(in inputs, out io.Writer) int {
+	problems, err := check(in)
 	if err != nil {
 		fmt.Fprintln(out, "prcheck:", err)
 		return 2
@@ -38,22 +47,30 @@ func run(eventPath, filesPath string, out io.Writer) int {
 	return 0
 }
 
-func check(eventPath, filesPath string) ([]string, error) {
-	if eventPath == "" || filesPath == "" {
-		return nil, errors.New("both -event and -files are required")
+func check(in inputs) ([]string, error) {
+	if in.event == "" || in.files == "" || in.baseAgents == "" {
+		return nil, errors.New("-event, -files and -base-agents are required")
 	}
-	body, err := readBody(eventPath)
+	body, err := readBody(in.event)
 	if err != nil {
 		return nil, err
 	}
-	files, err := readFiles(filesPath)
+	files, err := readFiles(in.files)
 	if err != nil {
 		return nil, err
 	}
-	if !docsOnlyClaimed(body) {
-		return nil, nil
+	base, err := readBounded(in.baseAgents)
+	if err != nil {
+		return nil, fmt.Errorf("read base AGENTS.md: %w", err)
 	}
-	return docsOnlyProblems(files), nil
+	problems, err := adrProblems(files, in.root, string(base))
+	if err != nil {
+		return nil, err
+	}
+	if docsOnlyClaimed(body) {
+		problems = append(problems, docsOnlyProblems(files)...)
+	}
+	return problems, nil
 }
 
 // readBody returns the pull request body from a GitHub event payload. A

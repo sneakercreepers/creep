@@ -29,7 +29,8 @@ func TestDocsOnlyJobIsRequired(t *testing.T) {
 		"\n  docs-only:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n",
 		"persist-credentials: false",
 		"git diff --no-renames --name-only -z HEAD^1 HEAD",
-		`go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files`,
+		`git show HEAD^1:AGENTS.md > "$RUNNER_TEMP/base-agents.md"`,
+		`go run ./internal/tools/prcheck -event "$GITHUB_EVENT_PATH" -files "$RUNNER_TEMP/changed" -base-agents "$RUNNER_TEMP/base-agents.md"`,
 	} {
 		if !strings.Contains(wf, want) {
 			t.Errorf(".github/workflows/pr.yml lacks %q", want)
@@ -89,6 +90,23 @@ func TestDocsOnlyMatchesAgents(t *testing.T) {
 	}
 	if len(ruleNames) != 2 || !ruleNames["governance.md"] || !ruleNames["security.md"] || adrDir != "docs/adr/" {
 		t.Errorf("ruleNames %v or adrDir %q differs from AGENTS.md", ruleNames, adrDir)
+	}
+}
+
+// The loop, the invariants and the conventions must sit outside Current
+// state, the one part of AGENTS.md that changes without an ADR (#56).
+func TestCurrentStateHoldsNoPolicy(t *testing.T) {
+	rest, ok := withoutState(readRepoFile(t, rootAgents))
+	if !ok {
+		t.Fatalf("AGENTS.md must hold %q exactly once", stateHeading)
+	}
+	for _, want := range []string{
+		"## Invariants", "## Conventions", "## Workflow (spec-driven)", "## Do not read",
+		"developer → tester → pentester → auditor", "Changing or removing this loop needs an ADR", "Documentation-only changes run only the auditor",
+	} {
+		if !strings.Contains(rest, want) {
+			t.Errorf("AGENTS.md outside Current state lacks %q", want)
+		}
 	}
 }
 

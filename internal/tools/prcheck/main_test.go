@@ -27,6 +27,38 @@ func eventJSON(t *testing.T, body any) string {
 	return string(data)
 }
 
+// baseAgentsText is an AGENTS.md with a loop, a Current state and a section after it.
+const baseAgentsText = "# AGENTS.md\n\n## Workflow (spec-driven)\n\n- developer → tester\n\n" +
+	stateHeading + "\n\n- v0.1\n\n## Do not read\n\n- bin/\n"
+
+// newInputs writes the event, the file list, the base AGENTS.md and a tree
+// whose AGENTS.md and docs/adr/ match the base.
+func newInputs(t *testing.T, event, files string) inputs {
+	t.Helper()
+	root := t.TempDir()
+	writeTree(t, root, rootAgents, baseAgentsText)
+	if err := os.MkdirAll(filepath.Join(root, "docs", "adr"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	return inputs{
+		event:      writeTemp(t, "event.json", event),
+		files:      writeTemp(t, "files", files),
+		baseAgents: writeTemp(t, "base-agents.md", baseAgentsText),
+		root:       root,
+	}
+}
+
+func writeTree(t *testing.T, root, name, content string) {
+	t.Helper()
+	p := filepath.Join(root, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -46,11 +78,13 @@ func TestRun(t *testing.T) {
 		{"not a pull request event", `{"repository":{"full_name":"a/b"}}`, "", 2, "no pull request"},
 		{"no number", `{"pull_request":{"body":"x"}}`, "", 2, "no pull request"},
 		{"body of the wrong type", `{"pull_request":{"number":7,"body":5}}`, "", 2, "decode event"},
+		{"policy change without an ADR", eventJSON(t, "no boxes"), "CLAUDE.md\x00", 1, `"CLAUDE.md" changes the agent-loop policy`},
+		{"docs-only and policy without an ADR", eventJSON(t, docsLine), "CLAUDE.md\x00", 1, `"CLAUDE.md" is a policy file`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
-			code := run(writeTemp(t, "event.json", tt.event), writeTemp(t, "files", tt.files), &out)
+			code := run(newInputs(t, tt.event, tt.files), &out)
 			if code != tt.code || !strings.Contains(out.String(), tt.want) {
 				t.Fatalf("run() = %d, %q; want %d and %q", code, out.String(), tt.code, tt.want)
 			}
@@ -60,25 +94,36 @@ func TestRun(t *testing.T) {
 
 // An input that cannot be read fails the check with exit 2, never passes.
 func TestRunFailsClosedOnInputs(t *testing.T) {
-	event := writeTemp(t, "event.json", eventJSON(t, "no boxes"))
-	files := writeTemp(t, "files", "")
 	missing := filepath.Join(t.TempDir(), "missing")
 	huge := writeTemp(t, "huge", strings.Repeat("a", maxInputBytes+1))
 	tests := []struct {
-		name, event, files string
+		name string
+		edit func(in *inputs)
 	}{
-		{"no event flag", "", files},
-		{"no files flag", event, ""},
-		{"missing event", missing, files},
-		{"missing files", event, missing},
-		{"event over the cap", huge, files},
-		{"files over the cap", event, huge},
-		{"event is a directory", t.TempDir(), files},
+		{"no event flag", func(in *inputs) { in.event = "" }},
+		{"no files flag", func(in *inputs) { in.files = "" }},
+		{"no base-agents flag", func(in *inputs) { in.baseAgents = "" }},
+		{"missing event", func(in *inputs) { in.event = missing }},
+		{"missing files", func(in *inputs) { in.files = missing }},
+		{"missing base AGENTS.md", func(in *inputs) { in.baseAgents = missing }},
+		{"event over the cap", func(in *inputs) { in.event = huge }},
+		{"files over the cap", func(in *inputs) { in.files = huge }},
+		{"base AGENTS.md over the cap", func(in *inputs) { in.baseAgents = huge }},
+		{"event is a directory", func(in *inputs) { in.event = t.TempDir() }},
+		{"head AGENTS.md is a directory", func(in *inputs) {
+			in.files = writeTemp(t, "files", rootAgents)
+			in.root = t.TempDir()
+			if err := os.Mkdir(filepath.Join(in.root, rootAgents), 0o750); err != nil {
+				t.Fatal(err)
+			}
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			in := newInputs(t, eventJSON(t, "no boxes"), "")
+			tt.edit(&in)
 			var out bytes.Buffer
-			if code := run(tt.event, tt.files, &out); code != 2 {
+			if code := run(in, &out); code != 2 {
 				t.Fatalf("run() = %d (%q), want 2", code, out.String())
 			}
 			if strings.Contains(out.String(), "prcheck: ok") {
