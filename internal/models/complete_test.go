@@ -124,16 +124,20 @@ func TestCompleteDoesNotRetryEndpointFailures(t *testing.T) {
 	tests := []struct {
 		name     string
 		contract string
+		fixture  string // replayed when rep is nil
 		rep      *replayer
 		sendErr  error
 		want     error
 	}{
-		{"openai 429", "openai", nil, nil, ErrStatus},
-		{"anthropic 529", "anthropic", nil, nil, ErrStatus},
-		{"not json", "openai", replyWith(200, `"<html>proxy login</html>"`), nil, ErrMalformedReply},
-		{"no choices", "openai", replyWith(200, `{"choices":[]}`), nil, ErrMalformedReply},
-		{"anthropic wrong type", "anthropic", replyWith(200, `{"type":"error","content":[]}`), nil, ErrMalformedReply},
-		{"budget refusal", "openai", nil, budgetErr, gateway.ErrBudgetExhausted},
+		{"openai 429", "openai", "openai_status_429", nil, nil, ErrStatus},
+		{"anthropic 529", "anthropic", "anthropic_overloaded", nil, nil, ErrStatus},
+		{"not json", "openai", "", replyWith(200, `"<html>proxy login</html>"`), nil, ErrMalformedReply},
+		{"no choices", "openai", "", replyWith(200, `{"choices":[]}`), nil, ErrMalformedReply},
+		{"anthropic wrong type", "anthropic", "", replyWith(200, `{"type":"error","content":[]}`), nil, ErrMalformedReply},
+		// #157: arguments as an object, not the contract's JSON string,
+		// fails closed; see openAIResponse.
+		{"openai object arguments", "openai", "openai_tools_object_arguments", nil, nil, ErrMalformedReply},
+		{"budget refusal", "openai", "", nil, budgetErr, gateway.ErrBudgetExhausted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,7 +148,7 @@ func TestCompleteDoesNotRetryEndpointFailures(t *testing.T) {
 					return nil, tt.sendErr
 				}
 				if tt.rep == nil {
-					tt.rep = loadReplay(t, map[string]string{"openai": "openai_status_429", "anthropic": "anthropic_overloaded"}[tt.contract])
+					tt.rep = loadReplay(t, tt.fixture)
 				}
 				return tt.rep.send(ctx, call)
 			}
@@ -153,7 +157,7 @@ func TestCompleteDoesNotRetryEndpointFailures(t *testing.T) {
 			if !errors.Is(err, tt.want) || calls != 1 {
 				t.Fatalf("err = %v after %d calls, want %v after 1", err, calls, tt.want)
 			}
-			if strings.Contains(err.Error(), "Rate limit") || strings.Contains(err.Error(), "Overloaded") {
+			if strings.Contains(err.Error(), "Rate limit") || strings.Contains(err.Error(), "Overloaded") || strings.Contains(err.Error(), "vulnerable") {
 				t.Errorf("error quotes the reply body: %v", err)
 			}
 		})

@@ -31,6 +31,9 @@ func TestSettle(t *testing.T) {
 		want int64
 	}{
 		{"reported", &Usage{InputTokens: 7, OutputTokens: 3}, 10},
+		// A forced tool call's provider overhead (#157): charged in full,
+		// past the reservation and the endpoint limit, as models/doc.go says.
+		{"reported over the reservation", &Usage{InputTokens: 346, OutputTokens: 9}, 355},
 		{"none", nil, 100},
 		{"negative input", &Usage{InputTokens: -50, OutputTokens: 1}, 100},
 		{"negative output", &Usage{InputTokens: 1, OutputTokens: -50}, 100},
