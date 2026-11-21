@@ -190,6 +190,12 @@ func TestHolisticCatchesBrokenRun(t *testing.T) {
 				Note string
 			}{repoPlannerInput(t), "x"}, "input")
 		}, "input.Note holds string"},
+		{"planner input not observed", func(*testing.T, fixtureRun, *gatewaytest.Endpoint) []string {
+			return plannedText(nil)
+		}, "planner saw 0 inputs"},
+		{"planner input without sinks", func(*testing.T, fixtureRun, *gatewaytest.Endpoint) []string {
+			return plannedText(make([]planner.Input, 2))
+		}, "has no sink"},
 	}
 	seed := uint64(100)
 	for _, tt := range tests {

@@ -46,8 +46,12 @@ func sinkIndex[ID ~uint32](id ID) int { return int(id) - 1 }
 
 // planSinks builds the plan and records every sink it leaves out, with its
 // reason. planner.ErrInput is returned for the caller to fail closed.
-func planSinks(rs repoScan, tier planner.Tier, budget planner.Budget, findings []report.Finding) (planner.Plan, error) {
+// observe, when set, sees the input before the planner does.
+func planSinks(rs repoScan, tier planner.Tier, budget planner.Budget, findings []report.Finding, observe func(planner.Input)) (planner.Plan, error) {
 	in, unmapped := plannerInput(rs.res, tier, budget)
+	if observe != nil {
+		observe(in)
+	}
 	for _, id := range unmapped {
 		findings[sinkIndex(id)].Reason = reasonUnmappedKind
 	}

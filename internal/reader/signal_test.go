@@ -8,11 +8,17 @@ import (
 	"testing"
 )
 
+// signalElems lists the only structs a slice or array reachable from Signal
+// may hold. A new element type fails the guard until a reviewer lists it.
+var signalElems = map[reflect.Type]bool{reflect.TypeFor[LineRange](): true}
+
 // textCapable returns the path to the first type reachable from t that can
 // carry text: strings, byte or rune sequences, maps, interfaces, functions,
-// channels and raw pointers. Slices and arrays may hold only structs, so a
-// sequence of small numbers cannot spell a message either.
-func textCapable(t reflect.Type, path string, seen map[reflect.Type]bool) string {
+// channels, floats and uintptrs. A slice or array may hold only a struct
+// listed in elems, because a sequence of small numbers, or of structs that
+// wrap them, can spell a message byte by byte. planner/text_test.go holds
+// the same function; TestTextGuardsMatch there fails if the two drift.
+func textCapable(t reflect.Type, path string, elems, seen map[reflect.Type]bool) string {
 	if seen[t] {
 		return ""
 	}
@@ -22,16 +28,16 @@ func textCapable(t reflect.Type, path string, seen map[reflect.Type]bool) string
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return ""
 	case reflect.Pointer:
-		return textCapable(t.Elem(), path+"*", seen)
+		return textCapable(t.Elem(), path+"*", elems, seen)
 	case reflect.Slice, reflect.Array:
-		if t.Elem().Kind() != reflect.Struct {
-			return path + "[]" + t.Elem().Kind().String()
+		if !elems[t.Elem()] {
+			return path + "[]" + t.Elem().String() + " (element type not allowed)"
 		}
-		return textCapable(t.Elem(), path+"[]", seen)
+		return textCapable(t.Elem(), path+"[]", elems, seen)
 	case reflect.Struct:
 		for i := range t.NumField() {
 			f := t.Field(i)
-			if p := textCapable(f.Type, path+"."+f.Name, seen); p != "" {
+			if p := textCapable(f.Type, path+"."+f.Name, elems, seen); p != "" {
 				return p
 			}
 		}
@@ -43,41 +49,71 @@ func textCapable(t reflect.Type, path string, seen map[reflect.Type]bool) string
 // TestSignalCarriesNoText is the invariant 3 guard: if a field that can
 // hold model text is ever added to Signal, directly or nested, this fails.
 func TestSignalCarriesNoText(t *testing.T) {
-	if p := textCapable(reflect.TypeFor[Signal](), "Signal", map[reflect.Type]bool{}); p != "" {
+	if p := textCapable(reflect.TypeFor[Signal](), "Signal", signalElems, map[reflect.Type]bool{}); p != "" {
 		t.Fatalf("Signal can carry text through %s; the planner must receive only IDs, enums, booleans and bounded numbers", p)
 	}
 }
 
 // TestTextCapableCatchesText proves the guard sees each way text could hide.
+// elems nil means signalElems; a case sets it to reach inside an element.
 func TestTextCapableCatchesText(t *testing.T) {
 	type nested struct{ Note string }
+	type wrappedByte struct{ C uint8 }
+	type embedsText struct{ nested }
 	tests := []struct {
-		name string
-		typ  reflect.Type
+		name  string
+		typ   reflect.Type
+		elems map[reflect.Type]bool
 	}{
-		{"string", reflect.TypeFor[struct{ S string }]()},
-		{"named string", reflect.TypeFor[struct{ V Tier }]()},
-		{"bytes", reflect.TypeFor[struct{ B []byte }]()},
-		{"runes", reflect.TypeFor[struct{ R []rune }]()},
-		{"byte array", reflect.TypeFor[struct{ A [16]byte }]()},
-		{"interface", reflect.TypeFor[struct{ X any }]()},
-		{"error", reflect.TypeFor[struct{ E error }]()},
-		{"map", reflect.TypeFor[struct{ M map[int]int }]()},
-		{"func", reflect.TypeFor[struct{ F func() }]()},
-		{"chan", reflect.TypeFor[struct{ C chan int }]()},
-		{"float", reflect.TypeFor[struct{ F float64 }]()},
-		{"uintptr", reflect.TypeFor[struct{ U uintptr }]()},
-		{"nested", reflect.TypeFor[struct{ N []nested }]()},
-		{"pointer", reflect.TypeFor[struct{ P *nested }]()},
-		{"unexported", reflect.TypeFor[struct{ s string }]()},
-		{"answer", reflect.TypeFor[Answer]()},
+		{"string", reflect.TypeFor[struct{ S string }](), nil},
+		{"named string", reflect.TypeFor[struct{ V Tier }](), nil},
+		{"bytes", reflect.TypeFor[struct{ B []byte }](), nil},
+		{"runes", reflect.TypeFor[struct{ R []rune }](), nil},
+		{"byte array", reflect.TypeFor[struct{ A [16]byte }](), nil},
+		{"ids", reflect.TypeFor[struct{ I []HypothesisID }](), nil},
+		{"wrapped bytes", reflect.TypeFor[struct{ W []wrappedByte }](), nil},
+		{"wrapped ids", reflect.TypeFor[struct{ W []struct{ T uint32 } }](), nil},
+		{"wrapped byte array", reflect.TypeFor[struct{ W [8]struct{ C byte } }](), nil},
+		{"wrapped bytes behind pointer", reflect.TypeFor[struct{ P *[]wrappedByte }](), nil},
+		{"pointer elements", reflect.TypeFor[struct{ R []*LineRange }](), nil},
+		{"text in an allowed element", reflect.TypeFor[struct{ N []nested }](), map[reflect.Type]bool{reflect.TypeFor[nested](): true}},
+		{"interface", reflect.TypeFor[struct{ X any }](), nil},
+		{"error", reflect.TypeFor[struct{ E error }](), nil},
+		{"embedded error", reflect.TypeFor[struct{ error }](), nil},
+		{"embedded struct", reflect.TypeFor[embedsText](), nil},
+		{"map", reflect.TypeFor[struct{ M map[int]int }](), nil},
+		{"map of structs", reflect.TypeFor[struct{ M map[uint8]struct{} }](), nil},
+		{"func", reflect.TypeFor[struct{ F func() }](), nil},
+		{"chan", reflect.TypeFor[struct{ C chan int }](), nil},
+		{"float", reflect.TypeFor[struct{ F float64 }](), nil},
+		{"uintptr", reflect.TypeFor[struct{ U uintptr }](), nil},
+		{"pointer", reflect.TypeFor[struct{ P *nested }](), nil},
+		{"unexported", reflect.TypeFor[struct{ s string }](), nil},
+		{"answer", reflect.TypeFor[Answer](), nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if textCapable(tt.typ, "T", map[reflect.Type]bool{}) == "" {
+			elems := tt.elems
+			if elems == nil {
+				elems = signalElems
+			}
+			if textCapable(tt.typ, "T", elems, map[reflect.Type]bool{}) == "" {
 				t.Errorf("%s not flagged as able to carry text", tt.typ)
 			}
 		})
+	}
+}
+
+// TestTextCapableAllowsNumbers keeps the guard from passing by flagging
+// everything: listed elements and bounded numbers go through.
+func TestTextCapableAllowsNumbers(t *testing.T) {
+	type twice struct {
+		A, B []LineRange
+		R    [2]LineRange
+		P    *LineRange
+	}
+	if p := textCapable(reflect.TypeFor[twice](), "T", signalElems, map[reflect.Type]bool{}); p != "" {
+		t.Errorf("numbers flagged at %s", p)
 	}
 }
 
