@@ -1,0 +1,8 @@
+{
+  "about": "A search page that escapes its query except when a race in its cache hands back the raw value: runs 1, 3 and 4 of 5 reflect it.",
+  "poc": {"template": "http_request", "http_request": {
+    "request": {"method": "GET", "path": "/search?q=__CREEP_NONCE__", "headers": [], "content_type": "", "body": ""},
+    "oracle": {"kind": "reflect", "status": 0}}},
+  "reflects": [true, false, true, true, false],
+  "want": {"verified": 3, "runs": 5}
+}

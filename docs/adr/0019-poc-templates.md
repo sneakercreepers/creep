@@ -3,6 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-21)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (each PoC runs `verify.DefaultRuns` times from `creep scan`, with a reproduction bundle and `creep reproduce`)
 - **Amends:** [ADR 0016](0016-sandbox-runtime.md) (two more containers join the run network: the PoC runner, after the canary, and the database marker lookup; the app container gets one read-only mount, creep's canary file)
 - **Changes:** a new layer-6 package `internal/verify`, whose row was already in the layers table; a new stable contract, the PoC parameter schema (`verify.Request`); `sandbox.Exchange`, `sandbox.DatabaseHasTable`, `sandbox.AppCanary`, `sandbox.RunnerImage`, `sandbox.AppHost` and `sandbox.AppCanaryFile`
 - **Fitness function:** the rows "A PoC is a closed template the model cannot escape", "PoC requests run only in the runner container" and "A PoC oracle cannot be faked" of [architecture.md §9](../architecture.md#9-fitness-functions)

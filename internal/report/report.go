@@ -128,6 +128,10 @@ type Finding struct {
 	Partial    bool        `json:"partial,omitempty"`
 	Confidence int         `json:"confidence,omitempty"` // the reader's 0-100
 	Evidence   []LineRange `json:"evidence,omitempty"`   // lines the reader cited
+	// PoC is how many runs of the finding's PoC verified it (#25), for the
+	// text summary, Markdown and SARIF only: JSON v1 does not change, so a
+	// JSON consumer reads `verified`, and a report read back has none.
+	PoC PoCRate `json:"-"`
 }
 
 // LineRange is an inclusive range of 1-based lines in the finding's file.

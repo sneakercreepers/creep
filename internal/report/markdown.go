@@ -130,8 +130,9 @@ func writeDataHandling(w io.Writer, d DataHandling, wholeFiles int) {
 	fmt.Fprintf(w, "\nRedacted before sending: %s.\n", countList(d.Redactions))
 }
 
-// findingNotes says why a finding was not decided, or that its verdict came
-// from a cut slice; both are IDs, never repository text.
+// findingNotes says why a finding was not decided, that its verdict came
+// from a cut slice, or how many PoC runs verified it: IDs and numbers,
+// never repository text.
 func findingNotes(f Finding) string {
 	var notes []string
 	if f.Reason != "" {
@@ -139,6 +140,9 @@ func findingNotes(f Finding) string {
 	}
 	if f.Partial {
 		notes = append(notes, "`partial slice`")
+	}
+	if rate := f.PoC.Text(); rate != "" {
+		notes = append(notes, codeSpan(rate))
 	}
 	return strings.Join(notes, ", ")
 }
