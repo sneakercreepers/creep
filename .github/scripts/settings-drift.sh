@@ -56,7 +56,9 @@ done <"$tmp/rulesets.txt"
 
 fetch actions/permissions
 compare "actions permissions" .github/settings/actions-permissions.json
-if [ "$(gh api "repos/$repo/actions/permissions" --jq .allowed_actions)" = selected ]; then
+# A failed read must exit 2, not pass as "not selected" drift.
+allowed="$(gh api "repos/$repo/actions/permissions" --jq .allowed_actions)" || fail "cannot read actions/permissions"
+if [ "$allowed" = selected ]; then
   fetch actions/permissions/selected-actions
   compare "allowed actions" .github/settings/actions-selected.json
 else
