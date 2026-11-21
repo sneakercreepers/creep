@@ -22,9 +22,12 @@
 //   - Strings that come from the scanned repository or from egress.log
 //     (paths, endpoints, models, labels) are escaped before they reach
 //     Markdown: each is printed as a code span with control, format and bidi
-//     runes shown as escapes, so no file name can inject markup, links or
-//     terminal sequences. SARIF URIs are percent-encoded; JSON escaping is
-//     encoding/json's.
+//     runes shown as escapes and a literal backslash doubled, so no file
+//     name can inject markup, links or terminal sequences, or pass for a
+//     different name. SARIF URIs are percent-encoded. JSON and SARIF are
+//     encoded by encoding/json and then passed through escapeInert, which
+//     also writes DEL, C1 controls and format runes (bidi included) as JSON
+//     escapes, so a printed report file holds none of them raw.
 //   - A finding path is relative, slash-separated and clean, with no
 //     backslash or drive letter (ValidPath), so no SARIF location resolves
 //     outside %SRCROOT%; New and ReadJSON refuse any other.

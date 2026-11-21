@@ -24,6 +24,8 @@ var hostilePaths = []string{
 	"bad\xffutf8 #?%.py",
 	"c1" + string(rune(0x9b)) + "31mcsi.py", // 8-bit CSI
 	"del" + string(rune(0x7f)) + "ete.py",
+	"tag" + string(rune(0xE0041)) + "1.py", // tag character above U+FFFF
+	`lit\u202egnp.exe`,                     // spells an escape, holds no bidi rune
 }
 
 const sampleEgress = `{"v":1,"type":"request","id":"r1","time":"t","endpoint":"https://api.example.com/v1/messages","model":"m-large","purpose":"read","bytes":1200,"sha256":"x","redactions":{"AWS_KEY":2},"payload_file":"payloads/r1.payload"}
@@ -59,6 +61,8 @@ func sampleInput(t *testing.T, incomplete bool) Input {
 			{Path: hostilePaths[3], Reason: SkipReadFailed},
 			{Path: hostilePaths[5], Reason: SkipRedactFailed},
 			{Path: hostilePaths[6], Reason: SkipReadFailed},
+			{Path: hostilePaths[7], Reason: SkipReadFailed},
+			{Path: hostilePaths[8], Reason: SkipReadFailed},
 			{Path: "node_modules/pkg/index.js", Reason: SkipVendor},
 			{Path: "node_modules/pkg/lib.js", Reason: SkipVendor},
 			{Path: "api_pb2.py", Reason: SkipGenerated},
