@@ -28,3 +28,7 @@ What decided it: the maintainer asked for the throughput, and picking features t
 - The loop itself is unchanged: roles, order (developer → tester → auditor; pentester per version and on external PRs, ADR 0004), context rules and blocking rules stay as they are.
 - Shared documents such as AGENTS.md **Current state** may still conflict; the later branch resolves them during its rebase.
 - A branch that is green but behind `main` must be rebased and pass CI again before merge.
+
+## Amendments
+
+- **Up-to-date branches enforced (#51, 2026-11-21).** The `main` ruleset (`.github/rulesets/main.json`) sets `strict_required_status_checks_policy: true`, so GitHub refuses to merge a pull request that is behind `main` until it is updated and its required checks pass again. This enforces the rebase-and-re-check rule above; the maintainer applies it with `make rulesets`, and `make repo-settings-check` reports it if the live ruleset drifts (#50). The same PR records the governance changes that touch CONTRIBUTING.md: the Actions allowlist, workflow permissions, immutable releases and the `release/*` branch rulesets are now settings as code. The loop's roles, order and blocking rules are unchanged.

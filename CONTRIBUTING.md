@@ -123,10 +123,11 @@ Delete the temporary directory and the two config files afterwards.
 
 ## Repository rules
 
-Rulesets live in [`.github/rulesets/`](.github/rulesets/) and are applied with `make rulesets` (creates or updates by name), which also applies [`.github/settings/`](.github/settings/): Actions permissions (full-SHA pinning required) and the `release` environment. Change them by PR, never only in the UI.
+Rulesets live in [`.github/rulesets/`](.github/rulesets/) and are applied with `make rulesets` (creates or updates by name), which also applies [`.github/settings/`](.github/settings/): Actions permissions (full-SHA pinning required, only GitHub-owned actions and the allowlist in `actions-selected.json` run), workflow permissions (read-only default token that cannot approve pull requests), immutable releases and the `release` environment (it refuses an environment that can deploy anything but a `v*` tag). Change them by PR, never only in the UI. `make repo-settings-check` reports drift between these files and the live repository without changing anything; `make rulesets` runs it before and after applying. A new third-party action needs its entry in `actions-selected.json`, or its workflow fails to start.
 
-- `main`: PR required, squash only, linear history, no force push or deletion, and all CI jobs green. No bypass actors, not even admins.
+- `main`: PR required, squash only, linear history, no force push or deletion, and all CI jobs green on a branch that is up to date with `main`. No bypass actors, not even admins.
 - `release-tags`: `v*` tags can never be moved or deleted. `release-tag-creation`: only repository admins can create `v*` tags.
+- `release-branch-writes`: only repository admins can create, push to or delete `release/*` branches. `release-branches`: nobody can force-push them.
 - Single-maintainer phase: PRs need 0 approvals and code-owner review is off. With two or more maintainers, raise approvals and turn on `require_code_owner_review` (see [GOVERNANCE.md](GOVERNANCE.md)).
 
 ## Releasing
@@ -143,7 +144,7 @@ To try the release build without releasing, run the workflow by hand (Actions â†
 
 Tags are immutable (ruleset) and so are published releases (immutable releases are enabled). A mistake means a new version, never a moved tag.
 
-Rulesets cannot enforce "a `v*` tag points to a commit on `main`". The release workflow ([#19](https://github.com/sneakercreepers/creep/issues/19)) checks ancestry before building and refuses a tag whose commit is not on `main`, the only branch a ruleset protects. A `release/*` branch would need its own ruleset first.
+Rulesets cannot enforce "a `v*` tag points to a commit on `main`". The release workflow ([#19](https://github.com/sneakercreepers/creep/issues/19)) checks ancestry before building and refuses a tag whose commit is not on `main`, the only branch a ruleset makes PR-only with required checks. A `release/*` branch would need such a ruleset first; today's `release/*` rulesets only limit who writes it.
 
 **Hotfix** (patch without shipping unreleased work from `main`). Not available yet: the ancestry guard accepts only `main` until a ruleset in `.github/rulesets/` protects `release/*` like `main` (PR-only, required checks, no force push or deletion), the maintainer applies it with `make rulesets`, and the guard is extended to it. Until then a patch is tagged on `main`. Once it is enabled:
 

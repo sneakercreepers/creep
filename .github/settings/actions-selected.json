@@ -1,0 +1,10 @@
+{
+  "github_owned_allowed": true,
+  "verified_allowed": false,
+  "patterns_allowed": [
+    "golangci/golangci-lint-action@*",
+    "ossf/scorecard-action@*",
+    "sigstore/cosign-installer@*",
+    "zizmorcore/zizmor-action@*"
+  ]
+}
