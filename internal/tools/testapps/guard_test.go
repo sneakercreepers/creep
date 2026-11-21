@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -43,15 +44,16 @@ func checkNoExecution(fsys fs.FS) ([]string, error) {
 	return problems, err
 }
 
-// skipWalk leaves out .git, every testdata tree (the apps themselves, data
-// that nothing executes), the root build outputs and nested modules, such as
-// a git worktree checked out inside the repository, which are not this
-// repository's files.
+// skipWalk leaves out .git, the apps themselves, the recorded replies under
+// testdata/replay, the root build outputs and nested modules, such as a git
+// worktree checked out inside the repository, which are not this
+// repository's files. Every other testdata tree is checked: a script under
+// internal/<pkg>/testdata can name ../../../testdata/apps too.
 func skipWalk(fsys fs.FS, name string, d fs.DirEntry) error {
 	switch {
 	case name == ".":
 		return nil
-	case d.Name() == ".git", d.Name() == "testdata":
+	case d.Name() == ".git", name == appsDir, name == "testdata/replay":
 		return fs.SkipDir
 	case path.Dir(name) == "." && (d.Name() == "bin" || d.Name() == "dist"):
 		return fs.SkipDir
@@ -72,27 +74,45 @@ func executesApps(name string, data []byte) string {
 	return ""
 }
 
-func isRunnerFile(name string) bool {
-	base := path.Base(name)
-	switch {
-	case base == "Makefile", base == "GNUmakefile", strings.HasPrefix(base, "Dockerfile"):
-		return true
-	case base == "package.json", isComposeFile(base):
-		return true
-	case base == "action.yml", base == "action.yaml", path.Dir(name) == ".github/workflows":
-		return true
-	}
-	return runnerExts[strings.ToLower(path.Ext(name))]
+// runnerNames are lower-case base names that make, just, npm, a dev
+// container or a GitHub action runs.
+var runnerNames = map[string]bool{
+	"makefile": true, "gnumakefile": true, "justfile": true, ".justfile": true,
+	"package.json": true, "action.yml": true, "action.yaml": true, ".devcontainer.json": true,
 }
 
-// isComposeFile matches docker-compose*.yml and compose*.yml (and .yaml),
-// which `docker compose up` runs.
-func isComposeFile(base string) bool {
+// isRunnerFile ignores case: GNU make reads makefile, and the Windows and
+// macOS file systems treat Dockerfile and dockerfile as one file.
+func isRunnerFile(name string) bool {
+	name = strings.ToLower(name)
+	base, dir := path.Base(name), path.Dir(name)
+	switch {
+	case runnerNames[base], runnerExts[path.Ext(base)]:
+		return true
+	case strings.HasPrefix(base, "dockerfile"), strings.HasPrefix(base, "containerfile"):
+		return true
+	case dir == ".github/workflows", isRunnerYAML(base):
+		return true
+	case base == "tasks.json" && path.Base(dir) == ".vscode":
+		return true
+	}
+	return slices.Contains(strings.Split(dir, "/"), ".devcontainer")
+}
+
+// isRunnerYAML matches the YAML files a tool runs commands from: docker
+// compose (docker-compose*, compose*), Task (taskfile*), pre-commit and
+// GoReleaser hooks.
+func isRunnerYAML(base string) bool {
 	ext := path.Ext(base)
 	if ext != ".yml" && ext != ".yaml" {
 		return false
 	}
-	return strings.HasPrefix(base, "docker-compose") || strings.HasPrefix(base, "compose")
+	for _, prefix := range []string{"docker-compose", "compose", "taskfile", ".pre-commit-config", ".goreleaser"} {
+		if strings.HasPrefix(base, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // mentionsApps matches the path with either separator, so a Windows script
@@ -102,12 +122,17 @@ func mentionsApps(s string) bool {
 	return strings.Contains(s, appsDir)
 }
 
-// goExecutesApps reports Go code that can start a program and has a string
-// literal naming the apps: the whole path, or "apps" for a filepath.Join.
+// goExecutesApps reports a //go:generate directive naming the apps, which
+// `go generate` runs whatever the file imports, and Go code that can start a
+// program and has a string literal naming the apps: the whole path, or
+// "apps" for a filepath.Join.
 func goExecutesApps(name string, data []byte) string {
-	file, err := parser.ParseFile(token.NewFileSet(), name, data, parser.SkipObjectResolution)
+	file, err := parser.ParseFile(token.NewFileSet(), name, data, parser.SkipObjectResolution|parser.ParseComments)
 	if err != nil {
 		return fmt.Sprintf("cannot parse: %v", err)
+	}
+	if generatesApps(file) {
+		return "a //go:generate directive names the vulnerable apps"
 	}
 	if !startsPrograms(file) {
 		return ""
@@ -124,6 +149,19 @@ func goExecutesApps(name string, data []byte) string {
 		return true
 	})
 	return found
+}
+
+// generatesApps also matches an indented directive, which go generate
+// ignores, so the guard errs on the side of flagging.
+func generatesApps(file *ast.File) bool {
+	for _, group := range file.Comments {
+		for _, c := range group.List {
+			if strings.HasPrefix(c.Text, "//go:generate") && mentionsApps(c.Text) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func startsPrograms(file *ast.File) bool {
