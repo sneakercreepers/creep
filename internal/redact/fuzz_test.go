@@ -187,5 +187,8 @@ func FuzzFile(f *testing.F) {
 		if r.Unredact(out) != text {
 			t.Fatal("Unredact(File(x)) != x")
 		}
+		if strings.Count(out, "\n") > strings.Count(text, "\n") {
+			t.Fatal("File added a newline") // the reader's lines_shifted relies on it (#197)
+		}
 	})
 }

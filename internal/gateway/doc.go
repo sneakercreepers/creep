@@ -7,7 +7,8 @@
 //     other package, test files and dev tooling included, imports them or
 //     reaches them through a dependency; golangci-lint's depguard rule gives
 //     the same feedback in editors.
-//   - Every model call is redacted first: FileScan passes each repository
+//   - Every model call is redacted first: each producer of repository text
+//     that Call lists (FileScan, reader.Slicer and discovery) passes each
 //     file whole through the run's redact.File and cuts only its output, and
 //     a run that returns redact.ErrRunFull stops sending and is reported as
 //     incomplete.
@@ -130,7 +131,7 @@
 //   - The scanned repository cannot grant consent: creep.yaml has no consent
 //     key and the store lives in the user's directory, never the repo.
 //
-// FileScan is how repository text becomes Call payloads (scan.go):
+// FileScan is the gateway's own producer of Call payloads (scan.go):
 //   - Each file is redacted whole by redact.File, then cut at line ends into
 //     fragments of at most MaxFragmentBytes (a longer line goes alone, never
 //     truncated). Only File output is cut, so no boundary splits a secret.

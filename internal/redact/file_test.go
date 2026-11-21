@@ -158,6 +158,31 @@ func TestFileMatchesRedact(t *testing.T) {
 	}
 }
 
+// The reader's lines_shifted check treats equal "\n" counts as proof that no
+// line moved (#197), which holds only while File never adds a newline:
+// markers are one line, and masking a multi-line key only removes them.
+func TestFileNeverAddsNewlines(t *testing.T) {
+	rng := rand.New(rand.NewPCG(197, 1))
+	key, _ := fakeKey(rng, "RSA", 600, 64)
+	inputs := map[string]string{
+		"empty":            "",
+		"no newline":       "token := \"" + fakeGitHub(rng) + "\"",
+		"whole key":        "a := 1\n" + key + "\nb := 2\n",
+		"key, no end":      "x\n" + pemEdge("BEGIN", "EC") + "\n" + strings.Join(fakeBody(rng, 300, 64), "\n"),
+		"key, no begin":    strings.Join(fakeBody(rng, 300, 64), "\n") + "\n" + pemEdge("END", "EC") + "\n",
+		"crlf lines":       "password = \"" + fakePassword(rng) + "\"\r\nemail: a@b.io\r\n",
+		"marker lookalike": "<SECRET_X_1>\n<PII_EMAIL_2>\n<ESC_PII_EMAIL_1>\n",
+		"format character": "key := \"gh" + zwsp + "p_" + fakeToken(rng, alnum, 36) + "\"\n",
+		"over one chunk":   repoCode(t, MaxInputBytes+2*chunkOverlap) + key + "\n",
+	}
+	for name, text := range inputs {
+		out := mustFile(t, newRedactor(t), text)
+		if got, limit := strings.Count(out, "\n"), strings.Count(text, "\n"); got > limit {
+			t.Errorf("%s: File output has %d newlines, input %d", name, got, limit)
+		}
+	}
+}
+
 func BenchmarkFileRepoCode(b *testing.B) {
 	code := []byte(repoCode(b, 1<<20))
 	r := newRedactor(b)
