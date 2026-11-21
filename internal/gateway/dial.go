@@ -22,14 +22,14 @@ var ErrPrivateAddress = errors.New("resolved to a non-public address")
 // black-holed addresses.
 const maxPinnedAddrs = 8
 
-// Resolver is the subset of *net.Resolver the gateway uses. Tests inject one
-// to count lookups and to change answers between calls.
-type Resolver interface {
+// netResolver is the subset of *net.Resolver the gateway uses. Tests in this
+// package inject one to count lookups and to change answers between calls.
+type netResolver interface {
 	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
 }
 
-// DialFunc opens a TCP connection to an IP:port address.
-type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+// dialFunc opens a TCP connection to an IP:port address.
+type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // localhostAddrs is what "localhost" means; the name is never resolved, so a
 // hosts file or resolver cannot point it elsewhere.
@@ -43,15 +43,15 @@ var localhostAddrs = []netip.Addr{netip.MustParseAddr("127.0.0.1"), netip.MustPa
 // SNI and verifies the certificate against the URL host.
 type pinningDialer struct {
 	allow    allowlist
-	resolver Resolver
-	dial     DialFunc
+	resolver netResolver
+	dial     dialFunc
 	limits   timeLimits
 
 	mu     sync.Mutex // guards pinned, never held during a lookup
 	pinned map[string]*pin
 }
 
-func newPinningDialer(allow allowlist, res Resolver, dial DialFunc, limits timeLimits) *pinningDialer {
+func newPinningDialer(allow allowlist, res netResolver, dial dialFunc, limits timeLimits) *pinningDialer {
 	if res == nil {
 		res = net.DefaultResolver
 	}

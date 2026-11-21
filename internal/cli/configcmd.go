@@ -11,6 +11,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/gateway"
 )
 
 // Default file locations. The user file is shown as "~/..." so messages and
@@ -64,7 +65,7 @@ func loadConfig(opts globalOptions) (*config.Resolved, error) {
 		if err != nil {
 			return nil, err
 		}
-		return config.Load(in)
+		return resolve(in)
 	}
 	if in.User, err = readUserLayer(); err != nil {
 		return nil, err
@@ -72,7 +73,21 @@ func loadConfig(opts globalOptions) (*config.Resolved, error) {
 	if in.Project, err = readProjectLayer(); err != nil {
 		return nil, err
 	}
-	return config.Load(in)
+	return resolve(in)
+}
+
+// resolve resolves the layers and checks the policy's consent entries
+// with the gateway's own parser, so a bad entry is a configuration error
+// (exit 2) for every command, before any run starts (#116).
+func resolve(in config.Inputs) (*config.Resolved, error) {
+	r, err := config.Load(in)
+	if err != nil {
+		return nil, err
+	}
+	if err := gateway.CheckPolicyConsent(r.PolicyConsent()); err != nil {
+		return nil, fmt.Errorf("%s: %w", policyEnv, err)
+	}
+	return r, nil
 }
 
 // readLayer reads a required file; name is how the layer is shown.
