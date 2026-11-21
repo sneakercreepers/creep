@@ -63,6 +63,9 @@ type Slice struct {
 	// the walk stopped early; the verdict was reached on less than the slice.
 	Partial    bool
 	Redactions map[string]int // marker label -> count in Text, for Call.Redactions
+	// Tier is the budget Text was cut to; Evaluate refuses any other tier's
+	// prompt, so a slice is never sent with a prompt it was not sized for.
+	Tier Tier
 }
 
 // SkipReason says why a hypothesis was not evaluated. It is a closed set,
@@ -212,6 +215,7 @@ func (s Slicer) buildTarget(t Target, lines []string, budget int, rep *SliceRepo
 		Shown:      r.shown,
 		Partial:    r.partial || fl.partial,
 		Redactions: s.Redactor.MarkerCounts(r.text),
+		Tier:       s.Tier,
 	})
 }
 

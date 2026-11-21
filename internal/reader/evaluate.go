@@ -13,14 +13,18 @@ const purpose = "reader"
 // Evaluate asks h's model whether s's hypothesis holds and projects the
 // answer to a Signal. The user turn is s.Text, built from redact.File output
 // only, and the call goes through h, whose SendFunc is the gateway in
-// production, so redaction counts reach egress.log. tier must be the tier s
-// was built for. An answer that fails the schema, Validate or Project is an
-// error, never a verdict. The Signal carries s.Partial, so a verdict from a
-// cut slice is never read as one from the whole flow.
+// production, so redaction counts reach egress.log. A tier other than
+// s.Tier, the one Slicer.Build cut s for, fails with ErrTier before any
+// call. An answer that fails the schema, Validate or Project is an error,
+// never a verdict. The Signal carries s.Partial, so a verdict from a cut
+// slice is never read as one from the whole flow.
 func Evaluate(ctx context.Context, h *models.HTTP, tier Tier, s Slice) (Signal, error) {
 	system, err := System(tier)
 	if err != nil {
 		return Signal{}, err
+	}
+	if s.Tier != tier {
+		return Signal{}, fmt.Errorf("%w: hypothesis %d sliced for %q, sent under %q", ErrTier, s.Hypothesis, string(s.Tier), string(tier))
 	}
 	a, err := models.Complete[Answer](ctx, h, models.Request{
 		Purpose:    purpose,

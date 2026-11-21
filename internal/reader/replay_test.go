@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/state"
@@ -18,8 +19,13 @@ const (
 	replayDir         = "testdata/replay"
 	variantVulnerable = "vulnerable"
 	variantSafe       = "safe"
-	replayTier        = TierM
+	// replayTier is the tier the fail-closed tests tamper with.
+	replayTier = TierM
 )
+
+// replayTiers each have a fixture set: a slice and its prompt differ per
+// tier, so each tier's request bodies are recorded on their own.
+var replayTiers = []Tier{TierS, TierM, TierL}
 
 // appHypothesis is one route→sink hypothesis on a testdata app variant.
 // Its fixture must replay to vulnerable on the vulnerable variant and to
@@ -66,40 +72,51 @@ var appCases = []appCase{
 	}},
 }
 
-// Acceptance (#95): every testdata app replays through Slicer.Build and
-// Evaluate from its committed fixture, with no network, no key and no
-// model call, to the verdicts its expected.json implies. Regenerate the
-// fixtures with: go test ./internal/reader -run TestAppsReplay -update
+// Acceptance (#95, #204): every testdata app replays at every tier through
+// Slicer.Build and Evaluate from its committed fixture, with no network, no
+// key and no model call, to the verdicts its expected.json implies.
+// Regenerate the fixtures with: go test ./internal/reader -run TestAppsReplay -update
 func TestAppsReplay(t *testing.T) {
-	for _, c := range appCases {
-		t.Run(c.app, func(t *testing.T) {
-			store, mode := fixtureStore(t, c.app)
-			calls := 0
-			for _, variant := range []string{variantVulnerable, variantSafe} {
-				got, err := runVariant(store, mode, replayTier, c, variant, countingModel(&calls))
-				if err != nil {
-					t.Fatalf("%s: %v", variant, err)
-				}
-				for _, err := range c.mismatches(variant, got) {
-					t.Errorf("%s: %v", variant, err)
-				}
-			}
-			if !*update && calls != 0 {
-				t.Fatalf("replay made %d model calls", calls)
-			}
-			if n := len(cacheFiles(t, filepath.Join(replayDir, c.app))); n != len(c.hyps) {
-				t.Fatalf("%d fixture files for %d hypotheses; rerun with -update", n, len(c.hyps))
-			}
-		})
+	for _, tier := range replayTiers {
+		for _, c := range appCases {
+			t.Run(string(tier)+"/"+c.app, func(t *testing.T) {
+				replayApp(t, tier, c)
+			})
+		}
 	}
 }
 
-// fixtureStore opens the app's fixture store. With -update it records into
-// testdata/replay/<app>, dropping old recordings first; otherwise it
-// replays a copy, so the test never writes into the repository.
-func fixtureStore(t *testing.T, app string) (*state.Store, state.Mode) {
+func replayApp(t *testing.T, tier Tier, c appCase) {
+	store, mode := fixtureStore(t, tier, c.app)
+	calls := 0
+	for _, variant := range []string{variantVulnerable, variantSafe} {
+		got, err := runVariant(store, mode, tier, c, variant, countingModel(&calls))
+		if err != nil {
+			t.Fatalf("%s: %v", variant, err)
+		}
+		for _, err := range c.mismatches(variant, got) {
+			t.Errorf("%s: %v", variant, err)
+		}
+	}
+	if !*update && calls != 0 {
+		t.Fatalf("replay made %d model calls", calls)
+	}
+	if n := len(cacheFiles(t, fixtureDir(tier, c.app))); n != len(c.hyps) {
+		t.Fatalf("%d fixture files for %d hypotheses; rerun with -update", n, len(c.hyps))
+	}
+}
+
+// fixtureDir is where the app's recordings for tier live.
+func fixtureDir(tier Tier, app string) string {
+	return filepath.Join(replayDir, strings.ToLower(string(tier)), app)
+}
+
+// fixtureStore opens the app's fixture store for tier. With -update it
+// records into testdata/replay/<tier>/<app>, dropping old recordings first;
+// otherwise it replays a copy, so the test never writes into the repository.
+func fixtureStore(t *testing.T, tier Tier, app string) (*state.Store, state.Mode) {
 	t.Helper()
-	dir := filepath.Join(replayDir, app)
+	dir := fixtureDir(tier, app)
 	mode := state.ModeReplay
 	if *update {
 		if err := os.RemoveAll(filepath.Join(dir, "cache")); err != nil {

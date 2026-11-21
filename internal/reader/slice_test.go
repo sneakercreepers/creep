@@ -282,3 +282,14 @@ func TestBuildNeedsValidInput(t *testing.T) {
 		})
 	}
 }
+
+// #204: every slice records the tier whose budget cut it, so Evaluate can
+// refuse to send it under another tier's prompt.
+func TestBuildRecordsTier(t *testing.T) {
+	for _, tier := range tiers {
+		rep := build(t, tier, map[string]string{"app.py": app}, sqlTarget(1, "app.py"))
+		if len(rep.Slices) != 1 || rep.Slices[0].Tier != tier {
+			t.Errorf("tier %s: slices %+v", tier, rep.Slices)
+		}
+	}
+}

@@ -20,8 +20,9 @@ const (
 	TierL Tier = "L"
 )
 
-// ErrTier means System got a tier with no prompt. There is no fallback, so
-// a typo in the caller fails instead of silently using another variant.
+// ErrTier means a tier has no prompt, or Evaluate got a slice cut for
+// another tier. There is no fallback, so a typo in the caller fails instead
+// of silently using another variant.
 var ErrTier = errors.New("reader: unknown tier")
 
 var (
