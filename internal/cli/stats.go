@@ -34,7 +34,7 @@ type runStats struct {
 	requests  int // model requests the pipeline made
 	sent      int // requests that reached the transport (the gateway)
 	cached    int // requests served from the run-state cache
-	failed    int // requests that ended in an error
+	failed    int // requests that ended in an error or a reply other than 200
 	usage     gateway.Usage
 	cacheUse  gateway.Usage // tokens the recorded replies report: not spent again
 	noUsage   int           // sent replies that reported no token count
@@ -96,7 +96,7 @@ func (st *runStats) addRequest(c gateway.Call, r *gateway.Reply, err error, sent
 	st.requests++
 	st.byPurpose[c.Purpose]++
 	switch {
-	case err != nil:
+	case !succeeded(r, err):
 		st.failed++
 	case !sent:
 		st.cached++
@@ -110,7 +110,7 @@ func (st *runStats) addSent(c gateway.Call, r *gateway.Reply, err error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	st.sent++
-	if err != nil {
+	if !succeeded(r, err) {
 		return
 	}
 	u, ok := replyUsage(c, r)
@@ -119,6 +119,12 @@ func (st *runStats) addSent(c gateway.Call, r *gateway.Reply, err error) {
 		return
 	}
 	st.usage = addUsage(st.usage, u)
+}
+
+// succeeded reports a 200 reply. The gateway and the run-state cache return
+// a 429 or 500 with no error, so the status counts too (#222).
+func succeeded(r *gateway.Reply, err error) bool {
+	return err == nil && r != nil && r.Status == 200
 }
 
 func replyUsage(c gateway.Call, r *gateway.Reply) (gateway.Usage, bool) {

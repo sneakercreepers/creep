@@ -107,3 +107,76 @@ func TestWhyWithoutReport(t *testing.T) {
 		t.Fatalf("why created %s: %v", stateDir, err)
 	}
 }
+
+// validReport is a report scan could have written, with one finding f1.
+const validReport = `{"schema_version":1,"tool":{"name":"creep","version":"x","commit":"y"},"run":{"incomplete":false},` +
+	`"findings":[{"id":"f1","class":"sqli","status":"probable","path":"a.py","line":3}],` +
+	`"coverage":{"classes":[],"not_evaluated":[]},"data_handling":{"requests":0,"bytes":0,"endpoints":[],"redactions":{}}}`
+
+// Regression (#209): why reads only the .creep directory scan makes. A
+// .creep that is a link (a junction on Windows) or a file is refused with
+// exit 2, though the report it leads to is valid; a real directory works.
+func TestWhyRefusesLinkedStateDir(t *testing.T) {
+	tests := []struct {
+		name     string
+		plant    func(t *testing.T, outside string)
+		wantCode int
+		want     string
+	}{
+		{"directory", func(t *testing.T, outside string) {
+			if err := os.Rename(outside, stateDir); err != nil {
+				t.Fatal(err)
+			}
+		}, exitcode.OK, "finding f1"},
+		{"link to a directory", func(t *testing.T, outside string) { linkDir(t, outside, stateDir) }, exitcode.ConfigError, "not a directory"},
+		{"file", func(t *testing.T, _ string) { mustWrite(t, stateDir, validReport) }, exitcode.ConfigError, "not a directory"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateUserConfig(t)
+			outside := filepath.Join(t.TempDir(), "elsewhere")
+			if err := os.Mkdir(outside, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(outside, "report.json"), validReport)
+			t.Chdir(t.TempDir())
+			tt.plant(t, outside)
+			code, out, errOut := runScanWith(noModelDeps, "why", "f1")
+			if code != tt.wantCode || !strings.Contains(out+errOut, tt.want) {
+				t.Fatalf("exit %d, want %d and %q\nstdout %q\nstderr %q", code, tt.wantCode, tt.want, out, errOut)
+			}
+		})
+	}
+}
+
+// The race the Lstat leaves (#209): a directory swapped in under the name
+// after it was checked is not the one checked, and is refused; the same
+// directory opens.
+func TestOpenSameDirRefusesSwap(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir("dir", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Lstat("dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.SameFile(before, before)
+	root, err := openSameDir("dir", before)
+	if err != nil {
+		t.Fatalf("same directory refused: %v", err)
+	}
+	_ = root.Close()
+	if err := os.Rename("dir", "checked"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir("dir", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if root, err := openSameDir("dir", before); err == nil || !strings.Contains(err.Error(), "changed while opening") {
+		if root != nil {
+			_ = root.Close()
+		}
+		t.Fatalf("swapped directory opened: %v", err)
+	}
+}

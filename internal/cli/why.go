@@ -46,10 +46,7 @@ func runWhy(e env, args []string) int {
 // through report.ReadJSON, which refuses anything scan would not write.
 func readLastReport() (*report.Report, error) {
 	name := reportNames["json"]
-	if _, err := os.Lstat(stateDir); err != nil {
-		return nil, fmt.Errorf("no scan report in this directory (run creep scan with json in report.formats): %w", err)
-	}
-	root, err := os.OpenRoot(stateDir)
+	root, err := openStateDir()
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +56,40 @@ func readLastReport() (*report.Report, error) {
 		return nil, fmt.Errorf("read %s: %w", path.Join(stateDir, name), err)
 	}
 	return report.ReadJSON(bytes.NewReader(data))
+}
+
+// openStateDir opens .creep for reading without creating it. A link or any
+// other non-directory there is refused, as the state store refuses it, so a
+// .creep link a cloned repository planted is never read as the last scan
+// (#209).
+func openStateDir() (*os.Root, error) {
+	before, err := os.Lstat(stateDir)
+	if err != nil {
+		return nil, fmt.Errorf("no scan report in this directory (run creep scan with json in report.formats): %w", err)
+	}
+	// Pin the Windows file ID now; SameFile would otherwise read it by path
+	// later, after a swap.
+	os.SameFile(before, before)
+	if !before.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory (a link, junction or file); creep reads only the directory scan makes", stateDir)
+	}
+	return openSameDir(stateDir, before)
+}
+
+// openSameDir opens name as a root only if it is still the directory before
+// describes: os.OpenRoot follows links, so one swapped in after the Lstat
+// opens another directory, and that is refused.
+func openSameDir(name string, before os.FileInfo) (*os.Root, error) {
+	root, err := os.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	after, err := root.Stat(".")
+	if err != nil || !os.SameFile(before, after) {
+		_ = root.Close()
+		return nil, fmt.Errorf("%s changed while opening it", name)
+	}
+	return root, nil
 }
 
 func printWhy(w io.Writer, f report.Finding) {

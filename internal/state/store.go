@@ -118,6 +118,14 @@ func (s *Store) Close() error {
 	return s.root.Close()
 }
 
+// Root is the directory handle Open checked (not a link, not writable by
+// others, the directory it statted), for files the store does not own, such
+// as scan's reports: reopening the directory by path could open a link
+// swapped in since (#209). The store closes it; callers must not.
+func (s *Store) Root() *os.Root {
+	return s.root
+}
+
 // makeStateDir creates abs if missing. A file or link planted in its place
 // is refused as ErrUnsafePath on every OS (MkdirAll's own error for it is
 // "path not found" on Windows).
