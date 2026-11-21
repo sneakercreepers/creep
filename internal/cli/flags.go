@@ -92,6 +92,11 @@ func (o globalOptions) validate() error {
 	if !validPrice(o.priceIn) || !validPrice(o.priceOut) {
 		return fmt.Errorf("--price-in and --price-out must be numbers from 0 to %g (currency per 1M tokens)", maxPrice)
 	}
+	// An unset variable in --config "$CFG" must not fall back to the
+	// default layers, which would scan under a config nobody chose.
+	if o.explicit["config"] && o.configPath == "" {
+		return errors.New("--config needs a file path; leave the flag out to use the user and project files")
+	}
 	return validateConfigPath(o.configPath)
 }
 
@@ -132,7 +137,7 @@ func takesSeparateValue(fs *flag.FlagSet, arg string) bool {
 	return !isBool || !b.IsBoolFlag()
 }
 
-// validateConfigPath only checks an explicitly given path; when it is empty
+// validateConfigPath only checks an explicitly given path; without --config
 // the config layers (see #2) decide which files to read.
 func validateConfigPath(path string) error {
 	if path == "" {

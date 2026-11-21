@@ -43,8 +43,8 @@ func (s *state) inheritedGates() map[string]gateFloor {
 // checkProjectGates rejects a project gate looser than any of its floors.
 // The project file comes from the repository being scanned, so a pull
 // request must not loosen the gate that judges it, neither the built-in one
-// nor the one the operator set; operator layers (user, --config, flags,
-// policy) may still loosen.
+// nor the one the operator set; operator layers (user, --config, policy)
+// may still loosen.
 func (s *state) checkProjectGates(keys []string, src string, inherited map[string]gateFloor) error {
 	for _, k := range keys {
 		if !slices.Contains(gateKeys, k) {
@@ -79,14 +79,23 @@ func (s *state) checkProjectGate(key string, inherited gateFloor) error {
 	if len(broken) == 0 {
 		return nil
 	}
+	hint := fmt.Sprintf("the project file may only make gates stricter, use %q or a stricter gate", passingGate(value, floors)) + operatorHint(broken)
 	if f, ok := strictestFloor(broken); ok {
 		broken = []gateFloor{f}
 	}
-	hint := fmt.Sprintf("the project file may only make gates stricter, use %q or a stricter gate", passingGate(value, floors))
-	if !slices.ContainsFunc(broken, func(f gateFloor) bool { return f.what == "the limit" }) {
-		hint += ", or set a looser gate in the user file, --config or a flag"
-	}
 	return fmt.Errorf("%s %q is looser than %s; %s", key, value, floorNames(broken), hint)
+}
+
+// operatorHint offers loosening the inherited gate only when it is the one
+// floor broken: the limit and the built-in floor hold whatever an operator
+// layer sets, so naming one would send the user to a fix that fails (#64).
+// It is checked before strictestFloor narrows the list, which could hide a
+// broken built-in floor behind a stricter inherited gate.
+func operatorHint(broken []gateFloor) string {
+	if len(broken) != 1 || broken[0].what != "the gate" {
+		return ""
+	}
+	return fmt.Sprintf(", or set a looser gate in %s", broken[0].by)
 }
 
 // strictestFloor returns the first floor at least as strict as all the

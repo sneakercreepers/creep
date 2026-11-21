@@ -25,7 +25,7 @@
 //     gates.nightly looser than the built-in default, the policy limit or
 //     the gate the layers before it set (policy defaults, user file) is
 //     rejected, so a pull request cannot loosen the gate that judges it.
-//     Operator layers (user file, --config, flags, policy) may still loosen.
+//     Operator layers (user file, --config, policy) may still loosen.
 //   - The project file comes from the repository being scanned, which is
 //     untrusted, so it cannot set where code is sent (model.endpoint,
 //     egress.allow), which program receives it (model.run, model.env,

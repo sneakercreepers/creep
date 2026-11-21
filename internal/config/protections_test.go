@@ -58,7 +58,8 @@ func TestGateLooserThanLimitIsRejected(t *testing.T) {
 		project string
 		wantErr string
 	}{
-		{"default pr is looser", "", `default: gates.pr "probable:critical" is looser than the limit "probable:high"`},
+		{"default pr is looser: the policy author is told the fix", "", `default: gates.pr "probable:critical" is looser than the limit "probable:high" set by policy "org.yaml"; the built-in gate is looser than the policy limit, so set defaults.gates.pr in policy "org.yaml" to "probable:high" or a stricter gate`},
+		{"default nightly is looser: the policy author is told the fix", "gates:\n  pr: probable:high\n", `default: gates.nightly "verified:high" is looser than the limit "verified:medium" set by policy "org.yaml"; the built-in gate is looser than the policy limit, so set defaults.gates.nightly in policy "org.yaml" to "verified:medium" or a stricter gate`},
 		{"pr disabled", "gates:\n  pr: none\n", `project "creep.yaml": gates.pr "none" is looser`},
 		{"pr looser status", "gates:\n  pr: verified:high\n", `gates.pr "verified:high" is looser`},
 		{"pr looser severity", "gates:\n  pr: probable:critical\n", `gates.pr "probable:critical" is looser`},
@@ -81,6 +82,38 @@ func TestGateLooserThanLimitIsRejected(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// The policy-default hint (#64) appears only when the built-in gate broke
+// the limit, and following it makes the run pass.
+func TestLimitHintOnlyForBuiltInGate(t *testing.T) {
+	const limit = "limits:\n  gates:\n    pr: probable:high\n"
+	tests := []struct {
+		name     string
+		in       Inputs
+		wantHint bool
+		wantOK   bool
+	}{
+		{"built-in gate breaks the limit", Inputs{Policy: file("org.yaml", limit)}, true, false},
+		{"user gate breaks the limit", Inputs{Policy: file("org.yaml", limit), User: file("u", "gates:\n  pr: verified:high\n")}, false, false},
+		{"policy default breaks its own limit", Inputs{Policy: file("org.yaml", limit+"defaults:\n  gates:\n    pr: none\n")}, false, false},
+		{"--config gate breaks the limit", Inputs{Policy: file("org.yaml", limit), Explicit: file("ci.yaml", "gates:\n  pr: none\n")}, false, false},
+		{"following the hint passes", Inputs{Policy: file("org.yaml", limit+"defaults:\n  gates:\n    pr: probable:high\n")}, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(tt.in)
+			if (err == nil) != tt.wantOK {
+				t.Fatalf("err = %v, want ok %v", err, tt.wantOK)
+			}
+			if err == nil {
+				return
+			}
+			if hinted := strings.Contains(err.Error(), "set defaults.gates.pr"); hinted != tt.wantHint {
+				t.Errorf("hint = %v, want %v: %v", hinted, tt.wantHint, err)
 			}
 		})
 	}

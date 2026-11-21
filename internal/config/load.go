@@ -199,10 +199,20 @@ func (s *state) checkLimits() error {
 	for _, l := range limits {
 		value := field(&s.Config, l.key).String()
 		if err := checkFloor(l.key, value, l.limit, "the limit", s.limSrc); err != nil {
-			return fmt.Errorf("%s: %w", s.sources[l.key], err)
+			return fmt.Errorf("%s: %w%s", s.sources[l.key], err, s.limitHint(l.key, l.limit))
 		}
 	}
 	return nil
+}
+
+// limitHint points the policy author at the fix when the built-in gate is
+// the one looser than their limit: no user setting caused it, and every run
+// fails until the policy sets a default.
+func (s *state) limitHint(key, limit string) string {
+	if s.sources[key] != "default" {
+		return ""
+	}
+	return fmt.Sprintf("; the built-in gate is looser than the policy limit, so set defaults.%s in %s to %q or a stricter gate", key, s.limSrc, limit)
 }
 
 // checkFloor reports an error when value is looser than floor; an empty floor

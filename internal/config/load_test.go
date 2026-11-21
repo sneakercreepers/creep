@@ -105,6 +105,7 @@ func TestLoadErrors(t *testing.T) {
 		{"unknown top-level key", Inputs{Project: file("creep.yaml", "models:\n  name: x\n")}, []string{`project "creep.yaml"`, `unknown key "models"`, "line 1"}},
 		{"unknown nested key", Inputs{User: file("u", "model:\n  named: x\n")}, []string{`unknown key "model.named"`, "line 2"}},
 		{"wrong type", Inputs{User: file("u", "budget:\n  max_tokens: lots\n")}, []string{"decode", "line 2", "into int"}},
+		{"several wrong types on one line", Inputs{User: file("u", "budget:\n  max_tokens: lots\n  max_calls: many\n")}, []string{"yaml: unmarshal errors: line 2: ", "; line 3: ", "into int"}},
 		{"section not a mapping", Inputs{User: file("u", "model: openai\n")}, []string{`key "model" must be a mapping`}},
 		{"top level not a mapping", Inputs{User: file("u", "- a\n")}, []string{"the top level must be a mapping"}},
 		{"null value", Inputs{User: file("u", "model:\n  name: ~\n")}, []string{`key "model.name" has no value`}},
@@ -131,6 +132,10 @@ func TestLoadErrors(t *testing.T) {
 			_, err := Load(tt.in)
 			if err == nil {
 				t.Fatal("Load succeeded, want error")
+			}
+			// The CLI escapes a newline as \x0a, so errors stay on one line (#64).
+			if strings.Contains(err.Error(), "\n") {
+				t.Errorf("error spans lines: %q", err)
 			}
 			for _, w := range tt.want {
 				if !strings.Contains(err.Error(), w) {
