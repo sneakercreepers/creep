@@ -19,7 +19,7 @@ inputs:
     required: false
     default: ""
   config:
-    description: creep config file (--config), used instead of the user file and the creep.yaml of the repository. Empty reads the usual layers (CREEP_POLICY, user file, creep.yaml).
+    description: creep config file (--config), used instead of the user file and the creep.yaml of the repository. Empty reads the usual layers (CREEP_POLICY, user file, creep.yaml). It can choose the model endpoint and command, so keep it outside the checkout or in a path the change under review cannot edit; on a pull request a path in the checkout is the file as the pull request changed it.
     required: false
     default: ""
   mode:
@@ -27,7 +27,7 @@ inputs:
     required: false
     default: ""
   baseline:
-    description: Repository-relative baseline file (--baseline, creep v0.2). On a pull request or a merge group it is read from the base commit, so the change under review cannot suppress its own findings.
+    description: Baseline file (--baseline, creep v0.2), relative to working-directory. On a pull request or a merge group it is read from the base commit, so the change under review cannot suppress its own findings.
     required: false
     default: ""
   incremental:
@@ -35,7 +35,7 @@ inputs:
     required: false
     default: "true"
   working-directory:
-    description: Directory to scan. Code scanning places alerts by paths relative to the repository root, so keep the default when uploading SARIF.
+    description: Directory to scan. The changed list (incremental) and the baseline path are relative to it. Code scanning places alerts by paths relative to the repository root, so keep the default when uploading SARIF.
     required: false
     default: "."
   upload-sarif:

@@ -176,3 +176,37 @@ func TestRedactPrefersSpecificLabel(t *testing.T) {
 		}
 	}
 }
+
+// TestRedactPasswordShapesPentest is the protection test for the v0.2
+// release pentest: a password whose bare start is only a prefix (a Python
+// string prefix, a Go conversion, a bracket, a concatenation) and one in an
+// XML element or a .NET key/value pair never reaches File's output.
+func TestRedactPasswordShapesPentest(t *testing.T) {
+	tests := []string{
+		"DB_PASSWORD = b\"" + plainPasswd + "\"\n",
+		"DB_PASSWORD = r'" + plainPasswd + "'\n",
+		"password := []byte(\"" + plainPasswd + "\")\n",
+		"password = (\"" + plainPasswd + "\")\n",
+		"{\"password\": [\"" + plainPasswd + "\"]}\n",
+		"password = PREFIX + \"" + plainPasswd + "\"\n",
+		"<password>" + plainPasswd + "</password>\n",
+		"  <Password>" + plainPasswd + "</Password>\n",
+		"<db.password type=\"x\">" + plainPasswd + "</db.password>\n",
+		"<add key=\"DbPassword\" value=\"" + plainPasswd + "\"/>\n",
+		"<add key='db_secret' value='" + plainPasswd + "' />\n",
+	}
+	for _, text := range tests {
+		out, err := newRedactor(t).File([]byte(text))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(out, plainPasswd) {
+			t.Errorf("File(%q) = %q: password sent", text, out)
+		}
+	}
+	for _, text := range []string{"<password>${DB_PASSWORD}</password>\n"} {
+		if out := mustRedact(t, newRedactor(t), text); out != text {
+			t.Errorf("Redact(%q) = %q, want unchanged", text, out)
+		}
+	}
+}

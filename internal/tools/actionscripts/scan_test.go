@@ -264,3 +264,33 @@ func TestScanBaselineOnPush(t *testing.T) {
 		t.Errorf("args %q", args)
 	}
 }
+
+// Protection (v0.2 release pentest): creep scans the step's working
+// directory, so the changed list and a base-commit baseline are read
+// relative to it. Names relative to the repository root would match no
+// walked file under a working-directory input, every changed file would be
+// listed unchanged, and a pull request would pass on a scan that read
+// nothing.
+func TestScanWorkingDirectoryScope(t *testing.T) {
+	s, dir := scanSandbox(t)
+	root := s.workdir
+	git(t, root, "init", "-q")
+	mustWrite(t, filepath.Join(root, "svc", "app.py"), "a = 1\n", 0o600)
+	mustWrite(t, filepath.Join(root, "svc", "creep-baseline.json"), "svc entries\n", 0o600)
+	mustWrite(t, filepath.Join(root, "creep-baseline.json"), "root entries\n", 0o600)
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-q", "-m", "base")
+	base := git(t, root, "rev-parse", "HEAD")
+	mustWrite(t, filepath.Join(root, "svc", "app.py"), "a = 2\n", 0o600)
+	mustWrite(t, filepath.Join(root, "other.py"), "b = 2\n", 0o600)
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-q", "-m", "pull request")
+
+	s.workdir = filepath.Join(root, "svc")
+	s.env["EVENT_NAME"] = "pull_request"
+	s.env["BASE_SHA"] = base
+	s.env["INPUT_BASELINE"] = "creep-baseline.json"
+	wantCode(t, s.run("scan.sh"), 0, "")
+	checkPassedFile(t, dir, "changed", "app.py\x00")
+	checkPassedFile(t, dir, "baseline", "svc entries\n")
+}

@@ -45,6 +45,24 @@ var credentialDetectors = slices.Concat([]patternDetector{
 		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
 	},
 	{
+		// An XML element named like a password (Maven settings.xml,
+		// <password>..</password>): the text up to the closing tag.
+		label: passwordLabel,
+		re: regexp.MustCompile(`(?i)<[A-Za-z0-9_.:-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.:-]*(?:[ \t][^<>\r\n]*)?>` +
+			`([^<\r\n]+)</`),
+		valid: notPlaceholder,
+		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
+	},
+	{
+		// A key and value pair of attributes whose key names a password
+		// (.NET <add key="DbPassword" value=".."/>).
+		label: passwordLabel,
+		re: regexp.MustCompile(`(?i)\bkey[ \t]*=[ \t]*["'][^"'\r\n]*(?:passw(?:or)?d|passphrase|pwd|secret)[^"'\r\n]*["'][ \t]+value[ \t]*=[ \t]*` +
+			`(?:"([^"\r\n]*)"|'([^'\r\n]*)')`),
+		valid: notPlaceholder,
+		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
+	},
+	{
 		// A bare AWS secret access key has no prefix, so a 40-character
 		// base64 run is masked only when an access key id shares the input.
 		label: "SECRET_AWS_SECRET_KEY",

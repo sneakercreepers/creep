@@ -7,6 +7,12 @@
 # a run that wrote reports (exit 0, 1 or 4), report, sarif and markdown to
 # $GITHUB_OUTPUT.
 #
+# The changed list and a base-commit baseline are read relative to the
+# working directory (git diff --relative, <commit>:./<path>), the directory
+# creep scans: names relative to the repository root would match no walked
+# file under a working-directory input, and every changed file would read
+# as unchanged, a clean exit for a scan that read nothing.
+#
 # Environment: CREEP, INPUT_CONFIG, INPUT_MODE, INPUT_BASELINE,
 # INPUT_INCREMENTAL, INPUT_API_KEY, EVENT_NAME, BASE_SHA, NEED_SARIF,
 # NEED_MARKDOWN (true|false each), RUNNER_TEMP. BASE_SHA is the pull
@@ -65,7 +71,7 @@ add_changed() {
   is_pull_request || return 0
   need_base
   local list="$RUNNER_TEMP/creep-changed.txt"
-  git diff --no-ext-diff --no-textconv --name-only -z "$BASE_SHA...HEAD" >"$list" ||
+  git diff --no-ext-diff --no-textconv --relative --name-only -z "$BASE_SHA...HEAD" >"$list" ||
     fail "git diff against the base commit failed"
   args+=("--changed=$list")
 }
@@ -83,11 +89,11 @@ add_baseline() {
     return 0
   fi
   need_base
-  if ! git cat-file -e "$BASE_SHA:$path" 2>/dev/null; then
+  if ! git cat-file -e "$BASE_SHA:./$path" 2>/dev/null; then
     echo "::notice title=creep::the base commit has no $path: scanning without a baseline"
     return 0
   fi
-  git cat-file blob "$BASE_SHA:$path" >"$copy" || fail "could not read $path from the base commit"
+  git cat-file blob "$BASE_SHA:./$path" >"$copy" || fail "could not read $path from the base commit"
   args+=("--baseline=$copy")
 }
 

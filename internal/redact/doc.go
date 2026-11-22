@@ -166,6 +166,13 @@
 //     literal after "#" or "//" outside a string, read as a comment
 //     (cfg.Secret || this.#x || "..."); a literal glued to a kept value
 //     (None"..."); a no-break space before "=", and curly quotes.
+//   - A key the password detector does not name: pass = "...", a setter or
+//     a pair of arguments (setPassword("..."), set("password", "...")), a
+//     command-line option (--password ..., mysql -p'...'). Since the v0.2
+//     release pentest a masked bare value also masks the literals after it
+//     on its line (b"...", []byte("..."), PREFIX + "..."), and an XML
+//     element or a key/value attribute pair named like a password is
+//     masked (<password>...</password>, <add key="DbPassword" value="..."/>).
 //   - A digit-free dotted passphrase that starts with one of the receivers
 //     above (config.is.sparta, env.monkey.island) reads as a config path and
 //     is sent; the password and generic rules both keep it (#71).

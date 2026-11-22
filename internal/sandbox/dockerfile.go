@@ -47,6 +47,7 @@ const (
 	ruleOnbuild       = "onbuild"          // a trigger runs in a later FROM, unchecked
 	ruleTooManyImages = "too_many_images"  // more images than the check covers
 	ruleNoFrom        = "no_from"          // nothing to build
+	ruleHeredoc       = "heredoc"          // a here-document: its body is not instructions, and its end line is the author's
 )
 
 const maxBaseImages = 16
@@ -55,7 +56,9 @@ var (
 	// anyDirective is a "# key=" comment in any spacing or case: BuildKit
 	// reads directives as `#\s*key\s*=`, so this matches every one of them.
 	anyDirective = regexp.MustCompile(`^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=`)
-	continuation = regexp.MustCompile(`\\[ \t]*$`)
+	// continuation is BuildKit's own rule: a backslash after another one
+	// does not continue, so `x\\` ends its line (v0.2 release pentest F1).
+	continuation = regexp.MustCompile(`(^|[^\\])\\[ \t]*$`)
 	// imageRef is a plain reference: no flag, variable or space.
 	imageRef       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 	nativePlatform = []string{"$BUILDPLATFORM", "${BUILDPLATFORM}", "$TARGETPLATFORM", "${TARGETPLATFORM}"}
@@ -147,8 +150,8 @@ func logicalLines(lines []string) []string {
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		if loc := continuation.FindStringIndex(l); loc != nil {
-			cur.WriteString(l[:loc[0]] + " ")
+		if m := continuation.FindStringSubmatchIndex(l); m != nil {
+			cur.WriteString(l[:m[3]] + " ")
 			open = true
 			continue
 		}
@@ -180,6 +183,9 @@ func checkInstructions(lines []string) (images, stages []string, rule string) {
 		if rule != "" {
 			return nil, nil, rule
 		}
+		if hasHeredoc(keyword, rest) {
+			return nil, nil, ruleHeredoc
+		}
 		imgs, rule := checkInstruction(keyword, flags, args, &st)
 		if rule != "" {
 			return nil, nil, rule
@@ -190,6 +196,21 @@ func checkInstructions(lines []string) (images, stages []string, rule string) {
 		return nil, nil, ruleNoFrom
 	}
 	return images, st.names, ""
+}
+
+// hasHeredoc reports a possible here-document (<<EOF, <<-EOF, 3<<EOF) in
+// an instruction that takes one. BuildKit ends its body at the author's
+// end word, which may look like a comment or a continuation to this check,
+// so a later instruction would be read as body, and a body line as an
+// instruction (v0.2 release pentest F2, F3). Any "<<" there is refused,
+// inside a shell command too: the check reads lines, not shell, and a
+// refused build only leaves findings probable.
+func hasHeredoc(keyword, rest string) bool {
+	switch keyword {
+	case "RUN", "COPY", "ADD":
+		return strings.Contains(rest, "<<")
+	}
+	return false
 }
 
 func checkInstruction(keyword string, flags map[string][]string, args []string, st *stageSet) ([]string, string) {

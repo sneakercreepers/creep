@@ -73,8 +73,15 @@ func (d patternDetector) judge(out []span, padded, key string, start, end, tail 
 	}
 	verdict := d.bare(key, padded[start:end], after)
 	switch {
-	case verdict == maskValue:
+	case verdict == maskValue && end < tail:
 		return append(out, span{start: start - 1, end: end - 1, label: d.label}), tail
+	case verdict == maskValue:
+		// The bare value may be only a prefix of the secret: b"..",
+		// []byte(".."), ("..") or PREFIX + "..". The literals after it on
+		// its line are masked too (v0.2 release pentest).
+		out = append(out, span{start: start - 1, end: end - 1, label: d.label})
+		literals, lineEnd := tailLiterals(padded, end, d.label)
+		return append(out, literals...), lineEnd
 	case verdict == keepValue, end < tail:
 		return out, tail
 	case closesString(padded, start, end):
