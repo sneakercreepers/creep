@@ -51,6 +51,8 @@ const (
 	ReasonNotLinux       Reason = "not_linux"       // the daemon runs Windows containers
 	ReasonNoSeccomp      Reason = "no_seccomp"      // seccomp is off or unconfined
 	ReasonNoLimits       Reason = "no_limits"       // memory, pids or CPU limits cannot be applied
+	ReasonUnknownVersion Reason = "unknown_version" // the engine, builder or OCI runtime version is not reported, or the runtime is not runc or crun
+	ReasonOldRuntime     Reason = "old_runtime"     // below the minimum engine, BuildKit, Buildah, runc or crun version
 )
 
 // Status is what detection found for one runtime.

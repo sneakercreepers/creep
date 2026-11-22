@@ -28,6 +28,8 @@ type recorder struct {
 	images map[string]cliResult // per image reference, before image
 	// platform answers the engine platform query; "" is testPlatform.
 	platform string
+	// workdir answers the working directory inspect; "" is null.
+	workdir string
 }
 
 // testPlatform is the fake engine's os/arch, and nativeInspect a base
@@ -42,6 +44,9 @@ func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, er
 	r.calls = append(r.calls, slices.Clone(args))
 	r.mu.Unlock()
 	inspect := subcommand(args) == "image" && slices.Contains(args, "inspect")
+	if inspect && r.workdir != "" && slices.Contains(args, "{{json .Config.WorkingDir}}") {
+		return cliResult{stdout: []byte(r.workdir + "\n")}, nil
+	}
 	if answer, ok := r.images[args[len(args)-1]]; ok && inspect {
 		return answer, nil
 	}
@@ -144,6 +149,9 @@ func allowedOption(o string) bool {
 		return true
 	case strings.HasPrefix(o, "--network-alias="):
 		return aliasName.MatchString(strings.TrimPrefix(o, "--network-alias="))
+	case strings.HasPrefix(o, "--workdir="):
+		dir := strings.TrimPrefix(o, "--workdir=")
+		return strings.HasPrefix(dir, "/") && !strings.Contains(dir, "..") && checkContainerPath(dir) == ""
 	case strings.HasPrefix(o, "--tmpfs=") && strings.HasSuffix(o, ":rw,noexec,nosuid,nodev,size=256m,mode=1777"):
 		target := strings.TrimSuffix(strings.TrimPrefix(o, "--tmpfs="), ":rw,noexec,nosuid,nodev,size=256m,mode=1777")
 		return checkTarget(target) == nil && !strings.Contains(target, ":")
@@ -260,6 +268,9 @@ func TestHardeningCheckCatchesWeakenedRun(t *testing.T) {
 		"exec tmpfs":              insert("--tmpfs=/data:rw,exec,size=256m"),
 		"tmpfs over /proc":        insert("--tmpfs=/proc:rw,noexec,nosuid,nodev,size=256m,mode=1777"),
 		"alias with a dot":        insert("--network-alias=db.example.com"),
+		"workdir in proc":         insert("--workdir=/proc/self/fd/8"),
+		"workdir climbs":          insert("--workdir=/app/../proc/1"),
+		"relative workdir":        insert("--workdir=app"),
 	}
 	for name, argv := range publishWeakened(good) {
 		weakened[name] = argv

@@ -67,6 +67,7 @@ type Spec struct {
 	alias     string   // the container's name on that network
 	detach    bool     // a service: runs until Close
 	tmpfs     []string // extra tmpfs targets; each may cover an image VOLUME
+	workdir   string   // the app's checked working directory; "" keeps the image's
 }
 
 var (
@@ -129,6 +130,9 @@ func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 	if spec.alias != "" {
 		args = append(args, "--network-alias="+spec.alias)
 	}
+	if spec.workdir != "" {
+		args = append(args, "--workdir="+spec.workdir)
+	}
 	for _, t := range spec.tmpfs {
 		args = append(args, "--tmpfs="+t+":"+serviceTmpfs)
 	}
@@ -149,6 +153,8 @@ func checkSpec(spec Spec) error {
 		return fmt.Errorf("timeout %s outside 0..%s: %w", spec.Timeout, MaxTimeout, ErrSpec)
 	case spec.alias != "" && (!spec.networked || !aliasName.MatchString(spec.alias)):
 		return fmt.Errorf("network alias %q: %w", spec.alias, ErrSpec)
+	case spec.workdir != "" && checkContainerPath(spec.workdir) != "":
+		return fmt.Errorf("working directory %q: %w", spec.workdir, ErrSpec)
 	case len(spec.tmpfs) > maxTmpfs:
 		return fmt.Errorf("too many tmpfs mounts: %w", ErrSpec)
 	}

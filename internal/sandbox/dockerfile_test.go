@@ -17,10 +17,10 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"plain":           {"FROM python:3.12-slim\nCOPY . /app\nRUN pip install --no-index /app\nCMD [\"python\", \"/app/app.py\"]\n", []string{"python:3.12-slim"}},
 		"pinned":          {"FROM docker.io/library/node@sha256:" + strings.Repeat("a", 64) + "\n", []string{"docker.io/library/node@sha256:" + strings.Repeat("a", 64)}},
 		"multi-stage":     {"FROM golang:1.27 AS build\nRUN go build -o /x .\nFROM scratch\nCOPY --from=build /x /x\nCOPY --from=0 /x /y\nCOPY --from=1 /x /z\n", []string{"golang:1.27"}},
-		"stage case":      {"from golang:1.27 as Build\nfrom build\ncopy --FROM=BUILD /x /x\nrun --mount=FROM=Build,target=/b true\n", []string{"golang:1.27"}},
+		"stage case":      {"from golang:1.27 as Build\nfrom build\ncopy --FROM=BUILD /x /x\n", []string{"golang:1.27"}},
 		"native platform": {"FROM --platform=$BUILDPLATFORM golang:1.27 AS b\nFROM --platform=${TARGETPLATFORM} alpine:3\n", []string{"alpine:3", "golang:1.27"}},
 		"copy from image": {"FROM scratch\nCOPY --from=busybox:1.37 /bin/sh /sh\n", []string{"busybox:1.37"}},
-		"mount from":      {"FROM alpine:3 AS a\nRUN --mount=type=bind,from=tools:1,target=/t --mount=type=tmpfs,target=/c /t/run\nRUN --mount=type=bind,FROM=a,source=x,target=/a true\n", []string{"alpine:3", "tools:1"}},
+		"mount context":   {"FROM alpine:3 AS a\nRUN --mount=type=bind,source=x,target=/t --mount=type=tmpfs,target=c /t/run\nWORKDIR app\nWORKDIR /srv/device\n", []string{"alpine:3"}},
 		"local add":       {"FROM alpine:3\nADD app.tar.gz /app/\nADD [\"a b\", \"/dst/\"]\nADD --chown=1:1 src $HOME/\n", []string{"alpine:3"}},
 		"urls elsewhere":  {"FROM alpine:3\nLABEL org.opencontainers.image.source=https://example.com/x\nRUN echo https://example.com\n", []string{"alpine:3"}},
 		"tabs and crlf":   {"FROM\talpine:3\r\nRUN\ttrue\r\n", []string{"alpine:3"}},
@@ -64,7 +64,7 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"F2 FROM lone CR":             {"FROM alpine\nFROM\rattacker.example/evil\n", ruleCharacter},
 	"F2 COPY vertical tab":        {"FROM alpine\nCOPY\v--from=attacker.example/evil /x /x\n", ruleCharacter},
 	"F2 RUN vertical tab network": {"FROM alpine\nRUN\v--network=host true\n", ruleCharacter},
-	"F2 mount From upper":         {"FROM alpine\nRUN --mount=type=bind,From=$X,target=/m true\n", ruleVariableImage},
+	"F2 mount From upper":         {"FROM alpine\nRUN --mount=type=bind,From=$X,target=/m true\n", ruleMountFrom},
 	"F2 mount quoted key":         {"FROM alpine\nRUN --mount=type=bind,\"from=attacker.example/evil\",target=/m true\n", ruleFlag},
 	"F2 mount quoted value":       {"FROM alpine\nRUN --mount=\"from=attacker.example/evil,target=/m\" true\n", ruleFlag},
 	"F2 non-ASCII":                {"FROM alpine\nLABEL x=é\n", ruleCharacter},
@@ -100,7 +100,7 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"variable base":               {"ARG BASE\nFROM $BASE\n", ruleVariableImage},
 	"variable base braces":        {"FROM ${BASE:-alpine}\n", ruleVariableImage},
 	"variable copy from":          {"FROM alpine:3\nCOPY --from=$IMG /x /x\n", ruleVariableImage},
-	"variable mount from":         {"FROM alpine:3\nRUN --mount=type=bind,from=${IMG},target=/t true\n", ruleVariableImage},
+	"variable mount from":         {"FROM alpine:3\nRUN --mount=type=bind,from=${IMG},target=/t true\n", ruleMountFrom},
 	"mount source above root":     {"FROM alpine:3\nRUN --mount=type=bind,source=../../etc,target=/t true\n", ruleMount},
 	"foreign platform":            {"FROM --platform=linux/s390x alpine:3\n", rulePlatform},
 	"foreign platform upper":      {"FROM --PLATFORM=linux/s390x alpine:3\n", rulePlatform},
@@ -202,7 +202,7 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		return ref == "" || ref == "scratch" || slices.Contains(stages, ref) || byIndex && isIndexBelow(ref, 1<<10) ||
 			slices.ContainsFunc(images, func(i string) bool { return strings.EqualFold(i, ref) })
 	}
-	problems := builderProblems(data, images)
+	problems := append(builderProblems(data, images), pentestProblems(data)...)
 	for _, line := range oracleLines(strings.TrimPrefix(string(data), "\xef\xbb\xbf")) {
 		if line == "#syntax" {
 			problems = append(problems, "syntax directive")
