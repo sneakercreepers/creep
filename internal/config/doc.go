@@ -26,7 +26,8 @@
 //     the gate the layers before it set (policy defaults, user file) is
 //     rejected, so a pull request cannot loosen the gate that judges it.
 //     Operator layers (user file, --config, policy) may still loosen.
-//   - The scan mode (pr, nightly) picks which gate judges a run and is not
+//   - The scan mode (pr, nightly) picks which gate judges a run (nightly
+//     reads gates.nightly and gates.pr) and is not
 //     a key: it comes from --mode or a GitHub Actions schedule event
 //     (ChooseMode), so no file can pick it. Reading a gate without
 //     verification only raises its status to probable (UnverifiedGate).

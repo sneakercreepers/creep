@@ -109,8 +109,8 @@ func (g runGate) nightlyGate(v report.Verification) (string, error) {
 
 // unverifiedReason says why a nightly scan's verification did not try
 // every finding it should have, or "" when it did. A PoC that ran and
-// never verified counts as tried: its finding stays probable, which the
-// nightly gate does not read (ADR 0020, ADR 0021).
+// never verified counts as tried: its finding stays probable, which
+// gates.nightly does not read and gates.pr still does (ADR 0020, ADR 0021).
 func unverifiedReason(v report.Verification) string {
 	switch {
 	case v.Status == report.VerificationOff:
