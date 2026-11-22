@@ -135,6 +135,9 @@ type Finding struct {
 	// text summary, Markdown and SARIF only: JSON v1 does not change, so a
 	// JSON consumer reads `verified`, and a report read back has none.
 	PoC PoCRate `json:"-"`
+	// Stability is how many samples of a --stability run saw the finding
+	// (ADR 0024); nil without one. Added to v1 additively by #37.
+	Stability *Stability `json:"stability,omitempty"`
 	// Fingerprint identifies a probable or verified finding across runs and
 	// line moves, for the baseline (ADR 0022): a hash of its class, path and
 	// redacted sink line (or a scanner's rule), never of raw text.

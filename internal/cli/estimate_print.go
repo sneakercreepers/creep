@@ -15,6 +15,9 @@ func printEstimate(w io.Writer, est *estimateRun) {
 	fmt.Fprintf(w, "walk: %d files, up to %d source files go to discovery whole and redacted; %d files listed without reading\n",
 		len(est.files.paths), est.files.sources(), len(est.files.gaps))
 	fmt.Fprintf(w, "calibration: %s\n", est.calibrationLine())
+	if n := est.opts.stability; n > 1 {
+		fmt.Fprintf(w, "stability: %d runs; every discovery and reader call below is made %d times, each its own call and recording\n", n, n)
+	}
 	price := pricingFor(est.opts, est.cfg.Model.Contract)
 	fmt.Fprintf(w, "%-6s %6s %7s %10s %10s %9s\n", "tier", "calls", "cached", "tokens in", "tokens out", "time")
 	for _, t := range est.tiers {

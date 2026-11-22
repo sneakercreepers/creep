@@ -36,10 +36,12 @@ type session struct {
 	run   *state.Run
 	link  modelLink
 	model *models.HTTP
-	red   *redact.Redactor
-	repo  *os.Root
-	stats *runStats
-	gate  runGate // the mode and the gate that judges the run (#28)
+	// reruns are the clients of --stability's samples 2 to N (ADR 0024).
+	reruns []*models.HTTP
+	red    *redact.Redactor
+	repo   *os.Root
+	stats  *runStats
+	gate   runGate // the mode and the gate that judges the run (#28)
 	// changed is the --changed list, nil for a full scan, and incremental
 	// the scope the walk applied it with (#26).
 	changed     *changedList
@@ -104,6 +106,7 @@ func runScan(e env, args []string) int {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
 	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
+	cal = s.feedStability(e.stderr, cal, res.findings)
 	return s.finish(e, cal, res)
 }
 
@@ -231,16 +234,27 @@ func (s *session) mode() state.Mode {
 }
 
 func (s *session) openModel(ctx context.Context) error {
-	send := s.stats.countRequests(recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send)))
-	opts, err := sessionModelOptions(s.cfg.Model, s.link.command, send)
-	if err != nil {
+	var err error
+	if s.model, err = s.sampleModel(1); err != nil {
 		return err
 	}
-	if s.model, err = models.NewHTTP(opts); err != nil {
+	if s.reruns, err = rerunModels(s.opts.stability, s.sampleModel); err != nil {
 		return err
 	}
 	s.red, err = redact.NewWithContext(ctx)
 	return err
+}
+
+// sampleModel is the client of one sample: every one goes through the
+// run-state cache, the stats and the gateway, sample k's calls labeled
+// for it (sampleSend).
+func (s *session) sampleModel(k int) (*models.HTTP, error) {
+	send := s.stats.countRequests(sampleSend(k, recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send))))
+	opts, err := sessionModelOptions(s.cfg.Model, s.link.command, send)
+	if err != nil {
+		return nil, err
+	}
+	return models.NewHTTP(opts)
 }
 
 // checkTools runs the tool canary once per run before calibration, so no
@@ -313,7 +327,7 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 	}
 	findings := baseFindings(rs)
 	done := s.stats.start(phasePlan)
-	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings, s.deps.planned)
+	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier, s.opts.stability), findings, s.deps.planned)
 	done()
 	if errors.Is(err, planner.ErrInput) {
 		return rejectedScan(findings, rs.gaps), nil
@@ -322,13 +336,15 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 		return scanResult{}, err
 	}
 	reads := newDeadlineReads(ctx, readRepoFile(s.repo))
-	stage := readStage{model: s.model, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read}, kept: map[int]reader.Slice{}}
+	stage := readStage{model: s.model, reruns: s.reruns, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read},
+		kept: map[int]reader.Slice{}, votes: map[int]uint8{}}
 	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
 	done()
 	if err != nil {
 		return scanResult{}, err
 	}
+	labelStability(findings, rs.res.Sinks, stage.votes, 1+len(s.reruns))
 	return scanResult{findings: findings, gaps: append(rs.gaps, gaps...), stop: stop, planned: true, slices: stage.kept}, nil
 }
 
@@ -342,9 +358,12 @@ func rejectedScan(findings []report.Finding, gaps []report.NotEvaluated) scanRes
 	return scanResult{findings: findings, gaps: gaps, stop: reasonPlannerRejected}
 }
 
-// planBudget gives the planner the run's token budget and what one reader
-// call can cost at the tier: its prompt and slice plus the reply.
-func planBudget(maxTokens int, tier reader.Tier) planner.Budget {
+// planBudget gives the planner the run's token budget and what one
+// hypothesis can cost at the tier: its prompt and slice plus the reply,
+// once per --stability sample, since every sample asks it (ADR 0024).
+// Without that a stability run plans N times what the budget pays for and
+// stops part way through the reader instead of skipping by budget.
+func planBudget(maxTokens int, tier reader.Tier, samples int) planner.Budget {
 	call, err := reader.CallTokens(tier)
 	if err != nil {
 		return planner.Budget{} // zero StepTokens: Build refuses it (fails closed)
@@ -353,5 +372,6 @@ func planBudget(maxTokens int, tier reader.Tier) planner.Budget {
 	if maxTokens > 0 {
 		tokens = uint32(min(uint64(maxTokens), math.MaxUint32)) //nolint:gosec // G115: clamped to the uint32 range
 	}
-	return planner.Budget{Tokens: tokens, StepTokens: uint32(call + replyTokens)} //nolint:gosec // G115: a few thousand
+	step := (call + replyTokens) * min(max(samples, 1), maxStability)
+	return planner.Budget{Tokens: tokens, StepTokens: uint32(step)} //nolint:gosec // G115: a few thousand, times at most maxStability
 }

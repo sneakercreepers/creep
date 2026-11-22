@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/redact"
 )
 
@@ -313,6 +314,8 @@ func TestRunRejectsConfig(t *testing.T) {
 		{"no model", func(d *Discoverer) { d.Model = nil }, ErrConfig},
 		{"no read", func(d *Discoverer) { d.Read = nil }, ErrConfig},
 		{"unknown tier", func(d *Discoverer) { d.Tier = "XL" }, ErrTier},
+		{"nil rerun", func(d *Discoverer) { d.Reruns = []*models.HTTP{nil} }, ErrConfig},
+		{"too many reruns", func(d *Discoverer) { d.Reruns = slices.Repeat([]*models.HTTP{d.Model}, MaxSamples) }, ErrConfig},
 	}
 	for _, tt := range tests {
 		d := ok

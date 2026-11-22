@@ -175,7 +175,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 		return t, err
 	}
 	findings := baseFindings(rs)
-	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings, nil)
+	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier, est.opts.stability), findings, nil)
 	if errors.Is(err, planner.ErrInput) {
 		return t.rejected(findings, rs.gaps), nil
 	}
@@ -218,7 +218,7 @@ func (est *estimateRun) measureReads(ctx context.Context, red *redact.Redactor, 
 	}
 	m := &meter{cache: est.cache}
 	// Metering builds requests in memory only; the slices are already made.
-	if err := m.readerRequests(context.WithoutCancel(ctx), est.cfg.Model, rtier, rep.Slices); err != nil {
+	if err := m.readerRequests(context.WithoutCancel(ctx), est.cfg.Model, rtier, rep.Slices, est.opts.stability); err != nil {
 		return "", err
 	}
 	t.requests = t.requests.plus(m.requestMeasure)

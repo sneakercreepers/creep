@@ -243,7 +243,7 @@
           "kind": "fail",
           "level": "error",
           "message": {
-            "text": "sqli finding f1 (verified)"
+            "text": "sqli finding f1 (verified, stable discovery: seen in 3 of 3 runs)"
           },
           "locations": [
             {
@@ -260,7 +260,12 @@
           ],
           "properties": {
             "creep_id": "f1",
-            "status": "verified"
+            "status": "verified",
+            "stability": {
+              "runs": 3,
+              "seen": 3,
+              "unstable": false
+            }
           }
         },
         {
@@ -269,7 +274,7 @@
           "kind": "fail",
           "level": "warning",
           "message": {
-            "text": "path_traversal finding f2 (probable)"
+            "text": "path_traversal finding f2 (probable, unstable discovery: seen in 2 of 3 runs)"
           },
           "locations": [
             {
@@ -286,7 +291,12 @@
           ],
           "properties": {
             "creep_id": "f2",
-            "status": "probable"
+            "status": "probable",
+            "stability": {
+              "runs": 3,
+              "seen": 2,
+              "unstable": true
+            }
           }
         },
         {

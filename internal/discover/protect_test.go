@@ -138,8 +138,8 @@ func TestModelCannotLowerRisk(t *testing.T) {
 		t.Errorf("auth = %+v, want the proposed span kept for the reader only", res.Auth)
 	}
 	want := []Sink{
-		{ID: 1, Route: 2, File: 0, Line: 1, Kind: SinkTemplate, Origin: OriginModel, DynamicArg: true},
-		{ID: 2, Route: 1, File: 0, Line: 6, Kind: SinkSQL, Origin: OriginTripwire | OriginModel, DynamicArg: true},
+		{ID: 1, Route: 2, File: 0, Line: 1, Kind: SinkTemplate, Origin: OriginModel, SeenBy: 1, DynamicArg: true},
+		{ID: 2, Route: 1, File: 0, Line: 6, Kind: SinkSQL, Origin: OriginTripwire | OriginModel, SeenBy: 1, DynamicArg: true},
 	}
 	if fmt.Sprint(res.Sinks) != fmt.Sprint(want) {
 		t.Errorf("sinks = %+v\nwant  %+v", res.Sinks, want)

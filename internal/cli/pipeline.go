@@ -79,13 +79,19 @@ func skipName(r planner.SkipReason) string {
 
 // readStage evaluates the plan's hypotheses with the reader.
 type readStage struct {
-	model  *models.HTTP
+	model *models.HTTP
+	// reruns are --stability's samples 2 to N: each hypothesis is asked of
+	// model and of every rerun (ADR 0024).
+	reruns []*models.HTTP
 	tier   reader.Tier
 	slicer reader.Slicer // its Read is reads.Read
 	reads  *deadlineReads
 	// kept, when set, gets the slice behind each probable finding, by
 	// finding index: the redacted code a PoC request shows the model (#25).
 	kept map[int]reader.Slice
+	// votes, when set, gets for each finding every sample answered the
+	// samples whose answer was vulnerable, bit k for sample k+1.
+	votes map[int]uint8
 }
 
 // run slices and evaluates every hypothesis. It returns the files the
@@ -148,7 +154,7 @@ func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]re
 func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf map[reader.HypothesisID]int, findings []report.Finding) string {
 	for i, s := range slices {
 		at := sinkOf[s.Hypothesis]
-		reason, stop := r.evaluateOne(ctx, s, &findings[at])
+		reason, stop := r.evaluateSamples(ctx, s, at, &findings[at])
 		r.keep(at, s, findings[at])
 		if !stop {
 			continue
@@ -169,14 +175,46 @@ func (r readStage) keep(at int, s reader.Slice, f report.Finding) {
 	r.kept[at] = s
 }
 
-// evaluateOne asks about one slice and reports whether the run must stop.
-// Past the deadline no call is made, and a call the deadline cut is named
-// for it rather than for the transport error it surfaced as.
-func (r readStage) evaluateOne(ctx context.Context, s reader.Slice, f *report.Finding) (reason string, stop bool) {
+// evaluateSamples asks every sample about one slice, in sample order, and
+// keeps the riskiest answer (readerRank): union only, so a sample can
+// raise a finding and never lower it (ADR 0024). A sample that must stop
+// the run stops it; the first sample's failure is the finding's, as with
+// one sample, and a later one's leaves the answers before it. Only a
+// finding every sample answered gets its votes.
+func (r readStage) evaluateSamples(ctx context.Context, s reader.Slice, at int, f *report.Finding) (reason string, stop bool) {
+	base := *f
+	var votes uint8
+	for k, m := range append([]*models.HTTP{r.model}, r.reruns...) {
+		g := base
+		reason, stop = r.evaluateOne(ctx, m, s, &g)
+		if stop && k > 0 {
+			return reason, true
+		}
+		if k == 0 || readerRank(g) > readerRank(*f) {
+			*f = g
+		}
+		if stop {
+			return reason, true
+		}
+		if g.Status == report.StatusProbable {
+			votes |= 1 << k
+		}
+	}
+	if r.votes != nil {
+		r.votes[at] = votes
+	}
+	return "", false
+}
+
+// evaluateOne asks one sample's model about one slice and reports whether
+// the run must stop. Past the deadline no call is made, and a call the
+// deadline cut is named for it rather than for the transport error it
+// surfaced as.
+func (r readStage) evaluateOne(ctx context.Context, model *models.HTTP, s reader.Slice, f *report.Finding) (reason string, stop bool) {
 	if pastDeadline(ctx, f) {
 		return f.Reason, true
 	}
-	sig, err := reader.Evaluate(ctx, r.model, r.tier, s)
+	sig, err := reader.Evaluate(ctx, model, r.tier, s)
 	if err == nil {
 		applySignal(f, sig)
 		return "", false

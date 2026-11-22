@@ -90,6 +90,8 @@ type sarifResultProp struct {
 	// The PoC's rate (#25), only on a finding a PoC verified.
 	PoCVerified int `json:"poc_verified_runs,omitempty"`
 	PoCRuns     int `json:"poc_runs,omitempty"`
+	// The stability run's counts (#37, ADR 0024), only with --stability.
+	Stability *Stability `json:"stability,omitempty"`
 }
 
 type sarifLocation struct {
@@ -162,19 +164,29 @@ func sarifResults(findings []Finding, index map[string]int) []sarifResult {
 			Message:             sarifMessage{Text: resultText(f)},
 			Locations:           []sarifLocation{fileLocation(f.Path, f.Line)},
 			PartialFingerprints: sarifFingerprints(f), Suppressions: sarifSuppressions(f.Suppression),
-			Properties: sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs},
+			Properties: resultProps(f),
 		})
 	}
 	return results
 }
 
-// resultText is a result's message: class, ID and status, and the PoC's
-// rate when one verified the finding.
+// resultProps are a result's creep properties: its ID and status, the
+// PoC's rate and the stability run's counts.
+func resultProps(f Finding) sarifResultProp {
+	return sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs, Stability: f.Stability}
+}
+
+// resultText is a result's message: class, ID and status, the PoC's rate
+// when one verified the finding, and the stability run's label.
 func resultText(f Finding) string {
+	notes := []string{string(f.Status)}
 	if rate := f.PoC.Text(); rate != "" {
-		return fmt.Sprintf("%s finding %s (%s, %s)", f.Class, f.ID, f.Status, rate)
+		notes = append(notes, rate)
 	}
-	return fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, f.Status)
+	if f.Stability != nil {
+		notes = append(notes, f.Stability.Text())
+	}
+	return fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, strings.Join(notes, ", "))
 }
 
 // sarifLevel is "" for statuses that are not code-scanning alerts.

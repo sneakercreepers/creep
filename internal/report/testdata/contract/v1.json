@@ -35,7 +35,12 @@
       "class": "path_traversal",
       "status": "probable",
       "path": "app/`tick`|pipe.py",
-      "line": 7
+      "line": 7,
+      "stability": {
+        "runs": 3,
+        "seen": 2,
+        "unstable": true
+      }
     },
     {
       "id": "f5",

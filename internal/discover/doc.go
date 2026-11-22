@@ -47,6 +47,13 @@
 //     entry point around it goes to one FileLevel route per file. Auth
 //     spans are kept only to widen the reader's slice.
 //
+//   - Samples (ADR 0024): with Reruns (--stability N) every batch goes to
+//     Model and to each rerun with the same prompt; each reply is checked
+//     and its canary found on its own, its proposals join the union, and a
+//     file any sample failed stays failed. Sink.SeenBy records which
+//     samples named a candidate (every one for a tripwire hit); it labels
+//     findings and is never read by planning.
+//
 // Result holds only IDs, enums, line numbers and booleans (text_test.go),
 // so it can fill planner.Input and reader.Target without carrying text.
 // Each File says how it was read (Coverage) and why not in full (Reason,

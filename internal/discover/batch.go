@@ -10,8 +10,9 @@ import (
 	"github.com/sneakercreepers/creep/internal/redact"
 )
 
-// flush sends the pending batch with a canary planted in it and applies
-// the reply. Every file of the batch ends with a Coverage.
+// flush sends the pending batch with a canary planted in it to every
+// sample's model and applies each reply. Every file of the batch ends with
+// a Coverage; a failure in any sample stays (ADR 0024).
 func (r *run) flush(ctx context.Context) {
 	secs := r.pending
 	r.pending, r.used = nil, 0
@@ -25,7 +26,17 @@ func (r *run) flush(ctx context.Context) {
 	}
 	r.number(secs)
 	prompt := renderBatch(batch)
-	a, err := models.Complete[Answer](ctx, r.d.Model, models.Request{
+	for i, m := range r.models() {
+		if r.stop != ReasonNone {
+			return // an earlier sample stopped the model path
+		}
+		r.ask(ctx, m, uint8(i), secs, batch, c, prompt) //nolint:gosec // G115: i < MaxSamples
+	}
+}
+
+// ask sends one sample of a batch and applies its reply.
+func (r *run) ask(ctx context.Context, m *models.HTTP, sample uint8, secs []section, batch []section, c canary, prompt string) {
+	a, err := models.Complete[Answer](ctx, m, models.Request{
 		Purpose:    purpose,
 		System:     r.system,
 		Prompt:     prompt,
@@ -42,7 +53,7 @@ func (r *run) flush(ctx context.Context) {
 		r.failAll(secs, CoverageSendFailed, ReasonParseFailed)
 		return
 	}
-	r.apply(rep, batch, c)
+	r.apply(rep, batch, c, sample)
 }
 
 // callFailed lists a batch with no reply. An invalid reply is the
@@ -103,19 +114,22 @@ func inBounds(a reply, batch []section) bool {
 	return true
 }
 
-// apply records a valid reply. Canary proposals are checked and never
-// recorded; a missed canary makes every file of the batch canary_missed,
-// but its proposals are still kept, since union only adds. A cap affects
-// only its own file.
-func (r *run) apply(a reply, batch []section, c canary) {
+// apply records a valid reply of one sample. Canary proposals are
+// checked and never recorded; a missed canary makes every file of the
+// batch canary_missed, but its proposals are still kept, since union only
+// adds. A cap affects only its own file. A file an earlier sample of the
+// batch failed stays failed.
+func (r *run) apply(a reply, batch []section, c canary, sample uint8) {
 	found := c.found(a)
 	for i, s := range batch {
 		if s.work < 0 {
 			continue
 		}
 		w := &r.work[s.work]
-		truncated := w.take(a, i)
+		truncated := w.take(a, i, sample)
 		switch {
+		case w.failed():
+			// An earlier sample's failure stays: union only adds.
 		case !found:
 			w.fail(CoverageCanaryMissed, ReasonParseFailed)
 		case truncated:
@@ -126,9 +140,9 @@ func (r *run) apply(a reply, batch []section, c canary) {
 	}
 }
 
-// take records the proposals for batch file index file and reports
-// whether the file reached a cap.
-func (w *fileWork) take(a reply, file int) bool {
+// take records the proposals of one sample for batch file index file and
+// reports whether the file reached a cap.
+func (w *fileWork) take(a reply, file int, sample uint8) bool {
 	entries, sinks, auth := 0, 0, 0
 	for _, e := range a.entries {
 		if e.file == file {
@@ -138,7 +152,9 @@ func (w *fileWork) take(a reply, file int) bool {
 	}
 	for _, s := range a.sinks {
 		if s.file == file {
-			w.sinks = append(w.sinks, sinkFrom(a, s))
+			p := sinkFrom(a, s)
+			p.samples = 1 << sample
+			w.sinks = append(w.sinks, p)
 			sinks++
 		}
 	}

@@ -36,6 +36,9 @@ type Calibration struct {
 	At    time.Time // when the calibration ran, UTC
 	// Cached is true when the result came from the cache, not from a run.
 	Cached bool
+	// Stability is what earlier --stability scans of this model saw, per
+	// class (ADR 0024); nil when none is recorded.
+	Stability map[Class]ClassStability
 }
 
 // cacheKeyFields is everything a cached result depends on. A change to any
@@ -70,10 +73,18 @@ func RunCached(ctx context.Context, opts CacheOptions) (Calibration, error) {
 	if err := opts.Store.CheckCalibrationDir(); err != nil {
 		return Calibration{}, err
 	}
-	want := cacheKeyFields{
-		Model: opts.Model.Identity(), Client: opts.Model.Settings(), Seed: opts.Seed,
-		TaskSet: taskSetHash(tasks), PromptVersion: PromptVersion,
+	want := keyFields(opts, tasks)
+	c, err := runCached(ctx, opts, tasks, want)
+	if err != nil {
+		return Calibration{}, err
 	}
+	// The stability record is a note on the calibration: one that cannot
+	// be read is left out, never a reason to fail it (ADR 0024).
+	c.Stability, _ = loadStability(opts, want)
+	return c, nil
+}
+
+func runCached(ctx context.Context, opts CacheOptions, tasks []Task, want cacheKeyFields) (Calibration, error) {
 	key := cacheKey(want)
 	if !opts.Recalibrate {
 		c, ok, err := loadCached(opts, key, want)
@@ -86,6 +97,15 @@ func RunCached(ctx context.Context, opts CacheOptions) (Calibration, error) {
 		return Calibration{}, err
 	}
 	return store(opts, key, want, r)
+}
+
+// keyFields is what a calibration of opts measures, the key of its cache
+// entry and of its stability record.
+func keyFields(opts CacheOptions, tasks []Task) cacheKeyFields {
+	return cacheKeyFields{
+		Model: opts.Model.Identity(), Client: opts.Model.Settings(), Seed: opts.Seed,
+		TaskSet: taskSetHash(tasks), PromptVersion: PromptVersion,
+	}
 }
 
 func cacheKey(f cacheKeyFields) string {
@@ -167,9 +187,9 @@ func (c Calibration) Header() string {
 	if len(set) > 12 {
 		set = set[:12]
 	}
-	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)%s",
+	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)%s%s",
 		c.Model.Model, c.Tier, c.At.UTC().Format(time.DateOnly), c.Seed, set, c.PromptVersion,
-		contextNote(c.Context))
+		contextNote(c.Context), stabilityNote(c.Stability))
 }
 
 // contextNote says which context probe failed and why, so a model held at

@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan)
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan), [ADR 0024](0024-discovery-stability.md) (`--stability N`; report v1 gains `stability` on a finding)
 
 ## Context
 
@@ -186,3 +186,7 @@ Residual: the list is the operator's input. One that names the wrong files scans
 ## Amendment: a gate per scan mode (#28, ADR 0021)
 
 [ADR 0021](0021-gate-per-mode.md) adds `--mode pr|nightly` (nightly also for a GitHub Actions `schedule` event). For this ADR: the **Gate** rule above reads the gate of the scan's mode, `gates.pr` for a pr scan, `gates.nightly` and `gates.pr` for a nightly one, with the same class severities, and exit 1 means one of them tripped; a nightly scan never passes what a pr scan fails. A pr scan never builds the app or runs a PoC, even with `sandbox.enabled`, so the #23 and #25 amendments apply to nightly scans only. The verification outcome still never makes a run incomplete and JSON v1 does not change, but in a nightly scan it decides which status the gate reads: when the sandbox is off, verification is unavailable or a PoC candidate got no completed run, `gates.nightly` is read with its status raised to probable (`verified:high` as `probable:high`), so a finding nothing verified fails the run at the gate's severity instead of passing it (the gate failure path, not exit 4). Each scan prints the mode and its gate on stderr (`gate: ...`).
+
+## Amendment: discovery stability (#37, ADR 0024)
+
+[ADR 0024](0024-discovery-stability.md) adds `--stability <n>` (1 to 5, scan and estimate). For this ADR: report v1 gains one optional finding field under the additive rule of the #26 amendment, `stability` (`runs` 2 to 5, `seen` 0 to `runs`, `unstable` true when `seen < runs`), only on a probable or verified finding; `report.ReadJSON` checks it as `report.New` does. Text, `creep why`, Markdown and SARIF print the label (`unstable discovery: seen in 2 of 3 runs`), which never shares a word with an intermittent PoC (`verified in 3/5 runs, intermittent`, ADR 0020). The gate, the incompleteness rules and the exit codes do not read it.

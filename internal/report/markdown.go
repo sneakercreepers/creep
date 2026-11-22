@@ -133,8 +133,8 @@ func writeDataHandling(w io.Writer, d DataHandling, wholeFiles int) {
 }
 
 // findingNotes says why a finding was not decided, that its verdict came
-// from a cut slice, or how many PoC runs verified it: IDs and numbers,
-// never repository text.
+// from a cut slice, how many PoC runs verified it, or how many stability
+// runs saw it: IDs and numbers, never repository text.
 func findingNotes(f Finding) string {
 	var notes []string
 	if f.Reason != "" {
@@ -145,6 +145,9 @@ func findingNotes(f Finding) string {
 	}
 	if rate := f.PoC.Text(); rate != "" {
 		notes = append(notes, codeSpan(rate))
+	}
+	if f.Stability != nil {
+		notes = append(notes, codeSpan(f.Stability.Text()))
 	}
 	if f.Suppression != nil {
 		notes = append(notes, codeSpan(fmt.Sprintf("suppressed: %s until %s", f.Suppression.Kind, f.Suppression.Expires)))

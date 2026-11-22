@@ -21,14 +21,24 @@
           "start": 10,
           "end": 12
         }
-      ]
+      ],
+      "stability": {
+        "runs": 3,
+        "seen": 3,
+        "unstable": false
+      }
     },
     {
       "id": "f2",
       "class": "path_traversal",
       "status": "probable",
       "path": "app/`tick`|pipe.py",
-      "line": 7
+      "line": 7,
+      "stability": {
+        "runs": 3,
+        "seen": 2,
+        "unstable": true
+      }
     },
     {
       "id": "f5",

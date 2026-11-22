@@ -37,6 +37,11 @@
 //     verification is unavailable and why, as IDs) is stated in Markdown,
 //     SARIF and the text summary, never in JSON v1, which is frozen (ADR
 //     0009), and never makes a run incomplete: findings stay probable.
+//   - A --stability run's label (Stability, ADR 0024) is only on a probable
+//     or verified finding and matches its counts. Every format, JSON
+//     included (an optional field added to v1), words it as an unstable or
+//     stable discovery, apart from an intermittent PoC (PoCRate, ADR 0020);
+//     neither moves the gate or the exit code.
 //   - Output is deterministic (no clock, sorted findings), so a replayed run
 //     renders byte-identical reports.
 //   - ReadJSON reads a report back for `creep why` as strictly as New
