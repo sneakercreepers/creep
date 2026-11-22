@@ -1,0 +1,44 @@
+# Example: the creep Action on pull requests and on main (ADR 0023).
+# Copy to .github/workflows/creep.yml and replace the <placeholders>.
+# Everything creep trusts comes from outside the scanned repository: the
+# policy below (model, endpoint, consent) is written by the workflow, the
+# model key is the only secret, and the Action refuses it on a pull request
+# from a fork. Pin the Action by the commit SHA of a release tag and name
+# that tag in version.
+name: creep
+
+on:
+  pull_request: # never pull_request_target: it runs a fork's code with this repository's secrets
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+      pull-requests: write # the pull request comment; drop it with comment: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the merge commit and the base commit, for --changed and the baseline
+          persist-credentials: false
+      - name: Policy, outside the repository
+        run: |
+          cat >"$RUNNER_TEMP/creep-policy.yaml" <<'EOF'
+          defaults:
+            model: { contract: openai, endpoint: "https://<host>/v1", name: "<model>" }
+            egress: { allow: ["<host>"] }
+          consent: ["https://<host>"]
+          EOF
+      - uses: sneakercreepers/creep@<commit SHA of the release tag> # <release tag>
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/creep-policy.yaml
+        with:
+          version: <release tag>
+          api-key: ${{ secrets.CREEP_API_KEY }}
+          baseline: creep-baseline.json # optional; read from the base commit on a pull request

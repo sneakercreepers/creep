@@ -27,6 +27,9 @@ func TestMain(m *testing.M) {
 	if mode := os.Getenv(fakeCLIEnv); mode != "" {
 		os.Exit(fakeCLI(mode))
 	}
+	if verdict := os.Getenv(actionStandInEnv); verdict != "" {
+		os.Exit(actionStandIn(verdict, os.Args[1:], os.Stdout, os.Stderr))
+	}
 	os.Exit(m.Run())
 }
 
