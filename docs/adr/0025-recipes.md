@@ -1,6 +1,6 @@
 # ADR 0025: Recipes: format, loader and trust model
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** @Ludocius
 - **Changes:** a new stable contract, the recipe format (`internal/recipe`, `docs/schemas/recipe-v1.json`); a new command, `creep recipe new|lint|test`; a new package row in the layer table (`internal/recipe`, layer 5); an optional HINT block in the reader's user turn with its own prompt note (`HintVersion`)
