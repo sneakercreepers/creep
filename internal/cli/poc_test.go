@@ -244,6 +244,19 @@ func TestPoCStageStopsOnModelError(t *testing.T) {
 	assertContains(t, "output", out, []string{"2 got no PoC run"})
 }
 
+// TestInvalidPoCSkipsOnly: output that is not a valid PoC skips that
+// finding and the stage goes on to the next; only a model link error
+// stops it (TestPoCStageStopsOnModelError).
+func TestInvalidPoCSkipsOnly(t *testing.T) {
+	invalid := map[string]any{"template": "shell", "http_request": nil, "http_sequence": nil, "sql_payload": nil, "path_payload": nil}
+	code, out, fb, m := pocScan(t, invalid, delayApp(repeatBool(true, 10), ""))
+	if code != exitcode.GateExceeded || fb.exchanges != 0 {
+		t.Fatalf("exit %d, %d PoC calls, %d exchanges\n%s", code, m.pocCalls, fb.exchanges, out)
+	}
+	assertAllProbable(t)
+	assertContains(t, "output", out, []string{"2 got no PoC run", "no PoC run for sink-1: poc request: model output invalid", "no PoC run for sink-2: poc request: model output invalid"})
+}
+
 // TestPoCStageBounds: a scan tries at most maxPoCs PoCs, the rest counted
 // not run, and a stage whose context ended (the scan deadline, Ctrl+C)
 // runs none.
