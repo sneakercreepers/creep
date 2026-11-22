@@ -20,10 +20,12 @@
 // exported way to send is EgressLog.Send. A go/types test walks every
 // exported object (functions, methods, variables, aliases, exported and
 // embedded fields, interface methods, type arguments) and fails when
-// *http.Client, *http.Transport, http.RoundTripper, net.Conn or net.Dialer
-// is reachable, or a gateway function returns any. Options exports only
-// Allow: the resolver, dialer and CA pool are unexported test seams, so no
-// caller can send a consented, allowlisted name to another address. It
+// *http.Client, *http.Transport, http.RoundTripper, net.Conn, net.Dialer,
+// net.Resolver, *x509.CertPool, *tls.Config or an address type (net.IP,
+// netip.Addr, which any resolver seam returns) is reachable, or a gateway
+// function returns any. Options exports only Allow: the resolver, dialer
+// and CA pool are unexported test seams, so no caller can send a
+// consented, allowlisted name to another address or trust its own CA. It
 // enforces where requests may go, in this order and before any
 // DNS lookup or dial:
 //   - Allowlist: the URL host and effective port must match an egress.allow

@@ -16,12 +16,15 @@ import (
 func TestPromptDeadline(t *testing.T) {
 	tests := []struct {
 		name    string
+		wait    time.Duration // the prompt deadline
 		delay   time.Duration // before the prompt answers yes; -1 never answers
 		granted bool
 	}{
-		{"never answers", -1, false},
-		{"answers too late", time.Second, false},
-		{"answers in time", 0, true},
+		{"never answers", 100 * time.Millisecond, -1, false},
+		{"answers too late", 100 * time.Millisecond, time.Second, false},
+		// A long deadline, so a loaded machine cannot turn a prompt that
+		// answers at once into a timeout.
+		{"answers in time", time.Minute, 0, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,7 +40,7 @@ func TestPromptDeadline(t *testing.T) {
 				return true, nil
 			}
 			c := newConsent(t, ConsentOptions{Prompt: prompt})
-			c.promptWait = 100 * time.Millisecond
+			c.promptWait = tt.wait
 			start := time.Now()
 			err := c.check(mustURL(t, "https://a.example/"))
 			if elapsed := time.Since(start); elapsed > 5*time.Second {

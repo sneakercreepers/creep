@@ -17,13 +17,20 @@ import (
 const gatewayPath = "github.com/sneakercreepers/creep/internal/gateway"
 
 // leakTypes let their holder send bytes without EgressLog.Send, so without
-// consent or egress.log, or choose where a dial goes (#115).
+// consent or egress.log, or choose where a dial goes or which certificate
+// it trusts (#115): a resolver seam has to return addresses, so an address
+// type in the exported API is refused as well.
 var leakTypes = map[string]bool{
 	"net/http.Client":       true,
 	"net/http.Transport":    true,
 	"net/http.RoundTripper": true,
 	"net.Conn":              true,
 	"net.Dialer":            true,
+	"net.Resolver":          true,
+	"net.IP":                true,
+	"net/netip.Addr":        true,
+	"crypto/x509.CertPool":  true,
+	"crypto/tls.Config":     true,
 }
 
 // No exported object of the gateway reaches a raw HTTP client, transport,
@@ -66,6 +73,11 @@ func TestLeakGuardCatchesEveryShape(t *testing.T) {
 		{"generic constraint", `type Tr interface{ *http.Transport }; func Get[T Tr]() {}`, true},
 		{"map and slice", `var M map[string][]*http.Client`, true},
 		{"channel", `func C() <-chan net.Conn { return nil }`, true},
+		{"resolver field", `type Options struct{ Resolver interface{ LookupNetIP(string) ([]netip.Addr, error) } }`, true},
+		{"net resolver", `var R = net.DefaultResolver`, true},
+		{"address func", `type Options struct{ Lookup func(string) []net.IP }`, true},
+		{"CA pool field", `type Options struct{ RootCAs *x509.CertPool }`, true},
+		{"TLS config", `func TLS() *tls.Config { return nil }`, true},
 		{"unexported field", `type T struct{ c *http.Client }; func (T) Close() {}`, false},
 		{"unexported func", `func raw() *http.Client { return nil }; func Name() string { return "" }`, false},
 		{"header map", `type Call struct{ Header http.Header }`, false},
@@ -106,7 +118,8 @@ func exportImporter(t *testing.T) types.Importer {
 func checkFixture(t *testing.T, imp types.Importer, decls string) *types.Package {
 	t.Helper()
 	fset := token.NewFileSet()
-	src := "package p\n\nimport (\n\t\"net\"\n\t\"net/http\"\n)\n\nvar _ net.Conn\nvar _ http.Header\n\n" + decls + "\n"
+	src := "package p\n\nimport (\n\t\"crypto/tls\"\n\t\"crypto/x509\"\n\t\"net\"\n\t\"net/http\"\n\t\"net/netip\"\n)\n\n" +
+		"var _ net.Conn\nvar _ http.Header\nvar _ netip.Addr\nvar _ *x509.CertPool\nvar _ *tls.Config\n\n" + decls + "\n"
 	f, err := parser.ParseFile(fset, "p.go", src, 0)
 	if err != nil {
 		t.Fatal(err)

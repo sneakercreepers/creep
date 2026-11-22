@@ -64,13 +64,14 @@ func TestRelativeStorePathRefused(t *testing.T) {
 }
 
 // Reading checks the directory too: a valid store that grants the endpoint
-// is refused when its directory is a link, before the prompt runs, and a
-// missing directory is an empty store.
+// is refused when its directory is a link (a junction on Windows, so the
+// read path is tested there without privilege), before the prompt runs,
+// and a missing directory is an empty store.
 func TestStoreDirCheckedOnRead(t *testing.T) {
 	target := t.TempDir()
 	writeStore(t, filepath.Join(target, "consent.json"), storedA)
 	link := filepath.Join(t.TempDir(), "creep")
-	symlink(t, target, link)
+	linkStoreDir(t, target, link)
 	p := &countingPrompt{yes: true}
 	c := newConsent(t, ConsentOptions{StorePath: filepath.Join(link, "consent.json"), Prompt: p.prompt})
 	checkStoreRefusal(t, c.check(mustURL(t, "https://a.example/")), true)
