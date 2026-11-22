@@ -170,13 +170,22 @@ func leavesRoot(p string) bool {
 // ARG with a value replaces BuildKit's own BUILDPLATFORM or
 // TARGETPLATFORM, and FROM --platform=$BUILDPLATFORM then fetches that
 // platform's layers. An ARG that names a platform is accepted only as one
-// bare name, which keeps the builder's value.
-func checkArg(args string) string {
-	plain := strings.NewReplacer(`\`, "", `"`, "", "'", "").Replace(strings.ToUpper(args))
-	if !strings.Contains(plain, "PLATFORM") || bareArg.MatchString(args) {
+// bare name, which keeps the builder's value. Before the first FROM, every
+// ARG must be one bare name: the builder itself reads global ARGs
+// (platforms, SOURCE_DATE_EPOCH, which BuildKit may resolve through a
+// remote ADD), and FROM, their only other reader, takes no variable here.
+func checkArg(args string, global bool) string {
+	if bareArg.MatchString(args) {
 		return ""
 	}
-	return rulePlatform
+	plain := strings.NewReplacer(`\`, "", `"`, "", "'", "").Replace(strings.ToUpper(args))
+	switch {
+	case strings.Contains(plain, "PLATFORM"):
+		return rulePlatform
+	case global:
+		return ruleGlobalArg
+	}
+	return ""
 }
 
 func isIndexBelow(s string, n int) bool {

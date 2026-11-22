@@ -122,6 +122,12 @@ func planCompose(repo Repo, paths []string, name string) (buildPlan, *refusal) {
 // planDockerfile reads and checks the Dockerfile, and records the images it
 // needs present.
 func planDockerfile(repo Repo, plan buildPlan) (buildPlan, *refusal) {
+	// Buildah (Podman) runs cpp(1) over a Dockerfile named *.in: a #define
+	// the check reads as a comment rewrites the checked lines (ADD SRC
+	// becomes a remote ADD), and #include reads host files.
+	if strings.HasSuffix(strings.ToLower(plan.dockerfile), ".in") {
+		return buildPlan{}, refuse(BuildDockerfileRefused, "preprocessed")
+	}
 	data, why := readBuildFile(repo, plan.dockerfile, BuildDockerfileRefused)
 	if why != nil {
 		return buildPlan{}, why

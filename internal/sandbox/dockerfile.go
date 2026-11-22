@@ -44,6 +44,7 @@ const (
 	ruleVariableImage = "variable_image"   // FROM, --from or from= with a variable: no image to check
 	ruleImageName     = "image_name"       // not a plain image reference, or one the engine could read as an image ID
 	rulePlatform      = "platform"         // a foreign platform would pull its layers
+	ruleGlobalArg     = "global_arg"       // an ARG before FROM that is not one bare name: the builder reads it
 	ruleFlag          = "flag"             // a flag outside the instruction's list, or quoted
 	ruleMount         = "mount"            // a --mount type that outlives the build, an unknown key, a source above its root
 	ruleOnbuild       = "onbuild"          // a trigger runs in a later FROM, unchecked

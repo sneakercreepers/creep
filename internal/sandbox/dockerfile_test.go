@@ -27,6 +27,9 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"plain comments":  {"#!/usr/bin/env docker\n# Build the app.\nFROM alpine:3\n  # indented comment\n", []string{"alpine:3"}},
 		"healthcheck":     {"FROM alpine:3\nHEALTHCHECK --interval=5s CMD true\n", []string{"alpine:3"}},
 		"boolean flags":   {"FROM alpine:3\nCOPY --link a /a\nCOPY --parents --LINK=false b /b\nADD --link c /c\n", []string{"alpine:3"}},
+		"stage shadows":   {"FROM alpine:3 AS busybox\nFROM busybox\nCOPY --from=BUSYBOX /a /b\n", []string{"alpine:3"}},
+		"stage ARG value": {"ARG TARGETOS\nFROM busybox\nARG V=1\nRUN echo $V\n", []string{"busybox"}},
+		"go multi-stage":  {"FROM --platform=$BUILDPLATFORM golang:1.27 AS build\nARG TARGETOS TARGETARCH\nWORKDIR /src\nCOPY go.* ./\nCOPY . .\nRUN CGO_ENABLED=0 go build -o /app .\n\nFROM gcr.io/distroless/static:nonroot\nCOPY --from=build --chown=65532:65532 /app /app\nUSER nonroot\nENTRYPOINT [\"/app\"]\n", []string{"gcr.io/distroless/static:nonroot", "golang:1.27"}},
 		"mount types":     {"FROM alpine:3\nRUN --mount=type=tmpfs,target=/t --mount=type=bind,source=x,target=/x --mount=target=/y true\n", []string{"alpine:3"}},
 	}
 	for name, tt := range tests {
@@ -94,7 +97,7 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"ADD json escaped url":        {"FROM alpine:3\nADD --chown=1 [\"https\\u003a//example.com/x\", \"/x\"]\n", ruleRemoteAdd},
 	"ADD url continued":           {"FROM alpine:3\nADD \\\n  https://example.com/x \\\n  /x\n", ruleRemoteAdd},
 	"ADD url after comment":       {"FROM alpine:3\nADD \\\n# hidden\n  https://example.com/x /x\n", ruleRemoteAdd},
-	"variable base":               {"ARG BASE=alpine:3\nFROM $BASE\n", ruleVariableImage},
+	"variable base":               {"ARG BASE\nFROM $BASE\n", ruleVariableImage},
 	"variable base braces":        {"FROM ${BASE:-alpine}\n", ruleVariableImage},
 	"variable copy from":          {"FROM alpine:3\nCOPY --from=$IMG /x /x\n", ruleVariableImage},
 	"variable mount from":         {"FROM alpine:3\nRUN --mount=type=bind,from=${IMG},target=/t true\n", ruleVariableImage},

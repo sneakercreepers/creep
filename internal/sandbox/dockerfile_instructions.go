@@ -128,7 +128,7 @@ func checkInstruction(keyword string, flags map[string][]string, args string, st
 	case "RUN":
 		return eachValue(flags["mount"], st, checkMount)
 	case "ARG":
-		return nil, checkArg(args)
+		return nil, checkArg(args, st.count == 0)
 	}
 	return nil, ""
 }
