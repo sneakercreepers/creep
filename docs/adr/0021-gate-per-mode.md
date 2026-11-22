@@ -1,6 +1,6 @@
 # ADR 0021: A gate per scan mode, and a nightly scan without verification
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (which gate a scan reads, and when the sandbox runs), [ADR 0020](0020-poc-repetitions-and-bundle.md) (PoCs run only in a nightly scan)
