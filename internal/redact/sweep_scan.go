@@ -67,7 +67,9 @@ type sweepScan struct {
 // label a piece takes: the output and the values stored are the same as with
 // every occurrence. Text that would still keep more than sweepLimit fails
 // closed with ErrTooManyValues. Once done is closed it stops and returns
-// nothing; the caller then drops the call.
+// nothing; the caller then drops the call. find writes each value's last
+// occurrence into the index, so it runs only under the Redactor's lock
+// (finish), unlike the read-only search it replaced.
 func (x *sweepIndex) find(text string, done <-chan struct{}) ([]span, error) {
 	return x.scanText(text, done, false)
 }
