@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "id": "python-sql-string-concat",
+  "class": "sql_injection",
+  "applies_to": [".py"],
+  "sources": ["request.args", "request.form"],
+  "sinks": ["execute("],
+  "hint": "A request value joined into SQL text with + or an f-string reaches execute().\nOnly a parameterized call, execute(sql, params), stops this class.",
+  "poc": {
+    "template": "sql_payload",
+    "sql_payload": {
+      "request": {"method": "GET", "path": "/users?name=__CREEP_PAYLOAD__", "headers": [], "content_type": "", "body": ""},
+      "context": "string",
+      "technique": "delay"
+    }
+  },
+  "fixtures": {
+    "vulnerable": {
+      "code": "from flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/users\")\ndef users():\n    name = request.args[\"name\"]\n    query = \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n    cursor = db.cursor()\n    cursor.execute(query)\n    return \"ok\"\n",
+      "source_line": 6,
+      "sink_line": 9
+    },
+    "safe": {
+      "code": "from flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/users\")\ndef users():\n    name = request.args[\"name\"]\n    cursor = db.cursor()\n    cursor.execute(\"SELECT * FROM users WHERE name = %s\", (name,))\n    return \"ok\"\n",
+      "source_line": 6,
+      "sink_line": 8
+    }
+  }
+}

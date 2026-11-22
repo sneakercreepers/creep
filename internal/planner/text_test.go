@@ -146,12 +146,12 @@ func TestTextCapableAllowsNumbers(t *testing.T) {
 	}
 }
 
-// TestTextGuardsMatch fails when this walk and the discover or reader copy
+// TestTextGuardsMatch fails when this walk and the discover, reader or recipe copy
 // differ, so a fix to one guard cannot leave another behind. The packages
 // may not import each other, so they cannot share one function.
 func TestTextGuardsMatch(t *testing.T) {
 	here := funcSource(t, "text_test.go", "textCapable")
-	for _, file := range []string{"../discover/text_test.go", "../reader/signal_test.go"} {
+	for _, file := range []string{"../discover/text_test.go", "../reader/signal_test.go", "../recipe/protect_test.go"} {
 		if there := funcSource(t, file, "textCapable"); there != here {
 			t.Errorf("textCapable in %s differs from planner's:\n%s\n--- planner ---\n%s", file, there, here)
 		}

@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/sneakercreepers/creep/blob/main/docs/schemas/recipe-v1.json",
+  "title": "creep recipe, version 1",
+  "description": "A recipe is data, never code (ADR 0025). creep does not read this file: internal/recipe decodes a recipe strictly (unknown fields, trailing data, repeated keys and keys in another case refused) and checks the same limits, and its tests keep this schema in sync (TestSchemaMatchesRecipe). A recipe loads only when the model flags its vulnerable fixture and clears its safe one. Errors name the field, never quote a value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "class", "applies_to", "sources", "sinks", "hint", "fixtures"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "description": "The recipe's name: a-z, 0-9 and -, not starting with -.",
+      "pattern": "^[a-z0-9][a-z0-9-]+$",
+      "minLength": 2,
+      "maxLength": 63
+    },
+    "class": {
+      "description": "The vulnerability class the recipe's hypotheses name: the reader's closed set.",
+      "enum": ["sql_injection", "command_injection", "path_traversal", "ssrf", "template_injection", "nosql_injection"]
+    },
+    "applies_to": {
+      "type": "array",
+      "description": "File extensions the recipe is for.",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^\\.[a-z0-9]+$", "minLength": 2, "maxLength": 11 }
+    },
+    "sources": { "$ref": "#/definitions/signatures" },
+    "sinks": { "$ref": "#/definitions/signatures" },
+    "hint": {
+      "type": "string",
+      "description": "Untrusted text shown only to the reader, redacted and escaped, as data in its HINT block; never to the planner. Printable ASCII lines, at most 8.",
+      "pattern": "^[ -~\\n]*[!-~][ -~\\n]*$",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "poc": {
+      "description": "Optional. A PoC template with closed parameters (verify.Request, ADR 0019) whose oracle proves the class; creep checks it with the same rules as a model's PoC.",
+      "type": ["object", "null"]
+    },
+    "fixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerable", "safe"],
+      "properties": {
+        "vulnerable": { "$ref": "#/definitions/fixture" },
+        "safe": { "$ref": "#/definitions/fixture" }
+      }
+    }
+  },
+  "definitions": {
+    "signatures": {
+      "type": "array",
+      "description": "Lexical signatures, as in the tripwire table: plain byte strings matched on a line.",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[!-~]([ -~]*[!-~])?$", "minLength": 2, "maxLength": 64 }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "source_line", "sink_line"],
+      "properties": {
+        "code": { "type": "string", "description": "A small program; its source_line holds a source and its sink_line a sink.", "minLength": 1, "maxLength": 8192 },
+        "source_line": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "sink_line": { "type": "integer", "minimum": 1, "maximum": 200 }
+      }
+    }
+  }
+}

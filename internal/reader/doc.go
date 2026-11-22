@@ -56,10 +56,21 @@
 // escaped lines as "N| text" in file order, and "[slice truncated: ...]"
 // when lines were left out or cut. Budgets per tier: S 2048, M 4096, L 8192
 // bytes, a hard cap measured after escaping; a line is cut at budget/8.
+//
+// A Target from a recipe (internal/recipe, ADR 0025) may carry a Hint,
+// untrusted text like the code: Build refuses one over MaxHintBytes or
+// MaxHintLines, redacts it with redact.File, escapes it like a repository
+// line and shows it between the HYPOTHESIS line and CODE as a "HINT (...)"
+// header and "~ " lines, cut to budget/4 bytes. Evaluate then adds
+// prompts/hint.txt (HintVersion) to the system prompt: the hint is data,
+// and evidence cites CODE lines only. A target without a hint gets exactly
+// the user turn and prompt above, so no recording changes.
+//
 // Hypotheses that get no slice are listed in SliceReport.NotEvaluated with
 // a closed SkipReason: file_not_scanned (the file is in NotScanned with its
 // gateway.SkipReason), run_full, line_out_of_range (past the file's end or
-// MaxLine) and lines_shifted (redaction joined lines, as a multi-line
+// MaxLine), hint_refused (the hint is over its limits or redact.File
+// refused it) and lines_shifted (redaction joined lines, as a multi-line
 // private key does, so the file's numbers would not match; the file is
 // also in NotScanned with FileLinesShifted).
 //

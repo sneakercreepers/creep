@@ -58,7 +58,7 @@ Each protection has a test that is proven able to fail, run by the required CI j
 ## Configuration layers
 
 1. Built-in safe defaults → 2. Org policy (`CREEP_POLICY`, can lock keys) → 3. User (`~/.creep/config.yaml`) → 4. Project (`./creep.yaml`) → 5. CLI flags.
-`creep config explain` shows each final value and its source, including a preset. Privacy modes (`local-only`, `full`), include/exclude and recipes are not built yet. A baseline is a file named on the command line (`--baseline`), never a config key ([ADR 0022](adr/0022-baseline-and-accepted-risks.md)).
+`creep config explain` shows each final value and its source, including a preset. Privacy modes (`local-only`, `full`) and include/exclude are not built yet. No config key names a recipe: `creep recipe` reads only the file the operator names, and scans load none until #34 ([ADR 0025](adr/0025-recipes.md)). A baseline is a file named on the command line (`--baseline`), never a config key ([ADR 0022](adr/0022-baseline-and-accepted-risks.md)).
 
 ## CI gates
 

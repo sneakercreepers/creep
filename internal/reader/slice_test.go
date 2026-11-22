@@ -264,11 +264,11 @@ func TestBuildRefusesLinesItCannotShow(t *testing.T) {
 		target Target
 		want   SkipReason
 	}{
-		{"sink past the end", app, Target{1, ClassSQLInjection, "f.py", 6, 99}, SkipLineRange},
-		{"source past the end", app, Target{1, ClassSQLInjection, "f.py", 99, 13}, SkipLineRange},
-		{"zero line", app, Target{1, ClassSQLInjection, "f.py", 0, 13}, SkipLineRange},
-		{"negative line", app, Target{1, ClassSQLInjection, "f.py", 6, -1}, SkipLineRange},
-		{"multi-line key joined", "KEY = \"\"\"\n" + key + "\"\"\"\n" + app, Target{1, ClassSQLInjection, "f.py", 12, 19}, SkipLinesShifted},
+		{"sink past the end", app, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "f.py", SourceLine: 6, SinkLine: 99}, SkipLineRange},
+		{"source past the end", app, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "f.py", SourceLine: 99, SinkLine: 13}, SkipLineRange},
+		{"zero line", app, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "f.py", SourceLine: 0, SinkLine: 13}, SkipLineRange},
+		{"negative line", app, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "f.py", SourceLine: 6, SinkLine: -1}, SkipLineRange},
+		{"multi-line key joined", "KEY = \"\"\"\n" + key + "\"\"\"\n" + app, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "f.py", SourceLine: 12, SinkLine: 19}, SkipLinesShifted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

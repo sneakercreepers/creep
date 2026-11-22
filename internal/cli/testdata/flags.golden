@@ -2,16 +2,16 @@
 --baseline        string   ""      scan accept
 --baseline-write  bool     "false" scan
 --changed         string   ""      scan estimate
---config          string   ""      doctor scan estimate why accept reproduce clean resume version config
+--config          string   ""      doctor scan estimate why accept reproduce clean resume version config recipe
 --expires         string   ""      accept
---format          string   "text"  doctor scan estimate why accept reproduce clean resume version config
---log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config
---mode            string   ""      doctor scan estimate why accept reproduce clean resume version config
---model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config
---price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config
---price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config
+--format          string   "text"  doctor scan estimate why accept reproduce clean resume version config recipe
+--log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config recipe
+--mode            string   ""      doctor scan estimate why accept reproduce clean resume version config recipe
+--model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config recipe
+--price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config recipe
+--price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config recipe
 --reason          string   ""      accept
---recalibrate     bool     "false" doctor scan estimate why accept reproduce clean resume version config
---record          bool     "false" doctor scan estimate why accept reproduce clean resume version config
---replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config
---stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config
+--recalibrate     bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
+--record          bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
+--replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
+--stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
