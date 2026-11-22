@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`)
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`)
 
 ## Context
 
@@ -178,3 +178,7 @@ A pull request scan must finish in minutes, so #26 asks for a scan of what chang
 - `--diff <ref>` is out of the product (maintainer decision on #26, 2026-11-21): creep has no such flag and no git-object reader. The caller produces the list, for example `git diff --name-only -z origin/main > changed.txt`. The Action (#29) builds the list from the event's base commit, must keep exit 4 failing the job, and the baseline (#27) must not read the missing findings of an `unchanged` file as fixed.
 
 Residual: the list is the operator's input. One that names the wrong files scans the wrong scope; the report then lists every unchanged file and counts the listed paths it found no file for, so a typo shows. Names are compared byte for byte after lower-casing, so a name the disk stores in another Unicode normalization than git's index (NFD on macOS against NFC) still misses its file and is counted as a listed path creep found no file for.
+
+## Amendment: baseline and accepted risks (#27, ADR 0022)
+
+[ADR 0022](0022-baseline-and-accepted-risks.md) adds `--baseline <file>`, `--baseline-write` and `creep accept <id>`. For this ADR: the **Gate** rule above skips a probable or verified finding a live baseline entry suppresses, and nothing else changes in how a run is judged. A suppressed finding keeps its status and is listed in every format; a `not_evaluated` finding is never suppressed; the incompleteness rules and exit 4 do not read suppressions, so a baseline never turns an incomplete run into exit 0 or 1. Report v1 gains two optional finding fields under the additive rule of the #26 amendment: `fingerprint` (32 lowercase hex digits, on probable and verified findings) and `suppression` (`kind` `baseline` or `accepted`, `expires`, and an accepted risk's `reason`); `report.ReadJSON` checks them as `report.New` does, so `creep why` and `creep accept` refuse a planted report that suppresses anything else. The text summary, Markdown and SARIF also print how the baseline was used (suppressed findings by kind, expired entries, entries that matched no finding); those counts are not JSON (`Report.Baseline` is `json:"-"`). A baseline file that cannot be read exits 2 before the run opens state; a refused or failed `--baseline-write` never exits 0.

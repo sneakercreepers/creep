@@ -32,6 +32,12 @@ type globalOptions struct {
 	priceIn     float64 // estimate and --stats: currency per 1M input tokens; 0 is unset
 	priceOut    float64 // estimate and --stats: currency per 1M output tokens; 0 is unset
 	changed     string  // scan and estimate: the file listing the changed paths (#26)
+	// The baseline (#27, ADR 0022): the file scan reads and accept writes,
+	// whether scan rewrites it, and accept's expiry and reason.
+	baseline      string
+	baselineWrite bool
+	expires       string
+	reason        string
 	// explicit holds the names of flags the user passed, so only those
 	// become the flags config layer; defaults must not override files.
 	explicit map[string]bool
@@ -78,6 +84,10 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.BoolVar(&opts.stats, "stats", opts.stats, "")
 	fs.Float64Var(&opts.priceIn, "price-in", opts.priceIn, "")
 	fs.Float64Var(&opts.priceOut, "price-out", opts.priceOut, "")
+	fs.StringVar(&opts.baseline, "baseline", opts.baseline, "")
+	fs.BoolVar(&opts.baselineWrite, "baseline-write", opts.baselineWrite, "")
+	fs.StringVar(&opts.expires, "expires", opts.expires, "")
+	fs.StringVar(&opts.reason, "reason", opts.reason, "")
 	return fs
 }
 

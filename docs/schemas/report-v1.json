@@ -86,7 +86,20 @@
           "description": "Line ranges of the finding's file that the reader cited.",
           "type": "array",
           "items": { "$ref": "#/definitions/lineRange" }
-        }
+        },
+        "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0022). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "suppression": { "$ref": "#/definitions/suppression" }
+      }
+    },
+    "suppression": {
+      "description": "The baseline entry that keeps a probable or verified finding from the gate until it expires (ADR 0022). The finding is still listed; a not-evaluated finding is never suppressed. Added to v1 additively by #27.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expires"],
+      "properties": {
+        "kind": { "enum": ["baseline", "accepted"] },
+        "expires": { "description": "The first UTC day the entry no longer suppresses.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "reason": { "description": "An accepted risk's reason, from the baseline file the scanned repository holds: untrusted, escape before printing. One printable line of at most 200 bytes.", "type": "string", "minLength": 1 }
       }
     },
     "lineRange": {
