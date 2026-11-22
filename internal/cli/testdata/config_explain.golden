@@ -21,3 +21,5 @@ sandbox.runtime         "docker"                          default
 calibration.cache_days  7                                 project "creep.yaml"
 output.format           "text"                            default
 log.level               "debug"                           flag --log-level
+mode                    "pr"                              default
+gate                    "probable:medium"                 gates.pr, project "creep.yaml"

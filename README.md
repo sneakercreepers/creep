@@ -19,7 +19,7 @@
 </div>
 
 > [!NOTE]
-> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). With the sandbox enabled, `main` builds the app offline from the repository's own compose file or Dockerfile (#23) and runs a PoC 5 times against it for each probable SQL injection, path traversal or template injection finding (#24, #25): a finding is `verified` only when its PoC verified in at least one run, with its rate when it verified in some runs only.
+> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is in progress. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). With the sandbox enabled, a nightly scan on `main` (`--mode nightly`, #28) builds the app offline from the repository's own compose file or Dockerfile (#23) and runs a PoC 5 times against it for each probable SQL injection, path traversal or template injection finding (#24, #25): a finding is `verified` only when its PoC verified in at least one run, with its rate when it verified in some runs only.
 
 ---
 
@@ -180,12 +180,13 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 
 `creep init` and continuing a run with `creep resume` are not implemented yet and fail closed.
 
-The sandbox is optional. `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint. Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. PoCs and a synthetic PostgreSQL seeded only from the project's SQL migrations (`migrations/`, `db/migrations/`, Prisma's and a few others) share one `--internal` network per run, `creep-<run>`, with no published port; before each PoC batch a canary container must fail to reach a public IP and to resolve a public name, or the run aborts. Rootful Podman gets no network (its bridge is reachable from the host). creep never pulls images: `creep doctor` lists the two digest-pinned images it needs (BusyBox for the canary, PostgreSQL) and, for a missing one, the pull command for the endpoint it checked (`docker --host=<endpoint> pull <ref>`, or `podman --remote=false pull <ref>`). The app image is built only from the repository's own root compose file or `Dockerfile`, never a generated one and never through `docker compose`, and the build is offline: `--network=none`, base images must already be present (creep never pulls), no build arguments or secrets, and the build context is a copy without `.env` files, `.git` or credential files; a compose or Dockerfile feature that could escape (privileged or host-network services, host volumes, remote contexts, build secrets, `ADD` of a URL, a `# syntax=` frontend) refuses the build, and any refused or failed build means verification unavailable, never a failed scan. With `sandbox.enabled: true` (user or policy config only; the project file cannot set it) and a usable runtime, `creep scan` builds the app this way once, after the analysis and within the scan deadline, from the scan's own file list, and removes the image when it ends. The report (text, Markdown and SARIF; JSON v1 does not change) says whether the app was built or why verification is unavailable, as a closed reason such as `no_build_file`, `dockerfile_refused`, `base_image_missing`, `build_failed` or `no_runtime`; the build never fails the scan or changes its exit code. Without a usable runtime, scans run as before and findings stay `probable`. Each app in `testdata/apps` ships one Dockerfile, from the pinned BusyBox, that only copies its files: an offline build cannot install Flask, FastAPI or Express, so the image holds the app but does not serve it until a registry mirror exists (#277, v0.3). With an app built, the scan asks the model for one PoC per probable `sqli`, `path_traversal` or `template_injection` finding (at most 16), as a closed template creep owns ([ADR 0019](docs/adr/0019-poc-templates.md)), and runs it 5 times in the sandbox, each time with a fresh nonce: 5 of 5 is `verified`, 1 to 4 of 5 `verified` with its rate (`verified in 3/5 runs, intermittent`, in the text, Markdown and SARIF reports; JSON v1 reads `verified`), and 0 of 5 leaves the finding `probable`, since the app is the repository's own and could fail a PoC on purpose. The app must declare its port (`EXPOSE`), or verification is unavailable (`no_port`). Each verified finding gets a reproduction bundle, `.creep/bundles/<id>.json` (the PoC, every request and response, the image IDs, the commit, the database seed's digest and the timings), redacted like everything the scan sends; `creep reproduce <id>` runs it again with no model ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)).
+The sandbox is optional. `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint. Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. PoCs and a synthetic PostgreSQL seeded only from the project's SQL migrations (`migrations/`, `db/migrations/`, Prisma's and a few others) share one `--internal` network per run, `creep-<run>`, with no published port; before each PoC batch a canary container must fail to reach a public IP and to resolve a public name, or the run aborts. Rootful Podman gets no network (its bridge is reachable from the host). creep never pulls images: `creep doctor` lists the two digest-pinned images it needs (BusyBox for the canary, PostgreSQL) and, for a missing one, the pull command for the endpoint it checked (`docker --host=<endpoint> pull <ref>`, or `podman --remote=false pull <ref>`). The app image is built only from the repository's own root compose file or `Dockerfile`, never a generated one and never through `docker compose`, and the build is offline: `--network=none`, base images must already be present (creep never pulls), no build arguments or secrets, and the build context is a copy without `.env` files, `.git` or credential files; a compose or Dockerfile feature that could escape (privileged or host-network services, host volumes, remote contexts, build secrets, `ADD` of a URL, a `# syntax=` frontend) refuses the build, and any refused or failed build means verification unavailable, never a failed scan. With `sandbox.enabled: true` (user or policy config only; the project file cannot set it) and a usable runtime, a nightly scan (`creep scan --mode nightly`, [CI](#ci-pull-request-and-nightly-scans)) builds the app this way once, after the analysis and within the scan deadline, from the scan's own file list, and removes the image when it ends; a pr scan never builds it. The report (text, Markdown and SARIF; JSON v1 does not change) says whether the app was built or why verification is unavailable, as a closed reason such as `no_build_file`, `dockerfile_refused`, `base_image_missing`, `build_failed` or `no_runtime`; the build never fails the scan or makes it incomplete, and in a nightly scan a verification that did not run reads the nightly gate at probable ([CI](#ci-pull-request-and-nightly-scans)). Without a usable runtime, scans run as before and findings stay `probable`. Each app in `testdata/apps` ships one Dockerfile, from the pinned BusyBox, that only copies its files: an offline build cannot install Flask, FastAPI or Express, so the image holds the app but does not serve it until a registry mirror exists (#277, v0.3). With an app built, the scan asks the model for one PoC per probable `sqli`, `path_traversal` or `template_injection` finding (at most 16), as a closed template creep owns ([ADR 0019](docs/adr/0019-poc-templates.md)), and runs it 5 times in the sandbox, each time with a fresh nonce: 5 of 5 is `verified`, 1 to 4 of 5 `verified` with its rate (`verified in 3/5 runs, intermittent`, in the text, Markdown and SARIF reports; JSON v1 reads `verified`), and 0 of 5 leaves the finding `probable`, since the app is the repository's own and could fail a PoC on purpose. The app must declare its port (`EXPOSE`), or verification is unavailable (`no_port`). Each verified finding gets a reproduction bundle, `.creep/bundles/<id>.json` (the PoC, every request and response, the image IDs, the commit, the database seed's digest and the timings), redacted like everything the scan sends; `creep reproduce <id>` runs it again with no model ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)).
 
 | Flag | Effect |
 |---|---|
 | `--config <path>` | Use this file instead of the user and project files (the policy still applies) |
 | `--model-run <cmd>` | Model CLI for the command contract |
+| `--mode pr\|nightly` | `scan`: the gate that judges the run; only `nightly` builds the app and runs PoCs (default `pr`, `nightly` on a GitHub Actions `schedule` event; [CI](#ci-pull-request-and-nightly-scans)) |
 | `--record` / `--replay` | Record every model response / serve only recorded responses, never the network |
 | `--recalibrate` | Calibrate again even if a calibration is cached (30 days) |
 | `--stats` | `scan`: print phase times, model calls, cache hits and tokens |
@@ -215,7 +216,7 @@ In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA
 | Code | Meaning |
 |---|---|
 | `0` | Nothing blocking |
-| `1` | Gate exceeded (`gates.pr`, default `probable:critical`) |
+| `1` | Gate exceeded: the gate of the scan's mode, `gates.pr` (default `probable:critical`), or for a nightly scan `gates.nightly` (default `verified:high`, read as `probable:high` when the nightly scan could not verify) and `gates.pr` |
 | `2` | Usage, configuration or consent error |
 | `3` | Model, tool canary, calibration or sandbox error |
 | `4` | Incomplete run: report written, not everything evaluated ([ADR 0007](docs/adr/0007-exit-code-incomplete.md), [ADR 0009](docs/adr/0009-scan-and-why-contract.md)) |
@@ -231,6 +232,73 @@ creep scan --baseline creep-baseline.json
 ```
 
 A finding is matched by its fingerprint (class, path and redacted sink line), so lines moving do not make it new; editing the sink line does. Every entry expires (baseline entries after 90 days, accepted risks when you say, at most 365 days), and an expired entry stops suppressing. A suppressed finding is still listed, with its expiry and reason, in the text summary, Markdown, SARIF (`suppressions`) and JSON (`suppression`); only the gate skips it. A not-evaluated finding is never suppressed, and an incomplete run still exits `4`. A malformed baseline, a link in its place or an expiry over a year away exits `2`. In a pull request, read the baseline from the base commit, so the pull request cannot suppress its own finding: `git show "$BASE_SHA:creep-baseline.json" > "$RUNNER_TEMP/baseline.json"` and `creep scan --baseline "$RUNNER_TEMP/baseline.json"`.
+
+## CI: pull request and nightly scans
+
+The scan's mode picks the gate that judges it ([ADR 0021](docs/adr/0021-gate-per-mode.md)):
+
+| Mode | Gate (default) | Sandbox | Chosen by |
+|---|---|---|---|
+| `pr` | `gates.pr` (`probable:critical`) | never: no build and no PoC, even with `sandbox.enabled`, so it never waits for verified findings | the default |
+| `nightly` | `gates.nightly` (`verified:high`) and `gates.pr` | builds the app and runs PoCs when `sandbox.enabled` | `--mode nightly`, or a GitHub Actions `schedule` event |
+
+The mode is never a config key, so the scanned repository cannot pick it; `--mode` always wins. A nightly scan also reads `gates.pr`, so it never passes what a pr scan fails. Each mode reads its keys with the same rules: the policy's `limits.gates.pr` and `limits.gates.nightly` floor both in every mode, and the project file may only make either stricter. A nightly scan that could not verify (`sandbox.enabled` false, verification unavailable for any reason, or a PoC candidate that got no run) reads `gates.nightly` at probable, `verified:high` as `probable:high`, so a finding nothing verified fails the run instead of passing it. Each scan prints its gate on stderr, for example `gate: nightly mode (GitHub Actions schedule event): gates.nightly "verified:high" (default) read as "probable:high": verification unavailable (no_runtime)`, and `creep config explain` ends with the `mode` and `gate` rows. A finding no PoC template can verify (`ssrf`, `command_injection`, `nosql_injection`, scanner findings) is read at probable in every nightly run, since nothing could verify it; accept one with a baseline entry ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)). A PoC that ran and never verified leaves its finding `probable`: `gates.pr` still fails a critical one, but a 0/5 probable high finding passes both default gates; set `gates.nightly: probable:high` in the user file or policy to fail on those too.
+
+A nightly workflow. Everything creep trusts comes from outside the repository: the policy (model, endpoint, consent, sandbox) is written by the workflow, the model key is the only secret and reaches only the scan step, the token is read-only and every action is pinned by SHA. Replace the placeholders, and pull the images `creep doctor` lists first (creep never pulls):
+
+```yaml
+# .github/workflows/creep-nightly.yml
+name: creep nightly
+on:
+  schedule:
+    - cron: "41 2 * * *"   # a schedule event: nightly mode without a flag
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: creep-nightly
+  cancel-in-progress: false
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+          cache: false
+      - name: Install creep
+        run: |
+          go install github.com/sneakercreepers/creep/cmd/creep@<release tag>
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Policy, outside the repository
+        run: |
+          mkdir -p "$RUNNER_TEMP/creep"
+          cat > "$RUNNER_TEMP/creep/policy.yaml" <<'EOF'
+          defaults:
+            model: { contract: openai, endpoint: "https://<host>/v1", name: "<model>" }
+            egress: { allow: ["<host>"] }
+            sandbox: { enabled: true }
+          consent: ["https://<host>"]   # the endpoint's origin; a command model takes the key creep doctor prints
+          EOF
+      - name: Sandbox images
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/creep/policy.yaml
+        run: |
+          creep doctor
+          docker pull "<each image doctor lists as missing, by digest>"
+      - name: Nightly scan
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/creep/policy.yaml
+          CREEP_API_KEY: ${{ secrets.CREEP_API_KEY }}
+        run: creep scan --mode nightly
+```
+
+Exit `1` fails the job when a finding reaches `gates.nightly` or `gates.pr`, `4` when the run is incomplete. The reports are in `.creep/`; upload them with `actions/upload-artifact` (pinned by SHA) if you want them after the run. The pull request workflow is the same without `sandbox` and with `creep scan` (pr mode), on `pull_request`, never `pull_request_target` (which would run the pull request's code with the base repository's secrets). A `pull_request` run uses the pull request's own copy of the workflow, so protect `.github/workflows` with CODEOWNERS and make the scan a required check. The [GitHub Action](#github-action) does the same: on a `schedule` event it runs nightly with no `mode` input, and `mode: nightly` sets `--mode` for any other event.
 
 ## GitHub Action
 
@@ -268,6 +336,7 @@ The project file comes from the repository being scanned, so it is untrusted. It
 - choose where code goes or what reads it: `model.contract`, `model.endpoint`, `model.name`, `model.preset`, `model.run`, `model.env`, `egress.allow`, `model.tier` (unused today: the scan takes the tier from calibration; refused so a future forced-tier option cannot come from the repository);
 - choose the sandbox (`sandbox.enabled`, `sandbox.runtime`) or the scanners (`scanners.enabled`, not even to remove one);
 - choose what creep writes or prints: `report.formats` and `output.format`, so a CI step that uploads `.creep/report.sarif` or reads `report.json` or the terminal output always gets its input;
+- pick the scan mode: there is no `mode` key in any file, only `--mode` and the CI event;
 - loosen a gate or grant consent: `gates.pr` and `gates.nightly` may only get stricter than the stricter of the built-in gate, the policy limit and the gate the layers before it set (policy defaults, the user file), so a repository cannot hand back the built-in gate to an operator who tightened it;
 - raise a limit: `budget.max_tokens`, `budget.max_calls`, `budget.max_seconds`, `model.timeout_seconds`, `model.max_output_bytes` and `calibration.cache_days` may only be lowered.
 
