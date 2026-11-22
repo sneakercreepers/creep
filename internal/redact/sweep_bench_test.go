@@ -108,16 +108,20 @@ func shortRuns() []byte {
 
 // BenchmarkFileOverflowFull times File at MaxFileBytes with the overflow list
 // empty and full: on oneByteRuns, which match most (issue #106), and on
-// shortRuns, which make every known run compute a hash at every "e".
+// shortRuns, which make every known run compute a hash at every "e"; with a
+// format character, which sweeps the file twice, shortRuns is the worst case
+// doc.go states.
 func BenchmarkFileOverflowFull(b *testing.B) {
+	shapes := map[string][]byte{
+		"runs":                    oneByteRuns(),
+		"short runs":              shortRuns(),
+		"short runs, format char": []byte(withFormatChar(string(shortRuns()))),
+	}
 	for _, tt := range []struct {
 		shape string
 		full  bool
-	}{{"runs", false}, {"runs", true}, {"short runs", true}} {
-		file := oneByteRuns()
-		if tt.shape == "short runs" {
-			file = shortRuns()
-		}
+	}{{"runs", false}, {"runs", true}, {"short runs", true}, {"short runs, format char", true}} {
+		file := shapes[tt.shape]
 		full := tt.full
 		b.Run(fmt.Sprintf("%s/overflow full=%t", tt.shape, full), func(b *testing.B) {
 			r := newRedactor(b)

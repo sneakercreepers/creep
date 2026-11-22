@@ -253,8 +253,9 @@
 // span per 4 bytes the call fails closed with ErrTooManyValues, so memory
 // stays linear; the sweep stops on the run's context too. With the overflow
 // list full of runs of one byte, File at MaxFileBytes takes about 1.2 to 1.8 s
-// on an i7-10510U and allocates at most about 100 MiB (BenchmarkFileOverflowFull,
-// #106), twice that with a format character. A rule whose matches overlap densely (a block of .env lines with
+// on an i7-10510U and allocates at most about 100 MiB, and a format character
+// about doubles both (BenchmarkFileOverflowFull, "short runs, format char",
+// #106). A rule whose matches overlap densely (a block of .env lines with
 // long names) stops searching again after a fixed multiple of the input,
 // masks the rest of the current line and searches the next lines with a
 // budget of the bytes it masked, so the dense block hides only its own lines

@@ -27,8 +27,9 @@ import (
 // (BenchmarkSweepOverflow, "crafted"), and on MaxFileBytes about 1.2 s for
 // File with long runs and 1.8 s with short ones (BenchmarkFileOverflowFull),
 // against 0.4 to 0.5 s with the list empty; File then allocates about 20 MiB
-// and 100 MiB (TestFileOverflowFullMemory holds it under 150). Whole files go
-// through File, which chunks them.
+// and 100 MiB (TestFileOverflowFullMemory holds the long runs under 150), and
+// a format character about doubles both ("short runs, format char"). Whole
+// files go through File, which chunks them.
 const MaxInputBytes = 64 << 10
 
 // maxMarkerLen bounds how far Unredact looks for the closing ">".

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // findAll is every occurrence the sweep sees, by bounds only: the reference
@@ -228,6 +229,35 @@ func TestSweepOverLimitFailsClosed(t *testing.T) {
 	}
 }
 
+// Protection (#106): a find over n bytes keeps at most n/4 + 1024
+// occurrences, exactly. Runs of "e" stored under a label each keep every
+// occurrence, since none nests in another of its label; blanks after them
+// raise n alone, so the text keeps exactly its limit, and with 4 blanks less
+// (a limit one lower) it fails closed.
+func TestSweepLimitIsExact(t *testing.T) {
+	x := newSweepIndex()
+	for i := range maxWindowValues + maxOverflowValues {
+		if _, ok := x.add(strings.Repeat("e", minSweepLen+i), "SECRET_T"+strconv.Itoa(i), true); !ok {
+			t.Fatalf("add %d refused", i)
+		}
+	}
+	runs := strings.Repeat(strings.Repeat("e", 200)+" ", 20)
+	kept := len(findAll(t, &x, runs))
+	n := 4 * (kept - 1024)
+	for _, tt := range []struct {
+		n    int
+		fits bool
+	}{{n, true}, {n - 4, false}} {
+		spans, err := x.find(runs+strings.Repeat(" ", tt.n-len(runs)), nil)
+		if tt.fits && (err != nil || len(spans) != kept) {
+			t.Fatalf("%d bytes: %d spans, %v; want all %d", tt.n, len(spans), err, kept)
+		}
+		if !tt.fits && (!errors.Is(err, ErrTooManyValues) || spans != nil) {
+			t.Fatalf("%d bytes: %d spans, %v; want none and ErrTooManyValues", tt.n, len(spans), err)
+		}
+	}
+}
+
 func redactOrFile(r *Redactor, text string, file bool) (string, error) {
 	if file {
 		return r.File([]byte(text))
@@ -254,6 +284,25 @@ func TestSweepStopsWithContext(t *testing.T) {
 	}
 	if spans, err := r.state.index.find(text, ctx.Done()); err != nil || spans != nil {
 		t.Fatalf("stopped find = %v, %v; want nothing", spans, err)
+	}
+}
+
+// Protection (#260, #106): a find stops within a few thousand positions of
+// its context's end, not at the end of the text: 4 MiB of short runs with
+// every known run checked at each "e" take seconds to sweep in full.
+func TestSweepStopsInsideText(t *testing.T) {
+	skipUnderRace(t)
+	x := newSweepIndex()
+	for i := range maxWindowValues + maxOverflowValues {
+		x.add(strings.Repeat("e", minSweepLen+i), "SECRET_TEST", true)
+	}
+	text := strings.Repeat(string(shortRuns()), 4)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	spans, err := x.find(text, ctx.Done())
+	if took := time.Since(start); took > time.Second || spans != nil || err != nil {
+		t.Fatalf("find = %d spans, %v after %v; want nothing within 1s of a 50ms deadline", len(spans), err, took)
 	}
 }
 

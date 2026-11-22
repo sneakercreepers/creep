@@ -243,6 +243,28 @@ func TestMergedLabelIsFixed(t *testing.T) {
 		if a[0].label != b[0].label {
 			t.Errorf("labels %v: %s in one order, %s in the other", p, a[0].label, b[0].label)
 		}
+		assertPartRememberedByRank(t, p)
+	}
+}
+
+// assertPartRememberedByRank checks that a part with the bounds of two
+// detectors' spans, inside a longer value, is remembered under the label
+// that outranks, in either order of the spans (#106).
+func assertPartRememberedByRank(t *testing.T, p [2]string) {
+	t.Helper()
+	want := p[1]
+	if outranks(p[0], p[1]) {
+		want = p[0]
+	}
+	text := strings.Repeat("Q7xZ9kLm", 4)
+	for _, order := range [][2]string{p, {p[1], p[0]}} {
+		s := &runState{byValue: map[string]string{}, byMarker: map[string]string{}, counters: map[string]int{}, index: newSweepIndex()}
+		found := []span{{start: 0, end: 32, label: secretPrefix + "WHOLE"}, {start: 0, end: 16, label: order[0]}, {start: 0, end: 16, label: order[1]}}
+		s.render(text, mergeSpans(found), found)
+		s.rememberParts(text, found)
+		if got := s.byValue[text[:16]]; !strings.HasPrefix(got, "<"+want+"_") {
+			t.Errorf("spans %v: part remembered as %q, want label %s", order, got, want)
+		}
 	}
 }
 
