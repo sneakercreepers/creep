@@ -1,6 +1,6 @@
 # ADR 0026: Signed commits required on main
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** @Ludocius
 - **Changes:** the `main` ruleset (`.github/rulesets/main.json`) gains the `required_signatures` rule; AGENTS.md Conventions, CONTRIBUTING.md and GOVERNANCE.md say signing is required, not recommended
