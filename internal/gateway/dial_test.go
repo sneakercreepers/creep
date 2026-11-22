@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func newDialer(t *testing.T, allow []string, res Resolver, d *recordingDial) *pinningDialer {
+func newDialer(t *testing.T, allow []string, res netResolver, d *recordingDial) *pinningDialer {
 	t.Helper()
 	a, err := parseAllowlist(allow)
 	if err != nil {

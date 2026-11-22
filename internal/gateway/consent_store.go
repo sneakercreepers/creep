@@ -15,6 +15,10 @@ import (
 // a special file, owned by another user or writable by others.
 var ErrUnsafeConsentStore = errors.New("unsafe consent store")
 
+// errNotPlainDir marks a store directory that is a link, a junction or not
+// a directory at all.
+var errNotPlainDir = errors.New("not a plain directory")
+
 // consentVersion is the consent file format version.
 const consentVersion = 1
 
@@ -31,11 +35,16 @@ type consentFile struct {
 	Endpoints []string `json:"endpoints"`
 }
 
-// readConsentStore returns the stored origins; a missing file is empty.
-// The file must be a regular file of this user that others cannot write
-// (outside Windows, see checkAccess), opened without following a link and
-// checked to be the same file after opening.
+// readConsentStore returns the stored origins; a missing file or directory
+// is empty. The directory must pass checkStoreDir, and the file must be a
+// regular file of this user that others cannot write (outside Windows, see
+// checkAccess), opened without following a link and checked to be the same
+// file after opening.
 func readConsentStore(path string) (map[string]bool, error) {
+	exists, err := storeDirReadable(filepath.Dir(path))
+	if err != nil || !exists {
+		return map[string]bool{}, err
+	}
 	data, err := readStoreFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return map[string]bool{}, nil
@@ -117,8 +126,8 @@ func addStoredConsent(path, key string) error {
 	return replaceFile(dir, path, append(data, '\n'))
 }
 
-// ensureStoreDir creates dir with mode 0700 if missing and refuses one that
-// is a link, not a directory, another user's, or writable by others.
+// ensureStoreDir creates dir with mode 0700 if missing and refuses one
+// checkStoreDir refuses.
 func ensureStoreDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("consent store dir: %w", err)
@@ -127,13 +136,36 @@ func ensureStoreDir(dir string) error {
 	if err != nil {
 		return fmt.Errorf("consent store dir: %w", err)
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("consent store dir %q: not a directory: %w", dir, ErrUnsafeConsentStore)
+	return checkStoreDir(dir, info)
+}
+
+// checkStoreDir refuses a store directory that is not a plain directory (a
+// symbolic link, a Windows junction, which Lstat reports as a directory with
+// ModeIrregular, or any other file), another user's, or writable by others.
+// The type check comes first and has its own error, errNotPlainDir, because
+// on Windows checkAccess checks nothing (#116).
+func checkStoreDir(dir string, info fs.FileInfo) error {
+	if info.Mode().Type() != fs.ModeDir {
+		return fmt.Errorf("consent store dir %q: %w: %w", dir, errNotPlainDir, ErrUnsafeConsentStore)
 	}
 	if err := checkAccess(dir, info, 0o022, ErrUnsafeConsentStore); err != nil {
 		return fmt.Errorf("consent store dir: %w", err)
 	}
 	return nil
+}
+
+// storeDirReadable checks the store's directory before the store is read,
+// so a store under a planted link or a shared directory is refused on read
+// too, not only when a yes is saved. A missing directory holds no store.
+func storeDirReadable(dir string) (bool, error) {
+	info, err := lstatPinned(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("consent store dir: %w", err)
+	}
+	return true, checkStoreDir(dir, info)
 }
 
 // replaceFile writes data to a fresh temporary file (os.CreateTemp: mode

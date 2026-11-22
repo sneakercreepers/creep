@@ -42,6 +42,26 @@ var ErrLabel = errors.New("model and purpose must be 1-256 bytes")
 // ErrResponseTooLarge means a reply exceeded maxResponseBytes.
 var ErrResponseTooLarge = errors.New("model response too large")
 
+// ErrHeader means a Call carries a header name the gateway does not send,
+// or more than maxHeaderBytes of header values.
+var ErrHeader = errors.New("request header refused")
+
+// allowedHeaders are the request headers a model adapter needs: body type,
+// API version and the credential. Header bytes reach neither the payload
+// file, its sha256 nor the redaction counts, so repository text placed in
+// any other header would leave unlogged (#115); it is refused before
+// anything is written or sent.
+var allowedHeaders = map[string]bool{
+	"Accept":            true,
+	"Anthropic-Version": true,
+	"Authorization":     true,
+	"Content-Type":      true,
+	"X-Api-Key":         true,
+}
+
+// maxHeaderBytes bounds the header values of one call, for the same reason.
+const maxHeaderBytes = 8 << 10
+
 // Call is one model request. Payload must already be redacted. This is the
 // one list of the producers whose repository text may reach it; each
 // redacts every file whole with the run's redact.File and cuts only that
@@ -59,7 +79,7 @@ type Call struct {
 	Purpose    string         // logged, e.g. "reader" or "calibration"
 	Payload    []byte         // exact request body; logged only as sha256 and file
 	Redactions map[string]int // marker label -> count in Payload; logged
-	Header     http.Header    // request headers (credentials); never logged
+	Header     http.Header    // credentials and API version, allowedHeaders names only; never logged
 	// ReserveTokens is charged to the Budget before anything is written or
 	// sent: the payload's input tokens plus the most output the request
 	// allows. Must be positive. The provider's reported Usage replaces it.
@@ -193,11 +213,32 @@ func checkCall(call Call) (string, error) {
 	if call.ReserveTokens <= 0 {
 		return "", fmt.Errorf("gateway call: %w", ErrReserveTokens)
 	}
+	if err := checkHeader(call.Header); err != nil {
+		return "", fmt.Errorf("gateway call: %w", err)
+	}
 	u, err := url.Parse(call.Endpoint)
 	if err != nil || !u.IsAbs() || u.Host == "" {
 		return "", errors.New("gateway call: endpoint must be an absolute URL")
 	}
 	return withoutCredentials(u), nil
+}
+
+// checkHeader refuses a header name outside allowedHeaders and header
+// values longer than maxHeaderBytes in all.
+func checkHeader(h http.Header) error {
+	total := 0
+	for name, values := range h {
+		if !allowedHeaders[http.CanonicalHeaderKey(name)] {
+			return fmt.Errorf("%q: %w", name, ErrHeader)
+		}
+		for _, v := range values {
+			total += len(v)
+		}
+	}
+	if total > maxHeaderBytes {
+		return fmt.Errorf("%d bytes of values, more than %d: %w", total, maxHeaderBytes, ErrHeader)
+	}
+	return nil
 }
 
 // withoutCredentials keeps scheme, host and path, dropping userinfo, query

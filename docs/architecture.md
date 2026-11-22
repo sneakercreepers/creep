@@ -128,7 +128,7 @@ Evidence from 2026-11-13 (lines are source/test, churn is commits on `main`).
 | Component | Size | Churn | Open follow-ups | External load | Decision |
 |---|---|---|---|---|---|
 | `redact` | 1593 / 2565 | 3 | ~10 | none | **Simplify.** Freeze features after v0.1. Pin perf budgets with CI benchmarks. Close follow-ups in batches, not one per PR. |
-| `gateway` | 1671 / 2008 | 4 | 6 | Go `net/http` | **Keep.** Freeze the exported API after #84. Use a `go/types` API guard (#115). |
+| `gateway` | 1671 / 2008 | 4 | 6 | Go `net/http` | **Keep.** Freeze the exported API after #84. A `go/types` guard keeps raw clients, dialers and transport seams out of it (#115). |
 | `tools/budget` | 1188 / 779 | 5 (highest) | 6 | none | **Trim.** The layer rule (#119) replaces ad-hoc import checks. The net source line count may not grow. |
 | `config` | 860 / 657 | 3 | 3 | YAML | **Keep.** |
 | `cli` | 727 / 655 | 3 | 1 | none | **Keep.** |

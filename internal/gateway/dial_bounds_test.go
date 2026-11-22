@@ -43,7 +43,7 @@ func (d *scriptedDial) dialed() []string {
 	return append([]string(nil), d.addrs...)
 }
 
-func scriptedDialer(t *testing.T, allow []string, res Resolver, d *scriptedDial, limits timeLimits) *pinningDialer {
+func scriptedDialer(t *testing.T, allow []string, res netResolver, d *scriptedDial, limits timeLimits) *pinningDialer {
 	t.Helper()
 	a, err := parseAllowlist(allow)
 	if err != nil {

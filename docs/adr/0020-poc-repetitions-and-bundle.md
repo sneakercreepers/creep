@@ -1,6 +1,6 @@
 # ADR 0020: PoC repetitions, the reproduction bundle and `creep reproduce`
 
-- **Status:** Proposed (needs maintainer approval)
+- **Status:** Accepted (maintainer, 2026-11-21)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (a PoC's rate in the text, Markdown and SARIF reports; JSON v1 unchanged; a new command), [ADR 0019](0019-poc-templates.md) (its PoCs now run from `creep scan`)
@@ -36,7 +36,7 @@ What a PoC that never verified does:
 
 ## Decision
 
-Option A with b: the rate is never in JSON v1, and a PoC can only raise a finding to `verified`, never lower it.
+Option A with b: the rate is never in JSON v1, and a PoC can only raise a finding to `verified`, never lower it. On 2026-11-21 the maintainer approved this ADR and chose to keep 0 of N as `probable` (option b) instead of the "0/5 discarded" first written in #25: the scanned repository builds the app, so a PoC it makes fail must never discard or lower its own finding. The scope of #25 is edited to match.
 
 **Repetitions.** `verify.Repeat(ctx, runner, target, poc, runs)` runs a PoC 1 to `verify.MaxRuns` (20) times, each run with its own fresh nonce (ADR 0019), and returns every `Result` with a `Rate{Verified, Runs}`. A sandbox error ends the repetition and no rate is made of the runs before it. `creep scan` uses `verify.DefaultRuns` (5):
 
