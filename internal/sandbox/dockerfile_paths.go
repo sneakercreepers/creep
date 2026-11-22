@@ -39,8 +39,7 @@ var imageTransports = []string{
 // A relative path starts in the previous WORKDIR, which may be "/", so
 // its first element is checked as if it were absolute. A link a RUN step
 // made is not seen; the minimum runc, BuildKit and Buildah versions
-// (requireDocker,
-// requirePodman) are the control there.
+// (requireDocker, requirePodman) are the control there.
 func checkContainerPath(p string) string {
 	if len(p) > 1024 || !containerPathChars.MatchString(p) {
 		return ruleContainerPath

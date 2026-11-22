@@ -24,9 +24,10 @@ var instructionFlags = map[string][]string{
 var booleanFlags = []string{"link", "parents"}
 
 // mountTypes leave nothing behind and read only the staged context (a
-// from= is refused, checkMount). A cache mount outlives --no-cache, Close and creep clean,
-// so a later build of the operator's would read what this one wrote; a
-// secret or ssh mount has nothing to offer a build that gets none.
+// from= is refused, checkMount). A cache mount outlives --no-cache, Close
+// and creep clean, so a later build of the operator's would read what this
+// one wrote; a secret or ssh mount has nothing to offer a build that gets
+// none.
 var mountTypes = []string{"bind", "tmpfs"}
 
 // mountKeys are the keys a bind or tmpfs mount takes; bareMountKeys may
