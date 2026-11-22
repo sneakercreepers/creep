@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -223,6 +225,40 @@ func TestPoCStageStopsOnSandboxError(t *testing.T) {
 	}
 	assertAllProbable(t)
 	assertContains(t, "output", out, []string{"2 got no PoC run", "sandbox network reaches outside"})
+}
+
+// TestPoCStageStopsOnModelError: a PoC request the model link fails (a
+// transport error, as a spent budget) ends the stage after that one call;
+// nothing is verified and no runner starts.
+func TestPoCStageStopsOnModelError(t *testing.T) {
+	fb := &fakeBuilder{app: builtApp, port: 5000, exchange: delayApp(repeatBool(true, 10), "")}
+	m := &fakeModel{verdict: sqliVulnerable, fail: map[string]error{"poc": errors.New("connection reset")}}
+	opened := 0
+	files := map[string]string{"app.py": "@flask", "migrations/1_init.sql": "CREATE TABLE users (id int);\n"}
+	code, stdout, stderr := runScanWith(withBuilder(fakeDeps(m, calibrate.TierM), fb, nil, &opened), "--config", scanRepo(t, files, sandboxOn), "scan")
+	out := stdout + stderr
+	if code != exitcode.GateExceeded || m.pocCalls == 0 || fb.exchanges != 0 {
+		t.Fatalf("exit %d, %d PoC calls, %d exchanges\n%s", code, m.pocCalls, fb.exchanges, out)
+	}
+	assertAllProbable(t)
+	assertContains(t, "output", out, []string{"2 got no PoC run"})
+}
+
+// TestPoCStageBounds: a scan tries at most maxPoCs PoCs, the rest counted
+// not run, and a stage whose context ended (the scan deadline, Ctrl+C)
+// runs none.
+func TestPoCStageBounds(t *testing.T) {
+	for _, n := range []int{0, 1, maxPoCs, maxPoCs + 1, 3 * maxPoCs} {
+		todo, skipped := pocBatch(make([]int, n))
+		if len(todo) != min(n, maxPoCs) || skipped != n-len(todo) {
+			t.Errorf("%d candidates: try %d, skip %d", n, len(todo), skipped)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if sum := (pocStage{}).run(ctx, make([]int, maxPoCs+2)); sum != (report.PoCSummary{NotRun: maxPoCs + 2}) {
+		t.Errorf("ended stage: %+v", sum)
+	}
 }
 
 // TestMaxRunsMatchReport keeps report's copy of verify.MaxRuns in step.

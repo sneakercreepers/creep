@@ -88,10 +88,20 @@ type pocStage struct {
 	commit string
 }
 
-func (st pocStage) run(ctx context.Context, todo []int) report.PoCSummary {
-	var sum report.PoCSummary
+// pocBatch is the candidates one scan tries, the first maxPoCs in report
+// order, and how many it leaves not run.
+func pocBatch(todo []int) ([]int, int) {
+	if len(todo) <= maxPoCs {
+		return todo, 0
+	}
+	return todo[:maxPoCs], len(todo) - maxPoCs
+}
+
+func (st pocStage) run(ctx context.Context, candidates []int) report.PoCSummary {
+	todo, skipped := pocBatch(candidates)
+	sum := report.PoCSummary{NotRun: skipped}
 	for i, at := range todo {
-		if i >= maxPoCs || ctx.Err() != nil {
+		if ctx.Err() != nil {
 			sum.NotRun += len(todo) - i
 			break
 		}

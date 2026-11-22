@@ -140,12 +140,15 @@ func scrubPoC(req Request, scrub Scrub) (Request, error) {
 	return out, nil
 }
 
+// scrubSteps masks the run's credentials first (maskCredentials), since
+// redact.File has no rule for an opaque session, then scrubs each text.
 func scrubSteps(steps []Step, scrub Scrub) []BundleStep {
 	out := make([]BundleStep, len(steps))
+	masked := maskCredentials(steps)
 	for i, s := range steps {
 		out[i] = BundleStep{Role: s.Role, Truncated: s.Truncated, ElapsedMS: s.Elapsed.Milliseconds()}
-		req, errReq := scrub(s.Request)
-		resp, errResp := scrub(s.Response)
+		req, errReq := scrub(masked[i][0])
+		resp, errResp := scrub(masked[i][1])
 		if errReq != nil || errResp != nil {
 			out[i].Withheld = true
 			continue

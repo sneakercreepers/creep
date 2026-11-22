@@ -46,8 +46,11 @@ var pocRequest = []byte("proof of concept (PoC)")
 
 func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, error) {
 	m.calls++
-	if bytes.Contains(c.Payload, pocRequest) && m.poc != nil {
+	if bytes.Contains(c.Payload, pocRequest) && (m.poc != nil || m.fail["poc"] != nil) {
 		m.pocCalls++
+		if err := m.fail["poc"]; err != nil {
+			return nil, err
+		}
 		body, err := chatReply(m.poc)
 		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
 	}
