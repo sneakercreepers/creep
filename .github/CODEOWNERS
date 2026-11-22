@@ -33,6 +33,9 @@ prompts/                 @Ludocius
 /.goreleaser.yaml        @Ludocius
 /.github/scripts/        @Ludocius
 /.github/release.yml     @Ludocius
+# The Action runs on users' runners with their keys and tokens (ADR 0023).
+/action.yml              @Ludocius
+/action/                 @Ludocius
 
 # Guardrails: lint rules, build checks, dependency budget and ADRs
 /AGENTS.md               @Ludocius

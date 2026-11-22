@@ -189,3 +189,107 @@ jobs:
           name: fuzz-crasher
           path: internal/*/testdata/fuzz/
           retention-days: 7
+
+  # The Action (action.yml, ADR 0023) end to end on sample repositories. No
+  # release holds the code under review, so creep-path runs the internal/cli
+  # test binary as creep: the real CLI, config layers and reports with the
+  # protection tests' fake model, no key and no network
+  # (CREEP_ACTION_STANDIN, internal/cli/actionstandin_test.go). The
+  # vulnerable sample must fail on the gate (1), the clean one pass (0), and
+  # the one whose creep.yaml lowers budget.max_calls to 1 must fail as
+  # incomplete (4). The last step runs the Action's install script on the
+  # published v0.1.0 release, so checksum and provenance verification is
+  # proven against a real release, not only against fakes.
+  action:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read # gh attestation verify reads this repository's release provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Stand-in binary, policy and samples
+        run: |
+          dir="$RUNNER_TEMP/selftest"
+          mkdir -p "$dir"
+          go test -c -o "$dir/creep" ./internal/cli
+          printf 'defaults:\n  model:\n    contract: openai\n    endpoint: https://models.example.invalid/v1\n    name: test-model\n' >"$dir/policy.yaml"
+          for sample in vulnerable clean starved; do
+            mkdir -p "$dir/$sample"
+            cp internal/cli/testdata/action/app.py "$dir/$sample/"
+          done
+          printf 'budget:\n  max_calls: 1\n' >"$dir/starved/creep.yaml"
+      - name: Vulnerable sample
+        id: vulnerable
+        continue-on-error: true
+        uses: ./ # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is the checked-out code under review
+        env:
+          CREEP_ACTION_STANDIN: vulnerable
+          CREEP_POLICY: ${{ runner.temp }}/selftest/policy.yaml
+        with:
+          creep-path: ${{ runner.temp }}/selftest/creep
+          working-directory: ${{ runner.temp }}/selftest/vulnerable
+          incremental: "false"
+          upload-sarif: "false"
+          comment: "false"
+      - name: Clean sample
+        id: clean
+        uses: ./ # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is the checked-out code under review
+        env:
+          CREEP_ACTION_STANDIN: not_vulnerable
+          CREEP_POLICY: ${{ runner.temp }}/selftest/policy.yaml
+        with:
+          creep-path: ${{ runner.temp }}/selftest/creep
+          working-directory: ${{ runner.temp }}/selftest/clean
+          incremental: "false"
+          upload-sarif: "false"
+          comment: "false"
+      - name: Sample whose creep.yaml lowers its budget
+        id: starved
+        continue-on-error: true
+        uses: ./ # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is the checked-out code under review
+        env:
+          CREEP_ACTION_STANDIN: vulnerable
+          CREEP_POLICY: ${{ runner.temp }}/selftest/policy.yaml
+        with:
+          creep-path: ${{ runner.temp }}/selftest/creep
+          working-directory: ${{ runner.temp }}/selftest/starved
+          incremental: "false"
+          upload-sarif: "false"
+          comment: "false"
+      - name: Each sample ended as it must
+        env:
+          VULNERABLE: ${{ steps.vulnerable.outcome }} ${{ steps.vulnerable.outputs.exit-code }}
+          CLEAN: ${{ steps.clean.outcome }} ${{ steps.clean.outputs.exit-code }}
+          STARVED: ${{ steps.starved.outcome }} ${{ steps.starved.outputs.exit-code }}
+          CLEAN_SARIF: ${{ steps.clean.outputs.sarif }}
+          CLEAN_MARKDOWN: ${{ steps.clean.outputs.markdown }}
+        run: |
+          status=0
+          for check in "vulnerable|$VULNERABLE|failure 1" "clean|$CLEAN|success 0" "starved|$STARVED|failure 4"; do
+            IFS='|' read -r name got want <<<"$check"
+            if [ "$got" != "$want" ]; then
+              echo "::error::$name sample: outcome and exit code '$got', want '$want'"
+              status=1
+            fi
+          done
+          if [ ! -f "$CLEAN_SARIF" ] || [ ! -f "$CLEAN_MARKDOWN" ]; then
+            echo "::error::the clean run published no SARIF or Markdown report"
+            status=1
+          fi
+          exit "$status"
+      - name: The install script verifies the published v0.1.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: v0.1.0
+        run: |
+          out="$RUNNER_TEMP/install-output"
+          : >"$out"
+          GITHUB_OUTPUT="$out" bash action/install.sh
+          path="$(sed -n 's/^path=//p' "$out")"
+          "$path" version | grep -Fx 'creep v0.1.0'

@@ -1,0 +1,135 @@
+# The creep GitHub Action (#29, ADR 0023): install a verified creep release,
+# scan, upload SARIF to code scanning and keep one pull request comment.
+# Every input, event field and report value reaches the scripts in action/
+# only through env, never as text inside run.
+name: creep
+description: Find vulnerabilities in the repository with creep, upload SARIF to code scanning and comment on the pull request.
+author: sneakercreepers
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  version:
+    description: creep release tag to install (vX.Y.Z). Defaults to the tag the Action is used at; required when the Action is pinned by commit SHA.
+    required: false
+    default: ""
+  api-key:
+    description: Model API key, passed to creep as CREEP_API_KEY in the scan step only. Refused on a pull request from a fork.
+    required: false
+    default: ""
+  config:
+    description: creep config file (--config), used instead of the user file and the creep.yaml of the repository. Empty reads the usual layers (CREEP_POLICY, user file, creep.yaml).
+    required: false
+    default: ""
+  mode:
+    description: Scan mode (--mode pr|nightly, creep v0.2). Empty lets creep pick it from the event (nightly on schedule).
+    required: false
+    default: ""
+  baseline:
+    description: Repository-relative baseline file (--baseline, creep v0.2). On a pull request it is read from the base commit, so the pull request cannot suppress its own findings.
+    required: false
+    default: ""
+  incremental:
+    description: On a pull request, scan only the files it changes (--changed). Needs the base commit in the clone (actions/checkout fetch-depth 2).
+    required: false
+    default: "true"
+  working-directory:
+    description: Directory to scan. Code scanning places alerts by paths relative to the repository root, so keep the default when uploading SARIF.
+    required: false
+    default: "."
+  upload-sarif:
+    description: Upload .creep/report.sarif to code scanning (needs security-events write).
+    required: false
+    default: "true"
+  comment:
+    description: Keep one comment with the report on the pull request (needs pull-requests write). Skipped on a pull request from a fork.
+    required: false
+    default: "true"
+  github-token:
+    description: Token for downloading the release, verifying its attestation, uploading SARIF and commenting.
+    required: false
+    default: ${{ github.token }}
+  creep-path:
+    description: Self-test only. Runs this local binary unverified instead of a release; never set it in a real workflow.
+    required: false
+    default: ""
+
+outputs:
+  exit-code:
+    description: The exit code of creep (0 ok, 1 gate, 2 usage or config, 3 model or sandbox, 4 incomplete). Every code but 0 fails the job.
+    value: ${{ steps.scan.outputs.exit-code }}
+  sarif:
+    description: Path of the SARIF report, when creep wrote one.
+    value: ${{ steps.scan.outputs.sarif }}
+  report:
+    description: Path of the JSON report (schema v1), when creep wrote one.
+    value: ${{ steps.scan.outputs.report }}
+  markdown:
+    description: Path of the Markdown report, when creep wrote one.
+    value: ${{ steps.scan.outputs.markdown }}
+
+runs:
+  using: composite
+  steps:
+    - name: Event and fork policy
+      id: preflight
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REPOSITORY: ${{ github.repository }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+      run: bash "$GITHUB_ACTION_PATH/action/preflight.sh"
+
+    - name: Install creep (checksum and build provenance verified)
+      id: install
+      shell: bash
+      env:
+        CREEP_PATH: ${{ inputs.creep-path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: bash "$GITHUB_ACTION_PATH/action/install.sh"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CREEP: ${{ steps.install.outputs.path }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_INCREMENTAL: ${{ inputs.incremental }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        NEED_SARIF: ${{ inputs.upload-sarif }}
+        NEED_MARKDOWN: ${{ inputs.comment }}
+      run: bash "$GITHUB_ACTION_PATH/action/scan.sh"
+
+    - name: Upload SARIF to code scanning
+      if: inputs.upload-sarif == 'true' && steps.scan.outputs.sarif != ''
+      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif }}
+        category: creep
+        token: ${{ inputs.github-token }}
+
+    - name: Pull request comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request' && steps.preflight.outputs.fork == 'false'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+        MARKDOWN: ${{ steps.scan.outputs.markdown }}
+      run: bash "$GITHUB_ACTION_PATH/action/comment.sh"
+
+    - name: Verdict
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+      run: bash "$GITHUB_ACTION_PATH/action/verdict.sh"
