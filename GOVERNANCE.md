@@ -23,6 +23,7 @@ Sustained, high-quality contributions over at least three months, including revi
 
 ## Review rules
 
+- Every commit on `main` is signed ([ADR 0026](docs/adr/0026-signed-commits.md)); the `main` ruleset rejects unsigned commits and GitHub signs its own squash merges. Setup: [CONTRIBUTING.md](CONTRIBUTING.md#pull-requests).
 - Single-maintainer phase: PR + required checks; review requires 0 approvals and code-owner review is off. Nobody bypasses the checks.
 - With two or more maintainers: two approvals for security-sensitive paths (see `.github/CODEOWNERS`).
 

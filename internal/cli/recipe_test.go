@@ -188,3 +188,42 @@ func runRecipeWithin(t *testing.T, sub, p string) (int, string) {
 		return 0, ""
 	}
 }
+
+// A recipe test ends its run, loaded or refused, so creep resume never
+// offers to continue it as an interrupted scan.
+func TestRecipeTestEndsItsRun(t *testing.T) {
+	for _, m := range []*fakeModel{rightRecipeModel(), {}} {
+		cfg := scanRepo(t, map[string]string{"r.json": string(recipe.Template())}, "")
+		runScanWith(fakeDeps(m, calibrate.TierM), "recipe", "test", "--config", cfg, "r.json")
+		runs, err := filepath.Glob(filepath.Join(stateDir, "runs", "*"))
+		if err != nil || len(runs) != 1 {
+			t.Fatalf("runs %v, %v", runs, err)
+		}
+		if code, _, stderr := run("resume", filepath.Base(runs[0])); code != exitcode.ConfigError || !strings.Contains(stderr, "already ended") {
+			t.Errorf("resume of a recipe run: exit %d: %s", code, stderr)
+		}
+	}
+}
+
+// recipe new writes inside the working directory's root: a directory that
+// is a link to outside the tree, as a swap after checkRecipePath would
+// leave it, never receives the file.
+func TestRecipeNewStaysInTree(t *testing.T) {
+	scanRepo(t, nil, "")
+	outside := t.TempDir()
+	linkDir(t, outside, "linked")
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := createInRoot(root, "linked/r.json"); err == nil {
+		t.Error("createInRoot wrote through a link out of the tree")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "r.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a file was written outside the tree: %v", err)
+	}
+	if err := createInRoot(root, "r.json"); err != nil {
+		t.Errorf("createInRoot in the tree: %v", err)
+	}
+}

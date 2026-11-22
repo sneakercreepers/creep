@@ -111,9 +111,17 @@
 // variant, not_vulnerable on the safe twin. The replies are synthesized from
 // expected.json, not recorded from a live model, so they pin the reader path
 // (slicing, prompt, request, decoding, projection), not a model's judgement.
-// -update only writes synthesized replies; replacing them with live replies
-// (#204) needs a live-record mode, which does not exist yet, run by a
-// maintainer with a key. They are signed with a fixed public test secret,
+// They will be replaced by live-recorded replies once a maintainer with a
+// key runs the reader against a live model (#204). -update only writes
+// synthesized replies. `creep scan --record` exists (#8) but cannot
+// produce these files: it records into the user's run-state store under
+// the user's secret, keyed on the endpoint and request body, the
+// configured model and a reader.rN.cN label, while the fixtures key on
+// the body alone, model replay-model and reader.vN. Re-recording needs a live
+// source behind countingModel in replay_test.go, answering each call
+// through the gateway instead of synthesizedReply, followed by a review
+// of every reply that disagrees with expected.json; until then the
+// synthesized set stays. They are signed with a fixed public test secret,
 // so a real run, which uses the user's own secret, never serves them. A
 // missing, torn, edited, foreign or stale recording fails the test
 // (replay_fail_test.go). After changing a prompt, the schema, slicing or an
