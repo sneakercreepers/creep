@@ -124,3 +124,44 @@ func runWithTimeout(t *testing.T, args ...string) (int, string) {
 		return 0, ""
 	}
 }
+
+// A FIFO or a hard link planted where the baseline is: the scan exits 2 at
+// once, never waiting for a writer and never reading the link's other name,
+// which may sit outside the repository.
+func TestBaselineSpecialFileRefused(t *testing.T) {
+	tests := []struct {
+		name string
+		make func(t *testing.T, path string) error
+		want string
+	}{
+		{"fifo", func(_ *testing.T, path string) error { return syscall.Mkfifo(path, 0o600) }, "not a link or special file"},
+		{"hard link", func(t *testing.T, path string) error {
+			outside := filepath.Join(t.TempDir(), "outside.json")
+			mustWrite(t, outside, emptyBaseline)
+			return os.Link(outside, path)
+		}, "must not be a hard link"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+			if err := tt.make(t, "b.json"); err != nil {
+				t.Skipf("unsupported here: %v", err)
+			}
+			done := make(chan struct{})
+			var code int
+			var stderr string
+			go func() {
+				defer close(done)
+				code, _, stderr = runScanWith(baselineDeps(vulnerableSQL(), baselineToday), "scan", "--config", cfg, "--baseline", "b.json")
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("the scan hung on the baseline")
+			}
+			if code != exitcode.ConfigError || !strings.Contains(stderr, tt.want) {
+				t.Errorf("exit %d: %s", code, stderr)
+			}
+		})
+	}
+}

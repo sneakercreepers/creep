@@ -28,6 +28,7 @@ var commands = []command{
 	{"scan", "scan the repository in the current directory; reports go to .creep/", runScan},
 	{"estimate", "estimate the calls, tokens, time and cost of a scan here, without calling a model", runEstimate},
 	{"why", "why <id>: show the evidence behind a finding of the last scan", runWhy},
+	{"accept", "accept <id> --expires 90d --reason \"...\": record a finding of the last scan as an accepted risk in the baseline file", runAccept},
 	{"reproduce", "reproduce <id>: run a verified finding's PoC again from its bundle, in the sandbox, without a model", runReproduce},
 	{"clean", "remove the containers, app images and networks creep left on local docker or podman, from any run", runClean},
 	{"resume", "resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)", runResume},

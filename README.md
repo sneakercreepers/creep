@@ -171,6 +171,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep scan` | Scan the current directory; write `.creep/report.*` |
 | `creep estimate` | Build every request a scan would send and measure it; no model call, no network ([ADR 0011](docs/adr/0011-estimate-and-stats.md)) |
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
+| `creep accept <id> --expires 90d --reason "..."` | Record a probable or verified finding of the last scan as an accepted risk in `creep-baseline.json` (or `--baseline <file>`); both flags are required, the expiry is 1d to 365d ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)) |
 | `creep reproduce <id>` | Run a verified finding's PoC again from its bundle in `.creep/bundles/`, against a fresh offline build, as many times as the scan did; no model is read, configured or called. Needs `sandbox.enabled`. Exit 0 when it verified in at least one run, 1 when in none ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)) |
 | `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level, the pinned images it needs |
 | `creep clean` | Remove every container, app image and network creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
@@ -192,6 +193,9 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `--changed <file>` | `scan` and `estimate`: evaluate only the paths listed in the file (see Incremental scans) |
 | `--price-in <n>` / `--price-out <n>` | `estimate` and `--stats`: price per 1M input/output tokens, for a cost |
 | `--format`, `--log-level` | Output format (`text`, `json`, `sarif`, `markdown`) and log level |
+| `--baseline <file>` | `scan`: the gate skips findings a live entry of the file matches, each still listed; `accept`: the file to write |
+| `--baseline-write` | `scan`: rewrite `--baseline` from this run's findings (a complete run only); accepted risks are kept, baseline entries expire in 90 days |
+| `--expires <n>d`, `--reason <text>` | `accept`: when the accepted risk expires, and why it is accepted |
 
 **Incremental scans.** `--changed <file>` limits a scan to the files a list names, one repository-relative path per line or NUL-separated. creep never runs git and has no `--diff <ref>`, so build the list with git yourself:
 
@@ -219,6 +223,16 @@ In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA
 
 An incomplete run never exits `0`, even when the gate also trips.
 
+**Baseline.** To gate only on new findings, take a baseline from a complete scan, commit it, and pass it to every scan ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)):
+
+```sh
+creep scan --baseline creep-baseline.json --baseline-write   # once, from a complete run
+creep accept sink-3 --expires 90d --reason "admin-only tool, fix in #12"
+creep scan --baseline creep-baseline.json
+```
+
+A finding is matched by its fingerprint (class, path and redacted sink line), so lines moving do not make it new; editing the sink line does. Every entry expires (baseline entries after 90 days, accepted risks when you say, at most 365 days), and an expired entry stops suppressing. A suppressed finding is still listed, with its expiry and reason, in the text summary, Markdown, SARIF (`suppressions`) and JSON (`suppression`); only the gate skips it. A not-evaluated finding is never suppressed, and an incomplete run still exits `4`. A malformed baseline, a link in its place or an expiry over a year away exits `2`. In a pull request, read the baseline from the base commit, so the pull request cannot suppress its own finding: `git show "$BASE_SHA:creep-baseline.json" > "$RUNNER_TEMP/baseline.json"` and `creep scan --baseline "$RUNNER_TEMP/baseline.json"`.
+
 ## CI: pull request and nightly scans
 
 The scan's mode picks the gate that judges it ([ADR 0021](docs/adr/0021-gate-per-mode.md)):
@@ -228,7 +242,7 @@ The scan's mode picks the gate that judges it ([ADR 0021](docs/adr/0021-gate-per
 | `pr` | `gates.pr` (`probable:critical`) | never: no build and no PoC, even with `sandbox.enabled`, so it never waits for verified findings | the default |
 | `nightly` | `gates.nightly` (`verified:high`) and `gates.pr` | builds the app and runs PoCs when `sandbox.enabled` | `--mode nightly`, or a GitHub Actions `schedule` event |
 
-The mode is never a config key, so the scanned repository cannot pick it; `--mode` always wins. A nightly scan also reads `gates.pr`, so it never passes what a pr scan fails. Each mode reads its keys with the same rules: the policy's `limits.gates.pr` and `limits.gates.nightly` floor both in every mode, and the project file may only make either stricter. A nightly scan that could not verify (`sandbox.enabled` false, verification unavailable for any reason, or a PoC candidate that got no run) reads `gates.nightly` at probable, `verified:high` as `probable:high`, so a finding nothing verified fails the run instead of passing it. Each scan prints its gate on stderr, for example `gate: nightly mode (GitHub Actions schedule event): gates.nightly "verified:high" (default) read as "probable:high": verification unavailable (no_runtime)`, and `creep config explain` ends with the `mode` and `gate` rows. A PoC that ran and never verified leaves its finding `probable`: `gates.pr` still fails a critical one, but a probable high finding nothing verified (0/5, a class with no template such as `ssrf`, a scanner finding) passes both default gates; set `gates.nightly: probable:high` in the user file or policy to fail on those too.
+The mode is never a config key, so the scanned repository cannot pick it; `--mode` always wins. A nightly scan also reads `gates.pr`, so it never passes what a pr scan fails. Each mode reads its keys with the same rules: the policy's `limits.gates.pr` and `limits.gates.nightly` floor both in every mode, and the project file may only make either stricter. A nightly scan that could not verify (`sandbox.enabled` false, verification unavailable for any reason, or a PoC candidate that got no run) reads `gates.nightly` at probable, `verified:high` as `probable:high`, so a finding nothing verified fails the run instead of passing it. Each scan prints its gate on stderr, for example `gate: nightly mode (GitHub Actions schedule event): gates.nightly "verified:high" (default) read as "probable:high": verification unavailable (no_runtime)`, and `creep config explain` ends with the `mode` and `gate` rows. A finding no PoC template can verify (`ssrf`, `command_injection`, `nosql_injection`, scanner findings) is read at probable in every nightly run, since nothing could verify it; accept one with a baseline entry ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)). A PoC that ran and never verified leaves its finding `probable`: `gates.pr` still fails a critical one, but a 0/5 probable high finding passes both default gates; set `gates.nightly: probable:high` in the user file or policy to fail on those too.
 
 A nightly workflow. Everything creep trusts comes from outside the repository: the policy (model, endpoint, consent, sandbox) is written by the workflow, the model key is the only secret and reaches only the scan step, the token is read-only and every action is pinned by SHA. Replace the placeholders, and pull the images `creep doctor` lists first (creep never pulls):
 

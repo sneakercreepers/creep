@@ -1,6 +1,7 @@
 package report
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -45,7 +46,7 @@ func checkFinding(f Finding, seen map[string]bool) error {
 	if _, ok := statusRank[f.Status]; !ok {
 		return fmt.Errorf("%w: finding %s: status %q", ErrInvalid, f.ID, f.Status)
 	}
-	if err := checkPoC(f); err != nil {
+	if err := errors.Join(checkPoC(f), checkSuppression(f)); err != nil {
 		return err
 	}
 	seen[f.ID] = true

@@ -93,5 +93,7 @@ func TestContractFixtureUsesEveryField(t *testing.T) {
 		!slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Partial }) ||
 		!slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Confidence > 0 && len(f.Evidence) > 0 }):
 		t.Error("fixture findings need a reason, a partial verdict, a confidence and evidence")
+	case !slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Fingerprint != "" && f.Suppression != nil && f.Suppression.Reason != "" }):
+		t.Error("fixture findings need a fingerprint and a suppression with a reason (#27)")
 	}
 }

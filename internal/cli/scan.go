@@ -44,6 +44,8 @@ type session struct {
 	// the scope the walk applied it with (#26).
 	changed     *changedList
 	incremental report.Incremental
+	// baseline is --baseline, read before the run opened anything (#27).
+	baseline *scanBaseline
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
@@ -88,6 +90,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	base, err := loadScanBaseline(e.opts, e.deps.today())
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	// Only the scan deadline cancels the run's context (#260); it starts
 	// after calibration, and the redactor stops with it.
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -100,6 +107,7 @@ func runScan(e env, args []string) int {
 	defer s.close()
 	s.gate = gate
 	s.changed = changed
+	s.baseline = base
 	warnPreset(e.stderr, resolved.Config.Model)
 	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {

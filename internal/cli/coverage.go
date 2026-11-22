@@ -148,6 +148,9 @@ func fileGapped(gaps []report.NotEvaluated) bool {
 // value, see runGate).
 func gateExceeded(gate string, findings []report.Finding) (bool, error) {
 	for _, f := range findings {
+		if f.Suppressed() {
+			continue // listed in every format; the baseline keeps it from the gate (#27)
+		}
 		severity, ok := classSeverity[f.Class]
 		if !ok {
 			severity = "critical"

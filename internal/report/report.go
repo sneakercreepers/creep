@@ -135,6 +135,13 @@ type Finding struct {
 	// text summary, Markdown and SARIF only: JSON v1 does not change, so a
 	// JSON consumer reads `verified`, and a report read back has none.
 	PoC PoCRate `json:"-"`
+	// Fingerprint identifies a probable or verified finding across runs and
+	// line moves, for the baseline (ADR 0022): a hash of its class, path and
+	// redacted sink line (or a scanner's rule), never of raw text.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	// Suppression is the baseline entry that keeps the finding from the
+	// gate, if one does; the finding is still listed everywhere.
+	Suppression *Suppression `json:"suppression,omitempty"`
 }
 
 // LineRange is an inclusive range of 1-based lines in the finding's file.
@@ -188,6 +195,9 @@ type Report struct {
 	// Incremental is the scope of a --changed scan (#26); JSON states it
 	// through the files listed unchanged.
 	Incremental Incremental `json:"-"`
+	// Baseline counts how the run used its baseline file (#27); JSON
+	// states each suppression on its finding.
+	Baseline BaselineUse `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -204,6 +214,7 @@ type Input struct {
 	Discovery      Discovery
 	Verification   Verification
 	Incremental    Incremental
+	Baseline       BaselineUse
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -226,7 +237,8 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := errors.Join(checkDiscovery(in.Discovery), checkVerification(in.Verification), checkIncremental(in.Incremental)); err != nil {
+	if err := errors.Join(checkDiscovery(in.Discovery), checkVerification(in.Verification),
+		checkIncremental(in.Incremental), checkBaseline(in.Baseline, findings)); err != nil {
 		return nil, err
 	}
 	info := buildinfo.Get()
@@ -243,6 +255,7 @@ func New(in Input) (*Report, error) {
 		},
 		Verification: in.Verification,
 		Incremental:  in.Incremental,
+		Baseline:     in.Baseline,
 	}, nil
 }
 

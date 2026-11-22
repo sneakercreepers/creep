@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/sneakercreepers/creep/internal/baseline"
 	"github.com/sneakercreepers/creep/internal/repofile"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/scanrun"
@@ -118,7 +119,10 @@ func scannerFindings(s repofile.Scanner, in []scanrun.Finding) []report.Finding 
 	class, prefix := scannerFindingClass(s)
 	out := make([]report.Finding, 0, len(in))
 	for _, f := range in {
-		out = append(out, report.Finding{ID: prefix + "-" + f.Key, Class: class, Status: report.StatusProbable, Path: f.Path, Line: f.Line})
+		out = append(out, report.Finding{
+			ID: prefix + "-" + f.Key, Class: class, Status: report.StatusProbable, Path: f.Path, Line: f.Line,
+			Fingerprint: baseline.Fingerprint(class, f.Path, baseline.ScannerAnchor(f.Anchor)),
+		})
 	}
 	return out
 }

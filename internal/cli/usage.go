@@ -44,6 +44,13 @@ func globalFlagsHelp() string {
 		"                      NUL-separated (git diff --name-only -z origin/main > changed.txt);\n"+
 		"                      every other source file is listed unchanged and not evaluated\n"+
 		"  --price-in <n>      estimate, --stats: price per 1M input tokens, for a cost\n"+
-		"  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost\n",
+		"  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost\n"+
+		"  --baseline <file>   scan: do not gate on findings the file's live entries match\n"+
+		"                      (each still listed); accept: the file to write (default\n"+
+		"                      "+defaultBaselineFile+")\n"+
+		"  --baseline-write    scan: rewrite --baseline from this run's findings (a complete\n"+
+		"                      run only); accepted risks are kept\n"+
+		"  --expires <n>d      accept: days until the accepted risk expires (1d to 365d)\n"+
+		"  --reason <text>     accept: why the risk is accepted (required)\n",
 		strings.Join(formats, ", "), d.format, strings.Join(logLevels, ", "), d.logLevel)
 }

@@ -57,10 +57,14 @@ func (f Failure) String() string {
 // Finding is one result. Path is repository-relative and slash-separated;
 // Line is 1-based, 0 for the whole file. Key is a hex digest of the
 // scanner, path, line and the tool's rule or advisory: an ID, never tool text.
+// Anchor is the same digest without the line, so it survives lines moving
+// (the baseline fingerprint, #27); two findings of one rule in one file share
+// it.
 type Finding struct {
-	Path string
-	Line int
-	Key  string
+	Path   string
+	Line   int
+	Key    string
+	Anchor string
 }
 
 // Result is one scanner run. SkippedRepoIgnore means the repository root

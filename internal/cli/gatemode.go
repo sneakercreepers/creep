@@ -6,6 +6,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/verify"
 )
 
 // runGate is the gate that judges one scan (#28, ADR 0021): the mode, how
@@ -58,7 +59,11 @@ func (g runGate) verifies(w io.Writer) bool {
 }
 
 // exceeded prints the gate line on w and reports whether a finding trips
-// a gate that judges the run (judging).
+// a gate that judges the run (judging). In a nightly scan a finding no PoC
+// template can verify (unverifiable) is also judged by gates.nightly read
+// at probable: verification could never try it, so verified:high alone
+// would pass it unseen, and a baseline entry is how an accepted one stops
+// failing the run (ADR 0021, ADR 0022).
 func (g runGate) exceeded(w io.Writer, v report.Verification, findings []report.Finding) (bool, error) {
 	gates, err := g.judging(w, v)
 	if err != nil {
@@ -70,7 +75,26 @@ func (g runGate) exceeded(w io.Writer, v report.Verification, findings []report.
 			return hit, err
 		}
 	}
-	return false, nil
+	if !g.nightly() {
+		return false, nil
+	}
+	gate, err := config.UnverifiedGate(g.value)
+	if err != nil {
+		return false, err
+	}
+	return gateExceeded(gate, unverifiable(findings))
+}
+
+// unverifiable are the findings whose class has no PoC template (ADR 0019),
+// such as ssrf and scanner findings: no nightly scan can verify them.
+func unverifiable(findings []report.Finding) []report.Finding {
+	var out []report.Finding
+	for _, f := range findings {
+		if len(verify.TemplatesFor(f.Class)) == 0 {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // judging prints the gate line on w and returns the gates the findings are
@@ -93,7 +117,7 @@ func (g runGate) judging(w io.Writer, v report.Verification) ([]string, error) {
 	if gate != g.value {
 		line += fmt.Sprintf(" read as %q: %s", gate, unverifiedReason(v))
 	}
-	line += fmt.Sprintf("; gates.pr %q (%s) also applies", g.pr, g.prSource)
+	line += fmt.Sprintf("; gates.pr %q (%s) also applies; a finding with no PoC template is read at probable", g.pr, g.prSource)
 	fmt.Fprintln(w, escapeControl(line))
 	return []string{gate, g.pr}, nil
 }

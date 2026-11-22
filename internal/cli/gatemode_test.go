@@ -67,9 +67,10 @@ func TestPRModeNeverWaitsForVerification(t *testing.T) {
 // never passes on findings nothing verified. The SSRF finding is rated
 // high: the PR gate (probable:critical) passes it, and the nightly gate
 // (verified:high) would pass it unverified, so without verification the
-// nightly gate is read as probable:high and the run fails. An app that was
-// built, for a class with no PoC template, is the documented residual: the
-// nightly gate reads verified findings only.
+// nightly gate is read as probable:high and the run fails. With the app
+// built, SSRF has no PoC template, so no run could verify it: it is read at
+// probable too. TestNightlyBaselineAcceptsUnverifiable shows how an
+// accepted one stops failing the run.
 func TestNightlyNeverPassesUnverified(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -88,8 +89,8 @@ func TestNightlyNeverPassesUnverified(t *testing.T) {
 		{"build failed", "nightly", sandboxOn, []sandbox.Status{rootlessDocker}, fakeBuilder{app: sandbox.App{Unavailable: sandbox.BuildFailed, Detail: "exit_1"}}, exitcode.GateExceeded,
 			`read as "probable:high": verification unavailable (build_failed)`},
 		{"operator loosened the nightly gate", "nightly", "gates:\n  nightly: none\n", nil, fakeBuilder{}, exitcode.OK, `gates.nightly "none" (--config`},
-		{"app built, no template for the class", "nightly", sandboxOn, []sandbox.Status{rootlessDocker}, fakeBuilder{app: builtApp, port: 5000}, exitcode.OK,
-			`gates.nightly "verified:high" (default); gates.pr "probable:critical" (default) also applies` + "\n"},
+		{"app built, no template for the class", "nightly", sandboxOn, []sandbox.Status{rootlessDocker}, fakeBuilder{app: builtApp, port: 5000}, exitcode.GateExceeded,
+			`gates.nightly "verified:high" (default); gates.pr "probable:critical" (default) also applies; a finding with no PoC template is read at probable` + "\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,6 +149,23 @@ func TestNightlyIncompleteWinsOverGate(t *testing.T) {
 	}
 	assertContains(t, "stderr", stderr, []string{`read as "probable:high"`})
 	assertContains(t, "stdout", stdout, []string{"probable  ssrf", "too_large"})
+}
+
+// Acceptance (#28, ADR 0021, ADR 0022): an unverifiable finding that fails
+// a nightly scan stops failing it once a baseline entry suppresses it, and
+// the entry does not hide it from the report.
+func TestNightlyBaselineAcceptsUnverifiable(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+	deps := baselineDeps(&fakeModel{verdict: map[string]string{"ssrf": "vulnerable"}}, baselineToday)
+	code, _, stderr := runScanWith(deps, "scan", "--config", cfg, "--mode", "nightly", "--baseline", "b.json", "--baseline-write")
+	if code != exitcode.GateExceeded {
+		t.Fatalf("write exit %d: %s", code, stderr)
+	}
+	code, stdout, stderr := runScanWith(deps, "scan", "--config", cfg, "--mode", "nightly", "--baseline", "b.json")
+	if code != exitcode.OK {
+		t.Fatalf("baselined exit %d\n%s%s", code, stdout, stderr)
+	}
+	assertContains(t, "stdout", stdout, []string{"ssrf", "suppressed: baseline until"})
 }
 
 // Protection (#28, #61, #62): the scanned repository cannot loosen the
