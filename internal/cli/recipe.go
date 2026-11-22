@@ -16,6 +16,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/recipe"
 	"github.com/sneakercreepers/creep/internal/report"
+	"github.com/sneakercreepers/creep/internal/state"
 	"github.com/sneakercreepers/creep/internal/verify"
 )
 
@@ -80,6 +81,7 @@ func runRecipeTest(e env, name string) int {
 	}
 	defer s.close()
 	r, tier, err := s.loadRecipe(ctx, e.stderr, data)
+	s.finishRecipeRun(err)
 	if err != nil {
 		printError(e.stderr, "creep recipe test", err)
 		return recipeFailureCode(err)
@@ -128,6 +130,16 @@ func (s *session) loadRecipe(ctx context.Context, stderr io.Writer, data []byte)
 	}
 	r, _, err := recipe.Checker{Model: s.model, Redactor: s.red, Tier: tier}.Load(ctx, data, checkRecipePoC)
 	return r, tier, err
+}
+
+// finishRecipeRun writes the run's end line, so a recipe test never looks
+// like an interrupted scan that creep resume could continue.
+func (s *session) finishRecipeRun(err error) {
+	outcome, reason := state.OutcomeComplete, ""
+	if err != nil {
+		outcome, reason = state.OutcomeIncomplete, "recipe_not_loaded"
+	}
+	_ = s.run.Finish(outcome, reason)
 }
 
 // recipeFailureCode is 2 for a refused recipe or an unmapped tier, and the
@@ -211,21 +223,26 @@ func checkRecipePath(name string) error {
 	return nil
 }
 
-// writeNewRecipe creates name with the template, exclusively, inside its
-// directory's os.Root: an existing file or a link there is never written.
+// writeNewRecipe creates name with the template, exclusively, inside the
+// working directory's os.Root: an existing file or a link there is never
+// written, and a directory swapped for a link after checkRecipePath cannot
+// move the write out of the tree.
 func writeNewRecipe(name string) error {
 	if err := checkRecipePath(name); err != nil {
 		return err
 	}
-	dir, file := path.Split(name)
-	if dir == "" {
-		dir = "."
-	}
-	root, err := os.OpenRoot(filepath.FromSlash(dir))
+	root, err := os.OpenRoot(".")
 	if err != nil {
 		return configError("recipe", name, err)
 	}
 	defer root.Close()
+	return createInRoot(root, name)
+}
+
+// createInRoot writes the template to name inside root, never over a file;
+// a failed write removes what it created.
+func createInRoot(root *os.Root, name string) error {
+	file := filepath.FromSlash(name)
 	f, err := root.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return configError("recipe", name, err)
