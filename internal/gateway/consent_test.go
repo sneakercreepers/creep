@@ -179,6 +179,7 @@ func TestSendWithoutConsent(t *testing.T) {
 		{"CI without policy", newConsent(t, ConsentOptions{CI: true, Prompt: answer(true, nil)}), true},
 		{"local decline", newConsent(t, ConsentOptions{Prompt: answer(false, nil)}), false},
 		{"no consent configured", nil, false},
+		{"zero-value consent", &Consent{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

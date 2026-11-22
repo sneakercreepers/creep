@@ -17,8 +17,15 @@
 //   - It connects only to configured model endpoints; creep has no telemetry.
 //
 // NewClient returns an opaque *Client with no HTTP methods, so the only
-// exported way to send is EgressLog.Send (a test checks that no exported
-// API returns *http.Client, *http.Transport or http.RoundTripper). It
+// exported way to send is EgressLog.Send. A go/types test walks every
+// exported object (functions, methods, variables, aliases, exported and
+// embedded fields, interface methods, type arguments) and fails when
+// *http.Client, *http.Transport, http.RoundTripper, net.Conn, net.Dialer,
+// net.Resolver, *x509.CertPool, *tls.Config or an address type (net.IP,
+// netip.Addr, which any resolver seam returns) is reachable, or a gateway
+// function returns any. Options exports only Allow: the resolver, dialer
+// and CA pool are unexported test seams, so no caller can send a
+// consented, allowlisted name to another address or trust its own CA. It
 // enforces where requests may go, in this order and before any
 // DNS lookup or dial:
 //   - Allowlist: the URL host and effective port must match an egress.allow
@@ -88,6 +95,12 @@
 //     and the tokens the provider reported. No error text, header or payload
 //     byte is ever written to the log.
 //
+// Because headers are never logged, a Call may carry only the headers a
+// model adapter needs (Accept, Anthropic-Version, Authorization,
+// Content-Type, X-Api-Key, in any case) and at most 8 KiB of header values;
+// anything else is refused with ErrHeader before anything is written or
+// sent, so repository text cannot leave in a header.
+//
 // The body itself is stored in <run>/payloads/<id>.payload (mode 0600, in a
 // 0700 directory), so the user can check the hash and read what was sent.
 //
@@ -117,15 +130,31 @@
 // connection. It is per endpoint origin (scheme, host and effective port,
 // normalized like egress.allow), never global:
 //   - In CI (config.InCI) consent comes only from the policy file's consent
-//     list (CI detection: config.InCI); nothing prompts and the local store
-//     is ignored. A missing entry returns a *ConsentError whose ExitCode is
-//     2; so does an unreadable or unsafe store (fail closed).
+//     list; nothing prompts and the local store is ignored. CI=false does
+//     not end detection while a provider's own variable (GITHUB_ACTIONS,
+//     GITLAB_CI and others) is set. A missing entry returns a *ConsentError
+//     whose ExitCode is 2; so does an unreadable or unsafe store (fail
+//     closed). The CLI checks the policy entries with CheckPolicyConsent
+//     when it loads the configuration, so a bad one is exit 2 at once.
 //   - Locally the policy, then the user's consent store (a 0600 JSON file of
-//     origins, replaced atomically, refused when it is a link, another
-//     user's or writable by others), then the injected Prompt. A yes is
+//     origins, replaced atomically, refused when it or its directory is a
+//     link, a junction or a special file, another user's or writable by
+//     others, on read and on write), then the injected Prompt. A yes is
 //     stored, so each endpoint is asked once; a no is remembered for the
 //     run only. TerminalPrompt declines without reading when stdin is not a
-//     terminal.
+//     terminal, and a prompt with no answer in five minutes is a refusal,
+//     so a CI run InCI misses cannot hang holding the consent lock.
+//   - A zero-value Consent refuses every endpoint, like one with no policy,
+//     store or prompt.
+//   - Known limit, Windows ACLs (#116, not planned): Go file modes do not
+//     express them, so the owner and writable-by-others checks are skipped
+//     on Windows and the store directory's ACL decides who can plant a
+//     consent file. The store, under %APPDATA%\creep, is private to the
+//     user by default; if %APPDATA% points at a folder other users can
+//     write (C:\ProgramData, a share), another local user could plant
+//     consent there. Checking the owner SID and
+//     the DACL needs Windows security calls the syscall package does not
+//     expose, that is x/sys and an ADR, which the maintainer declined.
 //   - A refusal is not written to egress.log: the log records what was
 //     attempted, and a refused call attempts nothing. The caller reports it.
 //   - The scanned repository cannot grant consent: creep.yaml has no consent

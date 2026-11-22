@@ -33,16 +33,19 @@ const (
 	idleConnTimeout       = 90 * time.Second
 )
 
-// Options configures NewClient. Only Allow comes from configuration
-// (egress.allow); the rest exist so tests can run without real DNS or
-// network and default to the system resolver, dialer and roots.
+// Options configures NewClient. Only Allow is exported: it comes from
+// configuration (egress.allow). The resolver, dialer and CA pool stay
+// unexported so no caller outside the gateway can map a consented,
+// allowlisted name to another address or trust its own CA (#115). Tests in
+// this package set them to run without real DNS or network; their zero
+// values are the system resolver, dialer and roots.
 type Options struct {
-	Allow    []string
-	Resolver Resolver
-	Dial     DialFunc
-	RootCAs  *x509.CertPool
+	Allow []string
 
-	limits timeLimits // zero fields take the defaults; tests shorten them
+	resolver netResolver
+	dial     dialFunc
+	rootCAs  *x509.CertPool
+	limits   timeLimits // zero fields take the defaults; tests shorten them
 }
 
 // Client is the handle Send uses to reach a model. It is opaque on purpose:
@@ -80,9 +83,9 @@ func newHTTPClient(opts Options) (*http.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway client: %w", err)
 	}
-	d := newPinningDialer(allow, opts.Resolver, opts.Dial, opts.limits)
+	d := newPinningDialer(allow, opts.resolver, opts.dial, opts.limits)
 	return &http.Client{
-		Transport:     guard{allow: allow, limits: d.limits, next: newTransport(d, opts.RootCAs)},
+		Transport:     guard{allow: allow, limits: d.limits, next: newTransport(d, opts.rootCAs)},
 		CheckRedirect: sameOrigin,
 	}, nil
 }

@@ -43,7 +43,7 @@ func TestRedirectToAnotherOriginRefused(t *testing.T) {
 	for _, tt := range tests {
 		res := newResolver(nil)
 		d := &recordingDial{target: srv.Listener.Addr().String()}
-		c := newTestClient(t, Options{Allow: allow, Resolver: res, Dial: d.dial})
+		c := newTestClient(t, Options{Allow: allow, resolver: res, dial: d.dial})
 		_, err := get(c, base+"/go?to="+tt.to)
 		if tt.wantErr != errors.Is(err, ErrRedirect) {
 			t.Errorf("redirect to %s: err = %v, wantErr %v", tt.to, err, tt.wantErr)
@@ -59,7 +59,7 @@ func TestRedirectDowngradeRefused(t *testing.T) {
 	port := serverPort(t, srv)
 	res := newResolver(map[string][]string{"example.com": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
-	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
+	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, resolver: res, dial: d.dial, rootCAs: roots})
 	_, err := get(c, "https://example.com:"+port+"/go?to=http://example.com:"+port+"/ok")
 	if !errors.Is(err, ErrRedirect) {
 		t.Fatalf("err = %v, want ErrRedirect", err)

@@ -26,6 +26,18 @@ func TestInCI(t *testing.T) {
 		{map[string]string{"BUILD_ID": "b1", "PROJECT_ID": "p1"}, true},
 		{map[string]string{"BUILD_ID": "b1"}, false},
 		{map[string]string{"PROJECT_ID": "p1"}, false},
+		// A repository step can set CI=false (#116); a provider's own
+		// variable still marks the run, whatever its value.
+		{map[string]string{"CI": "false", "GITHUB_ACTIONS": "true"}, true},
+		{map[string]string{"CI": "0", "GITLAB_CI": "true"}, true},
+		{map[string]string{"CI": "false", "CIRCLECI": "true"}, true},
+		{map[string]string{"CI": "false", "BUILDKITE": "true"}, true},
+		{map[string]string{"CI": "false", "TRAVIS": "true"}, true},
+		{map[string]string{"CI": "false", "BITBUCKET_BUILD_NUMBER": "42"}, true},
+		{map[string]string{"CI": "false", "DRONE": "true"}, true},
+		{map[string]string{"CI": "false", "APPVEYOR": "True"}, true},
+		{map[string]string{"GITHUB_ACTIONS": "false"}, true},
+		{map[string]string{"GITHUB_ACTIONS": " "}, false},
 	}
 	for _, tt := range tests {
 		got := InCI(func(k string) string { return tt.env[k] })

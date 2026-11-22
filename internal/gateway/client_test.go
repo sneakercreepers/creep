@@ -27,7 +27,7 @@ func TestNotAllowedFailsBeforeDNS(t *testing.T) {
 	for _, url := range tests {
 		res := newResolver(nil)
 		d := &recordingDial{target: "127.0.0.1:1"}
-		c := newTestClient(t, Options{Allow: allow, Resolver: res, Dial: d.dial})
+		c := newTestClient(t, Options{Allow: allow, resolver: res, dial: d.dial})
 		if _, err := get(c, url); err == nil {
 			t.Errorf("GET %s: want error", url)
 		}
@@ -38,7 +38,7 @@ func TestNotAllowedFailsBeforeDNS(t *testing.T) {
 }
 
 func TestNotAllowedError(t *testing.T) {
-	c := newTestClient(t, Options{Allow: []string{"api.example.com"}, Resolver: newResolver(nil)})
+	c := newTestClient(t, Options{Allow: []string{"api.example.com"}, resolver: newResolver(nil)})
 	if _, err := get(c, "https://evil.example/"); !errors.Is(err, ErrNotAllowed) {
 		t.Fatalf("err = %v, want ErrNotAllowed", err)
 	}
@@ -57,7 +57,7 @@ func TestPlainHTTPRefused(t *testing.T) {
 	allow := []string{"api.example.com", "localhost.attacker.com", "127.0.0.1.nip.io", "10.0.0.5", "0.0.0.0", "::"}
 	for _, url := range tests {
 		res := newResolver(nil)
-		c := newTestClient(t, Options{Allow: allow, Resolver: res, Dial: (&recordingDial{}).dial})
+		c := newTestClient(t, Options{Allow: allow, resolver: res, dial: (&recordingDial{}).dial})
 		if _, err := get(c, url); !errors.Is(err, ErrPlainHTTP) {
 			t.Errorf("GET %s: err = %v, want ErrPlainHTTP", url, err)
 		}
@@ -83,7 +83,7 @@ func TestPlainHTTPToLoopback(t *testing.T) {
 		res := newResolver(nil)
 		d := &recordingDial{target: srv.Listener.Addr().String()}
 		allow := []string{"127.0.0.1:" + port, "localhost:" + port}
-		c := newTestClient(t, Options{Allow: allow, Resolver: res, Dial: d.dial})
+		c := newTestClient(t, Options{Allow: allow, resolver: res, dial: d.dial})
 		if _, err := get(c, tt.url); err != nil {
 			t.Errorf("GET %s: %v", tt.url, err)
 			continue
@@ -104,7 +104,7 @@ func TestResolvedIPIsPinned(t *testing.T) {
 	port := serverPort(t, srv)
 	res := newResolver(map[string][]string{"example.com": {"93.184.216.7", "93.184.216.9"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
-	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
+	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, resolver: res, dial: d.dial, rootCAs: roots})
 
 	for i := 0; i < 3; i++ {
 		body, err := get(c, "https://example.com:"+port+"/")
@@ -135,7 +135,7 @@ func TestTLSVerifiesHostname(t *testing.T) {
 	// The test certificate covers example.com, not this name.
 	res := newResolver(map[string][]string{"api.other.test": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
-	c := newTestClient(t, Options{Allow: []string{"api.other.test:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
+	c := newTestClient(t, Options{Allow: []string{"api.other.test:" + port}, resolver: res, dial: d.dial, rootCAs: roots})
 	if _, err := get(c, "https://api.other.test:"+port+"/"); err == nil {
 		t.Fatal("certificate for another name was accepted")
 	}
@@ -157,7 +157,7 @@ func TestPrivateResolutionRefused(t *testing.T) {
 	for _, ips := range tests {
 		res := &fakeResolver{answers: map[string][][]netip.Addr{"example.com": {mustAddrs(ips)}}, calls: map[string]int{}}
 		d := &recordingDial{target: "127.0.0.1:1"}
-		c := newTestClient(t, Options{Allow: []string{"example.com"}, Resolver: res, Dial: d.dial})
+		c := newTestClient(t, Options{Allow: []string{"example.com"}, resolver: res, dial: d.dial})
 		if _, err := get(c, "https://example.com/"); !errors.Is(err, ErrPrivateAddress) {
 			t.Errorf("answer %v: err = %v, want ErrPrivateAddress", ips, err)
 		}
@@ -180,7 +180,7 @@ func TestIPEntryDoesNotVouchForNames(t *testing.T) {
 	for _, allow := range allows {
 		res := newResolver(map[string][]string{"example.com": {"10.0.0.5"}})
 		d := &recordingDial{target: srv.Listener.Addr().String()}
-		c := newTestClient(t, Options{Allow: allow, Resolver: res, Dial: d.dial, RootCAs: roots})
+		c := newTestClient(t, Options{Allow: allow, resolver: res, dial: d.dial, rootCAs: roots})
 		if _, err := get(c, "https://example.com:"+port+"/"); !errors.Is(err, ErrPrivateAddress) {
 			t.Errorf("allow %v: err = %v, want ErrPrivateAddress", allow, err)
 		}
@@ -198,7 +198,7 @@ func TestProxyEnvIgnored(t *testing.T) {
 	port := serverPort(t, srv)
 	res := newResolver(map[string][]string{"example.com": {"93.184.216.7"}})
 	d := &recordingDial{target: srv.Listener.Addr().String()}
-	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, Resolver: res, Dial: d.dial, RootCAs: roots})
+	c := newTestClient(t, Options{Allow: []string{"example.com:" + port}, resolver: res, dial: d.dial, rootCAs: roots})
 	if _, err := get(c, "https://example.com:"+port+"/"); err != nil {
 		t.Fatal(err)
 	}
