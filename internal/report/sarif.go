@@ -71,13 +71,17 @@ type sarifDescriptor struct {
 }
 
 type sarifResult struct {
-	RuleID     string          `json:"ruleId"`
-	RuleIndex  int             `json:"ruleIndex"`
-	Kind       string          `json:"kind"`
-	Level      string          `json:"level"`
-	Message    sarifMessage    `json:"message"`
-	Locations  []sarifLocation `json:"locations"`
-	Properties sarifResultProp `json:"properties"`
+	RuleID    string          `json:"ruleId"`
+	RuleIndex int             `json:"ruleIndex"`
+	Kind      string          `json:"kind"`
+	Level     string          `json:"level"`
+	Message   sarifMessage    `json:"message"`
+	Locations []sarifLocation `json:"locations"`
+	// The baseline (#27): creep's fingerprint, and the entry that keeps
+	// the result from the gate.
+	PartialFingerprints map[string]string  `json:"partialFingerprints,omitempty"`
+	Suppressions        []sarifSuppression `json:"suppressions,omitempty"`
+	Properties          sarifResultProp    `json:"properties"`
 }
 
 type sarifResultProp struct {
@@ -155,8 +159,9 @@ func sarifResults(findings []Finding, index map[string]int) []sarifResult {
 		}
 		results = append(results, sarifResult{
 			RuleID: f.Class, RuleIndex: index[f.Class], Kind: "fail", Level: level,
-			Message:    sarifMessage{Text: resultText(f)},
-			Locations:  []sarifLocation{fileLocation(f.Path, f.Line)},
+			Message:             sarifMessage{Text: resultText(f)},
+			Locations:           []sarifLocation{fileLocation(f.Path, f.Line)},
+			PartialFingerprints: sarifFingerprints(f), Suppressions: sarifSuppressions(f.Suppression),
 			Properties: sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs},
 		})
 	}
@@ -209,6 +214,7 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 	}
 	inv.Notifications = append(inv.Notifications, scannerNotifications(r.Coverage.Scanners)...)
 	inv.Notifications = append(inv.Notifications, verificationNotifications(r.Verification)...)
+	inv.Notifications = append(inv.Notifications, baselineNotifications(r.Baseline.Text(r.Findings))...)
 	return inv
 }
 

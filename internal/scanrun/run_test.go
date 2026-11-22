@@ -215,3 +215,28 @@ func TestParseRejectsHostileReports(t *testing.T) {
 		}
 	}
 }
+
+// Anchor drops the line from the key (#27): the same rule in the same file
+// keeps its anchor when lines move, another rule or file changes it, and
+// the secret the scanner reports is never decoded into it.
+func TestAnchorIgnoresLine(t *testing.T) {
+	repo := filepath.Join(t.TempDir(), "repo")
+	report := `[{"File":"a.py","StartLine":3,"RuleID":"aws-access-token","Secret":"AKIA-RAW"},` +
+		`{"File":"a.py","StartLine":40,"RuleID":"aws-access-token"},` +
+		`{"File":"a.py","StartLine":3,"RuleID":"slack-bot-token"},` +
+		`{"File":"b.py","StartLine":3,"RuleID":"aws-access-token"}]`
+	got, failure := parseGitleaks([]byte(report), repo, 10)
+	if failure != FailNone || len(got) != 4 {
+		t.Fatalf("parse: %v, %d findings", failure, len(got))
+	}
+	switch {
+	case got[0].Key == got[1].Key:
+		t.Error("lines 3 and 40 share a key")
+	case got[0].Anchor != got[1].Anchor:
+		t.Error("a moved finding changed its anchor")
+	case got[0].Anchor == got[2].Anchor || got[0].Anchor == got[3].Anchor:
+		t.Error("another rule or file shares the anchor")
+	case got[0].Anchor != findingKey("a.py", 0, []string{"gitleaks", "aws-access-token"}):
+		t.Error("the anchor hashes more than scanner, path and rule")
+	}
+}

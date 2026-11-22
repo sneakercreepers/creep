@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/sneakercreepers/creep/blob/main/docs/schemas/report-v1.json",
   "title": "creep JSON report, schema_version 1",
-  "description": "Written by creep's JSON report format. Once a release ships it, fields are added only with a schema_version bump and a new schema file; a committed fixture per version must stay valid (internal/report contract test). Before the first release, ADR 0009 amended version 1 additively.",
+  "description": "Written by creep's JSON report format. There is no version 2: version 1 changes additively only (an optional field or a new enum value), never by removing or retyping a field (maintainer decision, ADR 0009 and ADR 0021); a committed fixture must stay valid (internal/report contract test).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "tool", "run", "findings", "coverage", "data_handling"],
@@ -86,7 +86,20 @@
           "description": "Line ranges of the finding's file that the reader cited.",
           "type": "array",
           "items": { "$ref": "#/definitions/lineRange" }
-        }
+        },
+        "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0021). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "suppression": { "$ref": "#/definitions/suppression" }
+      }
+    },
+    "suppression": {
+      "description": "The baseline entry that keeps a probable or verified finding from the gate until it expires (ADR 0021). The finding is still listed; a not-evaluated finding is never suppressed. Added to v1 additively by #27.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "expires"],
+      "properties": {
+        "kind": { "enum": ["baseline", "accepted"] },
+        "expires": { "description": "The first UTC day the entry no longer suppresses.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "reason": { "description": "An accepted risk's reason, from the baseline file the scanned repository holds: untrusted, escape before printing. One printable line of at most 200 bytes.", "type": "string", "minLength": 1 }
       }
     },
     "lineRange": {

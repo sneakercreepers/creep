@@ -29,6 +29,7 @@ type scanDeps struct {
 	connect   func(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error)
 	calibrate func(ctx context.Context, opts calibrate.CacheOptions) (calibrate.Calibration, error)
 	now       func() time.Time // --stats clock; nil is time.Now
+	date      func() time.Time // the baseline's today (#27); nil is time.Now
 	// runScanner runs one optional scanner; nil is scanrun.Run, the only
 	// code that starts a program (ADR 0013).
 	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result

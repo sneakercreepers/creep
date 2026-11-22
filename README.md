@@ -171,6 +171,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep scan` | Scan the current directory; write `.creep/report.*` |
 | `creep estimate` | Build every request a scan would send and measure it; no model call, no network ([ADR 0011](docs/adr/0011-estimate-and-stats.md)) |
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
+| `creep accept <id> --expires 90d --reason "..."` | Record a probable or verified finding of the last scan as an accepted risk in `creep-baseline.json` (or `--baseline <file>`); both flags are required, the expiry is 1d to 365d ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)) |
 | `creep reproduce <id>` | Run a verified finding's PoC again from its bundle in `.creep/bundles/`, against a fresh offline build, as many times as the scan did; no model is read, configured or called. Needs `sandbox.enabled`. Exit 0 when it verified in at least one run, 1 when in none ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)) |
 | `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level, the pinned images it needs |
 | `creep clean` | Remove every container, app image and network creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
@@ -190,6 +191,9 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `--stats` | `scan`: print phase times, model calls, cache hits and tokens |
 | `--price-in <n>` / `--price-out <n>` | `estimate` and `--stats`: price per 1M input/output tokens, for a cost |
 | `--format`, `--log-level` | Output format (`text`, `json`, `sarif`, `markdown`) and log level |
+| `--baseline <file>` | `scan`: the gate skips findings a live entry of the file matches, each still listed; `accept`: the file to write |
+| `--baseline-write` | `scan`: rewrite `--baseline` from this run's findings (a complete run only); accepted risks are kept, baseline entries expire in 90 days |
+| `--expires <n>d`, `--reason <text>` | `accept`: when the accepted risk expires, and why it is accepted |
 
 **Calibration cache.** A calibration is kept in your user cache directory for `calibration.cache_days` (default 30) and reused only for the same contract, endpoint, model name, structured-output mode, max output tokens and retries, and the same creep task set and prompts; changing any of them calibrates again. creep cannot see which snapshot a model name points to: a dated name (`model-2025-06-01`) gets its own entry, but an alias such as `-latest` that the provider moves to a new snapshot keeps its cached tier until the entry expires. Pin a dated model name, or pass `--recalibrate` after the provider updates the alias. The `calibration:` line of `creep scan` shows the tier and, when the context probe stopped early, the size and reason (for example `8 KiB probe: HTTP 400`, which holds the model at tier S). A `calibrations/` cache directory that is a link or junction is refused before any model call, also with `--recalibrate`; the error names the directory to remove.
 
@@ -206,6 +210,16 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `4` | Incomplete run: report written, not everything evaluated ([ADR 0007](docs/adr/0007-exit-code-incomplete.md), [ADR 0009](docs/adr/0009-scan-and-why-contract.md)) |
 
 An incomplete run never exits `0`, even when the gate also trips.
+
+**Baseline.** To gate only on new findings, take a baseline from a complete scan, commit it, and pass it to every scan ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)):
+
+```sh
+creep scan --baseline creep-baseline.json --baseline-write   # once, from a complete run
+creep accept sink-3 --expires 90d --reason "admin-only tool, fix in #12"
+creep scan --baseline creep-baseline.json
+```
+
+A finding is matched by its fingerprint (class, path and redacted sink line), so lines moving do not make it new; editing the sink line does. Every entry expires (baseline entries after 90 days, accepted risks when you say, at most 365 days), and an expired entry stops suppressing. A suppressed finding is still listed, with its expiry and reason, in the text summary, Markdown, SARIF (`suppressions`) and JSON (`suppression`); only the gate skips it. A not-evaluated finding is never suppressed, and an incomplete run still exits `4`. A malformed baseline, a link in its place or an expiry over a year away exits `2`. In a pull request, read the baseline from the base commit, so the pull request cannot suppress its own finding: `git show "$BASE_SHA:creep-baseline.json" > "$RUNNER_TEMP/baseline.json"` and `creep scan --baseline "$RUNNER_TEMP/baseline.json"`.
 
 ## Configuration
 

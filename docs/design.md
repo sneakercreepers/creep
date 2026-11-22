@@ -44,6 +44,7 @@ No provider-specific code in the core. Presets are embedded data in `internal/pr
 ## Fixed protections (not configurable)
 
 - Model output never runs on the host.
+- A baseline only keeps a probable or verified finding from the gate, and only until its entry expires (at most 365 days; accepted risks need a reason); the finding stays listed in every report, a not-evaluated finding is never suppressed, an incomplete run still exits 4, and only `--baseline` can name the file ([ADR 0022](adr/0022-baseline-and-accepted-risks.md)).
 - Sandbox has no internet access: every container runs with `--network=none` or on the run's `--internal` network, which a canary must find closed before each PoC batch (else the run aborts), with no published port, a read-only root, no capabilities, user 65534 and resource limits, and never mounts the runtime socket or host credentials (ADR 0016). App builds run with `--network=none` from local base images only, from a copy of the context without `.env` files, with nothing in the Dockerfile the builder would fetch; a refused or failed build is verification unavailable, never a failed scan (#23).
 - Only targets built from local source; no `--url`.
 - Secrets always redacted before the gateway sends code; `egress.log` always on. Exception: the `codex` and `gemini` presets can read host files the model asks for, outside redaction (`host_reads`, ADR 0015, #229); creep warns at `doctor` and scan start.
@@ -55,7 +56,7 @@ Each protection has a test that is proven able to fail, run by the required CI j
 ## Configuration layers
 
 1. Built-in safe defaults → 2. Org policy (`CREEP_POLICY`, can lock keys) → 3. User (`~/.creep/config.yaml`) → 4. Project (`./creep.yaml`) → 5. CLI flags.
-`creep config explain` shows each final value and its source, including a preset. Privacy modes (`local-only`, `full`), include/exclude, baseline and recipes are not built yet.
+`creep config explain` shows each final value and its source, including a preset. Privacy modes (`local-only`, `full`), include/exclude and recipes are not built yet. A baseline is a file named on the command line (`--baseline`), never a config key ([ADR 0022](adr/0022-baseline-and-accepted-risks.md)).
 
 ## CI gates
 
@@ -83,7 +84,7 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Product never imports `os/exec` | `scanrun`, `sandbox` and `gateway` only, by an exact rule in `make budget` | Changed by ADR 0013, 0014, 0016 | Kept |
 | Exit codes 0–3 | Added 4 for incomplete runs, with fixed rules ([ADR 0007](adr/0007-exit-code-incomplete.md), [ADR 0009](adr/0009-scan-and-why-contract.md)) | Changed by ADR 0007, 0009 | Strengthened; a directory link the walk does not cover is listed `not_regular` and makes the run incomplete (#214) |
 | Reports SARIF, JSON, Markdown, HTML | SARIF, JSON v1, Markdown; HTML in v1.0 | None | Kept |
-| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; Action, `--diff`, baseline, nightly mode in v0.2 (#26–#29) | Moved to v0.2 | Kept for full scans |
+| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; baseline and accepted risks with an expiry (#27, ADR 0022); Action, `--diff`, nightly mode in v0.2 (#26, #28, #29) | Moved to v0.2 | Kept for full scans |
 | Recorded model replies for tests | Reader fixtures are synthesized from `expected.json`; no real-model recording or public bench yet (#204, #35) | Moved (bench in v0.3) | Unproven: quality with a real small model is not measured yet |
 | ~3 dependencies (YAML, wazero, JSON Schema) | 1 (YAML) since #265; no schema validator in the binary | Changed (smaller) | Kept |
 | Privacy modes, `creep clean`, `init` | `creep clean` removes creep's containers (#21); privacy modes and `init` not built; redacted mode always on | Moved to v0.2 or later | Kept |

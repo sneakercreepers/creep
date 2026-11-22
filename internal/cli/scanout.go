@@ -37,6 +37,9 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 	if err := printScan(e, s.cfg.Output.Format, cal, rep, written); err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
+	if err := s.baseline.save(e.stderr, rep); err != nil {
+		unwritten = append(unwritten, err)
+	}
 	s.printStats(e)
 	return reportCode(e, exitcode.ForReport(rep.Run.Incomplete, gate), append(s.staleReports, unwritten...))
 }
@@ -70,9 +73,11 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 	if err != nil {
 		return nil, err
 	}
+	fingerprint(res.findings, res.slices)
+	findings := append(slices.Clip(res.findings), res.scanners.findings...)
 	return report.New(report.Input{
-		Run: s.run.Summary(), ScanIncomplete: res.stop != "",
-		Findings: append(slices.Clip(res.findings), res.scanners.findings...),
+		Run: s.run.Summary(), ScanIncomplete: res.stop != "", Baseline: s.baseline.apply(findings),
+		Findings: findings,
 		Classes: classCoverage(coverageInput{
 			cal: cal.Result, findings: res.findings, planned: res.planned,
 			gapped: res.stop != "" || fileGapped(res.gaps),
@@ -163,6 +168,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 			return err
 		}
 		printVerification(e.stderr, rep.Verification)
+		printBaseline(e.stderr, rep)
 		if rep.Run.Incomplete {
 			fmt.Fprintln(e.stderr, incompleteMark(rep))
 		}
@@ -180,6 +186,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	}
 	printScanners(w, rep.Coverage.Scanners)
 	printVerification(w, rep.Verification)
+	printBaseline(w, rep)
 	if rep.Run.Incomplete {
 		fmt.Fprintln(w, incompleteMark(rep))
 	}
@@ -279,6 +286,7 @@ func printFindings(w io.Writer, findings []report.Finding) {
 		if rate := f.PoC.Text(); rate != "" {
 			notes += "  " + rate
 		}
+		notes += suppressionNote(f)
 		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), notes)
 	}
 }

@@ -17,6 +17,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 		r.Tool.Name, codeSpan(r.Tool.Version), codeSpan(r.Tool.Commit), r.SchemaVersion)
 	writeRunStatus(bw, r.Run)
 	writeFindings(bw, r.Findings)
+	writeSuppressions(bw, r.Baseline, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
 	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
@@ -143,6 +144,9 @@ func findingNotes(f Finding) string {
 	}
 	if rate := f.PoC.Text(); rate != "" {
 		notes = append(notes, codeSpan(rate))
+	}
+	if f.Suppression != nil {
+		notes = append(notes, codeSpan(fmt.Sprintf("suppressed: %s until %s", f.Suppression.Kind, f.Suppression.Expires)))
 	}
 	return strings.Join(notes, ", ")
 }

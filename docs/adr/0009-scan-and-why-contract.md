@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`)
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`)
 
 ## Context
 
@@ -154,3 +154,7 @@ The text summary also changes. A probable or verified finding from a partial sli
 ## Amendment: PoC rates and `creep reproduce` (#25, ADR 0020)
 
 [ADR 0020](0020-poc-repetitions-and-bundle.md) runs each PoC 5 times from `creep scan` and adds `creep reproduce <id>`. For this ADR: a PoC that verified in 5 of 5 runs makes its finding `verified`; one that verified in 1 to 4 makes it `verified` with its rate, marked intermittent; one that verified in none leaves the finding `probable`, since the scanned repository builds the app and could otherwise discard its own finding. The rate follows the #23 decision above: it is in the text summary (`verified in 3/5 runs, intermittent` after the finding), in Markdown's notes and in SARIF (the result message and the `poc_verified_runs` and `poc_runs` properties), and **JSON v1 does not change** (`report.Finding.PoC` is `json:"-"`), so a JSON consumer reads `verified`. The verification summary counts the PoCs that ran, verified in every run, were intermittent, were not reproduced and were not run; `no_port` and `start_failed` join the closed reasons. The outcome still never makes a run incomplete; only `verified`, as the gate reads it, can move the exit code. `creep reproduce <id>` exits 0 when the PoC verified in at least one run, 1 when in none, 2 for usage, configuration or a missing or refused bundle, 3 for the sandbox (ADR 0007 codes, where 1 means the PoC did not reproduce).
+
+## Amendment: baseline and accepted risks (#27, ADR 0022)
+
+[ADR 0022](0022-baseline-and-accepted-risks.md) adds `--baseline <file>`, `--baseline-write` and `creep accept <id>`. For this ADR: the **Gate** rule above skips a probable or verified finding a live baseline entry suppresses, and nothing else changes in how a run is judged. A suppressed finding keeps its status and is listed in every format; a `not_evaluated` finding is never suppressed; the incompleteness rules and exit 4 do not read suppressions, so a baseline never turns an incomplete run into exit 0 or 1. Report v1 gains two optional finding fields under the additive rule of the #26 amendment: `fingerprint` (32 lowercase hex digits, on probable and verified findings) and `suppression` (`kind` `baseline` or `accepted`, `expires`, and an accepted risk's `reason`); `report.ReadJSON` checks them as `report.New` does, so `creep why` and `creep accept` refuse a planted report that suppresses anything else. The text summary, Markdown and SARIF also print how the baseline was used (suppressed findings by kind, expired entries, entries that matched no finding); those counts are not JSON (`Report.Baseline` is `json:"-"`). A baseline file that cannot be read exits 2 before the run opens state; a refused or failed `--baseline-write` never exits 0.

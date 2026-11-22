@@ -137,6 +137,37 @@ func TestBuildMasksSecretsInSlices(t *testing.T) {
 	}
 }
 
+// Slice.Sink, which the baseline hashes (#27), is the sink line of
+// redact.File output: never the raw secret on it, and the same line
+// whatever code moves above it.
+func TestSliceSinkIsRedactedSinkLine(t *testing.T) {
+	token := "ghp_" + "1234567890abcdefghijABCDEFGHIJ123456"
+	sinkLine := `    os.system("deploy --token ` + token + ` " + request.args["c"])`
+	src := "import os\n\n@app.route(\"/run\")\ndef run():\n" + sinkLine + "\n"
+	moved := "import os\nimport sys\n\n\ndef helper():\n    return 1\n\n@app.route(\"/run\")\ndef run():\n" + sinkLine + "\n"
+	tests := []struct {
+		name   string
+		src    string
+		source int
+		sink   int
+	}{
+		{"original", src, 4, 5},
+		{"code added above", moved, 9, 10},
+	}
+	var sinks []string
+	for _, tt := range tests {
+		target := Target{Hypothesis: 1, Class: ClassCommandInjection, Path: "run.py", SourceLine: tt.source, SinkLine: tt.sink}
+		s := build(t, TierM, map[string]string{"run.py": tt.src}, target).Slices[0]
+		if strings.Contains(s.Sink, token) || !strings.Contains(s.Sink, "<SECRET_") || !strings.Contains(s.Sink, `os.system("deploy --token `) {
+			t.Errorf("%s: Sink %q is not the redacted sink line", tt.name, s.Sink)
+		}
+		sinks = append(sinks, s.Sink)
+	}
+	if sinks[0] != sinks[1] {
+		t.Errorf("Sink changed with a code move: %q vs %q", sinks[0], sinks[1])
+	}
+}
+
 // Acceptance (#94): a file redact.File rejects, or one that cannot be read
 // (missing or renamed since discovery ran), is never sliced, raw or truncated;
 // it is listed as not scanned and the run goes on.

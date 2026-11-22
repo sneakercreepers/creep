@@ -66,6 +66,10 @@ type Slice struct {
 	// Tier is the budget Text was cut to; Evaluate refuses any other tier's
 	// prompt, so a slice is never sent with a prompt it was not sized for.
 	Tier Tier
+	// Sink is the sink's line of redact.File output, escaped like Text, for
+	// the finding's baseline fingerprint (#27): it is hashed, never sent or
+	// printed, and never holds a secret redaction masked.
+	Sink string
 }
 
 // SkipReason says why a hypothesis was not evaluated. It is a closed set,
@@ -216,6 +220,7 @@ func (s Slicer) buildTarget(t Target, lines []string, budget int, rep *SliceRepo
 		Partial:    r.partial || fl.partial,
 		Redactions: s.Redactor.MarkerCounts(r.text),
 		Tier:       s.Tier,
+		Sink:       lines[t.SinkLine-1],
 	})
 }
 

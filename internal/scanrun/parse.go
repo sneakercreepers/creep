@@ -103,7 +103,7 @@ func (c *collector) add(repo, path string, line, max int, parts ...string) Failu
 		c.seen = map[string]bool{}
 	}
 	c.seen[key] = true
-	c.out = append(c.out, Finding{Path: rel, Line: line, Key: key})
+	c.out = append(c.out, Finding{Path: rel, Line: line, Key: key, Anchor: findingKey(rel, 0, parts)})
 	return FailNone
 }
 
