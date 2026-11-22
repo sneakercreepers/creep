@@ -227,3 +227,40 @@ func TestRecipeNewStaysInTree(t *testing.T) {
 		t.Errorf("createInRoot in the tree: %v", err)
 	}
 }
+
+// lint and test read inside the working directory's root: a parent swapped
+// for a link out of the tree after checkRecipePath is never read, nor is a
+// final link, even one that points back into the tree.
+func TestRecipeReadStaysInTree(t *testing.T) {
+	scanRepo(t, map[string]string{"in/r.json": string(recipe.Template())}, "")
+	outside := t.TempDir()
+	mustWrite(t, filepath.Join(outside, "r.json"), string(recipe.Template()))
+	linkDir(t, outside, "linked")
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	tests := []struct {
+		name string
+		ok   bool
+	}{
+		{"in/r.json", true},
+		{"linked/r.json", false},
+		{"missing/r.json", false},
+	}
+	if err := os.Symlink("in/r.json", "final.json"); err == nil {
+		tests = append(tests, struct {
+			name string
+			ok   bool
+		}{"final.json", false})
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := readCappedFile(recipeOpener(root), "recipe", filepath.FromSlash(tt.name), recipe.MaxFileBytes)
+			if (err == nil) != tt.ok {
+				t.Errorf("read %q: err %v, want ok %v", tt.name, err, tt.ok)
+			}
+		})
+	}
+}

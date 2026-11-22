@@ -24,26 +24,28 @@ var (
 	dockerRuntimes  = []string{"runc", "io.containerd.runc.v2"}
 )
 
-// parseVersion reads "1.2.3" or "1.2" with an optional "v" and any suffix
-// after "-", "+", "~" or a space ("1.1.12-0ubuntu2", "v2.2.5").
-func parseVersion(s string) (engineVersion, bool) {
+// parseVersion reads "1.2.3" or "1.2" with an optional "v", and returns
+// apart any suffix from the first "-", "+", "~" or space
+// ("1.1.12-0ubuntu2", "v2.2.5").
+func parseVersion(s string) (engineVersion, string, bool) {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	suffix := ""
 	if end := strings.IndexAny(s, "-+~ "); end >= 0 {
-		s = s[:end]
+		s, suffix = s[:end], s[end:]
 	}
 	parts := strings.Split(s, ".")
 	if len(parts) < 2 || len(parts) > 3 {
-		return engineVersion{}, false
+		return engineVersion{}, "", false
 	}
 	var v engineVersion
 	for i, p := range parts {
 		// Six digits keep every part inside a 32-bit int.
 		if p == "" || len(p) > 6 || strings.Trim(p, "0123456789") != "" {
-			return engineVersion{}, false
+			return engineVersion{}, "", false
 		}
 		v[i], _ = strconv.Atoi(p)
 	}
-	return v, true
+	return v, suffix, true
 }
 
 func (v engineVersion) atLeast(min engineVersion) bool {
@@ -55,16 +57,68 @@ func (v engineVersion) atLeast(min engineVersion) bool {
 	return true
 }
 
-// versionReason is ReasonOK for a version at or above min.
+// versionReason is ReasonOK for a version above min, or at min with no
+// suffix or a distribution's packaging suffix. A pre-release above min
+// ("1.35.4-dev", "1.2.0-rc.1") passes on purpose: its number is past the
+// fixed release, so the suffix is not read.
 func versionReason(s string, min engineVersion) Reason {
-	v, ok := parseVersion(s)
+	v, suffix, ok := parseVersion(s)
 	switch {
 	case !ok:
 		return ReasonUnknownVersion
 	case !v.atLeast(min):
 		return ReasonOldRuntime
+	case v == min:
+		return minimumSuffixReason(suffix)
 	}
 	return ReasonOK
+}
+
+// minimumSuffixReason judges the suffix of a version equal to the minimum:
+// a pre-release of it ("-rc.1", "-dev", "~beta2") predates the fix, a
+// packaging suffix ("-0ubuntu2", "+dfsg1", "-ce") marks the release
+// itself, and any other suffix is unknown, so it is refused.
+func minimumSuffixReason(suffix string) Reason {
+	switch {
+	case suffix == "":
+		return ReasonOK
+	case isPreRelease(suffix):
+		return ReasonOldRuntime
+	case isPackagingSuffix(suffix):
+		return ReasonOK
+	}
+	return ReasonUnknownVersion
+}
+
+// preReleaseTags start the words that mark a pre-release, in any case and
+// with or without a separator ("rc1", "-RC.1", "devel", "preview").
+var preReleaseTags = []string{"rc", "dev", "alpha", "beta", "pre"}
+
+// isPreRelease reports whether any run of letters in suffix starts with a
+// pre-release tag.
+func isPreRelease(suffix string) bool {
+	words := strings.FieldsFunc(strings.ToLower(suffix), func(r rune) bool { return r < 'a' || r > 'z' })
+	for _, w := range words {
+		for _, tag := range preReleaseTags {
+			if strings.HasPrefix(w, tag) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isPackagingSuffix accepts build metadata after "+", a distribution
+// revision after "-" that starts with a digit, and Docker's "-ce" or "-ee".
+func isPackagingSuffix(suffix string) bool {
+	if rest, ok := strings.CutPrefix(suffix, "+"); ok {
+		return rest != ""
+	}
+	rest, ok := strings.CutPrefix(suffix, "-")
+	if !ok || rest == "" {
+		return false
+	}
+	return strings.EqualFold(rest, "ce") || strings.EqualFold(rest, "ee") || (rest[0] >= '0' && rest[0] <= '9')
 }
 
 // dockerServer is the part of `docker version` the minimums read.
