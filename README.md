@@ -116,6 +116,8 @@ creep reproduce <id>   # run a verified finding's PoC again in the sandbox, offl
 
 Outside CI, the first send to an endpoint asks for your consent; in CI only the org policy's consent list grants it (`creep doctor` prints the consent key).
 
+Guides in the [wiki](https://github.com/sneakercreepers/creep/wiki): [Quickstart](https://github.com/sneakercreepers/creep/wiki/Quickstart), [Sandbox](https://github.com/sneakercreepers/creep/wiki/Sandbox) (what runs where, isolation levels, Podman), [Verification statuses](https://github.com/sneakercreepers/creep/wiki/Verification-statuses), [CI with the Action](https://github.com/sneakercreepers/creep/wiki/CI-with-the-Action) and [FAQ](https://github.com/sneakercreepers/creep/wiki/FAQ). Where a guide and this README disagree, this README and the ADRs win.
+
 ### Presets
 
 A preset sets `contract: command` and a reviewed command line with the CLI's tools switched off. Presets are embedded in the binary ([ADR 0015](docs/adr/0015-model-presets.md)).
@@ -359,7 +361,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline, nightly gate (#27, #28), GitHub Action (#29 ✅, [ADR 0023](docs/adr/0023-github-action.md)) |
+| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline and accepted risks (#27 ✅, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28 ✅, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29 ✅, [ADR 0023](docs/adr/0023-github-action.md)) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 
