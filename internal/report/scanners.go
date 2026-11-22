@@ -29,6 +29,20 @@ type ScannerCoverage struct {
 	Name    string        `json:"name"`
 	Status  ScannerStatus `json:"status"`
 	Classes []string      `json:"classes"`
+	// RepoIgnoreSkipped: the repository held a suppression file the scanner
+	// always reads (gitleaks' .gitleaksignore) and the run did not apply it
+	// (#226). Not in the frozen JSON v1 schema; the text summary, Markdown
+	// and SARIF say it.
+	RepoIgnoreSkipped bool `json:"-"`
+}
+
+// SkipNote is what the readable formats add when RepoIgnoreSkipped is set,
+// or "".
+func (s ScannerCoverage) SkipNote() string {
+	if !s.RepoIgnoreSkipped {
+		return ""
+	}
+	return "the repository's suppression file was not applied, so it hid no finding"
 }
 
 func checkScanners(in []ScannerCoverage) ([]ScannerCoverage, error) {

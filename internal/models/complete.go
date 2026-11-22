@@ -60,8 +60,9 @@ type Validator interface {
 type Request struct {
 	Purpose string // logged in egress.log, e.g. "reader"
 	System  string // creep's instructions
-	// Prompt is the user turn. Repository text in it must come from
-	// gateway.FileScan fragments, already redacted.
+	// Prompt is the user turn. Repository text in it must come from a
+	// producer listed on gateway.Call (FileScan fragments, reader slices,
+	// discovery batches), already redacted.
 	Prompt     string
 	Redactions map[string]int // marker label -> count in System and Prompt
 	// Schema is the output's JSON schema object, required for

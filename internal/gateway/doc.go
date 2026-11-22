@@ -7,7 +7,8 @@
 //     other package, test files and dev tooling included, imports them or
 //     reaches them through a dependency; golangci-lint's depguard rule gives
 //     the same feedback in editors.
-//   - Every model call is redacted first: FileScan passes each repository
+//   - Every model call is redacted first: each producer of repository text
+//     that Call lists (FileScan, reader.Slicer and discovery) passes each
 //     file whole through the run's redact.File and cuts only its output, and
 //     a run that returns redact.ErrRunFull stops sending and is reported as
 //     incomplete.
@@ -130,7 +131,7 @@
 //   - The scanned repository cannot grant consent: creep.yaml has no consent
 //     key and the store lives in the user's directory, never the repo.
 //
-// FileScan is how repository text becomes Call payloads (scan.go):
+// FileScan is the gateway's own producer of Call payloads (scan.go):
 //   - Each file is redacted whole by redact.File, then cut at line ends into
 //     fragments of at most MaxFragmentBytes (a longer line goes alone, never
 //     truncated). Only File output is cut, so no boundary splits a secret.
@@ -183,8 +184,13 @@
 // directory, where other users could plant files a CLI reads from parent
 // directories) and its own TMPDIR, a timeout and a stdout cap; stderr
 // is discarded. On Unix the CLI's whole process group is killed after it
-// exits or times out, before the working directory is checked; Windows
-// kills only the CLI (no job object without x/sys or unsafe). Anything
+// exits or times out, before the working directory is checked; on Windows
+// a timeout or the output cap kills the tree with taskkill /T /F from a
+// drive-letter SystemRoot (no job object without x/sys or unsafe, #226),
+// while a second handle opened right after the start pins the CLI's
+// process ID, since os/exec closes its own as soon as the CLI exits; after
+// a normal exit nothing is killed, since taskkill finds no tree under an
+// exited process (residual, threat model C3). Anything
 // left in the working directory means the CLI used a tool: the reply is
 // dropped with a *ToolUseError.
 package gateway

@@ -33,6 +33,7 @@ func codeBlock(size int) string {
 // generic rule out of budget, yet the code stays visible byte for byte and
 // every key value is still masked, through Redact and File.
 func TestDenseKeysKeepCodeVisible(t *testing.T) {
+	skipUnderRace(t)
 	rng := rand.New(rand.NewPCG(107, 1))
 	keys, values := denseKeyBlock(rng, 16<<10)
 	tests := []struct{ name, before, after string }{
@@ -41,8 +42,7 @@ func TestDenseKeysKeepCodeVisible(t *testing.T) {
 	}
 	for _, tt := range tests {
 		text := tt.before + keys + tt.after
-		// The input is seeded, so the job without -race checks this for both.
-		if !raceEnabled && !budgetRunsOut(t, text) {
+		if !budgetRunsOut(t, text) {
 			t.Fatalf("%s: the generic rule kept within its budget; the test needs it spent", tt.name)
 		}
 		viaFile, err := newRedactor(t).File([]byte(text))
@@ -137,6 +137,7 @@ func TestFindTotalMasksRest(t *testing.T) {
 // of budget and ends in an open assignment must not leak the value written
 // on the next line, as main never did; the code after it stays visible.
 func TestGivenUpLineMasksDanglingValue(t *testing.T) {
+	skipUnderRace(t)
 	rng := rand.New(rand.NewPCG(193, 1))
 	keys, _ := denseKeyBlock(rng, 16<<10)
 	tests := []struct{ name, open, close string }{
@@ -147,10 +148,9 @@ func TestGivenUpLineMasksDanglingValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Under -race: one value and less code, which only shrinks the budget.
-			for range underRace(4, 1) {
+			for range 4 {
 				value := fakeToken(rng, alnum, 24)
-				code := codeBlock(underRace(8<<10, 2<<10))
+				code := codeBlock(8 << 10)
 				text := strings.TrimSuffix(keys, "\n") + tt.open + fmt.Sprintf(tt.close, value) + code
 				assertValueMasked(t, text, value, code)
 			}

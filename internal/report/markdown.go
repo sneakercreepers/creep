@@ -104,7 +104,11 @@ func writeScanners(w io.Writer, scanners []ScannerCoverage) {
 	fmt.Fprint(w, "## Optional scanners\n\nOnly a scanner marked evaluated ran offline and evaluated its classes; for every other status they were not evaluated through it.\n\n")
 	fmt.Fprint(w, "| Scanner | Status | Classes |\n|---|---|---|\n")
 	for _, s := range scanners {
-		fmt.Fprintf(w, "| %s | %s | %s |\n", codeSpan(s.Name), statusText(string(s.Status)), codeList(s.Classes))
+		status := statusText(string(s.Status))
+		if note := s.SkipNote(); note != "" {
+			status += "; " + note
+		}
+		fmt.Fprintf(w, "| %s | %s | %s |\n", codeSpan(s.Name), status, codeList(s.Classes))
 	}
 	fmt.Fprint(w, "\n")
 }

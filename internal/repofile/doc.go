@@ -9,13 +9,18 @@
 //   - IgnoreReason reads the marks an author can put on a file: a vendor
 //     directory name, a generator header (Go's "Code generated ... DO NOT
 //     EDIT.", "@generated" as the first word, or protoc's header, in the
-//     leading comments only), or a minified JavaScript or TypeScript shape
-//     (nine tenths of the bytes on lines over 500 bytes; a .min.js name
-//     never counts). A mark is the author's say-so (pentest P4, #213): the
-//     caller lists a vendor file unread only when VendorEvidence names a
-//     package-manager mark that exists, and believes a generated or
+//     leading comments only; a block comment counts only when it closes on
+//     a line of its own, so "/* @generated */ var x;" is code), or a
+//     minified JavaScript or TypeScript shape (nine tenths of the bytes on
+//     lines over 500 bytes; no file name, *.min.js or *-min.js, counts).
+//     Names are split at the host's separator, like the walk that made
+//     them: '\' separates on Windows only, and elsewhere is a byte of a
+//     legal file name (#194). A mark is the author's say-so (pentest P4,
+//     #213): the caller lists a vendor file unread only when VendorEvidence
+//     names a package-manager mark that exists, and believes a generated or
 //     minified mark only for a file discovery read in full with no
-//     candidate.
+//     candidate, so no opt-back-in is needed: a file with anything in it is
+//     evaluated whatever its mark (ADR 0017).
 //
 //   - EscapeLines makes repository lines inert before a prompt shows them,
 //     so no line can pass for a second line, a header or a terminal

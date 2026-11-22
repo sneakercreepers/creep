@@ -145,6 +145,8 @@ It runs with `--skip-trust` because headless Gemini CLI exits 55 in an untrusted
 > [!IMPORTANT]
 > The model reads untrusted code, so it must not have tools. `creep doctor` and every scan send a **tool canary** first and stop with exit `3` if the CLI writes a file or runs a command.
 
+Behind a corporate proxy, declare the proxy variables in `model.env` as well (`env: [HTTPS_PROXY, NO_PROXY]`): creep never passes them to a model CLI on its own.
+
 ### HTTP contract instead
 
 Any OpenAI-compatible endpoint or the Anthropic Messages API. The key comes only from the `CREEP_API_KEY` environment variable.
@@ -223,8 +225,8 @@ Any of these is a configuration error (exit `2`) that names the project file and
 
 Enable them in your user config, `--config` or the policy: `scanners: { enabled: [gitleaks, osv-scanner] }`. creep runs an installed scanner only from outside the repository, offline, with fixed arguments and no shell ([ADR 0013](docs/adr/0013-scanner-runner.md)):
 
-- **gitleaks** scans files (not git history) with `--redact`. A root `.gitleaksignore` would hide findings, so creep does not run gitleaks there and the run is incomplete.
-- **osv-scanner** runs with `--offline --no-ignore` against a local database in `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` (download it once with `osv-scanner --download-offline-databases`); without one it is not run.
+- **gitleaks** scans files (not git history) with `--redact`. The scanned repository cannot hide a finding: a root `.gitleaksignore` is not applied (creep scans every root entry on its own, the ignore file included, and says so on stderr and in the report). If a root directory holds its own `.gitleaksignore`, or the root has more than 256 entries, gitleaks is not run and the run is incomplete.
+- **osv-scanner** runs with `--offline --no-ignore` against a local database in `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` (download it once with `osv-scanner --download-offline-databases`); without one it is not run. The database must hold every ecosystem the repository's lockfiles use (for example `Go` for `go.mod`, `npm` for `package-lock.json`); if one is missing, osv-scanner is not run and the run is incomplete (`missing_ecosystem_db`).
 - **semgrep** is detected only; creep ships no local rules ([ADR 0010](docs/adr/0010-optional-scanners-detect-only.md)).
 
 Scanner findings are `probable`. A scanner that fails or times out makes the run incomplete.

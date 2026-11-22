@@ -286,7 +286,7 @@
               },
               "level": "note",
               "message": {
-                "text": "optional scanner gitleaks evaluated; evaluated: hardcoded_secret"
+                "text": "optional scanner gitleaks evaluated; evaluated: hardcoded_secret; the repository's suppression file was not applied, so it hid no finding"
               }
             },
             {

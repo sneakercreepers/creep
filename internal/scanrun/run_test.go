@@ -123,16 +123,6 @@ func TestRunRefusesWithoutStarting(t *testing.T) {
 		{"osv-scanner with a missing database directory", func(t *testing.T, base, repo string) Job {
 			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: filepath.Join(base, "none")}
 		}, NotRun},
-		{"gitleaks with a repository .gitleaksignore", func(t *testing.T, base, repo string) Job {
-			writeFile(t, filepath.Join(repo, ".gitleaksignore"), "app/config.py:generic-api-key:3\n")
-			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
-		}, Failed},
-		{"gitleaks with a .gitleaksignore directory", func(t *testing.T, base, repo string) Job {
-			if err := os.Mkdir(filepath.Join(repo, ".gitleaksignore"), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			return Job{Scanner: repofile.ScannerGitleaks, Bin: installFake(t, base, "findings", "gitleaks"), Repo: repo}
-		}, Failed},
 		{"osv-scanner database inside the repository", func(t *testing.T, base, repo string) Job {
 			return Job{Scanner: repofile.ScannerOSV, Bin: installFake(t, base, "findings", "osv-scanner"), Repo: repo, OSVDB: osvDB(t, repo)}
 		}, Refused},
@@ -158,9 +148,6 @@ func TestRunRefusesWithoutStarting(t *testing.T) {
 			got := Run(context.Background(), job)
 			if got.Outcome != tc.want || len(got.Findings) != 0 {
 				t.Fatalf("Run = %+v, want outcome %d", got, tc.want)
-			}
-			if tc.want == Failed && got.Failure != FailRepoIgnore {
-				t.Errorf("failure %s, want %s", got.Failure, FailRepoIgnore)
 			}
 			if ran(job.Bin) {
 				t.Error("the binary was started")

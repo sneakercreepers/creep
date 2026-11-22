@@ -51,13 +51,15 @@ func mustRedact(t testing.TB, r *Redactor, text string) string {
 	return out
 }
 
-// underRace returns race under -race and full otherwise: the heaviest tests
-// scale down there (issue #203) and keep full size in the job without -race.
-func underRace(full, race int) int {
+// skipUnderRace skips a heavy test under -race (#76). Such a test runs on one
+// goroutine, and redact starts none, so the race detector has nothing to
+// find in it; the test job without -race (windows-latest, pinned by the
+// budget tool's TestNonRaceTestJobIsRequired) runs it in full on every PR.
+func skipUnderRace(tb testing.TB) {
+	tb.Helper()
 	if raceEnabled {
-		return race
+		tb.Skip("heavy single-goroutine test: runs in full without -race (#76)")
 	}
-	return full
 }
 
 var markerRe = regexp.MustCompile(`<(?:SECRET|PII)_[A-Z0-9_]+_[0-9]+>`)

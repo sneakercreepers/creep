@@ -67,7 +67,20 @@
 // follows names within one file and the function around the sink, not
 // into helpers in other files or across calls; a guard contributes only
 // its first body line; and it over-approximates, since an assignment never
-// stops a name from being tracked.
+// stops a name from being tracked. Three more, none of which can leak a
+// secret or forge a line (#197):
+//   - lines_shifted holds because redact.File never adds a newline (pinned
+//     by redact's TestFileNeverAddsNewlines), so equal "\n" counts mean no
+//     line moved.
+//   - Slice.Redactions counts the markers in the text sent, so a marker
+//     that a line cut splits is not counted, and the counts in egress.log
+//     can be slightly low.
+//   - Backslashes are not escaped, so a literal `\x0d` in the source reads
+//     the same as an escaped CR; the text stays visible on its own line.
+//     Escaping runs before the flow walk, so a leading form feed, which
+//     Python reads as an indentation reset, becomes `\x0c` and that line
+//     reads as indent 0: the def around the sink can then be the wrong
+//     block without the slice being marked Partial (accuracy only).
 //
 // Evaluate (evaluate.go) asks the model about one slice: the tier's system
 // prompt, Slice.Text as the user turn and Slice.Redactions for egress.log,
