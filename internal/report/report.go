@@ -68,6 +68,9 @@ const (
 	// Kept for JSON v1 readers: no run since ADR 0017 emits these two.
 	SkipSyntaxError SkipReason = "syntax_error"
 	SkipUnsupported SkipReason = "unsupported_language"
+	// SkipUnchanged is a file an incremental scan left out because its
+	// --changed list does not name it (#26): by design, like vendor.
+	SkipUnchanged SkipReason = "unchanged"
 )
 
 var skipReasons = map[SkipReason]bool{
@@ -75,7 +78,7 @@ var skipReasons = map[SkipReason]bool{
 	SkipRunFull: true, SkipSendFailed: true, SkipBudget: true, SkipLinesShifted: true,
 	SkipVendor: true, SkipGenerated: true, SkipMinified: true, SkipNotRegular: true,
 	SkipInvalidPath: true, SkipParseFailed: true, SkipSyntaxError: true, SkipTruncated: true,
-	SkipUnsupported: true,
+	SkipUnsupported: true, SkipUnchanged: true,
 }
 
 // Incomplete reasons when the run state gives none.
@@ -178,6 +181,9 @@ type Report struct {
 	// Verification is the sandbox's outcome (#23); not part of the
 	// contract either.
 	Verification Verification `json:"-"`
+	// Incremental is the scope of a --changed scan (#26); JSON states it
+	// through the files listed unchanged.
+	Incremental Incremental `json:"-"`
 }
 
 // Input is what a run hands to New. Classes are in the caller's fixed order;
@@ -193,6 +199,7 @@ type Input struct {
 	DataHandling   DataHandling
 	Discovery      Discovery
 	Verification   Verification
+	Incremental    Incremental
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
@@ -215,7 +222,7 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := errors.Join(checkDiscovery(in.Discovery), checkVerification(in.Verification)); err != nil {
+	if err := errors.Join(checkDiscovery(in.Discovery), checkVerification(in.Verification), checkIncremental(in.Incremental)); err != nil {
 		return nil, err
 	}
 	info := buildinfo.Get()
@@ -231,6 +238,7 @@ func New(in Input) (*Report, error) {
 			Inventory:  slices.Clone(in.Discovery.Inventory), Batches: slices.Clone(in.Discovery.Batches),
 		},
 		Verification: in.Verification,
+		Incremental:  in.Incremental,
 	}, nil
 }
 

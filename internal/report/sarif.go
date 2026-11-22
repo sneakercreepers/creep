@@ -180,6 +180,7 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 			Message:    sarifMessage{Text: "incomplete run (" + r.Run.Reason + "): not everything was evaluated; this is not a clean result"},
 		})
 	}
+	inv.Notifications = append(inv.Notifications, incrementalNotifications(r.Incremental.Text(r.Coverage.NotEvaluated))...)
 	if summary := ByDesignSummary(r.Coverage.NotEvaluated); summary != "" {
 		inv.Notifications = append(inv.Notifications, sarifNotification{
 			Descriptor: sarifDescriptor{ID: "creep/by-design"},

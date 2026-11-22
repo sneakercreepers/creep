@@ -81,7 +81,7 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Product never imports `os/exec` | `scanrun`, `sandbox` and `gateway` only, by an exact rule in `make budget` | Changed by ADR 0013, 0014, 0016 | Kept |
 | Exit codes 0–3 | Added 4 for incomplete runs, with fixed rules ([ADR 0007](adr/0007-exit-code-incomplete.md), [ADR 0009](adr/0009-scan-and-why-contract.md)) | Changed by ADR 0007, 0009 | Strengthened; a directory link the walk does not cover is listed `not_regular` and makes the run incomplete (#214) |
 | Reports SARIF, JSON, Markdown, HTML | SARIF, JSON v1, Markdown; HTML in v1.0 | None | Kept |
-| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; Action, `--diff`, baseline, nightly mode in v0.2 (#26–#29) | Moved to v0.2 | Kept for full scans |
+| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; incremental scans with `--changed` (a path list built with git; creep never runs git, ADR 0009 #26 amendment), Action, baseline, nightly mode in v0.2 (#26–#29) | Moved to v0.2 | Kept for full scans |
 | Recorded model replies for tests | Reader fixtures are synthesized from `expected.json`; no real-model recording or public bench yet (#204, #35) | Moved (bench in v0.3) | Unproven: quality with a real small model is not measured yet |
 | ~3 dependencies (YAML, wazero, JSON Schema) | 1 (YAML) since #265; no schema validator in the binary | Changed (smaller) | Kept |
 | Privacy modes, `creep clean`, `init` | `creep clean` removes creep's containers (#21); privacy modes and `init` not built; redacted mode always on | Moved to v0.2 or later | Kept |
