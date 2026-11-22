@@ -42,9 +42,15 @@ func ForReport(incomplete, gateExceeded bool) int {
 
 // Help returns the exit-code section printed by --help.
 func Help() string {
+	return render(table)
+}
+
+// render is Help over any table, so the golden test can prove that a changed
+// value or meaning fails it.
+func render(entries []entry) string {
 	var b strings.Builder
 	b.WriteString("Exit codes:\n")
-	for _, e := range table {
+	for _, e := range entries {
 		fmt.Fprintf(&b, "  %d  %s\n", e.code, e.meaning)
 	}
 	return b.String()

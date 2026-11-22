@@ -3,6 +3,8 @@ package report
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -75,5 +77,39 @@ func TestSummarizeEgressIgnoresAdditiveFields(t *testing.T) {
 	log := `{"v":1,"type":"request","id":"a","endpoint":"e","model":"m","bytes":5,"future_field":{"x":1}}`
 	if dh, err := SummarizeEgress(strings.NewReader(log)); err != nil || dh.Bytes != 5 {
 		t.Fatalf("got %+v, %v", dh, err)
+	}
+}
+
+// TestSummarizeEgressReadsV1Fixture keeps the report reader on the committed
+// v1 egress.log fixture the gateway's writer is pinned to (#135); the broken
+// cases prove a retyped field fails the read.
+func TestSummarizeEgressReadsV1Fixture(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "gateway", "testdata", "contract", "v1", "egress.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := string(data)
+	tests := []struct {
+		name string
+		log  string
+		ok   bool
+	}{
+		{"v1 fixture", fixture, true},
+		{"broken: bytes retyped", strings.Replace(fixture, `"bytes":32`, `"bytes":"32"`, 1), false},
+		{"broken: tokens retyped", strings.Replace(fixture, `"input":12`, `"input":"12"`, 1), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dh, err := SummarizeEgress(strings.NewReader(tt.log))
+			if !tt.ok {
+				if err == nil {
+					t.Fatalf("a retyped field was read: %+v", dh)
+				}
+				return
+			}
+			if err != nil || dh.Requests != 1 || dh.Bytes != 32 || dh.Redactions["SECRET_AWS"] != 1 || dh.Endpoints[0].InputTokens != 12 {
+				t.Fatalf("got %+v, %v", dh, err)
+			}
+		})
 	}
 }

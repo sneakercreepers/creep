@@ -1,0 +1,17 @@
+# flag, type, default, commands that accept it (implemented commands only)
+--baseline        string   ""      scan accept
+--baseline-write  bool     "false" scan
+--changed         string   ""      scan estimate
+--config          string   ""      doctor scan estimate why accept reproduce clean resume version config
+--expires         string   ""      accept
+--format          string   "text"  doctor scan estimate why accept reproduce clean resume version config
+--log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config
+--mode            string   ""      doctor scan estimate why accept reproduce clean resume version config
+--model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config
+--price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config
+--price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config
+--reason          string   ""      accept
+--recalibrate     bool     "false" doctor scan estimate why accept reproduce clean resume version config
+--record          bool     "false" doctor scan estimate why accept reproduce clean resume version config
+--replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config
+--stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config

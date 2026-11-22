@@ -2,6 +2,7 @@
 /dist/
 /.creep/
 egress.log
+!internal/gateway/testdata/contract/v1/egress.log
 *.sarif
 !internal/report/testdata/golden/*.sarif
 coverage.out
