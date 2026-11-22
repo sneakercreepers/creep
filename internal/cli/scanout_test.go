@@ -7,6 +7,7 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
@@ -89,4 +90,36 @@ func TestScanSummaryFlagsPartialVerdict(t *testing.T) {
 	}
 	assertContains(t, "stdout", out, []string{"probable  sqli  app.py:", "  partial slice\n",
 		"INCOMPLETE RUN (reason partial_slice): 2 not evaluated or partial, 1 left out by design;"})
+}
+
+// The text summary opens with the calibration header and ends with the
+// incomplete mark, then the report files written, if any; the model name
+// never reaches the terminal as raw control characters.
+func TestPrintScanTextOrder(t *testing.T) {
+	cal := calibrate.Calibration{Result: calibrate.Result{Tier: calibrate.TierM}, Model: models.Identity{Model: "m\x1b[2J"}}
+	tests := []struct {
+		name    string
+		written []string
+		last    string
+	}{
+		{"reports written", []string{".creep/report.json", ".creep/report.sarif"}, "reports: .creep/report.json .creep/report.sarif"},
+		{"no report", nil, "INCOMPLETE RUN"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rep := &report.Report{Run: report.RunInfo{Incomplete: true, Reason: "planner_rejected"}}
+			var out bytes.Buffer
+			printScanText(&out, cal, rep, tt.written)
+			lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+			if !strings.HasPrefix(lines[0], `calibration: model "m`) || !strings.Contains(lines[0], "tier M") {
+				t.Errorf("first line %q, want the calibration header", lines[0])
+			}
+			if strings.ContainsRune(out.String(), 0x1b) {
+				t.Errorf("raw escape in the summary:\n%q", out.String())
+			}
+			if last := lines[len(lines)-1]; !strings.Contains(last, tt.last) {
+				t.Errorf("last line %q, want %q", last, tt.last)
+			}
+		})
+	}
 }

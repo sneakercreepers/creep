@@ -21,6 +21,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
+	"github.com/sneakercreepers/creep/internal/report"
 )
 
 // offlineDeps fails the test if estimate asks for a transport, and
@@ -326,4 +327,22 @@ func jsonText(v any) string {
 	}
 	walk(v)
 	return b.String()
+}
+
+// A planner that refuses its input makes the estimate predict what the
+// scan does: every sink skipped as planner_rejected and the run
+// incomplete, also when there is no sink at all.
+func TestTierEstimateRejected(t *testing.T) {
+	for _, n := range []int{0, 1, 3} {
+		t.Run(strconv.Itoa(n), func(t *testing.T) {
+			findings := make([]report.Finding, n)
+			got := tierEstimate{skipped: map[string]int{"other": 2}}.rejected(findings, nil)
+			if got.skipped[reasonPlannerRejected] != n || got.skipped["other"] != 2 {
+				t.Errorf("skipped %v, want %d %s and the other reason kept", got.skipped, n, reasonPlannerRejected)
+			}
+			if got.incomplete != reasonPlannerRejected {
+				t.Errorf("incomplete %q, want %q", got.incomplete, reasonPlannerRejected)
+			}
+		})
+	}
 }

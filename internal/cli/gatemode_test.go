@@ -303,3 +303,20 @@ func TestProductionReadsCIEnvironment(t *testing.T) {
 		t.Fatal("productionDeps has no getenv, so a scheduled run would never be nightly")
 	}
 }
+
+// Protection (#28): loadScanInputs refuses a mode the flag parser did not
+// check (a caller that builds options itself), as a usage error before a
+// session opens, instead of judging the run with a zero gate.
+func TestLoadScanInputsRefusesUncheckedMode(t *testing.T) {
+	for _, mode := range []string{"weekly", "NIGHTLY", " pr"} {
+		t.Run(mode, func(t *testing.T) {
+			opts := defaultOptions()
+			opts.configPath = scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+			opts.mode = mode
+			in, err := loadScanInputs(env{opts: opts, deps: fakeDeps(&fakeModel{}, calibrate.TierM)}, nil)
+			if err == nil || !strings.Contains(err.Error(), "invalid --mode") {
+				t.Fatalf("mode %q: err %v, gate %+v", mode, err, in.gate)
+			}
+		})
+	}
+}
