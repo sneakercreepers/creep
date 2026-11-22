@@ -1,6 +1,6 @@
 # ADR 0023: The GitHub Action contract
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Changes:** a new stable contract, the Action at the repository root (`action.yml`: inputs, outputs, exit-code mapping, the PR comment marker); a new required CI check, `action`
