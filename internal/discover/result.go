@@ -1,5 +1,7 @@
 package discover
 
+import "math/bits"
+
 // Result is everything discovery found. It holds only IDs, enums, line
 // numbers and booleans, never repository text (text_test.go): paths stay
 // with the caller, indexed by FileID. internal/cli copies Routes and Sinks
@@ -14,6 +16,9 @@ type Result struct {
 	// Incomplete means the model path stopped before the last file
 	// (run_full, budget or send_failed): never a clean result.
 	Incomplete bool
+	// Samples is how many times each batch was sent: 1, or the N of
+	// --stability N (ADR 0024).
+	Samples uint8
 }
 
 // File is what discovery knows about one path.
@@ -50,16 +55,24 @@ type Route struct {
 // Sink is one candidate: a tripwire hit, a model proposal or both. Its
 // flags are always the planner's highest-risk values.
 type Sink struct {
-	ID            SinkID
-	Route         RouteID
-	File          FileID
-	Line          uint32
-	Kind          SinkKind
-	Origin        Origin
+	ID     SinkID
+	Route  RouteID
+	File   FileID
+	Line   uint32
+	Kind   SinkKind
+	Origin Origin
+	// SeenBy has bit i set when sample i named the candidate: every
+	// sample's bit for a tripwire hit, which needs no model. It only labels
+	// a finding; planning never reads it, so it cannot drop or lower a
+	// candidate (ADR 0024).
+	SeenBy        uint8
 	DynamicArg    bool // always true
 	Parameterized bool // always false
 	Indirect      bool // always false
 }
+
+// Seen is how many of the Result's samples named the sink.
+func (s Sink) Seen() int { return bits.OnesCount8(s.SeenBy) }
 
 // AuthSpan is a span a model said holds an auth check. It may only widen
 // the reader's slice; it never sets Authenticated or skips a sink.

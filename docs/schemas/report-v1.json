@@ -88,7 +88,19 @@
           "items": { "$ref": "#/definitions/lineRange" }
         },
         "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0022). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "suppression": { "$ref": "#/definitions/suppression" }
+        "suppression": { "$ref": "#/definitions/suppression" },
+        "stability": { "$ref": "#/definitions/stability" }
+      }
+    },
+    "stability": {
+      "description": "How many samples of a --stability N run saw a probable or verified finding: its discovery named the sink and its reader answered vulnerable (ADR 0024). Seen below runs is an unstable discovery, a property of the model, distinct from an intermittent PoC (ADR 0020), which is not in JSON. Added to v1 additively by #37.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runs", "seen", "unstable"],
+      "properties": {
+        "runs": { "type": "integer", "minimum": 2, "maximum": 5 },
+        "seen": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "unstable": { "description": "seen < runs.", "type": "boolean" }
       }
     },
     "suppression": {

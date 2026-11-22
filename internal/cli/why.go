@@ -86,6 +86,9 @@ func printWhy(w io.Writer, f report.Finding) {
 	if f.Partial {
 		fmt.Fprintln(w, "  slice:      partial; lines were left out, so this verdict is partial coverage")
 	}
+	if label := f.Stability.Text(); label != "" {
+		fmt.Fprintf(w, "  stability:  %s\n", label)
+	}
 }
 
 func evidenceText(ranges []report.LineRange) string {

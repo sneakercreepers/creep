@@ -293,6 +293,9 @@ func printFindings(w io.Writer, findings []report.Finding) {
 		if rate := f.PoC.Text(); rate != "" {
 			notes += "  " + rate
 		}
+		if label := f.Stability.Text(); label != "" {
+			notes += "  " + label
+		}
 		notes += suppressionNote(f)
 		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), notes)
 	}

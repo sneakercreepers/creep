@@ -6,7 +6,7 @@
 - **Supersedes:** [ADR 0012](0012-language-kits.md) and [ADR 0008](0008-wazero-tree-sitter.md) (wazero and the grammars removed by #265 step F, landed with steps C–E in one PR; see [Amendments](#amendments-2026-11-19)).
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (incompleteness rules and not-evaluated reasons, from step D; see [Report contract](#report-contract-d3)), architecture §3, §5, §6, §7 and §9.
 - **Changes:** a new layer-4 package `internal/discover`; what `creep scan` and `creep estimate` send to the model (whole redacted source files, D1); when a run may exit 0 (D2)
-- **Amended by:** [ADR 0009's #26 amendment](0009-scan-and-why-contract.md#amendment-26-2026-11-21-incremental-scans-with---changed): there is no report v2, so D3's "JSON stays v1 and gains nothing" becomes "v1 changes additively only"; v1 gains the `unchanged` reason.
+- **Amended by:** [ADR 0024](0024-discovery-stability.md) (`--stability N`: every batch is sent to N samples and their proposals join the union; a sample never removes a candidate, lowers its risk or clears a failure); [ADR 0009's #26 amendment](0009-scan-and-why-contract.md#amendment-26-2026-11-21-incremental-scans-with---changed): there is no report v2, so D3's "JSON stays v1 and gains nothing" becomes "v1 changes additively only"; v1 gains the `unchanged` reason.
 
 ## Context
 

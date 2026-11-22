@@ -132,7 +132,7 @@ func (s *session) walk(ctx context.Context, stderr io.Writer) (all, scanned repo
 	}
 	scanned, s.incremental = s.changed.scope(all)
 	if s.mode() != state.ModeReplay {
-		noteWholeFiles(stderr, wholeFileTarget(s.cfg.Model, s.link.command), scanned.sources())
+		noteWholeFiles(stderr, wholeFileTarget(s.cfg.Model, s.link.command), scanned.sources(), s.opts.stability)
 	}
 	return all, scanned, nil
 }
@@ -140,9 +140,13 @@ func (s *session) walk(ctx context.Context, stderr io.Writer) (all, scanned repo
 // noteWholeFiles is the scan-start notice: consent per endpoint carries
 // over to discovery's whole-file egress, so the operator is told every
 // time. The count is the walk's, made with no model call.
-func noteWholeFiles(w io.Writer, target string, files int) {
-	fmt.Fprintf(w, "creep scan: discovery sends up to %d whole source files, each redacted, to %s; run creep estimate to see the volume\n",
-		files, escapeControl(target))
+func noteWholeFiles(w io.Writer, target string, files, samples int) {
+	times := ""
+	if samples > 1 {
+		times = fmt.Sprintf(" %d times (--stability)", samples)
+	}
+	fmt.Fprintf(w, "creep scan: discovery sends up to %d whole source files%s, each redacted, to %s; run creep estimate to see the volume\n",
+		files, times, escapeControl(target))
 }
 
 // discover runs discovery at the calibrated tier with the run's seed.
@@ -155,7 +159,7 @@ func (s *session) discover(ctx context.Context, tier calibrate.Tier, files repoF
 	if err != nil {
 		return repoScan{}, err
 	}
-	d := discover.Discoverer{Redactor: s.red, Model: s.model, Tier: dtier, Seed: seed, Read: readRepoFile(s.repo)}
+	d := discover.Discoverer{Redactor: s.red, Model: s.model, Reruns: s.reruns, Tier: dtier, Seed: seed, Read: readRepoFile(s.repo)}
 	done := s.stats.start(phaseDiscover)
 	defer done()
 	return discoverRepo(ctx, d, files)

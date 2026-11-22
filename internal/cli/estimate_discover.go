@@ -6,6 +6,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/redact"
 )
 
@@ -15,8 +16,9 @@ import (
 var emptyDiscovery = []byte(`{"id":"estimate","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"{\"entries\":[],\"sinks\":[],\"auth\":[]}"},"finish_reason":"stop"}]}`)
 
 // measureDiscovery runs discovery at tier against the meter: every batch
-// the scan would send is built from the same redacted files, seed and
-// prompt, and measured, never sent (ADR 0017 D1, ADR 0011 option B). The
+// the scan would send, once per --stability sample with the sample's own
+// label, is built from the same redacted files, seed and prompt, and
+// measured, never sent (ADR 0017 D1, ADR 0011 option B). The
 // requests are measured in the OpenAI wire format, as calibration is, so
 // the meter can answer them. red is the tier's redactor, shared with the
 // reader stage as the scan shares it, so placeholders number alike and the
@@ -38,7 +40,11 @@ func (est *estimateRun) measureDiscovery(ctx context.Context, tier calibrate.Tie
 	if err != nil {
 		return repoScan{}, err
 	}
-	d := discover.Discoverer{Redactor: red, Model: model, Tier: dtier, Seed: est.seed, Read: readRepoFile(est.repo)}
+	reruns, err := rerunModels(est.opts.stability, func(k int) (*models.HTTP, error) { return measureModel(cfg, sampleSend(k, m.send)) })
+	if err != nil {
+		return repoScan{}, err
+	}
+	d := discover.Discoverer{Redactor: red, Model: model, Reruns: reruns, Tier: dtier, Seed: est.seed, Read: readRepoFile(est.repo)}
 	res, marks, err := runDiscovery(ctx, d, est.files)
 	if err != nil {
 		return repoScan{}, err

@@ -90,16 +90,19 @@ func (m *meter) recorded(c gateway.Call) bool {
 	return err == nil && ok
 }
 
-// readerRequests sends each slice through Evaluate to the meter, so the
-// bodies are the reader's own, byte for byte.
-func (m *meter) readerRequests(ctx context.Context, cfg config.Model, tier reader.Tier, slices []reader.Slice) error {
-	model, err := measureModel(cfg, m.send)
-	if err != nil {
-		return err
-	}
-	for _, s := range slices {
-		if _, err := reader.Evaluate(ctx, model, tier, s); err != nil && !errors.Is(err, errNoModelCall) {
+// readerRequests sends each slice through Evaluate to the meter, once per
+// --stability sample with the sample's own label, so the bodies and cache
+// keys are the reader's own, byte for byte.
+func (m *meter) readerRequests(ctx context.Context, cfg config.Model, tier reader.Tier, slices []reader.Slice, samples int) error {
+	for k := 1; k <= max(samples, 1); k++ {
+		model, err := measureModel(cfg, sampleSend(k, m.send))
+		if err != nil {
 			return err
+		}
+		for _, s := range slices {
+			if _, err := reader.Evaluate(ctx, model, tier, s); err != nil && !errors.Is(err, errNoModelCall) {
+				return err
+			}
 		}
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/sneakercreepers/creep/internal/models"
@@ -34,7 +35,16 @@ type Discoverer struct {
 	// redact.ErrFileTooLarge and, at most, the file's first HeadBytes, so
 	// the head alone says whether a file with no extension is source.
 	Read func(path string) ([]byte, error)
+	// Reruns are the models of the extra samples of a --stability run
+	// (ADR 0024): each is sent every batch Model is sent, with the same
+	// prompt, and its proposals join the union, so a rerun can add a
+	// candidate but never remove or lower one. At most MaxSamples-1; nil
+	// for a run of one sample. Each one's SendFunc is the gateway too.
+	Reruns []*models.HTTP
 }
+
+// MaxSamples bounds the samples of one run: Model and its Reruns.
+const MaxSamples = 5
 
 // fileWork is one path while the run builds its Result.
 type fileWork struct {
@@ -56,6 +66,7 @@ type sinkProp struct {
 	kind     SinkKind
 	entry    Span // the proposed entry's lines; zero for none
 	hasEntry bool
+	samples  uint8 // bit i: sample i named the sink
 }
 
 // run is the state of one Run.
@@ -90,7 +101,7 @@ func (d Discoverer) Run(ctx context.Context, paths []string) (Result, error) {
 		r.addFile(ctx, i)
 	}
 	r.flush(ctx)
-	res := assemble(r.work)
+	res := assemble(r.work, r.samples())
 	res.Incomplete = r.err != nil
 	return res, r.err
 }
@@ -102,6 +113,9 @@ func (d Discoverer) newRun(paths []string) (*run, error) {
 	}
 	if d.Redactor == nil || d.Model == nil || d.Read == nil || d.Seed == [32]byte{} {
 		return nil, fmt.Errorf("%w: Redactor, Model, Read and a non-zero Seed are required", ErrConfig)
+	}
+	if len(d.Reruns) >= MaxSamples || slices.Contains(d.Reruns, nil) {
+		return nil, fmt.Errorf("%w: %d reruns, want at most %d, none nil", ErrConfig, len(d.Reruns), MaxSamples-1)
 	}
 	if uint64(len(paths)) > math.MaxUint32 {
 		return nil, fmt.Errorf("%w: %d paths", ErrConfig, len(paths))
@@ -236,4 +250,20 @@ func (r *run) halt(cov Coverage, reason Reason, err error) {
 
 func (w *fileWork) fail(cov Coverage, reason Reason) {
 	w.file.Coverage, w.file.Reason = cov, reason
+}
+
+// failed reports a file a sample already listed as not read in full. A
+// later sample of the same batch never clears that (ADR 0024).
+func (w *fileWork) failed() bool {
+	return w.file.Coverage != 0 && w.file.Coverage != CoverageReadFull
+}
+
+// models returns the client of each sample, Model first.
+func (r *run) models() []*models.HTTP {
+	return append([]*models.HTTP{r.d.Model}, r.d.Reruns...)
+}
+
+// samples is how many samples the run takes, 1 to MaxSamples.
+func (r *run) samples() uint8 {
+	return uint8(1 + len(r.d.Reruns)) //nolint:gosec // G115: newRun keeps it at most MaxSamples
 }
