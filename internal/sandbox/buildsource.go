@@ -50,6 +50,7 @@ type buildPlan struct {
 	dockerfile string   // the Dockerfile, relative to the root
 	target     string   // stage to build; "" for the last
 	images     []string // images the Dockerfile reads, which must be present
+	checked    []byte   // the Dockerfile as checkDockerfile read it
 }
 
 // Root build files, in the order they are looked for. A compose file
@@ -132,7 +133,7 @@ func planDockerfile(repo Repo, plan buildPlan) (buildPlan, *refusal) {
 	if plan.target != "" && !slices.Contains(stages, strings.ToLower(plan.target)) {
 		return buildPlan{}, refuse(BuildComposeRefused, "build.target")
 	}
-	plan.images = images
+	plan.images, plan.checked = images, data
 	return plan, nil
 }
 
