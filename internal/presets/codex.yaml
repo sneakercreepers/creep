@@ -8,12 +8,20 @@
 #                           Project config loads only for trusted projects,
 #                           and the empty temp directory is not one.
 #   -c features.shell_tool=false
-#                           switches the command execution tools off (config
-#                           reference: "Enable command execution tools"), the
+#                           switches the command execution tools off, the
 #                           path by which Codex could read files under HOME.
 #   -c features.view_image=false
 #                           switches off view_image, which opens local images
 #                           by path.
+#   -c features.apps=false  switches off the ChatGPT app connectors
+#                           (codex_apps MCP server), which include a web
+#                           search and tools that publish pages and sites.
+#   -c features.plugins=false
+#                           no plugin resources or plugin installs.
+#   -c features.image_generation=false
+#                           no image generation tool.
+#   -c web_search=disabled  switches off the built-in web search and page
+#                           open tool, which is on by default.
 #   -c project_root_markers=[]
 #                           "skip searching parent directories and treat the
 #                           current working directory as the project root"
@@ -23,27 +31,38 @@
 #                           which is not a Git repository.
 #   --ephemeral             keeps no session rollout files on disk.
 #   --color never           no escape sequences in the reply.
-# Still read: the login and the global instructions under CODEX_HOME
-# (~/.codex/AGENTS.md), which are the operator's own files.
-# Unverified (medium confidence): --ignore-user-config and the -c overrides
-# are documented but not yet checked with the real CLI. A renamed key could
-# be ignored, leaving the shell on under the read-only sandbox. So
-# host_reads stays unbounded until a manual check with the real CLI confirms
-# them (threat model C6; #229 closed with this as an accepted residual).
+# Checked with codex-cli 0.171.0 on 2026-11-22 (#272), in the gateway's
+# empty private working directory with its argv and environment: every flag
+# and key exists (codex exec --help, codex features list). With these args
+# the model could not read a canary file by absolute path, run a command
+# (echo, whoami) or list a directory, also through a sub-agent; the web
+# search, app connectors and image tool were gone; nothing was written.
+# Without the apps and web_search overrides, web search and page open still
+# worked, so they were added. Still on, with no flag to switch them off:
+# apply_patch, whose verification opens any absolute host path and reports
+# whether the file exists and whether it holds a given line (no content was
+# printed); a JavaScript code tool with no file or process access; sub-agents
+# that inherit these args; goal and clock tools. So host_reads stays
+# unbounded. Still read: the login and ~/.codex/AGENTS.md under CODEX_HOME,
+# the operator's own files.
 # Credentials: CODEX_API_KEY declared in model.env, or the login saved
 # under CODEX_HOME.
 version: 1
 name: codex
-description: OpenAI Codex CLI exec mode in a read-only sandbox without shell, image tools or user config, prompt on stdin.
+description: OpenAI Codex CLI exec mode in a read-only sandbox without shell, image, web or app tools or user config, prompt on stdin.
 docs: https://developers.openai.com/codex/noninteractive
 program: codex
-args: [exec, --sandbox, read-only, --ignore-user-config, -c, features.shell_tool=false, -c, features.view_image=false, -c, "project_root_markers=[]", --skip-git-repo-check, --ephemeral, --color, never, "-"]
+args: [exec, --sandbox, read-only, --ignore-user-config, -c, features.shell_tool=false, -c, features.view_image=false, -c, features.apps=false, -c, features.plugins=false, -c, features.image_generation=false, -c, web_search=disabled, -c, "project_root_markers=[]", --skip-git-repo-check, --ephemeral, --color, never, "-"]
 tools_off:
   - [--sandbox, read-only]
   - [--ignore-user-config]
   - [-c, features.shell_tool=false]
   - [-c, features.view_image=false]
+  - [-c, features.apps=false]
+  - [-c, features.plugins=false]
+  - [-c, features.image_generation=false]
+  - [-c, web_search=disabled]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: the flags that turn off its shell and image tools and ~/.codex/config.toml are not yet checked with the real CLI, so assume it can still read files such as ~/.ssh
+host_reads_detail: its apply_patch tool cannot be switched off and opens any host path, so it tells whether a file such as ~/.ssh/id_ed25519 exists and holds a given line
 verified: false
