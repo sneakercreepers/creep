@@ -10,10 +10,15 @@ import (
 
 // runGate is the gate that judges one scan (#28, ADR 0021): the mode, how
 // it was chosen, and that mode's gates.* value with the layer that set it.
+// A nightly scan also reads gates.pr (pr, prSource), so it never passes a
+// finding the PR gate fails: a PoC the repository's own app made fail
+// leaves its finding probable, and gates.pr still reads it (ADR 0020).
 type runGate struct {
-	mode   config.ModeChoice
-	value  string
-	source string
+	mode     config.ModeChoice
+	value    string
+	source   string
+	pr       string
+	prSource string
 }
 
 // chooseGate picks the scan's mode from --mode or the CI environment and
@@ -23,8 +28,12 @@ func chooseGate(e env, r *config.Resolved) (runGate, error) {
 	if err != nil {
 		return runGate{}, err
 	}
-	value, source := r.Gate(mode.Mode)
-	return runGate{mode: mode, value: value, source: source}, nil
+	g := runGate{mode: mode}
+	g.value, g.source = r.Gate(mode.Mode)
+	if g.nightly() {
+		g.pr, g.prSource = r.Gate(config.ModePR)
+	}
+	return g, nil
 }
 
 func chooseMode(e env) (config.ModeChoice, error) {
@@ -48,28 +57,54 @@ func (g runGate) verifies(w io.Writer) bool {
 	return g.nightly()
 }
 
-// judging prints the gate line on w and returns the gate the findings are
+// exceeded prints the gate line on w and reports whether a finding trips
+// a gate that judges the run (judging).
+func (g runGate) exceeded(w io.Writer, v report.Verification, findings []report.Finding) (bool, error) {
+	gates, err := g.judging(w, v)
+	if err != nil {
+		return false, err
+	}
+	for _, gate := range gates {
+		hit, err := gateExceeded(gate, findings)
+		if err != nil || hit {
+			return hit, err
+		}
+	}
+	return false, nil
+}
+
+// judging prints the gate line on w and returns the gates the findings are
 // judged by. A nightly scan whose verification did not try every finding
 // it should have (sandbox off or unavailable, or a PoC not run) is judged
 // at probable with the gate's severity (config.UnverifiedGate), so a
 // finding nothing could verify fails the run instead of passing it as
-// unverified (ADR 0021).
-func (g runGate) judging(w io.Writer, v report.Verification) (string, error) {
+// unverified; and gates.pr judges it too, so it is never looser than a pr
+// scan (ADR 0021).
+func (g runGate) judging(w io.Writer, v report.Verification) ([]string, error) {
 	line := fmt.Sprintf("gate: %s mode (%s): %s %q (%s)", g.mode.Mode, g.mode.Source, config.GateKey(g.mode.Mode), g.value, g.source)
-	why := unverifiedReason(v)
-	if !g.nightly() || why == "" {
+	if !g.nightly() {
 		fmt.Fprintln(w, escapeControl(line))
-		return g.value, nil
+		return []string{g.value}, nil
 	}
-	gate, err := config.UnverifiedGate(g.value)
+	gate, err := g.nightlyGate(v)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if gate != g.value {
-		line += fmt.Sprintf(" read as %q: %s", gate, why)
+		line += fmt.Sprintf(" read as %q: %s", gate, unverifiedReason(v))
 	}
+	line += fmt.Sprintf("; gates.pr %q (%s) also applies", g.pr, g.prSource)
 	fmt.Fprintln(w, escapeControl(line))
-	return gate, nil
+	return []string{gate, g.pr}, nil
+}
+
+// nightlyGate is gates.nightly, read at probable when verification did
+// not try every finding it should have.
+func (g runGate) nightlyGate(v report.Verification) (string, error) {
+	if unverifiedReason(v) == "" {
+		return g.value, nil
+	}
+	return config.UnverifiedGate(g.value)
 }
 
 // unverifiedReason says why a nightly scan's verification did not try

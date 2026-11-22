@@ -55,7 +55,8 @@ func ChooseMode(flag string, getenv func(string) string) (ModeChoice, error) {
 	return ModeChoice{Mode: ModePR, Source: modeDefault}, nil
 }
 
-// GateKey is the gates.* key that judges a scan in mode m.
+// GateKey is the gates.* key of mode m. A nightly scan is judged by
+// gates.pr as well, so it never passes what a pr scan fails (ADR 0021).
 func GateKey(m Mode) string {
 	if m == ModeNightly {
 		return "gates.nightly"
@@ -72,13 +73,19 @@ func (r *Resolved) Gate(m Mode) (value, source string) {
 }
 
 // ExplainMode is what config explain adds after the keys: the mode and
-// the gate it reads, with the key and layer that set the gate.
+// each gate it reads, with the key and layer that set the gate. A nightly
+// scan reads gates.nightly and gates.pr.
 func (r *Resolved) ExplainMode(c ModeChoice) []Entry {
-	value, source := r.Gate(c.Mode)
-	return []Entry{
-		{Key: "mode", Value: string(c.Mode), Source: c.Source},
-		{Key: "gate", Value: value, Source: GateKey(c.Mode) + ", " + source},
+	entries := []Entry{{Key: "mode", Value: string(c.Mode), Source: c.Source}, r.gateEntry(c.Mode)}
+	if c.Mode == ModeNightly {
+		entries = append(entries, r.gateEntry(ModePR))
 	}
+	return entries
+}
+
+func (r *Resolved) gateEntry(m Mode) Entry {
+	value, source := r.Gate(m)
+	return Entry{Key: "gate", Value: value, Source: GateKey(m) + ", " + source}
 }
 
 // UnverifiedGate is gateValue read as if no finding could be verified: a

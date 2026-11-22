@@ -89,7 +89,7 @@ func TestNightlyNeverPassesUnverified(t *testing.T) {
 			`read as "probable:high": verification unavailable (build_failed)`},
 		{"operator loosened the nightly gate", "nightly", "gates:\n  nightly: none\n", nil, fakeBuilder{}, exitcode.OK, `gates.nightly "none" (--config`},
 		{"app built, no template for the class", "nightly", sandboxOn, []sandbox.Status{rootlessDocker}, fakeBuilder{app: builtApp, port: 5000}, exitcode.OK,
-			`gates.nightly "verified:high" (default)` + "\n"},
+			`gates.nightly "verified:high" (default); gates.pr "probable:critical" (default) also applies` + "\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -105,6 +105,49 @@ func TestNightlyNeverPassesUnverified(t *testing.T) {
 			assertContains(t, "stderr", stderr, []string{tt.want})
 		})
 	}
+}
+
+// Protection (#28, ADR 0020, ADR 0021): a nightly scan never passes a
+// finding a pr scan fails. The probable critical SQL injection fails
+// gates.pr; in a nightly scan gates.pr applies too, so neither an operator
+// gate that reads verified findings only nor a nightly gate turned off lets
+// it pass. TestZeroRunsStayProbable covers a PoC the app made fail.
+func TestNightlyNeverLooserThanPR(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		user string
+		want string // in stderr
+	}{
+		{"pr fails it", "pr", "", `gates.pr "probable:critical" (default)`},
+		{"nightly reads gates.pr too", "nightly", "gates:\n  nightly: verified:critical\n", `; gates.pr "probable:critical" (default) also applies`},
+		{"nightly gate off", "nightly", "gates:\n  nightly: none\n", `gates.nightly "none" (--config`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fakeDeps(&fakeModel{verdict: map[string]string{"sql_injection": "vulnerable"}}, calibrate.TierM)
+			cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, tt.user)
+			code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan", "--mode", tt.mode)
+			if code != exitcode.GateExceeded {
+				t.Fatalf("exit %d, want %d\n%s%s", code, exitcode.GateExceeded, stdout, stderr)
+			}
+			assertContains(t, "stderr", stderr, []string{tt.want})
+		})
+	}
+}
+
+// Acceptance (#28, ADR 0007): a nightly scan that could not verify and
+// left a file unread exits 4, not 1: an incomplete run wins over the
+// gate, also when the unverified nightly gate trips.
+func TestNightlyIncompleteWinsOverGate(t *testing.T) {
+	deps := fakeDeps(&fakeModel{verdict: map[string]string{"ssrf": "vulnerable"}}, calibrate.TierM)
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "big.go": tooLarge}, "")
+	code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan", "--mode", "nightly")
+	if code != exitcode.Incomplete {
+		t.Fatalf("exit %d, want %d\n%s%s", code, exitcode.Incomplete, stdout, stderr)
+	}
+	assertContains(t, "stderr", stderr, []string{`read as "probable:high"`})
+	assertContains(t, "stdout", stdout, []string{"probable  ssrf", "too_large"})
 }
 
 // Protection (#28, #61, #62): the scanned repository cannot loosen the
@@ -201,7 +244,7 @@ func TestExplainShowsModeGate(t *testing.T) {
 		want []string
 	}{
 		{"default", nil, nil, []string{`mode "pr" default`, `gate "probable:critical" gates.pr, default`}},
-		{"schedule", nil, scheduledRun, []string{`mode "nightly" GitHub Actions schedule event`, `gate "verified:low" gates.nightly, user "~/.creep/config.yaml"`}},
+		{"schedule", nil, scheduledRun, []string{`mode "nightly" GitHub Actions schedule event`, `gate "verified:low" gates.nightly, user "~/.creep/config.yaml"`, `gate "probable:critical" gates.pr, default`}},
 		{"flag over schedule", []string{"--mode", "pr"}, scheduledRun, []string{`mode "pr" flag --mode`, `gate "probable:critical" gates.pr, default`}},
 	}
 	for _, tt := range tests {

@@ -103,8 +103,10 @@ func sqliFinding(t *testing.T) report.Finding {
 // text and Markdown reports, and one that never verified, or that the
 // model could not give for the class, leaves the finding probable with no
 // bundle. The nightly gate (verified:high) reads the result: a verified
-// finding trips it, a PoC that ran and never verified does not, and a PoC
-// that did not run reads the gate at probable (ADR 0021).
+// finding trips it, and a PoC that did not run reads it at probable. A PoC
+// that ran and never verified leaves the critical sqli finding probable,
+// which gates.pr (probable:critical) still fails in a nightly scan, so the
+// app cannot pass the run by failing its PoCs (ADR 0020, ADR 0021).
 func TestPoCRateDecidesStatus(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -118,7 +120,7 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 		{"stable", sqlDelayPoC, repeatBool(true, 10), report.StatusVerified, []string{"verified in 5/5 runs", "PoCs ran for 2 findings: 2 verified in every run"}, 10, exitcode.GateExceeded},
 		{"intermittent", sqlDelayPoC, []bool{true, false, true, true, false}, report.StatusVerified,
 			[]string{"verified in 3/5 runs, intermittent", "0 verified in every run, 1 intermittent, 1 not reproduced"}, 10, exitcode.GateExceeded},
-		{"never", sqlDelayPoC, nil, report.StatusProbable, []string{"2 not reproduced"}, 10, exitcode.OK},
+		{"never", sqlDelayPoC, nil, report.StatusProbable, []string{"2 not reproduced"}, 10, exitcode.GateExceeded},
 		{"template of another class", pathPoC, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0, exitcode.GateExceeded},
 		{"no valid PoC", nil, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0, exitcode.GateExceeded},
 	}
@@ -152,8 +154,9 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 // run. Every run answers, slowly on baselines and payload alike (a
 // tarpit), so nothing but the oracle can decide; the finding stays
 // probable, no bundle is written, and the report says it was not
-// reproduced. The nightly gate reads verified findings only, so the run
-// passes it; the PR gate judged these findings at probable (ADR 0021).
+// reproduced. The nightly gate reads verified findings only, but a nightly
+// scan also reads gates.pr, which fails the probable critical finding
+// (ADR 0021).
 func TestZeroRunsStayProbable(t *testing.T) {
 	tarpit := func(_ int, requests [][]byte) ([]sandbox.Exchange, error) {
 		out := make([]sandbox.Exchange, len(requests))
@@ -163,7 +166,7 @@ func TestZeroRunsStayProbable(t *testing.T) {
 		return out, nil
 	}
 	code, out, fb, m := pocScan(t, sqlDelayPoC, tarpit)
-	if code != exitcode.OK || fb.exchanges != 2*verify.DefaultRuns || m.pocCalls != 2 {
+	if code != exitcode.GateExceeded || fb.exchanges != 2*verify.DefaultRuns || m.pocCalls != 2 {
 		t.Fatalf("exit %d, %d exchanges, %d PoC calls\n%s", code, fb.exchanges, m.pocCalls, out)
 	}
 	assertAllProbable(t)

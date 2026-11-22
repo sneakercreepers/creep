@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -206,8 +207,9 @@ func TestExplainMode(t *testing.T) {
 	want := []Entry{
 		{Key: "mode", Value: "nightly", Source: "flag --mode"},
 		{Key: "gate", Value: "probable:high", Source: `gates.nightly, user "u"`},
+		{Key: "gate", Value: "probable:critical", Source: "gates.pr, default"},
 	}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	if !slices.Equal(got, want) {
 		t.Errorf("ExplainMode = %+v, want %+v", got, want)
 	}
 }
