@@ -232,6 +232,33 @@ creep scan --baseline creep-baseline.json
 
 A finding is matched by its fingerprint (class, path and redacted sink line), so lines moving do not make it new; editing the sink line does. Every entry expires (baseline entries after 90 days, accepted risks when you say, at most 365 days), and an expired entry stops suppressing. A suppressed finding is still listed, with its expiry and reason, in the text summary, Markdown, SARIF (`suppressions`) and JSON (`suppression`); only the gate skips it. A not-evaluated finding is never suppressed, and an incomplete run still exits `4`. A malformed baseline, a link in its place or an expiry over a year away exits `2`. In a pull request, read the baseline from the base commit, so the pull request cannot suppress its own finding: `git show "$BASE_SHA:creep-baseline.json" > "$RUNNER_TEMP/baseline.json"` and `creep scan --baseline "$RUNNER_TEMP/baseline.json"`.
 
+## GitHub Action
+
+The repository root is a composite Action ([ADR 0023](docs/adr/0023-github-action.md)). Full example: [docs/examples/creep-action.yml](docs/examples/creep-action.yml).
+
+```yaml
+permissions:
+  contents: read
+  security-events: write   # SARIF upload to code scanning
+  pull-requests: write     # the pull request comment; not needed with comment: "false"
+steps:
+  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    with: { fetch-depth: 2, persist-credentials: false }
+  - uses: sneakercreepers/creep@<commit SHA of the release tag> # <release tag>
+    env:
+      CREEP_POLICY: ${{ runner.temp }}/creep-policy.yaml   # model, endpoint and consent, written by an earlier step
+    with:
+      version: <release tag>
+      api-key: ${{ secrets.CREEP_API_KEY }}
+```
+
+- **Verified install.** It downloads the release archive for the runner (Linux or macOS, X64 or ARM64) and runs it only after its SHA-256 matches `checksums.txt` and `gh attestation verify` accepts its build provenance from this repository's release workflow at that tag, built on a GitHub-hosted runner. `version` defaults to the tag the Action is used at; pinned by commit SHA, set it. There is no moving `v0` tag.
+- **Forks and events.** It runs on `pull_request`, `push`, `schedule`, `workflow_dispatch` and `merge_group`, and fails on any other event (never use `pull_request_target`). On a pull request from a fork it fails if a model key is set, and otherwise runs without the comment.
+- **Verdict.** Every exit code but `0` fails the job, and `4` (incomplete) fails exactly like `1`: a pull request whose `creep.yaml` lowers its own budget cannot pass. SARIF upload and the comment still run first.
+- **Pull requests.** With `incremental` (default) it scans only the changed files (`--changed`, from the base commit; check out with `fetch-depth: 2`). The `baseline` input (creep v0.2, #27) is read from the base commit, so a pull request cannot suppress its own finding.
+- **Comment and annotations.** One comment, found by a hidden marker and updated in place, holding creep's Markdown report, which escapes every repository and model string. Annotations come from code scanning, which marks on a pull request only the alerts its SARIF adds; keep `working-directory` at the repository root when uploading. creep emits no fixes yet, so there are no `suggestion` blocks (deferred to the v3 fix stage).
+- **Inputs.** `version`, `api-key`, `config` (`--config`), `mode` (`--mode`, creep v0.2), `baseline`, `incremental`, `working-directory`, `upload-sarif`, `comment`, `github-token`; outputs `exit-code`, `sarif`, `report`, `markdown`. `creep-path` exists only for the Action's own self-test (CI job `action`) and runs an unverified binary.
+
 ## Configuration
 
 Layers, later overriding earlier: built-in defaults → org policy (`CREEP_POLICY`, an absolute path; can lock keys and set limits) → user file (`~/.creep/config.yaml`) → project file (`./creep.yaml`) → flags. `--config` replaces the user and project files. Unknown keys are errors; schema: [schema/config.schema.json](schema/config.schema.json).
@@ -263,7 +290,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline, nightly gate, GitHub Action (#27–#29) |
+| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline, nightly gate (#27, #28), GitHub Action (#29 ✅, [ADR 0023](docs/adr/0023-github-action.md)) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

@@ -1,6 +1,6 @@
 # ADR 0022: Baseline and accepted risks with an expiry
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression` on a finding; a new command)
