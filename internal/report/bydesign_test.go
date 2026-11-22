@@ -22,6 +22,9 @@ func TestByDesignSummary(t *testing.T) {
 			{Path: "m.js", Reason: SkipMinified}, {Path: "g.py", Reason: SkipGenerated},
 			{Path: "x.py", Reason: SkipTooLarge}, {Path: "venv/v.py", Reason: SkipVendor}, {Path: "n.js", Reason: SkipMinified},
 		}, "4 files left out by design (vendor 1, generated 1, minified 2)"},
+		{"unchanged counted last", []NotEvaluated{
+			{Path: "b.py", Reason: SkipUnchanged}, {Path: "venv/v.py", Reason: SkipVendor}, {Path: "c.go", Reason: SkipUnchanged},
+		}, "3 files left out by design (vendor 1, unchanged 2)"},
 		{"hostile path is not printed", []NotEvaluated{{Path: hostile, Reason: SkipGenerated}}, "1 file left out by design (generated 1)"},
 	}
 	for _, tt := range tests {
@@ -33,11 +36,12 @@ func TestByDesignSummary(t *testing.T) {
 	}
 }
 
-// TestByDesignReasons: exactly vendor, generated and minified are by
-// design; every other closed reason is a gap that makes a run incomplete.
+// TestByDesignReasons: exactly vendor, generated, minified and unchanged
+// (outside a --changed list, #26) are by design; every other closed reason
+// is a gap that makes a run incomplete.
 func TestByDesignReasons(t *testing.T) {
 	for r := range skipReasons {
-		want := r == SkipVendor || r == SkipGenerated || r == SkipMinified
+		want := r == SkipVendor || r == SkipGenerated || r == SkipMinified || r == SkipUnchanged
 		if r.ByDesign() != want {
 			t.Errorf("%s.ByDesign() = %v, want %v", r, r.ByDesign(), want)
 		}

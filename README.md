@@ -188,14 +188,25 @@ The sandbox is optional. `creep doctor` lists Docker and Podman with their isola
 | `--record` / `--replay` | Record every model response / serve only recorded responses, never the network |
 | `--recalibrate` | Calibrate again even if a calibration is cached (30 days) |
 | `--stats` | `scan`: print phase times, model calls, cache hits and tokens |
+| `--changed <file>` | `scan` and `estimate`: evaluate only the paths listed in the file (see Incremental scans) |
 | `--price-in <n>` / `--price-out <n>` | `estimate` and `--stats`: price per 1M input/output tokens, for a cost |
 | `--format`, `--log-level` | Output format (`text`, `json`, `sarif`, `markdown`) and log level |
+
+**Incremental scans.** `--changed <file>` limits a scan to the files a list names, one repository-relative path per line or NUL-separated. creep never runs git and has no `--diff <ref>`, so build the list with git yourself:
+
+```sh
+git diff --name-only -z origin/main > changed.txt      # changes since main
+git diff --cached --name-only -z > changed.txt         # pre-commit: staged changes
+creep scan --changed changed.txt
+```
+
+In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA"...HEAD`). Use `-z`: without it git quotes unusual names, and creep refuses a quoted entry, an absolute path, a `..` and a backslash (exit 2). The list only selects among the files the walk finds, so links are still not followed and `.git` and `.creep` are still skipped; deleted files and directories in it are counted and ignored, and names match without regard to case. Every other source file is listed `unchanged`, by design, and counted beside the coverage, and the text summary, Markdown and SARIF mark the run incremental. An incremental exit `0` means the listed files are clean, not the repository: a flow from a changed file into an unchanged one is not evaluated, so keep a full scan (for example nightly) as well ([ADR 0009](docs/adr/0009-scan-and-why-contract.md), #26 amendment).
 
 **Calibration cache.** A calibration is kept in your user cache directory for `calibration.cache_days` (default 30) and reused only for the same contract, endpoint, model name, structured-output mode, max output tokens and retries, and the same creep task set and prompts; changing any of them calibrates again. creep cannot see which snapshot a model name points to: a dated name (`model-2025-06-01`) gets its own entry, but an alias such as `-latest` that the provider moves to a new snapshot keeps its cached tier until the entry expires. Pin a dated model name, or pass `--recalibrate` after the provider updates the alias. The `calibration:` line of `creep scan` shows the tier and, when the context probe stopped early, the size and reason (for example `8 KiB probe: HTTP 400`, which holds the model at tier S). A `calibrations/` cache directory that is a link or junction is refused before any model call, also with `--recalibrate`; the error names the directory to remove.
 
 ## Output and exit codes
 
-`creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason.
+`creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason. Schema v1 changes additively only; since #26 a not-evaluated file may also have the reason `unchanged` (left out of an incremental scan).
 
 | Code | Meaning |
 |---|---|
@@ -238,7 +249,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), `--diff`, baseline, GitHub Action (#26–#29) |
+| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline, nightly gate, GitHub Action (#27–#29) |
 | v0.3 | Read-only MCP mode, YAML recipes, public `creep-bench` |
 | v1.0 | Organization policy features, HTML report |
 

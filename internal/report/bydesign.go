@@ -7,14 +7,15 @@ import (
 
 // byDesignOrder fixes the order reasons are counted in, so every format
 // prints the same summary for the same files.
-var byDesignOrder = []SkipReason{SkipVendor, SkipGenerated, SkipMinified}
+var byDesignOrder = []SkipReason{SkipVendor, SkipGenerated, SkipMinified, SkipUnchanged}
 
 // ByDesign reports whether a file listed with reason r was left out on
 // purpose (ADR 0009): it stays listed, but it is not a gap that makes the
-// run incomplete. Every other reason is a gap.
+// run incomplete. An unchanged file is outside the scope the operator chose
+// with --changed (#26). Every other reason is a gap.
 func (r SkipReason) ByDesign() bool {
 	switch r {
-	case SkipVendor, SkipGenerated, SkipMinified:
+	case SkipVendor, SkipGenerated, SkipMinified, SkipUnchanged:
 		return true
 	}
 	return false

@@ -46,6 +46,11 @@ type estimateRun struct {
 	seed  [32]byte // the stored discovery seed, so cached requests match
 	cal   calibrationEstimate
 	tiers []tierEstimate
+
+	// changed is the --changed list, nil for a full scan, and incremental
+	// the scope the walk applied it with (#26).
+	changed     *changedList
+	incremental report.Incremental
 }
 
 // runEstimate prints what `creep scan` would cost here without calling a
@@ -81,6 +86,9 @@ func runEstimate(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	printEstimate(e.stdout, est)
+	if text := est.incremental.Text(est.files.gaps); text != "" {
+		fmt.Fprintln(e.stdout, text)
+	}
 	if cut {
 		fmt.Fprintf(e.stdout, "PARTIAL ESTIMATE: the deadline of %d s (budget.max_seconds) passed; files and sinks it did not reach are counted as not evaluated (reason %s), so the figures above are a lower bound\n", est.cfg.Budget.MaxSeconds, reasonDeadline)
 		return exitcode.Incomplete
@@ -94,6 +102,9 @@ func newEstimate(e env) (*estimateRun, error) {
 		return nil, err
 	}
 	est := &estimateRun{cfg: resolved.Config, opts: e.opts}
+	if est.changed, err = readChangedList(e.opts.changed); err != nil {
+		return nil, err
+	}
 	if est.cache, err = openCacheReadOnly(); err != nil {
 		return nil, err
 	}
@@ -130,6 +141,7 @@ func (est *estimateRun) run(ctx context.Context, deps scanDeps) error {
 	if est.files, err = walkRepo(ctx, est.repo); err != nil {
 		return err
 	}
+	est.files, est.incremental = est.changed.scope(est.files)
 	if est.seed, err = storedSeed(est.cache); err != nil {
 		return err
 	}
