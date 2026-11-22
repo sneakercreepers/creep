@@ -1,6 +1,7 @@
 package baseline
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -23,14 +24,26 @@ func fileWith(entries ...string) string {
 	return `{"version": 1, "entries": [` + strings.Join(entries, ",") + `]}`
 }
 
-// entry is a valid accepted entry with fields overridden by extra
-// (`"key": value` pairs, later keys win in encoding/json).
+// entry is the body of a valid accepted entry with the fields of extra
+// (`"key": value` pairs) put in place of its own or added: Parse refuses a
+// repeated key, so a field cannot be overridden by repeating it.
 func entry(extra string) string {
-	e := `"kind": "accepted", "fingerprint": "` + fp + `", "class": "sqli", "path": "app/db.py", "expires": "2027-01-01", "reason": "internal tool"`
-	if extra != "" {
-		e += ", " + extra
+	return withFields(`"kind": "accepted", "fingerprint": "`+fp+`", "class": "sqli", "path": "app/db.py", "expires": "2027-01-01", "reason": "internal tool"`, extra)
+}
+
+// withFields returns the object body base with extra's fields set over it.
+func withFields(base, extra string) string {
+	fields := map[string]json.RawMessage{}
+	for _, body := range []string{base, extra} {
+		if err := json.Unmarshal([]byte("{"+body+"}"), &fields); err != nil {
+			panic(fmt.Sprintf("test entry %q: %v", body, err))
+		}
 	}
-	return e
+	data, err := json.Marshal(fields)
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(string(data), "{"), "}")
 }
 
 // Hostile and malformed files fail whole (the caller exits 2): wildcards,
@@ -52,6 +65,10 @@ func TestBaselineFileRejectsHostile(t *testing.T) {
 		{"no version", `{"entries": []}`, "version 0"},
 		{"unknown top field", `{"version": 1, "entries": [], "ignore_all": true}`, "not the baseline JSON format"},
 		{"unknown entry field", fileWith(entry(`"match": "*"`)), "not the baseline JSON format"},
+		{"key in another case", fileWith(entry(`"Kind": "baseline"`)), "unknown as spelled, or repeated"},
+		{"top key in another case", `{"Version": 1, "entries": []}`, "unknown as spelled, or repeated"},
+		{"repeated key", fileWith(entry("") + `, "expires": "2027-11-21"`), "unknown as spelled, or repeated"},
+		{"repeated top key", `{"version": 1, "entries": [], "entries": [{` + entry("") + `}]}`, "unknown as spelled, or repeated"},
 		{"trailing data", fileWith(entry("")) + `{"version": 1}`, "trailing data"},
 		{"trailing garbage", fileWith(entry("")) + "x", "trailing data"},
 		{"wildcard fingerprint", fileWith(entry(`"fingerprint": "*"`)), "fingerprint"},

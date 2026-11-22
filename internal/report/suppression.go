@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -53,20 +54,20 @@ func ValidDate(s string) bool {
 }
 
 // ValidReason reports whether s can be an accepted risk's reason: non-blank
-// UTF-8 of at most MaxReasonBytes, with no control or format rune (bidi
-// included), so it prints as the one line a reviewer read.
+// UTF-8 of at most MaxReasonBytes whose every rune is printable with the
+// ASCII space as its only space (unicode.IsPrint), so it prints as the one
+// line a reviewer read: no control or format rune (bidi included), and no
+// line or paragraph separator (U+2028, U+2029), which some viewers break on.
 func ValidReason(s string) bool {
-	if len(s) > MaxReasonBytes || !utf8.ValidString(s) {
+	if len(s) > MaxReasonBytes || !utf8.ValidString(s) || strings.TrimSpace(s) == "" {
 		return false
 	}
-	blank := true
 	for _, r := range s {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+		if !unicode.IsPrint(r) {
 			return false
 		}
-		blank = blank && unicode.IsSpace(r)
 	}
-	return !blank
+	return true
 }
 
 // Suppressed reports whether a baseline entry keeps f from the gate.

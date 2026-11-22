@@ -15,8 +15,9 @@
 //   - An entry suppresses one finding with the same fingerprint, class and
 //     path, and only a probable or verified one: never a not-evaluated or
 //     discarded finding, and never a coverage gap. There are no wildcards:
-//     every field is compared exactly, and a malformed field fails the whole
-//     file (the caller exits 2).
+//     every field is compared exactly, and a malformed field, or a key
+//     spelled otherwise or repeated, fails the whole file (the caller exits
+//     2), so what a reviewer reads in the diff is what creep reads.
 //   - Every entry expires, at most MaxDays ahead; an expired entry stops
 //     suppressing, so its finding is new again. An accepted risk needs a
 //     reason. The file is bounded (MaxEntries, and the caller reads at most

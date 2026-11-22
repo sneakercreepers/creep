@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -181,7 +182,15 @@ func TestBaselineNeverHidesIncomplete(t *testing.T) {
 // accepted risk without a reason, oversized, missing, or a link.
 func TestScanRefusesHostileBaseline(t *testing.T) {
 	entry := func(fields string) string {
-		return `{"version": 1, "entries": [{"kind": "accepted", "fingerprint": "0123456789abcdef0123456789abcdef", "class": "sqli", "path": "app.py", "expires": "2027-01-01", "reason": "r"` + fields + `}]}`
+		e := map[string]any{"kind": "accepted", "fingerprint": "0123456789abcdef0123456789abcdef", "class": "sqli", "path": "app.py", "expires": "2027-01-01", "reason": "r"}
+		if err := json.Unmarshal([]byte("{"+strings.TrimPrefix(fields, ",")+"}"), &e); err != nil {
+			t.Fatal(err)
+		}
+		data, err := json.Marshal(map[string]any{"version": 1, "entries": []any{e}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
 	}
 	tests := []struct {
 		name    string
@@ -195,6 +204,7 @@ func TestScanRefusesHostileBaseline(t *testing.T) {
 		{"far future", entry(`, "expires": "2099-01-01"`), "more than 365 days"},
 		{"no reason", entry(`, "reason": ""`), "reason"},
 		{"unknown key", entry(`, "all": true`), "not the baseline JSON format"},
+		{"key in another case", entry(`, "Expires": "2099-01-01"`), "unknown as spelled, or repeated"},
 		{"huge", `{"version": 1, "entries": [], "pad": "` + strings.Repeat("x", 1<<20) + `"}`, "larger than"},
 		{"missing", "", "does not exist"},
 	}

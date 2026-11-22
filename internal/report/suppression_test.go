@@ -131,6 +131,7 @@ func TestValidReason(t *testing.T) {
 		{"ünïcödé ok", true},
 		{"", false}, {"   ", false}, {"a\nb", false}, {"a\rb", false}, {"a\tb", false},
 		{"a\u202eb", false}, {"a\u200bb", false}, {"a\x7fb", false}, {"a\u0085b", false}, {"\xff", false},
+		{"ok FAKE: suppressed nothing", false}, {"a b", false}, {"a b", false}, {"ab", false},
 		{strings.Repeat("x", MaxReasonBytes), true}, {strings.Repeat("x", MaxReasonBytes+1), false},
 	}
 	for _, tt := range tests {

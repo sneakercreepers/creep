@@ -71,6 +71,9 @@ func loadScanBaseline(o globalOptions, today time.Time) (*scanBaseline, error) {
 }
 
 func readBaselineFile(path string, today time.Time, missingOK bool) (*baseline.File, error) {
+	if err := checkBaselinePath(path); err != nil {
+		return nil, err
+	}
 	// Opened like the project file: the repository may plant a link here.
 	data, err := readConfigWith(openProjectConfig, "--baseline", path)
 	if errors.Is(err, errNoFile) && missingOK {
@@ -84,6 +87,32 @@ func readBaselineFile(path string, today time.Time, missingOK bool) (*baseline.F
 		return nil, fmt.Errorf("--baseline %q: %w", path, err)
 	}
 	return b, nil
+}
+
+// checkBaselinePath vets --baseline before anything touches the path: no
+// UNC share or device path, whose lookup alone is network traffic on
+// Windows, and nothing under /proc, /sys or /dev (checkConfigPath). For a
+// path inside the working directory, no directory above the file may be a
+// link or junction: the repository could plant one to move the read or
+// the write out of the tree, past the final-name checks.
+func checkBaselinePath(path string) error {
+	if err := checkConfigPath("--baseline", path); err != nil {
+		return err
+	}
+	dir := filepath.Dir(filepath.Clean(path))
+	if !filepath.IsLocal(dir) {
+		return nil // absolute or above the working directory: the operator's own path
+	}
+	for ; dir != "."; dir = filepath.Dir(dir) {
+		info, err := os.Lstat(dir)
+		if err != nil {
+			return nil // a missing directory fails the open or write with its own error
+		}
+		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 || !info.IsDir() {
+			return fmt.Errorf("--baseline %q: a directory above the file is a link or special file", path)
+		}
+	}
+	return nil
 }
 
 // fingerprint gives each probable or verified finding the reader decided
@@ -143,7 +172,7 @@ func writeBaselineFile(path string, b *baseline.File) error {
 	if err != nil {
 		return err
 	}
-	if err := checkConfigPath("--baseline", path); err != nil {
+	if err := checkBaselinePath(path); err != nil {
 		return err
 	}
 	if _, err := lstatNoLink("--baseline", path); err != nil && !errors.Is(err, errNoFile) {

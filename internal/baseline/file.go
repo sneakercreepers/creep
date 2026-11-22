@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -71,6 +72,9 @@ func Parse(data []byte, today time.Time) (*File, error) {
 	if len(bytes.TrimSpace(data[dec.InputOffset():])) > 0 {
 		return nil, fmt.Errorf("%w: trailing data after the baseline", ErrInvalid)
 	}
+	if err := checkKeys(data); err != nil {
+		return nil, err
+	}
 	if f.Version != Version {
 		return nil, fmt.Errorf("%w: version %d, want %d", ErrInvalid, f.Version, Version)
 	}
@@ -78,6 +82,77 @@ func Parse(data []byte, today time.Time) (*File, error) {
 		return nil, err
 	}
 	return &f, nil
+}
+
+// fieldNames are the only keys a baseline file holds, spelled exactly.
+// encoding/json matches a key whatever its case and keeps the last of a
+// repeated key, so "Expires" or a second "expires" would decide what a
+// reviewer reading the diff did not see.
+var fieldNames = map[string]bool{
+	"version": true, "entries": true, "kind": true, "fingerprint": true,
+	"class": true, "path": true, "expires": true, "reason": true,
+}
+
+// keyFrame is one open object or array while checkKeys walks the tokens.
+type keyFrame struct {
+	seen    map[string]bool // keys met so far; nil for an array
+	wantKey bool            // the next string is a key
+}
+
+// checkKeys refuses a key that is not in fieldNames as spelled there, or
+// that repeats in one object. data is one valid JSON value (Parse decoded
+// it first), so only the keys are checked here.
+func checkKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	var stack []*keyFrame
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("%w: not the baseline JSON format", ErrInvalid)
+		}
+		var top *keyFrame
+		if len(stack) > 0 {
+			top = stack[len(stack)-1]
+		}
+		if top != nil && top.wantKey && tok != json.Delim('}') {
+			if err := top.key(tok); err != nil {
+				return err
+			}
+			continue
+		}
+		stack = step(stack, top, tok)
+	}
+}
+
+// key records tok, an object's key, and refuses it when it is unknown as
+// spelled or repeated.
+func (k *keyFrame) key(tok json.Token) error {
+	name, _ := tok.(string)
+	if !fieldNames[name] || k.seen[name] {
+		return fmt.Errorf("%w: a key is unknown as spelled, or repeated in one object", ErrInvalid)
+	}
+	k.seen[name] = true
+	k.wantKey = false
+	return nil
+}
+
+// step moves the walk past tok, a value or a closing delimiter.
+func step(stack []*keyFrame, top *keyFrame, tok json.Token) []*keyFrame {
+	if top != nil && top.seen != nil {
+		top.wantKey = true // after this value, the object's next key
+	}
+	switch tok {
+	case json.Delim('{'):
+		return append(stack, &keyFrame{seen: map[string]bool{}, wantKey: true})
+	case json.Delim('['):
+		return append(stack, &keyFrame{})
+	case json.Delim('}'), json.Delim(']'):
+		return stack[:len(stack)-1]
+	}
+	return stack
 }
 
 func (f *File) check(today time.Time) error {
