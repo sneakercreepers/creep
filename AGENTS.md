@@ -33,7 +33,7 @@ go test ./... -failfast           # tests replay recorded model responses; no ke
 - Errors wrap with context: `fmt.Errorf("redact %s: %w", path, err)`.
 - Tests are table-driven. New behavior needs a test that covers its edge cases, failure paths and security protections, not trivial happy paths or getters; new model behavior needs a replay fixture. Engineering principles: [docs/architecture.md §8](docs/architecture.md#8-engineering-principles).
 - Each package keeps its prompts in its own `prompts/` directory (`internal/reader/prompts/`, `internal/discover/prompts/`, `internal/calibrate/prompts/`) as versioned data, one variant per model tier, with a token-budget test.
-- Commits: Conventional Commits with `Signed-off-by` (`git commit -s`); SSH or GPG signing recommended (required once #49 lands).
+- Commits: Conventional Commits with `Signed-off-by` (`git commit -s`); every commit on `main` must be signed (SSH or GPG, [ADR 0026](docs/adr/0026-signed-commits.md)).
 - Test fixtures are generated in `t.TempDir()` unless they must be committed files; throwaway worktrees or folders go outside the repo and are removed when done.
 
 ## Workflow (spec-driven)

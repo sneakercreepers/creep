@@ -102,7 +102,13 @@ Delete the temporary directory and the two config files afterwards.
 - One logical change per PR. Small PRs get reviewed faster.
 - Branch from `main`. PRs are squash-merged; `main` has linear history.
 - Title in [Conventional Commits](https://www.conventionalcommits.org/) format: `feat(redact): detect JWTs`.
-- **Signed commits** (SSH or GPG) are recommended and will become required on `main` once the maintainer has signing set up ([#49](https://github.com/sneakercreepers/creep/issues/49)). See [GitHub docs](https://docs.github.com/authentication/managing-commit-signature-verification).
+- **Signed commits** (SSH or GPG) are required on `main` ([ADR 0026](docs/adr/0026-signed-commits.md)): the ruleset rejects a PR with an unsigned or unverified commit. GitHub signs its own squash merges. SSH setup:
+  ```sh
+  git config --global gpg.format ssh
+  git config --global user.signingkey ~/.ssh/id_ed25519.pub
+  git config --global commit.gpgsign true
+  ```
+  Then add the public key on GitHub (Settings → SSH and GPG keys → New SSH key) with key type **Signing key**; an authentication key does not verify signatures. Check with `git log --show-signature -1`. See [GitHub docs](https://docs.github.com/authentication/managing-commit-signature-verification).
 - **DCO**: every commit needs `Signed-off-by` (`git commit -s`). By signing off you certify the [Developer Certificate of Origin](https://developercertificate.org/). We do not use a CLA.
 - Add a release-note label (see below).
 
