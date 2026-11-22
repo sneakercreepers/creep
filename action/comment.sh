@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Posts or updates the Action's one pull request comment (ADR 0023). The
 # comment is found by the hidden marker at the start of its body, among the
-# comments of the token's bot account only. The body is the marker, a
+# comments of the token's own account only. The body is the marker, a
 # verdict line picked from a fixed table by exit code, and creep's own
 # Markdown report, which escapes every string from the scanned repository or
 # the model into code spans (internal/report codeSpan); nothing else from
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 readonly marker="<!-- creep-action:pr-comment -->"
-readonly author="github-actions[bot]"
+readonly workflow_bot="github-actions[bot]"
 readonly max_report_bytes=60000
 
 fail() {
@@ -31,6 +31,19 @@ verdict_line() {
     4) echo "**Incomplete run** (exit 4): not everything was evaluated, so this fails like a gate failure." ;;
     *) echo "**Unexpected exit code**: see the job log." ;;
   esac
+}
+
+# Prints the login whose comments the lookup searches: the user of a
+# personal token, else the workflow token's bot, since that token cannot
+# read /user. Only a plain login reaches the jq filter.
+comment_author() {
+  local login
+  login="$(gh api user --jq .login 2>/dev/null)" || login=""
+  if [[ "$login" =~ ^[A-Za-z0-9-]{1,39}$ ]]; then
+    printf '%s' "$login"
+    return 0
+  fi
+  printf '%s' "$workflow_bot"
 }
 
 # Prints at most max_report_bytes of the report, dropping the line the cut
@@ -71,6 +84,7 @@ fi
 
 body="$(mktemp "${RUNNER_TEMP:?}/creep-comment.XXXXXX")"
 write_body "$body"
+author="$(comment_author)"
 ids="$(gh api --paginate "repos/$REPOSITORY/issues/$PR_NUMBER/comments" \
   --jq ".[] | select(.user.login == \"$author\" and (.body | startswith(\"$marker\"))) | .id")"
 id="${ids%%$'\n'*}"

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Runs creep scan for the Action (ADR 0023) and records its exit code; the
 # verdict step fails the job on it, after SARIF upload and the comment. On a
-# pull request it scans only the changed files (--changed) and reads the
-# baseline from the base commit, so the pull request cannot suppress its own
-# findings. Writes exit-code and, for a run that wrote reports (exit 0, 1 or
-# 4), report, sarif and markdown to $GITHUB_OUTPUT.
+# pull request it scans only the changed files (--changed); on a pull request
+# or a merge group it reads the baseline from the base commit, so the change
+# under review cannot suppress its own findings. Writes exit-code and, for
+# a run that wrote reports (exit 0, 1 or 4), report, sarif and markdown to
+# $GITHUB_OUTPUT.
 #
 # Environment: CREEP, INPUT_CONFIG, INPUT_MODE, INPUT_BASELINE,
 # INPUT_INCREMENTAL, INPUT_API_KEY, EVENT_NAME, BASE_SHA, NEED_SARIF,
-# NEED_MARKDOWN, RUNNER_TEMP.
+# NEED_MARKDOWN (true|false each), RUNNER_TEMP. BASE_SHA is the pull
+# request's or the merge group's base commit.
 set -euo pipefail
 
 fail() {
@@ -20,10 +22,23 @@ args=(scan)
 
 is_pull_request() { [ "${EVENT_NAME:-}" = pull_request ]; }
 
+# A merge group holds queued pull requests not yet on the base branch, so
+# its baseline comes from the base commit too.
+reviews_a_change() { is_pull_request || [ "${EVENT_NAME:-}" = merge_group ]; }
+
+# upload-sarif and comment are compared case-insensitively in action.yml's
+# if:, so anything but true or false would skip a step without a word.
+check_switch() {
+  case "${2:-}" in
+    true | false) ;;
+    *) fail "$1 must be true or false" ;;
+  esac
+}
+
 # The base commit must be in the clone: actions/checkout with fetch-depth: 2
 # fetches the merge commit and both of its parents.
 need_base() {
-  [[ "${BASE_SHA:-}" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || fail "the pull request event has no base commit SHA"
+  [[ "${BASE_SHA:-}" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || fail "the event has no base commit SHA"
   git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null ||
     fail "the base commit is not in the clone: check out with fetch-depth: 2 (or 0)"
 }
@@ -59,7 +74,7 @@ add_baseline() {
   local path="${INPUT_BASELINE:-}" copy="$RUNNER_TEMP/creep-baseline.json"
   [ -n "$path" ] || return 0
   valid_repo_path "$path" || fail "baseline must be a plain repository-relative path"
-  if ! is_pull_request; then
+  if ! reviews_a_change; then
     if [ ! -f "$path" ]; then
       echo "::notice title=creep::no $path in the checkout: scanning without a baseline"
       return 0
@@ -99,6 +114,8 @@ publish_reports() {
 }
 
 [ -n "${CREEP:-}" ] || fail "no creep binary"
+check_switch upload-sarif "${NEED_SARIF:-}"
+check_switch comment "${NEED_MARKDOWN:-}"
 [ -z "${INPUT_CONFIG:-}" ] || args+=("--config=$INPUT_CONFIG")
 add_mode
 add_changed

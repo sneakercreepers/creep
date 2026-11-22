@@ -10,9 +10,16 @@ import (
 
 const marker = "<!-- creep-action:pr-comment -->"
 
-// fakeCommentGH lists $FAKE_IDS for the comment lookup and, for a POST or
-// PATCH, records the method and path and copies the body file it was sent.
+// fakeCommentGH answers "api user" with $FAKE_LOGIN (and fails without it,
+// as for the workflow token), lists $FAKE_IDS for the comment lookup and,
+// for a POST or PATCH, records the method and path and copies the body file
+// it was sent.
 const fakeCommentGH = `printf '%s\n' "$@" >>"$FAKE_DIR/calls"
+if [ "$1 $2" = "api user" ]; then
+  [ -n "${FAKE_LOGIN:-}" ] || exit 1
+  printf '%s\n' "$FAKE_LOGIN"
+  exit 0
+fi
 method=GET path="" body=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -48,25 +55,30 @@ func commentSandbox(t *testing.T, report string) (*sandbox, string) {
 // with the marker is never edited.
 func TestCommentUpdatesInPlace(t *testing.T) {
 	tests := []struct {
-		name      string
-		ids       string
-		wantWrite string
+		name       string
+		ids        string
+		login      string
+		wantWrite  string
+		wantAuthor string
 	}{
-		{"first run creates", "", "POST repos/owner/app/issues/7/comments"},
-		{"later run updates", "11", "PATCH repos/owner/app/issues/comments/11"},
-		{"duplicates update the first", "11\n12", "PATCH repos/owner/app/issues/comments/11"},
+		{"first run creates", "", "", "POST repos/owner/app/issues/7/comments", "github-actions[bot]"},
+		{"later run updates", "11", "", "PATCH repos/owner/app/issues/comments/11", "github-actions[bot]"},
+		{"duplicates update the first", "11\n12", "", "PATCH repos/owner/app/issues/comments/11", "github-actions[bot]"},
+		{"personal token searches its user", "11", "maintainer-1", "PATCH repos/owner/app/issues/comments/11", "maintainer-1"},
+		{"odd login falls back to the bot", "11", `x" or true or "`, "PATCH repos/owner/app/issues/comments/11", "github-actions[bot]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s, dir := commentSandbox(t, "# creep report\n")
 			s.env["FAKE_IDS"] = tt.ids
+			s.env["FAKE_LOGIN"] = tt.login
 			wantCode(t, s.run("comment.sh"), 0, "")
 			if got := strings.TrimSpace(mustRead(t, filepath.Join(dir, "write"))); got != tt.wantWrite {
 				t.Errorf("wrote %q, want %q", got, tt.wantWrite)
 			}
 			calls := mustRead(t, filepath.Join(dir, "calls"))
-			if !strings.Contains(calls, `select(.user.login == "github-actions[bot]" and (.body | startswith("`+marker+`")))`) {
-				t.Errorf("lookup does not match the bot and the marker:\n%s", calls)
+			if !strings.Contains(calls, `select(.user.login == "`+tt.wantAuthor+`" and (.body | startswith("`+marker+`")))`) {
+				t.Errorf("lookup does not match %s and the marker:\n%s", tt.wantAuthor, calls)
 			}
 		})
 	}

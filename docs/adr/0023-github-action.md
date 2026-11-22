@@ -1,6 +1,6 @@
 # ADR 0023: The GitHub Action contract
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Changes:** a new stable contract, the Action at the repository root (`action.yml`: inputs, outputs, exit-code mapping, the PR comment marker); a new required CI check, `action`
@@ -59,7 +59,18 @@ Option A with verification a. The one reason: it verifies with what the runner a
 ## Consequences
 
 - `action.yml` and `action/*.sh` are a contract: renaming an input or output, or changing the exit-code mapping, needs an amendment here; adding an input is additive.
-- `--mode` and `--baseline` need creep v0.2 (ADR 0021, ADR 0022); with an older `version`, setting `mode` or `baseline` makes creep exit 2, which fails the job.
+- `--mode`, `--baseline` and `--changed` need creep v0.2 (ADR 0021, ADR 0022, #26); with an older `version`, setting `mode` or `baseline`, or leaving `incremental` at its default `true` on a pull request, makes creep exit 2, which fails the job, so a workflow pinned to v0.1.0 sets `incremental: "false"`.
 - Windows runners are refused until a release check for the `.zip` archives is added.
 - `internal/tools/actionscripts` tests every script's refusals under bash with fake `gh` and `creep`; they skip on Windows and run in the Linux CI test job.
 - No dependency is added.
+
+## Amendment: post-merge review of #302 (2026-11-22)
+
+- **Status:** Accepted (maintainer, 2026-11-22, with the ADR)
+
+The tester and auditor review that #302 skipped changes three details; each is additive or a refusal of input that was never valid.
+
+- **Merge groups read the baseline from the base commit.** A merge group holds queued pull requests that are not on the base branch yet, so `BASE_SHA` is `github.event.merge_group.base_sha` there and the baseline comes from it, as on a pull request; a queued pull request's own baseline entry no longer passes the merge queue gate. `--changed` stays pull-request only. With several pull requests in one group the base commit can be deeper than `fetch-depth: 2`; the Action then fails closed and names `fetch-depth`.
+- **`upload-sarif` and `comment` must be `true` or `false`.** `action.yml` compares them in `if:`, which GitHub does case-insensitively, while the scan script compared them exactly, so `True` uploaded without requiring the report and `yes` skipped both steps without a word. Any other value now fails the scan step.
+- **The comment is found among the token account's comments.** `comment.sh` asks `gh api user` for the token's login and searches that user's comments (a personal token); the workflow token cannot read `/user`, so it falls back to `github-actions[bot]`. Only a login of plain characters reaches the `jq` filter. A GitHub App token still posts a new comment each run.
+- The documented example skips a fork's pull request: it gets no model key, so creep could not reach a hosted model and the job would always fail. CI runs actionlint on the example.

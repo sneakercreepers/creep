@@ -138,6 +138,8 @@ jobs:
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           "$(go env GOPATH)/bin/actionlint" -color
+          # The Action's documented example is a workflow users copy (ADR 0023).
+          "$(go env GOPATH)/bin/actionlint" -color docs/examples/creep-action.yml
       # Online audits use the job's read-only token to resolve refs, so an
       # impostor commit (a SHA from a fork) or a stale pin comment fails. The
       # action pins every zizmor wheel by hash (pip --require-hashes).

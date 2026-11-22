@@ -125,6 +125,9 @@ func TestScanArgs(t *testing.T) {
 		{"incremental off", map[string]string{"INPUT_INCREMENTAL": "false"}, 0, "", "scan\n"},
 		{"incremental typo", map[string]string{"INPUT_INCREMENTAL": "yes"}, 1, "incremental must be", ""},
 		{"incremental on push scans everything", map[string]string{"INPUT_INCREMENTAL": "true"}, 0, "", "scan\n"},
+		{"upload-sarif not a boolean", map[string]string{"NEED_SARIF": "True"}, 1, "upload-sarif must be true or false", ""},
+		{"comment not a boolean", map[string]string{"NEED_MARKDOWN": "yes"}, 1, "comment must be true or false", ""},
+		{"empty comment switch", map[string]string{"NEED_MARKDOWN": ""}, 1, "comment must be true or false", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -230,8 +233,25 @@ func checkPassedFile(t *testing.T, dir, name, want string) {
 	}
 }
 
-// Outside a pull request the baseline is the checkout's own file, and a
-// missing one scans without it.
+// Protection (ADR 0023 amendment): a merge group holds queued pull requests
+// that are not on the base branch yet, so its baseline is read from the
+// base commit as on a pull request; the changed list stays pull-request
+// only, so a merge group scans everything.
+func TestScanMergeGroupBaseline(t *testing.T) {
+	s, dir := scanSandbox(t)
+	s.env["EVENT_NAME"] = "merge_group"
+	s.env["BASE_SHA"] = pullRequestRepo(t, s.workdir, true)
+	s.env["INPUT_BASELINE"] = "creep-baseline.json"
+	wantCode(t, s.run("scan.sh"), 0, "")
+	checkPassedFile(t, dir, "baseline", "base entries\n")
+	checkPassedFile(t, dir, "changed", "")
+
+	s.env["BASE_SHA"] = ""
+	wantCode(t, s.run("scan.sh"), 1, "no base commit SHA")
+}
+
+// Outside a pull request or merge group the baseline is the checkout's own
+// file, and a missing one scans without it.
 func TestScanBaselineOnPush(t *testing.T) {
 	s, dir := scanSandbox(t)
 	s.env["INPUT_BASELINE"] = "creep-baseline.json"

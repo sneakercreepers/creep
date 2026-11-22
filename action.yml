@@ -27,7 +27,7 @@ inputs:
     required: false
     default: ""
   baseline:
-    description: Repository-relative baseline file (--baseline, creep v0.2). On a pull request it is read from the base commit, so the pull request cannot suppress its own findings.
+    description: Repository-relative baseline file (--baseline, creep v0.2). On a pull request or a merge group it is read from the base commit, so the change under review cannot suppress its own findings.
     required: false
     default: ""
   incremental:
@@ -39,15 +39,15 @@ inputs:
     required: false
     default: "."
   upload-sarif:
-    description: Upload .creep/report.sarif to code scanning (needs security-events write).
+    description: Upload .creep/report.sarif to code scanning (needs security-events write). true or false; anything else fails.
     required: false
     default: "true"
   comment:
-    description: Keep one comment with the report on the pull request (needs pull-requests write). Skipped on a pull request from a fork.
+    description: Keep one comment with the report on the pull request (needs pull-requests write). Skipped on a pull request from a fork. true or false; anything else fails.
     required: false
     default: "true"
   github-token:
-    description: Token for downloading the release, verifying its attestation, uploading SARIF and commenting.
+    description: Token for downloading the release, verifying its attestation, uploading SARIF and commenting. The comment is found again among the comments of the account that owns the token (github-actions[bot] for the workflow token, the user for a personal token); a GitHub App token posts a new comment each run.
     required: false
     default: ${{ github.token }}
   creep-path:
@@ -104,7 +104,7 @@ runs:
         INPUT_INCREMENTAL: ${{ inputs.incremental }}
         INPUT_API_KEY: ${{ inputs.api-key }}
         EVENT_NAME: ${{ github.event_name }}
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         NEED_SARIF: ${{ inputs.upload-sarif }}
         NEED_MARKDOWN: ${{ inputs.comment }}
       run: bash "$GITHUB_ACTION_PATH/action/scan.sh"
