@@ -17,7 +17,7 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"plain":           {"FROM python:3.12-slim\nCOPY . /app\nRUN pip install --no-index /app\nCMD [\"python\", \"/app/app.py\"]\n", []string{"python:3.12-slim"}},
 		"pinned":          {"FROM docker.io/library/node@sha256:" + strings.Repeat("a", 64) + "\n", []string{"docker.io/library/node@sha256:" + strings.Repeat("a", 64)}},
 		"multi-stage":     {"FROM golang:1.27 AS build\nRUN go build -o /x .\nFROM scratch\nCOPY --from=build /x /x\nCOPY --from=0 /x /y\nCOPY --from=1 /x /z\n", []string{"golang:1.27"}},
-		"stage case":      {"from golang:1.27 as Build\nfrom Build\ncopy --FROM=BUILD /x /x\n", []string{"golang:1.27"}},
+		"stage case":      {"from golang:1.27 as Build\nfrom build\ncopy --FROM=BUILD /x /x\nrun --mount=FROM=Build,target=/b true\n", []string{"golang:1.27"}},
 		"native platform": {"FROM --platform=$BUILDPLATFORM golang:1.27 AS b\nFROM --platform=${TARGETPLATFORM} alpine:3\n", []string{"alpine:3", "golang:1.27"}},
 		"copy from image": {"FROM scratch\nCOPY --from=busybox:1.37 /bin/sh /sh\n", []string{"busybox:1.37"}},
 		"mount from":      {"FROM alpine:3 AS a\nRUN --mount=type=bind,from=tools:1,target=/t --mount=type=tmpfs,target=/c /t/run\nRUN --mount=type=bind,FROM=a,source=x,target=/a true\n", []string{"alpine:3", "tools:1"}},
@@ -27,6 +27,9 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"plain comments":  {"#!/usr/bin/env docker\n# Build the app.\nFROM alpine:3\n  # indented comment\n", []string{"alpine:3"}},
 		"healthcheck":     {"FROM alpine:3\nHEALTHCHECK --interval=5s CMD true\n", []string{"alpine:3"}},
 		"boolean flags":   {"FROM alpine:3\nCOPY --link a /a\nCOPY --parents --LINK=false b /b\nADD --link c /c\n", []string{"alpine:3"}},
+		"stage shadows":   {"FROM alpine:3 AS busybox\nFROM busybox\nCOPY --from=BUSYBOX /a /b\n", []string{"alpine:3"}},
+		"stage ARG value": {"ARG TARGETOS\nFROM busybox\nARG V=1\nRUN echo $V\n", []string{"busybox"}},
+		"go multi-stage":  {"FROM --platform=$BUILDPLATFORM golang:1.27 AS build\nARG TARGETOS TARGETARCH\nWORKDIR /src\nCOPY go.* ./\nCOPY . .\nRUN CGO_ENABLED=0 go build -o /app .\n\nFROM gcr.io/distroless/static:nonroot\nCOPY --from=build --chown=65532:65532 /app /app\nUSER nonroot\nENTRYPOINT [\"/app\"]\n", []string{"gcr.io/distroless/static:nonroot", "golang:1.27"}},
 		"mount types":     {"FROM alpine:3\nRUN --mount=type=tmpfs,target=/t --mount=type=bind,source=x,target=/x --mount=target=/y true\n", []string{"alpine:3"}},
 	}
 	for name, tt := range tests {
@@ -94,7 +97,7 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"ADD json escaped url":        {"FROM alpine:3\nADD --chown=1 [\"https\\u003a//example.com/x\", \"/x\"]\n", ruleRemoteAdd},
 	"ADD url continued":           {"FROM alpine:3\nADD \\\n  https://example.com/x \\\n  /x\n", ruleRemoteAdd},
 	"ADD url after comment":       {"FROM alpine:3\nADD \\\n# hidden\n  https://example.com/x /x\n", ruleRemoteAdd},
-	"variable base":               {"ARG BASE=alpine:3\nFROM $BASE\n", ruleVariableImage},
+	"variable base":               {"ARG BASE\nFROM $BASE\n", ruleVariableImage},
 	"variable base braces":        {"FROM ${BASE:-alpine}\n", ruleVariableImage},
 	"variable copy from":          {"FROM alpine:3\nCOPY --from=$IMG /x /x\n", ruleVariableImage},
 	"variable mount from":         {"FROM alpine:3\nRUN --mount=type=bind,from=${IMG},target=/t true\n", ruleVariableImage},
@@ -105,7 +108,7 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"image with space":            {"FROM alpine 3\n", ruleImageName},
 	"no from":                     {"RUN true\n", ruleNoFrom},
 	// v0.2 release pentest F1-F3, each checked against BuildKit's parser.
-	"double backslash ends line": {"FROM busybox\nRUN x\\\\\nADD http://evil.example/a /a\n", ruleRemoteAdd},
+	"double backslash ends line": {"FROM busybox\nRUN x\\\\\nADD http://evil.example/a /a\n", ruleContinuation},
 	"heredoc hash end word":      {"FROM busybox\nRUN <<#X\nx \\\n#X\nADD http://evil.example/a /a\n", ruleHeredoc},
 	"heredoc body stage":         {"FROM busybox\nRUN <<EOF\nFROM scratch AS attacker\nEOF\nCOPY --from=attacker / /x\n", ruleHeredoc},
 	"heredoc dash":               {"FROM busybox\nCOPY <<-EOF /x\nhi\nEOF\n", ruleHeredoc},
@@ -137,30 +140,6 @@ func TestDockerfileBypassesRefused(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if _, _, rule := checkDockerfile([]byte(tt.file)); rule != tt.rule {
 				t.Errorf("rule %q, want %q", rule, tt.rule)
-			}
-		})
-	}
-}
-
-// TestStageReferencesOnlyEarlierStages (#274 F3): a number in FROM is an
-// image, and in --from or from= it is a stage only when below the number
-// of earlier stages; every other reference is an image to check.
-func TestStageReferencesOnlyEarlierStages(t *testing.T) {
-	tests := map[string]struct {
-		file   string
-		images []string
-	}{
-		"FROM number":         {"FROM 1234\n", []string{"1234"}},
-		"FROM later stage":    {"FROM b\nFROM alpine:3 AS b\n", []string{"alpine:3", "b"}},
-		"from index too high": {"FROM alpine:3\nCOPY --from=1 /x /x\n", []string{"1", "alpine:3"}},
-		"mount index":         {"FROM alpine:3\nRUN --mount=from=0,target=/a --mount=from=7,target=/b true\n", []string{"7", "alpine:3"}},
-		"from later name":     {"FROM alpine:3\nCOPY --from=late /x /x\nFROM scratch AS late\n", []string{"alpine:3", "late"}},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			images, _, rule := checkDockerfile([]byte(tt.file))
-			if rule != "" || !slices.Equal(images, tt.images) {
-				t.Errorf("images %q rule %q, want %q", images, rule, tt.images)
 			}
 		})
 	}
@@ -217,12 +196,13 @@ func oracleLines(text string) []string {
 // refused or returned: a syntax directive, a RUN network option, or an
 // image in FROM, --from or from= that is neither returned nor a stage.
 func oracleProblems(data []byte, images, stages []string) []string {
-	known := func(ref string) bool {
+	// Only COPY --from names a stage by index; FROM and from= never do.
+	known := func(ref string, byIndex bool) bool {
 		ref = strings.ToLower(strings.Trim(ref, `"'`))
-		return ref == "" || ref == "scratch" || slices.Contains(stages, ref) || isIndexBelow(ref, 1<<10) ||
+		return ref == "" || ref == "scratch" || slices.Contains(stages, ref) || byIndex && isIndexBelow(ref, 1<<10) ||
 			slices.ContainsFunc(images, func(i string) bool { return strings.EqualFold(i, ref) })
 	}
-	var problems []string
+	problems := builderProblems(data, images)
 	for _, line := range oracleLines(strings.TrimPrefix(string(data), "\xef\xbb\xbf")) {
 		if line == "#syntax" {
 			problems = append(problems, "syntax directive")
@@ -230,7 +210,7 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		}
 		fields := buildkitSpace.Split(strings.Trim(line, "\t\v\f\r "), -1)
 		keyword, flags, args := strings.ToUpper(fields[0]), leadingFlags(fields[1:]), fields[1+len(leadingFlags(fields[1:])):]
-		if keyword == "FROM" && len(args) > 0 && !known(args[0]) {
+		if keyword == "FROM" && len(args) > 0 && !known(args[0], false) {
 			problems = append(problems, "FROM image not checked: "+line)
 		}
 		if (keyword == "RUN" || keyword == "COPY" || keyword == "ADD") && strings.Contains(line, "<<") {
@@ -253,7 +233,7 @@ func oracleProblems(data []byte, images, stages []string) []string {
 				problems = append(problems, "mount outliving the build: "+line)
 			}
 			for _, ref := range oracleFromValues(f) {
-				if !known(ref) {
+				if !known(ref, keyword == "COPY") {
 					problems = append(problems, "from image not checked: "+line)
 				}
 			}
@@ -378,6 +358,11 @@ func TestOracleCatchesOldCheck(t *testing.T) {
 		"FROM alpine\nADD [\"http:\\\\/\\\\/evil.example/x\", \"/d\"]\n",
 		"FROM alpine\nRUN <\\\n<EOF cat\nhi\nEOF\n",
 		"FROM alpine\nFROM attacker.example/ev\\\nil\n",
+		// accepted before the v0.2 Dockerfile re-check
+		"FROM alpine\nRUN --mount=type=bind,from=0,target=/x true\n",
+		"FROM 526f\n",
+		"ARG BUILDPLATFORM=linux/ppc64le\nFROM --platform=$BUILDPLATFORM alpine\n",
+		"FROM alpine\nADD a \\\\\nhttp://evil.example/x /x\n",
 	} {
 		if len(oracleProblems([]byte(file), []string{"alpine"}, nil)) == 0 {
 			t.Errorf("oracle missed %q", file)

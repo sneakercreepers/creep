@@ -77,6 +77,11 @@ func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 	if info, err := os.Lstat(dockerfile); err != nil || !info.Mode().IsRegular() {
 		return unavailable(refuse(BuildContextRefused, "dockerfile_left_out")), nil
 	}
+	// The context is a second read of the repository: the builder must get
+	// the bytes that were checked, not a file changed in between.
+	if staged, err := os.ReadFile(dockerfile); err != nil || !bytes.Equal(staged, plan.checked) { //nolint:gosec // G304: a file in the sandbox's own work directory
+		return unavailable(refuse(BuildDockerfileRefused, "changed")), nil
+	}
 	if why, err := s.checkBaseImages(ctx, plan.images); err != nil || why != nil {
 		return unavailableOrErr(why, err)
 	}

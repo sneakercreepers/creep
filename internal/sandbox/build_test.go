@@ -234,7 +234,7 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		"slash frontend":     {dockerfileRepo("// syntax=evil.example/fe\nFROM alpine:3\n"), BuildDockerfileRefused},
 		"vertical tab FROM":  {dockerfileRepo("FROM alpine:3\nFROM\vmissing.example/base:1\n"), BuildDockerfileRefused},
 		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildBaseImageMissing},
-		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildBaseImageMissing},
+		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildDockerfileRefused},
 		"base onbuild":       {dockerfileRepo("FROM onbuild.example/base:1\n"), BuildImageRefused},
 		"podman onbuild":     {dockerfileRepo("FROM podman.example/base:1\n"), BuildImageRefused},
 		"other platform":     {dockerfileRepo("FROM arm.example/base:1\n"), BuildImageRefused},
