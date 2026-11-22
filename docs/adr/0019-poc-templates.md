@@ -1,6 +1,6 @@
 # ADR 0019: PoC templates with closed parameters, sent from a runner container
 
-- **Status:** Proposed (needs maintainer approval)
+- **Status:** Accepted (maintainer, 2026-11-21)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0016](0016-sandbox-runtime.md) (two more containers join the run network: the PoC runner, after the canary, and the database marker lookup; the app container gets one read-only mount, creep's canary file)
