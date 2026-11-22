@@ -172,7 +172,13 @@
 //     release pentest a masked bare value also masks the literals after it
 //     on its line (b"...", []byte("..."), PREFIX + "..."), and an XML
 //     element or a key/value attribute pair named like a password is
-//     masked (<password>...</password>, <add key="DbPassword" value="..."/>).
+//     masked (<password>...</password>, <add key="DbPassword" value="..."/>),
+//     as are an element whose key or name attribute names one
+//     (<entry key="password">...</entry>), the text on its own line or in
+//     CDATA, and the key and value attributes in either order or on
+//     separate lines. Still sent: a value on the lines after a bare one
+//     (password = [ then "..." below), an XML value over 256 characters or
+//     with a raw "<", and attributes more than three apart.
 //   - A digit-free dotted passphrase that starts with one of the receivers
 //     above (config.is.sparta, env.monkey.island) reads as a config path and
 //     is sent; the password and generic rules both keep it (#71).

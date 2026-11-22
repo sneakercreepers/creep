@@ -194,6 +194,15 @@ func TestRedactPasswordShapesPentest(t *testing.T) {
 		"<db.password type=\"x\">" + plainPasswd + "</db.password>\n",
 		"<add key=\"DbPassword\" value=\"" + plainPasswd + "\"/>\n",
 		"<add key='db_secret' value='" + plainPasswd + "' />\n",
+		// PR #307 review: the same password in other XML spellings.
+		"<password>\n  " + plainPasswd + "\n</password>\n",
+		"<password><![CDATA[" + plainPasswd + "]]></password>\n",
+		"<entry key=\"password\">" + plainPasswd + "</entry>\n",
+		"<property name=\"db.password\">" + plainPasswd + "</property>\n",
+		"<property name=\"password\" value=\"" + plainPasswd + "\"/>\n",
+		"<add value=\"" + plainPasswd + "\" key=\"DbPassword\"/>\n",
+		"<add key=\"DbPassword\"\n     value=\"" + plainPasswd + "\"/>\n",
+		"<add key=\"DbPassword\" type=\"s\" value=\"" + plainPasswd + "\"/>\n",
 	}
 	for _, text := range tests {
 		out, err := newRedactor(t).File([]byte(text))
@@ -204,7 +213,11 @@ func TestRedactPasswordShapesPentest(t *testing.T) {
 			t.Errorf("File(%q) = %q: password sent", text, out)
 		}
 	}
-	for _, text := range []string{"<password>${DB_PASSWORD}</password>\n"} {
+	for _, text := range []string{
+		"<password>${DB_PASSWORD}</password>\n",
+		"<input type=\"text\" name=\"user\" value=\"bob\"/>\n",
+		"<add key=\"Timeout\" value=\"30\"/>\n",
+	} {
 		if out := mustRedact(t, newRedactor(t), text); out != text {
 			t.Errorf("Redact(%q) = %q, want unchanged", text, out)
 		}

@@ -140,7 +140,8 @@ func hasDirective(text string, lines []string) bool {
 
 // logicalLines joins continued lines ("\" is the only escape character,
 // since no directive is accepted) and drops comments and blank lines,
-// inside continuations too, as BuildKit does.
+// inside continuations too, as BuildKit does: with nothing between the
+// pieces, so `AD\` then `D http://…` is one ADD (PR #307 review).
 func logicalLines(lines []string) []string {
 	var out []string
 	var cur strings.Builder
@@ -151,7 +152,7 @@ func logicalLines(lines []string) []string {
 			continue
 		}
 		if m := continuation.FindStringSubmatchIndex(l); m != nil {
-			cur.WriteString(l[:m[3]] + " ")
+			cur.WriteString(l[:m[3]])
 			open = true
 			continue
 		}
@@ -326,6 +327,10 @@ func image(ref string) ([]string, string) {
 
 // checkAdd refuses a source the builder would fetch: a URL, a git remote
 // (scp-like user@host:path too) or a variable that could expand to one.
+// BuildKit runs every source, in the JSON form too, through its shell
+// lexer, which drops quotes and escapes (`http:"//"x`, `http:\/\/x`), so
+// a source with a quote or a backslash is refused: the check does not
+// read shell words (PR #307 review).
 func checkAdd(args []string) string {
 	if joined := strings.Join(args, " "); strings.HasPrefix(joined, "[") {
 		args = jsonArgs(joined)
@@ -334,7 +339,7 @@ func checkAdd(args []string) string {
 		args = args[:len(args)-1] // the destination
 	}
 	for _, src := range args {
-		if strings.Contains(src, "://") || strings.HasPrefix(src, "git@") || strings.Contains(src, "$") ||
+		if strings.Contains(src, "://") || strings.HasPrefix(src, "git@") || strings.ContainsAny(src, `$"'\`) ||
 			(strings.Contains(src, "@") && strings.Contains(src, ":")) {
 			return ruleRemoteAdd
 		}

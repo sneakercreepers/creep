@@ -16,6 +16,20 @@ const (
 // Characters that end an unquoted value in code or config files.
 const valueStop = "\\s\"'`,;"
 
+// Pieces of the XML detectors. An element's text may sit on its own line
+// or in a CDATA section; a password attribute's key and value may come in
+// either order, with other attributes and line breaks between them. Every
+// repeat before a line break is bounded, so a match stays within
+// chunkOverlap (TestChunkOverlapBound).
+const (
+	keyNameWord      = `(?:passw(?:or)?d|passphrase|pwd|secret)`
+	xmlTagName       = `[A-Za-z0-9_.:-]{0,64}`
+	passwordNameAttr = `(?:key|name)[ \t]{0,8}=[ \t]{0,8}["'][^"'\r\n<>]{0,64}` + keyNameWord + `[^"'\r\n<>]{0,64}["']`
+	xmlText          = `[ \t\r\n]{0,32}(?:<!\[CDATA\[([^\r\n]{1,256}?)\]\]>|([^<\r\n]{1,256}?))[ \t\r\n]{0,32}</`
+	xmlAttrValue     = `(?:"([^"\r\n]{0,256})"|'([^'\r\n]{0,256})')`
+	xmlAttrsBetween  = `[ \t\r\n]{1,32}(?:[A-Za-z0-9_.:-]{1,64}[ \t]{0,8}=[ \t]{0,8}(?:"[^"\r\n]{0,64}"|'[^'\r\n]{0,64}')[ \t\r\n]{1,32}){0,3}?`
+)
+
 // credentialDetectors cover credentials the gitleaks rules miss because they
 // have no fixed format: they are recognized by where they sit, not by shape.
 var credentialDetectors = slices.Concat([]patternDetector{
@@ -48,17 +62,27 @@ var credentialDetectors = slices.Concat([]patternDetector{
 		// An XML element named like a password (Maven settings.xml,
 		// <password>..</password>): the text up to the closing tag.
 		label: passwordLabel,
-		re: regexp.MustCompile(`(?i)<[A-Za-z0-9_.:-]*(?:passw(?:or)?d|passphrase|pwd|secret)[A-Za-z0-9_.:-]*(?:[ \t][^<>\r\n]*)?>` +
-			`([^<\r\n]+)</`),
+		re:    regexp.MustCompile(`(?i)<` + xmlTagName + keyNameWord + xmlTagName + `(?:[ \t][^<>\r\n]{0,64})?>` + xmlText),
 		valid: notPlaceholder,
 		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
 	},
 	{
-		// A key and value pair of attributes whose key names a password
-		// (.NET <add key="DbPassword" value=".."/>).
+		// An XML element whose key or name attribute names a password
+		// (Java <entry key="password">..</entry>, Spring
+		// <property name="password">..</property>).
 		label: passwordLabel,
-		re: regexp.MustCompile(`(?i)\bkey[ \t]*=[ \t]*["'][^"'\r\n]*(?:passw(?:or)?d|passphrase|pwd|secret)[^"'\r\n]*["'][ \t]+value[ \t]*=[ \t]*` +
-			`(?:"([^"\r\n]*)"|'([^'\r\n]*)')`),
+		re:    regexp.MustCompile(`(?i)<[A-Za-z0-9_.:-]{1,64}[ \t\r\n][^<>]{0,64}?\b` + passwordNameAttr + `[^<>]{0,64}>` + xmlText),
+		valid: notPlaceholder,
+		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
+	},
+	{
+		// A key or name attribute that names a password and a value
+		// attribute, in either order, other attributes and line breaks
+		// between them (.NET <add key="DbPassword" value=".."/>, Spring
+		// <property name="password" value=".."/>).
+		label: passwordLabel,
+		re: regexp.MustCompile(`(?i)\b` + passwordNameAttr + xmlAttrsBetween + `value[ \t]{0,8}=[ \t]{0,8}` + xmlAttrValue +
+			`|\bvalue[ \t]{0,8}=[ \t]{0,8}` + xmlAttrValue + xmlAttrsBetween + passwordNameAttr),
 		valid: notPlaceholder,
 		when:  regexp.MustCompile(`(?i)passw|passphrase|pwd|secret`),
 	},

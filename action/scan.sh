@@ -11,7 +11,11 @@
 # working directory (git diff --relative, <commit>:./<path>), the directory
 # creep scans: names relative to the repository root would match no walked
 # file under a working-directory input, and every changed file would read
-# as unchanged, a clean exit for a scan that read nothing.
+# as unchanged, a clean exit for a scan that read nothing. The list leaves
+# deleted files out (--diff-filter=d), and when nothing is left (a pull
+# request that changes only files outside the working directory, or only
+# deletes) the scan reads every file instead: an empty list would also
+# exit 0 on a scan that read nothing.
 #
 # Environment: CREEP, INPUT_CONFIG, INPUT_MODE, INPUT_BASELINE,
 # INPUT_INCREMENTAL, INPUT_API_KEY, EVENT_NAME, BASE_SHA, NEED_SARIF,
@@ -71,8 +75,12 @@ add_changed() {
   is_pull_request || return 0
   need_base
   local list="$RUNNER_TEMP/creep-changed.txt"
-  git diff --no-ext-diff --no-textconv --relative --name-only -z "$BASE_SHA...HEAD" >"$list" ||
+  git diff --no-ext-diff --no-textconv --relative --diff-filter=d --name-only -z "$BASE_SHA...HEAD" >"$list" ||
     fail "git diff against the base commit failed"
+  if [ ! -s "$list" ]; then
+    echo "::notice title=creep::the pull request changes no file in the working directory: scanning every file"
+    return 0
+  fi
   args+=("--changed=$list")
 }
 
