@@ -4,6 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract: a new command `estimate` and the global flags `--stats`, `--price-in` and `--price-out`
+- **Amended by:** [ADR 0024](0024-discovery-stability.md) (`estimate --stability N` meters every sample)
 
 ## Context
 
@@ -50,3 +51,7 @@ This amendment corrects the record without rewriting it. The decision above stay
 - **Failed requests.** The gateway and the run-state cache return a 429 or 500 reply with no Go error. `--stats` now counts any reply other than 200, and any transport error, as failed. Before, such a reply counted as sent with no token count.
 - **Stats on failure.** With `--stats`, a scan that fails after opening its session (exit 2 or 3: the walk, the tool canary, calibration, the analysis, building the report) prints the stats block on stderr after the error. A run that spent tokens and then failed is the one where the cost matters most.
 - **Known bias of the token ratio.** No real provider run has been measured yet. The 4.5 bytes per token ratio and `TestEstimateWithin30Percent` are checked only against a fake model that reports a cl100k pre-token count. Real BPE tokenizers count at least that many tokens, so the estimate's current 11–20% overestimate may shrink, or become an underestimate, on real providers. Treat the token and cost figures as accurate to about ±30% against pre-token counts, not against a provider's bill. When real runs are measured, `bytesPerTenTokens` is the one constant to change.
+
+## Amendment: `--stability` (#37, ADR 0024)
+
+`creep estimate --stability N` builds and meters every discovery batch and reader request once per sample, each with the sample's own `-s<k>` label, so the cache lookup is the one the scan makes; the calls, cached calls, tokens, time and the budget warnings count every sample, and the output says `stability: N runs`. Without the flag nothing changes.

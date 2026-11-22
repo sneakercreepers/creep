@@ -28,8 +28,11 @@ import (
 type scanDeps struct {
 	connect   func(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error)
 	calibrate func(ctx context.Context, opts calibrate.CacheOptions) (calibrate.Calibration, error)
-	now       func() time.Time // --stats clock; nil is time.Now
-	date      func() time.Time // the baseline's today (#27); nil is time.Now
+	// recordStability adds a --stability run's per-class counts to the
+	// model's calibration record (ADR 0024); nil keeps none.
+	recordStability func(opts calibrate.CacheOptions, seen map[calibrate.Class]calibrate.ClassStability) (map[calibrate.Class]calibrate.ClassStability, error)
+	now             func() time.Time // --stats clock; nil is time.Now
+	date            func() time.Time // the baseline's today (#27); nil is time.Now
 	// runScanner runs one optional scanner; nil is scanrun.Run, the only
 	// code that starts a program (ADR 0013).
 	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result
@@ -60,7 +63,8 @@ type modelLink struct {
 
 func productionDeps() scanDeps {
 	return scanDeps{
-		connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now, getenv: os.Getenv,
+		connect: connectGateway, calibrate: calibrateWithUserCache, recordStability: recordStabilityInUserCache,
+		now: time.Now, getenv: os.Getenv,
 		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean, images: sandbox.Images, open: openSandbox},
 	}
 }

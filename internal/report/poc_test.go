@@ -53,7 +53,7 @@ func TestPoCRateInFormats(t *testing.T) {
 	got := render(t, newTestReport(t, in))
 	for ext, want := range map[string][]string{
 		"md":    {"`verified in 3/5 runs, intermittent`", "PoCs ran for 2 findings: 0 verified in every run, 1 intermittent, 1 not reproduced; 1 got no PoC run"},
-		"sarif": {`"poc_verified_runs": 3`, `"poc_runs": 5`, "(verified, verified in 3/5 runs, intermittent)", "1 intermittent"},
+		"sarif": {`"poc_verified_runs": 3`, `"poc_runs": 5`, "(verified, verified in 3/5 runs, intermittent, stable discovery: seen in 3 of 3 runs)", "1 intermittent"},
 	} {
 		for _, w := range want {
 			if !strings.Contains(string(got[ext]), w) {

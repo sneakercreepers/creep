@@ -95,5 +95,7 @@ func TestContractFixtureUsesEveryField(t *testing.T) {
 		t.Error("fixture findings need a reason, a partial verdict, a confidence and evidence")
 	case !slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Fingerprint != "" && f.Suppression != nil && f.Suppression.Reason != "" }):
 		t.Error("fixture findings need a fingerprint and a suppression with a reason (#27)")
+	case !slices.ContainsFunc(r.Findings, func(f Finding) bool { return f.Stability != nil && f.Stability.Unstable }):
+		t.Error("fixture findings need an unstable discovery (#37)")
 	}
 }

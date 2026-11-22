@@ -191,7 +191,7 @@ func TestPlanBudgetClampsTokens(t *testing.T) {
 		if tt.in > math.MaxInt {
 			continue // a 32-bit int cannot hold it
 		}
-		b := planBudget(int(tt.in), reader.TierS)
+		b := planBudget(int(tt.in), reader.TierS, 1)
 		if b.Tokens != tt.want || b.StepTokens == 0 {
 			t.Errorf("planBudget(%d) = %+v; want Tokens %d and a step cost", tt.in, b, tt.want)
 		}

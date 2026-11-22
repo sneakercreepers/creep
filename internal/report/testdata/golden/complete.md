@@ -8,8 +8,8 @@ creep `v0.0.0-test` (commit `0000000`) · report schema 1
 
 | ID | Class | Status | Location | Notes |
 |---|---|---|---|---|
-| `f1` | `sqli` | `verified` | `app/db.py:12` |  |
-| `f2` | `path_traversal` | `probable` | ``app/`tick`\|pipe.py:7`` |  |
+| `f1` | `sqli` | `verified` | `app/db.py:12` | `stable discovery: seen in 3 of 3 runs` |
+| `f2` | `path_traversal` | `probable` | ``app/`tick`\|pipe.py:7`` | `unstable discovery: seen in 2 of 3 runs` |
 | `f5` | `command_injection` | `probable` | `bad\xffutf8 #?%.py` |  |
 | `f3` | `sqli` | `discarded` | `app/db.py:40` | `partial slice` |
 | `f4` | `ssrf` | `not evaluated` | `svc/fetch.js:9` | `step cap` |

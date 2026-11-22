@@ -43,6 +43,9 @@ func globalFlagsHelp() string {
 		"  --changed <file>    scan, estimate: only the paths listed in file, one per line or\n"+
 		"                      NUL-separated (git diff --name-only -z origin/main > changed.txt);\n"+
 		"                      every other source file is listed unchanged and not evaluated\n"+
+		"  --stability <n>     scan, estimate: run discovery and every hypothesis n times (1 to\n"+
+		"                      5, default 1); a finding seen in fewer runs is labeled an\n"+
+		"                      unstable discovery\n"+
 		"  --price-in <n>      estimate, --stats: price per 1M input tokens, for a cost\n"+
 		"  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost\n"+
 		"  --baseline <file>   scan: do not gate on findings the file's live entries match\n"+

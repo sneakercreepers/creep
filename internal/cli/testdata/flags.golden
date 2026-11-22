@@ -14,4 +14,5 @@
 --recalibrate     bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
 --record          bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
 --replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe
+--stability       int      "1"     scan estimate
 --stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config recipe

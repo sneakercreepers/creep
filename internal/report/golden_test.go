@@ -46,8 +46,8 @@ func sampleInput(t *testing.T, incomplete bool) Input {
 		Findings: []Finding{
 			{ID: "f4", Class: "ssrf", Status: StatusNotEvaluated, Path: "svc/fetch.js", Line: 9, Reason: "step_cap"},
 			{ID: "f3", Class: "sqli", Status: StatusDiscarded, Path: "app/db.py", Line: 40, Partial: true},
-			{ID: "f2", Class: "path_traversal", Status: StatusProbable, Path: hostilePaths[0], Line: 7},
-			{ID: "f1", Class: "sqli", Status: StatusVerified, Path: "app/db.py", Line: 12, Confidence: 90, Evidence: []LineRange{{10, 12}}},
+			{ID: "f2", Class: "path_traversal", Status: StatusProbable, Path: hostilePaths[0], Line: 7, Stability: NewStability(2, 3)},
+			{ID: "f1", Class: "sqli", Status: StatusVerified, Path: "app/db.py", Line: 12, Confidence: 90, Evidence: []LineRange{{10, 12}}, Stability: NewStability(3, 3)},
 			{ID: "f5", Class: "command_injection", Status: StatusProbable, Path: hostilePaths[4], Line: 0},
 		},
 		Classes: []ClassCoverage{

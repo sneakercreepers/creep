@@ -93,7 +93,17 @@
 //     boundaries.
 //   - Header is the report's calibration line: model, tier, date, seed,
 //     task set and prompt version, then the context probe that stopped
-//     early and why, if one did.
+//     early and why, if one did, then the classes whose findings were
+//     unstable discoveries in earlier --stability scans.
+//
+// RecordStability (stability.go, ADR 0024) keeps, beside each calibration
+// and signed the same way, the per-class counts of the findings
+// --stability scans labeled and of the unstable ones. Its key is the
+// calibration's key fields under its own domain, so it follows the model,
+// client, seed, task set and prompts, and never reads as a calibration.
+// It is bounded (calibrated classes only, 256 findings a class, halved
+// past it), expires with MaxAge, and starts afresh from any record creep
+// cannot trust. It never changes a tier.
 //
 // The CLI (#14) must build Options.Model on models.Through(egressLog,
 // client) and give calibration its own redact.Redactor, separate from the
