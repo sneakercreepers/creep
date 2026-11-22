@@ -3,6 +3,8 @@ package calibrate
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -104,8 +106,29 @@ func TestStabilityRecordBounded(t *testing.T) {
 	}
 }
 
+// A record expires MaxAge after its first scan, however often later
+// scans add to it, so it never outlives the window a calibration has.
+func TestStabilityRecordExpiresFromFirstScan(t *testing.T) {
+	e := newCacheEnv(t)
+	opts := e.options(t, calibrated)
+	one := map[Class]ClassStability{ClassSQLi: {Findings: 1, Unstable: 1}}
+	for _, at := range []time.Time{calibrated, calibrated.Add(cacheMaxAge / 2), calibrated.Add(cacheMaxAge - time.Hour)} {
+		o := opts
+		o.Now = func() time.Time { return at }
+		if _, err := RecordStability(o, one); err != nil {
+			t.Fatal(err)
+		}
+	}
+	late := opts
+	late.Now = func() time.Time { return calibrated.Add(cacheMaxAge) }
+	rec, err := RecordStability(late, one)
+	if err != nil || rec[ClassSQLi] != one[ClassSQLi] {
+		t.Errorf("record %+v, %v: want a fresh one once the first scan is MaxAge old", rec, err)
+	}
+}
+
 // Counts no scan makes are refused, and a record creep cannot trust
-// (another user's, expired, from the future, malformed) starts afresh
+// (another user's, expired, from the future, edited on disk, malformed) starts afresh
 // instead of being added to.
 func TestStabilityRecordRefuses(t *testing.T) {
 	e := newCacheEnv(t)
@@ -144,6 +167,18 @@ func TestStabilityRecordRefuses(t *testing.T) {
 			if err := e.store.SaveCalibration(key, bad); err != nil {
 				t.Fatal(err)
 			}
+		}, calibrated},
+		{"tampered on disk", func(t *testing.T) {
+			path := filepath.Join(e.dir, "calibrations", key+".json")
+			data, err := os.ReadFile(path) //nolint:gosec // G304: the test's own temp cache dir
+			if err != nil {
+				t.Fatal(err)
+			}
+			edited := bytes.Replace(data, []byte(`"findings":`), []byte(`"findings":1`), 1)
+			if bytes.Equal(edited, data) {
+				t.Fatalf("no count to edit in %s", data)
+			}
+			writeCache(t, path, edited)
 		}, calibrated},
 		{"over the bound", func(t *testing.T) {
 			bad := state.Calibration{At: calibrated, Result: []byte(`{"version":1,"classes":{"sqli":{"findings":9999,"unstable":9}}}`)}

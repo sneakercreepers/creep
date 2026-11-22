@@ -68,17 +68,21 @@ func RecordStability(opts CacheOptions, seen map[Class]ClassStability) (map[Clas
 		return nil, err
 	}
 	want := keyFields(opts, tasks)
-	merged, err := loadStability(opts, want)
+	merged, started, err := loadStabilityAt(opts, want)
 	if err != nil && !untrusted(err) {
 		return nil, fmt.Errorf("stability record: %w", err)
+	}
+	if merged == nil {
+		started = opts.Now().UTC().Truncate(time.Second)
 	}
 	merged = addStability(merged, seen)
 	raw, err := json.Marshal(stabilityRecord{Version: stabilityVersion, Classes: merged})
 	if err != nil {
 		return nil, fmt.Errorf("stability record: %w", err)
 	}
-	at := opts.Now().UTC().Truncate(time.Second)
-	if err := opts.Store.SaveCalibration(stabilityKey(want), state.Calibration{At: at, Result: raw}); err != nil {
+	// The record keeps the time of its first scan, so it expires MaxAge
+	// after it started, as a calibration does, however often it is added to.
+	if err := opts.Store.SaveCalibration(stabilityKey(want), state.Calibration{At: started, Result: raw}); err != nil {
 		return nil, fmt.Errorf("stability record: %w", err)
 	}
 	return merged, nil
@@ -116,20 +120,26 @@ func addStability(rec, seen map[Class]ClassStability) map[Class]ClassStability {
 // counts of calibrated classes within the bound. Only an error from the
 // store (untrusted, newer version, I/O) is returned.
 func loadStability(opts CacheOptions, want cacheKeyFields) (map[Class]ClassStability, error) {
+	rec, _, err := loadStabilityAt(opts, want)
+	return rec, err
+}
+
+// loadStabilityAt is loadStability with the time the record started.
+func loadStabilityAt(opts CacheOptions, want cacheKeyFields) (map[Class]ClassStability, time.Time, error) {
 	c, ok, err := opts.Store.LoadCalibration(stabilityKey(want))
 	if err != nil || !ok {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if age := opts.Now().Sub(c.At); age < 0 || age >= opts.MaxAge {
-		return nil, nil
+		return nil, time.Time{}, nil
 	}
 	var rec stabilityRecord
 	dec := json.NewDecoder(bytes.NewReader(c.Result))
 	dec.DisallowUnknownFields()
 	if dec.Decode(&rec) != nil || dec.More() || rec.Version != stabilityVersion || !validRecord(rec.Classes) {
-		return nil, nil
+		return nil, time.Time{}, nil
 	}
-	return rec.Classes, nil
+	return rec.Classes, c.At, nil
 }
 
 func validRecord(classes map[Class]ClassStability) bool {

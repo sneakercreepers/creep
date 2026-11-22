@@ -175,7 +175,7 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 		return t, err
 	}
 	findings := baseFindings(rs)
-	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings, nil)
+	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier, est.opts.stability), findings, nil)
 	if errors.Is(err, planner.ErrInput) {
 		return t.rejected(findings, rs.gaps), nil
 	}

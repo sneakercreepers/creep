@@ -327,7 +327,7 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 	}
 	findings := baseFindings(rs)
 	done := s.stats.start(phasePlan)
-	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier), findings, s.deps.planned)
+	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier, s.opts.stability), findings, s.deps.planned)
 	done()
 	if errors.Is(err, planner.ErrInput) {
 		return rejectedScan(findings, rs.gaps), nil
@@ -358,9 +358,12 @@ func rejectedScan(findings []report.Finding, gaps []report.NotEvaluated) scanRes
 	return scanResult{findings: findings, gaps: gaps, stop: reasonPlannerRejected}
 }
 
-// planBudget gives the planner the run's token budget and what one reader
-// call can cost at the tier: its prompt and slice plus the reply.
-func planBudget(maxTokens int, tier reader.Tier) planner.Budget {
+// planBudget gives the planner the run's token budget and what one
+// hypothesis can cost at the tier: its prompt and slice plus the reply,
+// once per --stability sample, since every sample asks it (ADR 0024).
+// Without that a stability run plans N times what the budget pays for and
+// stops part way through the reader instead of skipping by budget.
+func planBudget(maxTokens int, tier reader.Tier, samples int) planner.Budget {
 	call, err := reader.CallTokens(tier)
 	if err != nil {
 		return planner.Budget{} // zero StepTokens: Build refuses it (fails closed)
@@ -369,5 +372,6 @@ func planBudget(maxTokens int, tier reader.Tier) planner.Budget {
 	if maxTokens > 0 {
 		tokens = uint32(min(uint64(maxTokens), math.MaxUint32)) //nolint:gosec // G115: clamped to the uint32 range
 	}
-	return planner.Budget{Tokens: tokens, StepTokens: uint32(call + replyTokens)} //nolint:gosec // G115: a few thousand
+	step := (call + replyTokens) * min(max(samples, 1), maxStability)
+	return planner.Budget{Tokens: tokens, StepTokens: uint32(step)} //nolint:gosec // G115: a few thousand, times at most maxStability
 }

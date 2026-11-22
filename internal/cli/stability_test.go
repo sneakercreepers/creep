@@ -15,6 +15,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/reader"
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
@@ -319,7 +320,12 @@ func TestStabilityFlag(t *testing.T) {
 	}{
 		{[]string{"scan", "--stability", "0"}, "--stability 0: want 1 to 5 runs"},
 		{[]string{"scan", "--stability", "6"}, "--stability 6: want 1 to 5 runs"},
+		{[]string{"scan", "--stability", "-1"}, "--stability -1: want 1 to 5 runs"},
+		{[]string{"estimate", "--stability", "6"}, "--stability 6: want 1 to 5 runs"},
+		{[]string{"scan", "--stability", "two"}, "invalid value"},
+		{[]string{"scan", "--stability", "1.5"}, "invalid value"},
 		{[]string{"why", "sink-1", "--stability", "2"}, "--stability changes only scan and estimate, not why"},
+		{[]string{"doctor", "--stability", "1"}, "--stability changes only scan and estimate, not doctor"},
 	}
 	for _, tt := range tests {
 		code, _, errOut := runScanWith(noModelDeps, tt.args...)
@@ -329,6 +335,18 @@ func TestStabilityFlag(t *testing.T) {
 	}
 	if discover.MaxSamples != report.MaxStabilityRuns {
 		t.Errorf("discover.MaxSamples %d, report.MaxStabilityRuns %d: keep them equal", discover.MaxSamples, report.MaxStabilityRuns)
+	}
+}
+
+// Each hypothesis costs one reader call per sample, so the planner plans
+// only what the budget pays for at N samples (ADR 0024); out-of-range
+// sample counts never shrink the step cost below one call.
+func TestPlanBudgetCountsSamples(t *testing.T) {
+	one := planBudget(1_000_000, reader.TierM, 1).StepTokens
+	for _, tt := range []struct{ samples, want int }{{0, 1}, {1, 1}, {3, 3}, {5, 5}, {9, 5}} {
+		if got := planBudget(1_000_000, reader.TierM, tt.samples).StepTokens; got != one*uint32(tt.want) { //nolint:gosec // G115: at most 5
+			t.Errorf("%d samples: step %d tokens, want %d", tt.samples, got, one*uint32(tt.want)) //nolint:gosec // G115: at most 5
+		}
 	}
 }
 
