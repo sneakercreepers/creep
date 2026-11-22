@@ -71,26 +71,7 @@ type scanResult struct {
 // the exit code is exitcode.ForReport, never 0 for an incomplete run
 // (ADR 0007).
 func runScan(e env, args []string) int {
-	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
-		printError(e.stderr, "creep scan", fmt.Errorf("scans the current directory; run it from the repository root (got %d arguments)", len(args)))
-		return exitcode.ConfigError
-	}
-	resolved, err := loadConfig(e.opts)
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
-	gate, err := chooseGate(e, resolved)
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
-	changed, err := readChangedList(e.opts.changed)
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
-	base, err := loadScanBaseline(e.opts, e.deps.today())
+	in, err := loadScanInputs(e, args)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
@@ -99,16 +80,13 @@ func runScan(e env, args []string) int {
 	// after calibration, and the redactor stops with it.
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	s, err := openSession(ctx, e, resolved)
+	s, err := openSession(ctx, e, in)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
 	defer s.close()
-	s.gate = gate
-	s.changed = changed
-	s.baseline = base
-	warnPreset(e.stderr, resolved.Config.Model)
+	warnPreset(e.stderr, in.resolved.Config.Model)
 	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
@@ -116,9 +94,7 @@ func runScan(e env, args []string) int {
 	if err := s.checkTools(ctx); err != nil {
 		return s.fail(e, "creep scan: tool canary", err, failureCode(err))
 	}
-	done := s.stats.start(phaseCalibrate)
 	cal, err := s.calibrate(ctx)
-	done()
 	if err != nil {
 		return s.fail(e, "creep scan: calibration", err, failureCode(err))
 	}
@@ -129,6 +105,38 @@ func runScan(e env, args []string) int {
 	}
 	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
 	return s.finish(e, cal, res)
+}
+
+// scanInputs is what a scan reads and checks before it opens anything:
+// the config, the gate of its mode, the --changed list and the baseline.
+type scanInputs struct {
+	resolved *config.Resolved
+	gate     runGate
+	changed  *changedList
+	baseline *scanBaseline
+}
+
+// loadScanInputs reads the scan's inputs; any error is a usage or config
+// error (exit 2), reported before a session, state or model is touched.
+func loadScanInputs(e env, args []string) (scanInputs, error) {
+	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
+		return scanInputs{}, fmt.Errorf("scans the current directory; run it from the repository root (got %d arguments)", len(args))
+	}
+	var in scanInputs
+	var err error
+	if in.resolved, err = loadConfig(e.opts); err != nil {
+		return scanInputs{}, err
+	}
+	if in.gate, err = chooseGate(e, in.resolved); err != nil {
+		return scanInputs{}, err
+	}
+	if in.changed, err = readChangedList(e.opts.changed); err != nil {
+		return scanInputs{}, err
+	}
+	if in.baseline, err = loadScanBaseline(e.opts, e.deps.today()); err != nil {
+		return scanInputs{}, err
+	}
+	return in, nil
 }
 
 // failureCode maps a model failure to its exit code: consent and other
@@ -144,11 +152,13 @@ func failureCode(err error) int {
 // openSession checks the model settings before touching the disk, then
 // opens the state store, a new run, the model link and the repository.
 // The redactor stops with ctx.
-func openSession(ctx context.Context, e env, r *config.Resolved) (*session, error) {
+func openSession(ctx context.Context, e env, in scanInputs) (*session, error) {
+	r := in.resolved
 	if err := checkModelConfig(r.Config.Model); err != nil {
 		return nil, err
 	}
-	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps, stats: newRunStats(e.deps.now)}
+	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps, stats: newRunStats(e.deps.now),
+		gate: in.gate, changed: in.changed, baseline: in.baseline}
 	if err := s.openState(); err != nil {
 		s.close()
 		return nil, err
@@ -259,7 +269,10 @@ func (s *session) close() {
 	}
 }
 
+// calibrate measures the model, or reads its cached tier, under the
+// calibrate phase of --stats.
 func (s *session) calibrate(ctx context.Context) (calibrate.Calibration, error) {
+	defer s.stats.start(phaseCalibrate)()
 	return s.deps.calibrate(ctx, calibrate.CacheOptions{
 		Options:     calibrate.Options{Seed: calibrationSeed, Model: s.model, Redactor: s.red},
 		MaxAge:      time.Duration(s.cfg.Calibration.CacheDays) * 24 * time.Hour,
@@ -282,11 +295,7 @@ func (s *session) scan(ctx context.Context, tier calibrate.Tier, files repoFiles
 // hypothesis. A repository with no candidate plans nothing and reads
 // nothing; whether that is complete is the files' to say (ADR 0017 D2).
 func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoScan) (scanResult, error) {
-	ptier, err := plannerTier(tier)
-	if err != nil {
-		return scanResult{}, err
-	}
-	rtier, err := readerTier(tier)
+	ptier, rtier, err := planReadTiers(tier)
 	if err != nil {
 		return scanResult{}, err
 	}

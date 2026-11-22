@@ -225,15 +225,7 @@ func New(in Input) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	classes, err := checkClasses(in.Classes, run.Incomplete)
-	if err != nil {
-		return nil, err
-	}
-	skipped, err := checkNotEvaluated(in.NotEvaluated)
-	if err != nil {
-		return nil, err
-	}
-	scanners, err := checkScanners(in.Scanners)
+	coverage, err := checkCoverage(in, run.Incomplete)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +239,7 @@ func New(in Input) (*Report, error) {
 		Tool:          Tool{Name: "creep", Version: info.Version, Commit: info.Commit},
 		Run:           run,
 		Findings:      findings,
-		Coverage:      Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners},
+		Coverage:      coverage,
 		DataHandling:  in.DataHandling.normalized(),
 		Discovery: Discovery{
 			WholeFiles: in.Discovery.WholeFiles,
@@ -257,6 +249,24 @@ func New(in Input) (*Report, error) {
 		Incremental:  in.Incremental,
 		Baseline:     in.Baseline,
 	}, nil
+}
+
+// checkCoverage checks the classes, the not-evaluated list and the
+// scanners: what the run covered and what it left out.
+func checkCoverage(in Input, incomplete bool) (Coverage, error) {
+	classes, err := checkClasses(in.Classes, incomplete)
+	if err != nil {
+		return Coverage{}, err
+	}
+	skipped, err := checkNotEvaluated(in.NotEvaluated)
+	if err != nil {
+		return Coverage{}, err
+	}
+	scanners, err := checkScanners(in.Scanners)
+	if err != nil {
+		return Coverage{}, err
+	}
+	return Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners}, nil
 }
 
 // runInfo is incomplete unless the run state ended complete and the scan
