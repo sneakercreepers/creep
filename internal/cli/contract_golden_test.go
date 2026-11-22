@@ -38,14 +38,17 @@ func TestHelpGolden(t *testing.T) {
 	if code != exitcode.OK {
 		t.Fatalf("creep --help exit %d: %s", code, stderr)
 	}
+	// The broken cases derive from the output, so a deliberate change accepted
+	// with -update never leaves one equal to the golden.
+	exitLine := strings.Split(exitcode.Help(), "\n")[1]
 	tests := []struct {
 		name  string
 		got   string
 		match bool
 	}{
 		{"creep --help", help, true},
-		{"broken: flag line removed", dropLine(help, "--stats"), false},
-		{"broken: exit code reworded", strings.Replace(help, "gate exceeded", "findings found", 1), false},
+		{"broken: flag lines removed", dropLine(help, "  --"), false},
+		{"broken: exit code reworded", strings.Replace(help, exitLine, exitLine+" changed", 1), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

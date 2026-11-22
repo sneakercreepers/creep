@@ -17,7 +17,8 @@ var goldenPath = filepath.Join("testdata", "exit_codes.golden")
 // TestExitCodesGolden pins every code's value and meaning (#135): CI
 // pipelines branch on them, so a change must show up as a golden diff. The
 // broken cases prove that a changed value, meaning, or a dropped or added
-// code each fails the comparison.
+// code each fails the comparison; they derive from the table so a deliberate
+// change accepted with -update cannot make one coincide with the golden.
 func TestExitCodesGolden(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -25,10 +26,10 @@ func TestExitCodesGolden(t *testing.T) {
 		match   bool
 	}{
 		{"current table", func() []entry { return table }, true},
-		{"broken: value changed", func() []entry { return withEntry(1, entry{5, "gate exceeded"}) }, false},
-		{"broken: meaning changed", func() []entry { return withEntry(1, entry{GateExceeded, "findings found"}) }, false},
+		{"broken: value changed", func() []entry { return withEntry(1, entry{table[1].code + 10, table[1].meaning}) }, false},
+		{"broken: meaning changed", func() []entry { return withEntry(1, entry{table[1].code, table[1].meaning + " changed"}) }, false},
 		{"broken: code dropped", func() []entry { return table[:len(table)-1] }, false},
-		{"broken: code added", func() []entry { return append(slices.Clone(table), entry{5, "new"}) }, false},
+		{"broken: code added", func() []entry { return append(slices.Clone(table), entry{len(table) + 10, "new"}) }, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
