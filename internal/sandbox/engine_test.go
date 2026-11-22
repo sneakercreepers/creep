@@ -149,6 +149,16 @@ func TestPreReleaseAtMinimum(t *testing.T) {
 		"bare plus":            {"1.1.12+", minRunc, ReasonUnknownVersion},
 		"tilde before release": {"1.1.12~22.04", minRunc, ReasonUnknownVersion},
 		"rc above minimum":     {"1.2.0-rc.1", minRunc, ReasonOK},
+		"dev above minimum":    {"1.35.4-dev", minBuildah, ReasonOK},
+		"upper rc":             {"1.35.3-RC1", minBuildah, ReasonOldRuntime},
+		"tilde rc":             {"1.35.3~rc1", minBuildah, ReasonOldRuntime},
+		"rc with no separator": {"1.35.3rc1", minBuildah, ReasonUnknownVersion},
+		"dev as fourth part":   {"1.35.3.dev0", minBuildah, ReasonUnknownVersion},
+		"buildah ubuntu":       {"1.35.3-0ubuntu2", minBuildah, ReasonOK},
+		"buildah dfsg1":        {"1.35.3+dfsg1", minBuildah, ReasonOK},
+		"upper ce":             {"25.0.2-CE", minDockerEngine, ReasonOK},
+		"rc inside build meta": {"25.0.2+rc1", minDockerEngine, ReasonOldRuntime},
+		"debian revision":      {"25.0.2-1~deb12u1", minDockerEngine, ReasonOK},
 		"rc below minimum":     {"1.1.11-0ubuntu1", minRunc, ReasonOldRuntime},
 	}
 	for name, tt := range tests {

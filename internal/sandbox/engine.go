@@ -58,7 +58,9 @@ func (v engineVersion) atLeast(min engineVersion) bool {
 }
 
 // versionReason is ReasonOK for a version above min, or at min with no
-// suffix or a distribution's packaging suffix.
+// suffix or a distribution's packaging suffix. A pre-release above min
+// ("1.35.4-dev", "1.2.0-rc.1") passes on purpose: its number is past the
+// fixed release, so the suffix is not read.
 func versionReason(s string, min engineVersion) Reason {
 	v, suffix, ok := parseVersion(s)
 	switch {
