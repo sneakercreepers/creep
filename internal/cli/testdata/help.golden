@@ -1,0 +1,49 @@
+creep finds vulnerabilities in local source code.
+
+Usage:
+  creep [global flags] <command> [flags] [args]
+
+Commands:
+  init     create a creep.yaml for this project (not implemented yet)
+  doctor   check the model (a command model must pass the tool canary) and the sandbox runtime
+  scan     scan the repository in the current directory; reports go to .creep/
+  estimate estimate the calls, tokens, time and cost of a scan here, without calling a model
+  why      why <id>: show the evidence behind a finding of the last scan
+  accept   accept <id> --expires 90d --reason "...": record a finding of the last scan as an accepted risk in the baseline file
+  reproduce reproduce <id>: run a verified finding's PoC again from its bundle, in the sandbox, without a model
+  clean    remove the containers, app images and networks creep left on local docker or podman, from any run
+  resume   resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)
+  version  print version, commit and Go version
+  config   explain: show each effective config value and the layer it came from
+  help     show this help
+
+Global flags (before or after the command; "--" ends flags):
+  --config <path>     config file used instead of the user and project files
+  --model-run <cmd>   model CLI for contract command: prompt on stdin, JSON out
+  --mode <mode>       scan: pr or nightly, which gate judges it (default pr, nightly
+                      on a GitHub Actions schedule event); only nightly verifies
+  --format <format>   output format: text, json, sarif, markdown (default "text")
+  --log-level <level> log level: debug, info, warn, error (default "info")
+  --record            call every model and record the responses for replay
+  --replay            serve recorded responses only; never use the network
+  --recalibrate       calibrate the model again even if a calibration is cached
+  --stats             scan: print phase times, model calls, cache hits and tokens
+  --changed <file>    scan, estimate: only the paths listed in file, one per line or
+                      NUL-separated (git diff --name-only -z origin/main > changed.txt);
+                      every other source file is listed unchanged and not evaluated
+  --price-in <n>      estimate, --stats: price per 1M input tokens, for a cost
+  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost
+  --baseline <file>   scan: do not gate on findings the file's live entries match
+                      (each still listed); accept: the file to write (default
+                      creep-baseline.json)
+  --baseline-write    scan: rewrite --baseline from this run's findings (a complete
+                      run only); accepted risks are kept
+  --expires <n>d      accept: days until the accepted risk expires (1d to 365d)
+  --reason <text>     accept: why the risk is accepted (required)
+
+Exit codes:
+  0  nothing blocking
+  1  gate exceeded
+  2  usage or configuration error
+  3  model or sandbox error
+  4  incomplete run: report written, not everything evaluated
