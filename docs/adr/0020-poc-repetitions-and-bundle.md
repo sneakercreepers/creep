@@ -3,6 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-21)
 - **Date:** 2026-11-21
 - **Deciders:** @Ludocius
+- **Amended by:** [ADR 0021](0021-gate-per-mode.md) (PoCs run only in a nightly scan, and the nightly gate reads their result)
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (a PoC's rate in the text, Markdown and SARIF reports; JSON v1 unchanged; a new command), [ADR 0019](0019-poc-templates.md) (its PoCs now run from `creep scan`)
 - **Changes:** two new stable contracts, the reproduction bundle (`verify.Bundle`, `.creep/bundles/<id>.json`) and the `creep reproduce <id>` command; the PoC prompt and schema (`internal/verify/prompts/`, `verify.Schema`); `sandbox.AppPort`
 - **Fitness function:** the rows "No finding is verified without a PoC that verified" and "A reproduction bundle holds no secret" of [architecture.md §9](../architecture.md#9-fitness-functions)

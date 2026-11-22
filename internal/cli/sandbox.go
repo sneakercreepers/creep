@@ -61,7 +61,7 @@ func reportSandbox(e env, cfg config.Sandbox) {
 		fmt.Fprintln(e.stdout, "sandbox: sandbox.enabled is false, so scans do not use it")
 	}
 	reportImages(e, best)
-	fmt.Fprintln(e.stdout, "sandbox: with sandbox.enabled, a scan builds the app offline and runs a PoC 5 times for each probable sqli, path_traversal or template_injection finding; only a PoC that verified makes a finding verified")
+	fmt.Fprintln(e.stdout, "sandbox: with sandbox.enabled, a nightly scan (--mode nightly) builds the app offline and runs a PoC 5 times for each probable sqli, path_traversal or template_injection finding; only a PoC that verified makes a finding verified")
 }
 
 // reportImages lists the digest-pinned images the run network needs

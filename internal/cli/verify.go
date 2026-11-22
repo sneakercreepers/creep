@@ -69,8 +69,9 @@ const (
 // context; a larger one leaves the app unbuilt (context_refused).
 const buildFileBytes = 64 << 20
 
-// verifyApp builds the app in the sandbox when sandbox.enabled is set and a
-// runtime is usable, runs a PoC for each probable finding it can (#25)
+// verifyApp builds the app in the sandbox when sandbox.enabled is set, the
+// scan is nightly (a pr scan never builds, #28) and a runtime is usable,
+// runs a PoC for each probable finding it can (#25)
 // and says what verification the findings got. It never fails the scan or
 // makes it incomplete: every way the build or a PoC can stop is a closed
 // reason or a count in the report, such findings stay probable, and the
@@ -79,7 +80,7 @@ const buildFileBytes = 64 << 20
 // reads verified (ADR 0009). The build and the PoCs end by the scan
 // deadline.
 func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, deadline time.Time, in pocInput) report.Verification {
-	if !s.cfg.Sandbox.Enabled {
+	if !s.cfg.Sandbox.Enabled || !s.gate.verifies(w) {
 		return report.Verification{}
 	}
 	rep, checked := detectSandbox(ctx, s.deps.sandbox, s.cfg.Sandbox)

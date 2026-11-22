@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`)
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan)
 
 ## Context
 
@@ -182,3 +182,7 @@ Residual: the list is the operator's input. One that names the wrong files scans
 ## Amendment: baseline and accepted risks (#27, ADR 0022)
 
 [ADR 0022](0022-baseline-and-accepted-risks.md) adds `--baseline <file>`, `--baseline-write` and `creep accept <id>`. For this ADR: the **Gate** rule above skips a probable or verified finding a live baseline entry suppresses, and nothing else changes in how a run is judged. A suppressed finding keeps its status and is listed in every format; a `not_evaluated` finding is never suppressed; the incompleteness rules and exit 4 do not read suppressions, so a baseline never turns an incomplete run into exit 0 or 1. Report v1 gains two optional finding fields under the additive rule of the #26 amendment: `fingerprint` (32 lowercase hex digits, on probable and verified findings) and `suppression` (`kind` `baseline` or `accepted`, `expires`, and an accepted risk's `reason`); `report.ReadJSON` checks them as `report.New` does, so `creep why` and `creep accept` refuse a planted report that suppresses anything else. The text summary, Markdown and SARIF also print how the baseline was used (suppressed findings by kind, expired entries, entries that matched no finding); those counts are not JSON (`Report.Baseline` is `json:"-"`). A baseline file that cannot be read exits 2 before the run opens state; a refused or failed `--baseline-write` never exits 0.
+
+## Amendment: a gate per scan mode (#28, ADR 0021)
+
+[ADR 0021](0021-gate-per-mode.md) adds `--mode pr|nightly` (nightly also for a GitHub Actions `schedule` event). For this ADR: the **Gate** rule above reads the gate of the scan's mode, `gates.pr` for a pr scan, `gates.nightly` and `gates.pr` for a nightly one, with the same class severities, and exit 1 means one of them tripped; a nightly scan never passes what a pr scan fails. A pr scan never builds the app or runs a PoC, even with `sandbox.enabled`, so the #23 and #25 amendments apply to nightly scans only. The verification outcome still never makes a run incomplete and JSON v1 does not change, but in a nightly scan it decides which status the gate reads: when the sandbox is off, verification is unavailable or a PoC candidate got no completed run, `gates.nightly` is read with its status raised to probable (`verified:high` as `probable:high`), so a finding nothing verified fails the run at the gate's severity instead of passing it (the gate failure path, not exit 4). Each scan prints the mode and its gate on stderr (`gate: ...`).

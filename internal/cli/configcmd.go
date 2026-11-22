@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"text/tabwriter"
 
 	"github.com/sneakercreepers/creep/internal/config"
@@ -40,7 +41,13 @@ func runConfig(e env, args []string) int {
 		printError(e.stderr, "creep config explain", err)
 		return exitcode.ConfigError
 	}
-	if err := printExplain(e.stdout, resolved); err != nil {
+	mode, err := chooseMode(e)
+	if err != nil {
+		printError(e.stderr, "creep config explain", err)
+		return exitcode.ConfigError
+	}
+	entries := slices.Concat(resolved.Explain(), resolved.ExplainMode(mode))
+	if err := printExplain(e.stdout, resolved.Config.Output.Format, entries); err != nil {
 		printError(e.stderr, "creep config explain", err)
 		return exitcode.ConfigError
 	}
@@ -139,14 +146,16 @@ func readProjectLayer() (*config.File, error) {
 	return &config.File{Name: projectFile, Data: data}, nil
 }
 
-func printExplain(w io.Writer, r *config.Resolved) error {
-	switch format := r.Config.Output.Format; format {
+// printExplain prints every key, then the scan's mode and the gate it
+// reads (#28).
+func printExplain(w io.Writer, format string, entries []config.Entry) error {
+	switch format {
 	case "text":
-		return printExplainText(w, r.Explain())
+		return printExplainText(w, entries)
 	case "json":
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		return enc.Encode(r.Explain())
+		return enc.Encode(entries)
 	default:
 		return fmt.Errorf("output format %q is not supported here: want text or json", format)
 	}

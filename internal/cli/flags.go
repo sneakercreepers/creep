@@ -23,6 +23,7 @@ type globalOptions struct {
 	format     string
 	configPath string
 	modelRun   string // --model-run: model.run, the CLI of contract command
+	mode       string // --mode: pr or nightly, the gate that judges a scan (#28); "" picks it
 	record     bool   // state.ModeRecord: call every model and overwrite recordings
 	replay     bool   // state.ModeReplay: serve recordings only, never the network
 	// recalibrate is calibrate.CacheOptions.Recalibrate: ignore a cached
@@ -77,6 +78,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.format, "format", opts.format, "")
 	fs.StringVar(&opts.configPath, "config", opts.configPath, "")
 	fs.StringVar(&opts.modelRun, "model-run", opts.modelRun, "")
+	fs.StringVar(&opts.mode, "mode", opts.mode, "")
 	fs.StringVar(&opts.changed, "changed", opts.changed, "")
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
@@ -97,6 +99,9 @@ func (o globalOptions) validate() error {
 	}
 	if !slices.Contains(formats, o.format) {
 		return fmt.Errorf("invalid --format %q: want one of %s", o.format, strings.Join(formats, ", "))
+	}
+	if o.explicit["mode"] && !slices.Contains(config.Modes(), o.mode) {
+		return fmt.Errorf("invalid --mode %q: want one of %s", o.mode, strings.Join(config.Modes(), ", "))
 	}
 	if o.record && o.replay {
 		return errors.New("--record and --replay cannot be used together")

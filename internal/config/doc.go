@@ -26,6 +26,11 @@
 //     the gate the layers before it set (policy defaults, user file) is
 //     rejected, so a pull request cannot loosen the gate that judges it.
 //     Operator layers (user file, --config, policy) may still loosen.
+//   - The scan mode (pr, nightly) picks which gate judges a run (nightly
+//     reads gates.nightly and gates.pr) and is not
+//     a key: it comes from --mode or a GitHub Actions schedule event
+//     (ChooseMode), so no file can pick it. Reading a gate without
+//     verification only raises its status to probable (UnverifiedGate).
 //   - The project file comes from the repository being scanned, which is
 //     untrusted, so it cannot set where code is sent (model.endpoint,
 //     egress.allow), which program receives it (model.run, model.env,

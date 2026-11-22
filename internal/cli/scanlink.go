@@ -37,6 +37,9 @@ type scanDeps struct {
 	// planned sees the planner input scan builds; nil in production. The
 	// holistic protection test walks the real input through it (#188).
 	planned func(planner.Input)
+	// getenv reads the CI environment that picks the scan's mode; nil
+	// reads none, so a test never takes its mode from the machine running it.
+	getenv func(string) string
 }
 
 // scannerRunner is runScanner, or scanrun.Run when none is set.
@@ -57,7 +60,7 @@ type modelLink struct {
 
 func productionDeps() scanDeps {
 	return scanDeps{
-		connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now,
+		connect: connectGateway, calibrate: calibrateWithUserCache, now: time.Now, getenv: os.Getenv,
 		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean, images: sandbox.Images, open: openSandbox},
 	}
 }

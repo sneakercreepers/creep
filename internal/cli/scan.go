@@ -39,6 +39,7 @@ type session struct {
 	red   *redact.Redactor
 	repo  *os.Root
 	stats *runStats
+	gate  runGate // the mode and the gate that judges the run (#28)
 	// changed is the --changed list, nil for a full scan, and incremental
 	// the scope the walk applied it with (#26).
 	changed     *changedList
@@ -79,6 +80,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	gate, err := chooseGate(e, resolved)
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	changed, err := readChangedList(e.opts.changed)
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
@@ -99,6 +105,7 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
+	s.gate = gate
 	s.changed = changed
 	s.baseline = base
 	warnPreset(e.stderr, resolved.Config.Model)
