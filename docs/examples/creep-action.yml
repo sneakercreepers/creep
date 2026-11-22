@@ -16,6 +16,10 @@ permissions: {}
 
 jobs:
   scan:
+    # A fork's pull request gets no model key, so creep could not reach a
+    # hosted model and every such job would fail; it is scanned on push after
+    # review. Drop this line if the policy names a model that needs no key.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 150
     permissions:
