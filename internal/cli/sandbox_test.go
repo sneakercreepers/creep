@@ -67,7 +67,7 @@ func TestDoctorReportsSandbox(t *testing.T) {
 		notWant []string
 	}{
 		{"rootless docker", []sandbox.Status{rootlessDocker, missingPodman}, "sandbox:\n  enabled: true\n",
-			[]string{"sandbox runtime docker \"/usr/bin/docker\": usable, rootless yes, isolation rootless", "sandbox runtime podman: not usable (not_found)", "sandbox: runtime docker, rootless yes, isolation rootless", "findings stay probable"},
+			[]string{"sandbox runtime docker \"/usr/bin/docker\": usable, rootless yes, isolation rootless", "sandbox runtime podman: not usable (not_found)", "sandbox: runtime docker, rootless yes, isolation rootless", "only a PoC that verified makes a finding verified"},
 			[]string{"warning", "sandbox.enabled is false"}},
 		// creep never pulls: a missing pinned image comes with the exact pull command.
 		{"pinned images", []sandbox.Status{rootlessDocker}, "",

@@ -19,8 +19,12 @@ import (
 
 const sandboxOn = "sandbox:\n  enabled: true\n"
 
-// fakeBuilder stands in for a *sandbox.Sandbox: it records the build and
-// every Close, and answers as told.
+// builtApp is an app image the fake sandbox built.
+var builtApp = sandbox.App{Image: "sha256:" + strings.Repeat("a", 64)}
+
+// fakeBuilder stands in for a *sandbox.Sandbox: it records the build,
+// the app and database it starts, every PoC exchange and every Close, and
+// answers as told. Without a port the app declares none (no_port).
 type fakeBuilder struct {
 	app      sandbox.App
 	err      error
@@ -30,7 +34,40 @@ type fakeBuilder struct {
 	repo     sandbox.Repo
 	builds   int
 	closes   int
+
+	port       int
+	portErr    error
+	startErr   error
+	dbErr      error
+	exchange   func(port int, requests [][]byte) ([]sandbox.Exchange, error)
+	started    int
+	migrations []sandbox.Migration
+	exchanges  int
 }
+
+func (f *fakeBuilder) AppPort(context.Context, sandbox.App) (int, error) { return f.port, f.portErr }
+
+func (f *fakeBuilder) StartDatabase(_ context.Context, m []sandbox.Migration) (sandbox.Database, error) {
+	f.migrations = m
+	return sandbox.Database{}, f.dbErr
+}
+
+func (f *fakeBuilder) StartApp(context.Context, sandbox.App) error {
+	f.started++
+	return f.startErr
+}
+
+func (f *fakeBuilder) Exchange(_ context.Context, port int, requests [][]byte) ([]sandbox.Exchange, error) {
+	f.exchanges++
+	if f.exchange == nil {
+		return nil, errors.New("fake sandbox: no exchange")
+	}
+	return f.exchange(port, requests)
+}
+
+func (f *fakeBuilder) DatabaseHasTable(context.Context, string) (bool, error) { return false, nil }
+
+func (f *fakeBuilder) AppCanary() string { return "creep-canary-00112233445566778899aabbccddeeff" }
 
 func (f *fakeBuilder) Build(ctx context.Context, repo sandbox.Repo) (sandbox.App, error) {
 	f.builds++
@@ -54,7 +91,7 @@ func (f *fakeBuilder) Close() error {
 // fails to open with openErr; opened counts the opens.
 func withBuilder(deps scanDeps, fb *fakeBuilder, openErr error, opened *int) scanDeps {
 	deps = withSandbox(deps, []sandbox.Status{rootlessDocker}, nil, nil)
-	deps.sandbox.open = func(st sandbox.Status, runID string) (appBuilder, error) {
+	deps.sandbox.open = func(st sandbox.Status, runID string) (appSandbox, error) {
 		*opened++
 		if st.Runtime != sandbox.Docker || runID == "" {
 			return nil, errors.New("wrong runtime or run")
@@ -87,7 +124,10 @@ func TestBuildFailureNeverFailsScan(t *testing.T) {
 		{"interrupted", fakeBuilder{err: sandbox.ErrInterrupted}, nil, "`interrupted`"},
 		{"cleanup fails", fakeBuilder{app: sandbox.App{Unavailable: sandbox.BuildNoFile}, closeErr: hostile}, nil, "no_build_file"},
 		{"open fails", fakeBuilder{}, hostile, "sandbox_error: open"},
-		{"built", fakeBuilder{app: sandbox.App{Image: "sha256:" + strings.Repeat("a", 64)}}, nil, "built offline"},
+		{"built, no port", fakeBuilder{app: builtApp}, nil, "no_port"},
+		{"port error", fakeBuilder{app: builtApp, portErr: hostile}, nil, "sandbox_error: port"},
+		{"app does not start", fakeBuilder{app: builtApp, port: 5000, startErr: hostile}, nil, "start_failed: app"},
+		{"no valid PoC", fakeBuilder{app: builtApp, port: 5000}, nil, "2 got no PoC run"},
 	}
 	flask := map[string]string{"app.py": testApp(t, "flask")}
 	base, _, _ := runScanWith(fakeDeps(&fakeModel{verdict: sqliVulnerable}, calibrate.TierM), "--config", scanRepo(t, flask, ""), "scan")
@@ -262,7 +302,7 @@ func TestCtrlCClosesTheSandbox(t *testing.T) {
 // give is in the report's closed set, and anything else becomes
 // sandbox_error instead of failing the scan.
 func TestVerificationReasonsClosed(t *testing.T) {
-	reasons := []string{verifyNotChecked, verifyNoRuntime, verifySandboxError, verifyInterrupted, verifyDeadline}
+	reasons := []string{verifyNotChecked, verifyNoRuntime, verifySandboxError, verifyInterrupted, verifyDeadline, verifyNoPort, verifyStartFailed}
 	for _, r := range sandbox.BuildReasons() {
 		reasons = append(reasons, string(r))
 	}

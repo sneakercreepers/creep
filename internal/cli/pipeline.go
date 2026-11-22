@@ -83,6 +83,9 @@ type readStage struct {
 	tier   reader.Tier
 	slicer reader.Slicer // its Read is reads.Read
 	reads  *deadlineReads
+	// kept, when set, gets the slice behind each probable finding, by
+	// finding index: the redacted code a PoC request shows the model (#25).
+	kept map[int]reader.Slice
 }
 
 // run slices and evaluates every hypothesis. It returns the files the
@@ -144,7 +147,9 @@ func targetsFor(plan planner.Plan, rs repoScan, findings []report.Finding) ([]re
 // marks only its own hypothesis.
 func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf map[reader.HypothesisID]int, findings []report.Finding) string {
 	for i, s := range slices {
-		reason, stop := r.evaluateOne(ctx, s, &findings[sinkOf[s.Hypothesis]])
+		at := sinkOf[s.Hypothesis]
+		reason, stop := r.evaluateOne(ctx, s, &findings[at])
+		r.keep(at, s, findings[at])
 		if !stop {
 			continue
 		}
@@ -154,6 +159,14 @@ func (r readStage) evaluate(ctx context.Context, slices []reader.Slice, sinkOf m
 		return reason
 	}
 	return ""
+}
+
+// keep remembers the first slice that made finding at probable.
+func (r readStage) keep(at int, s reader.Slice, f report.Finding) {
+	if _, seen := r.kept[at]; r.kept == nil || seen || f.Status != report.StatusProbable {
+		return
+	}
+	r.kept[at] = s
 }
 
 // evaluateOne asks about one slice and reports whether the run must stop.

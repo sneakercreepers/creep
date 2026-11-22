@@ -19,7 +19,7 @@ type sandboxDeps struct {
 	detect func(context.Context, sandbox.Env) sandbox.Report
 	clean  func(context.Context, sandbox.Status) (sandbox.Removed, error)
 	images func(context.Context, sandbox.Status) []sandbox.PinnedImage
-	open   func(st sandbox.Status, runID string) (appBuilder, error)
+	open   func(st sandbox.Status, runID string) (appSandbox, error)
 	// interrupt and now default to Ctrl+C and time.Now; tests replace them.
 	interrupt func(context.Context) (context.Context, context.CancelFunc)
 	now       func() time.Time
@@ -61,7 +61,7 @@ func reportSandbox(e env, cfg config.Sandbox) {
 		fmt.Fprintln(e.stdout, "sandbox: sandbox.enabled is false, so scans do not use it")
 	}
 	reportImages(e, best)
-	fmt.Fprintln(e.stdout, "sandbox: with sandbox.enabled, a scan builds the app offline; PoC verification is not built yet (#24, #25), so findings stay probable")
+	fmt.Fprintln(e.stdout, "sandbox: with sandbox.enabled, a scan builds the app offline and runs a PoC 5 times for each probable sqli, path_traversal or template_injection finding; only a PoC that verified makes a finding verified")
 }
 
 // reportImages lists the digest-pinned images the run network needs

@@ -22,7 +22,9 @@ creep scan .
   5 Sandbox  v0.2   optional Docker/Podman through their CLI (ADR 0016): runtime detection, hardened
                     profile and cleanup built (#21); internal network, canary and synthetic database
                     built (#22); offline app build wired into scan, outcome in the report (#23);
-                    PoC against HEAD next (#24, #25)
+                    PoC templates (#24, ADR 0019) run 5 times against HEAD per probable finding:
+                    5/5 verified, 1-4/5 verified with a rate (intermittent), 0/5 stays probable;
+                    a redacted reproduction bundle per verified finding (#25, ADR 0020)
   6 Fix      v3     diff → oracle → tests, suggested only
   7 Report          verified · probable · discarded · not evaluated → SARIF, JSON v1, Markdown in .creep/
                     (HTML in v1.0); an incomplete run exits 4 (ADR 0007, ADR 0009)
@@ -30,7 +32,7 @@ creep scan .
 
 Every model call goes through the **gateway**: `redact.File` → fragment → consent → token budget → `egress.log` write-ahead → send (HTTP) or run (command, ADR 0014).
 
-Supporting commands: `creep why <id>` reads the last JSON report; `creep estimate` measures the requests a scan would send without a transport (ADR 0011); `--stats` prints what a scan spent; `--record`/`--replay` repeat a run with no network; `creep doctor` runs the tool canary and reports the sandbox runtime, rootless status and isolation; `creep clean` removes the containers creep left (ADR 0016). `creep init` and continuing a run with `creep resume` are not implemented and fail closed.
+Supporting commands: `creep why <id>` reads the last JSON report; `creep reproduce <id>` runs a verified finding's PoC again from its bundle, in the sandbox, with no model (ADR 0020); `creep estimate` measures the requests a scan would send without a transport (ADR 0011); `--stats` prints what a scan spent; `--record`/`--replay` repeat a run with no network; `creep doctor` runs the tool canary and reports the sandbox runtime, rootless status and isolation; `creep clean` removes the containers creep left (ADR 0016). `creep init` and continuing a run with `creep resume` are not implemented and fail closed.
 
 ## Model contracts
 
