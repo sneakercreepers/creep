@@ -66,7 +66,7 @@ Option A with verification a. The one reason: it verifies with what the runner a
 
 ## Amendment: post-merge review of #302 (2026-11-22)
 
-- **Status:** Proposed (with the ADR)
+- **Status:** Accepted (maintainer, 2026-11-22, with the ADR)
 
 The tester and auditor review that #302 skipped changes three details; each is additive or a refusal of input that was never valid.
 
