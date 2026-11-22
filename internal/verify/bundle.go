@@ -137,6 +137,12 @@ func scrubPoC(req Request, scrub Scrub) (Request, error) {
 	if err := decodeStrict([]byte(text), &out); err != nil {
 		return Request{}, fmt.Errorf("%w: scrubbed poc: %w", ErrBundle, err)
 	}
+	// A marker the scrub wrote can leave a PoC Validate refuses (a path
+	// takes no "<"); creep reproduce would refuse that bundle, so none is
+	// written (v0.2 release pentest).
+	if _, err := Build(out); err != nil {
+		return Request{}, fmt.Errorf("%w: scrubbed poc: %w", ErrBundle, err)
+	}
 	return out, nil
 }
 

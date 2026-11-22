@@ -94,7 +94,12 @@ func TestBundleIsScrubbed(t *testing.T) {
 	breakPoC := func(text []byte) (string, error) {
 		return strings.Replace(string(text), `"template"`, `"<SECRET_VALUE_1>"`, 1), nil
 	}
-	for name, scrub := range map[string]Scrub{"scrub fails": failPoC, "scrub breaks it": breakPoC} {
+	// v0.2 release pentest: a marker in the path leaves a PoC reproduce
+	// would refuse, so no bundle is written.
+	invalidPoC := func(text []byte) (string, error) {
+		return strings.Replace(string(text), `"path":"/`, `"path":"/<SECRET_VALUE_1>`, 1), nil
+	}
+	for name, scrub := range map[string]Scrub{"scrub fails": failPoC, "scrub breaks it": breakPoC, "scrub leaves it invalid": invalidPoC} {
 		if _, err := NewBundle(testMeta(), p, rep, scrub); !errors.Is(err, ErrBundle) {
 			t.Errorf("%s: %v, want ErrBundle", name, err)
 		}

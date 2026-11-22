@@ -264,3 +264,66 @@ func TestScanBaselineOnPush(t *testing.T) {
 		t.Errorf("args %q", args)
 	}
 }
+
+// Protection (v0.2 release pentest): creep scans the step's working
+// directory, so the changed list and a base-commit baseline are read
+// relative to it. Names relative to the repository root would match no
+// walked file under a working-directory input, every changed file would be
+// listed unchanged, and a pull request would pass on a scan that read
+// nothing. Deleted files are left out, and an empty list (nothing changed
+// in the working directory) scans every file instead (PR #307 review).
+func TestScanWorkingDirectoryScope(t *testing.T) {
+	tests := []struct {
+		name        string
+		edit        func(root string)
+		want        string
+		wantChanged string // "" when --changed must be absent
+	}{
+		{"change inside and outside", func(root string) {
+			mustWrite(t, filepath.Join(root, "svc", "app.py"), "a = 2\n", 0o600)
+			mustWrite(t, filepath.Join(root, "other.py"), "b = 2\n", 0o600)
+		}, "", "app.py\x00"},
+		{"change only outside", func(root string) {
+			mustWrite(t, filepath.Join(root, "other.py"), "b = 2\n", 0o600)
+		}, "scanning every file", ""},
+		{"only a deletion", func(root string) {
+			git(t, root, "rm", "-q", filepath.Join("svc", "old.py"))
+		}, "scanning every file", ""},
+		{"change and deletion", func(root string) {
+			mustWrite(t, filepath.Join(root, "svc", "app.py"), "a = 2\n", 0o600)
+			git(t, root, "rm", "-q", filepath.Join("svc", "old.py"))
+		}, "", "app.py\x00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, dir := scanSandbox(t)
+			root := s.workdir
+			base := workingDirectoryRepo(t, root, tt.edit)
+			s.workdir = filepath.Join(root, "svc")
+			s.env["EVENT_NAME"] = "pull_request"
+			s.env["BASE_SHA"] = base
+			s.env["INPUT_BASELINE"] = "creep-baseline.json"
+			wantCode(t, s.run("scan.sh"), 0, tt.want)
+			checkPassedFile(t, dir, "changed", tt.wantChanged)
+			checkPassedFile(t, dir, "baseline", "svc entries\n")
+		})
+	}
+}
+
+// workingDirectoryRepo makes a base commit with a svc directory and a pull
+// request commit from edit on top of it in root, and returns the base SHA.
+func workingDirectoryRepo(t *testing.T, root string, edit func(root string)) string {
+	t.Helper()
+	git(t, root, "init", "-q")
+	mustWrite(t, filepath.Join(root, "svc", "app.py"), "a = 1\n", 0o600)
+	mustWrite(t, filepath.Join(root, "svc", "old.py"), "o = 1\n", 0o600)
+	mustWrite(t, filepath.Join(root, "svc", "creep-baseline.json"), "svc entries\n", 0o600)
+	mustWrite(t, filepath.Join(root, "creep-baseline.json"), "root entries\n", 0o600)
+	git(t, root, "add", ".")
+	git(t, root, "commit", "-q", "-m", "base")
+	base := git(t, root, "rev-parse", "HEAD")
+	edit(root)
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "pull request")
+	return base
+}

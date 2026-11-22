@@ -47,6 +47,7 @@ const (
 	ruleOnbuild       = "onbuild"          // a trigger runs in a later FROM, unchecked
 	ruleTooManyImages = "too_many_images"  // more images than the check covers
 	ruleNoFrom        = "no_from"          // nothing to build
+	ruleHeredoc       = "heredoc"          // a here-document: its body is not instructions, and its end line is the author's
 )
 
 const maxBaseImages = 16
@@ -55,7 +56,9 @@ var (
 	// anyDirective is a "# key=" comment in any spacing or case: BuildKit
 	// reads directives as `#\s*key\s*=`, so this matches every one of them.
 	anyDirective = regexp.MustCompile(`^#\s*[A-Za-z][A-Za-z0-9_-]*\s*=`)
-	continuation = regexp.MustCompile(`\\[ \t]*$`)
+	// continuation is BuildKit's own rule: a backslash after another one
+	// does not continue, so `x\\` ends its line (v0.2 release pentest F1).
+	continuation = regexp.MustCompile(`(^|[^\\])\\[ \t]*$`)
 	// imageRef is a plain reference: no flag, variable or space.
 	imageRef       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$`)
 	nativePlatform = []string{"$BUILDPLATFORM", "${BUILDPLATFORM}", "$TARGETPLATFORM", "${TARGETPLATFORM}"}
@@ -137,7 +140,8 @@ func hasDirective(text string, lines []string) bool {
 
 // logicalLines joins continued lines ("\" is the only escape character,
 // since no directive is accepted) and drops comments and blank lines,
-// inside continuations too, as BuildKit does.
+// inside continuations too, as BuildKit does: with nothing between the
+// pieces, so `AD\` then `D http://…` is one ADD (PR #307 review).
 func logicalLines(lines []string) []string {
 	var out []string
 	var cur strings.Builder
@@ -147,8 +151,8 @@ func logicalLines(lines []string) []string {
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		if loc := continuation.FindStringIndex(l); loc != nil {
-			cur.WriteString(l[:loc[0]] + " ")
+		if m := continuation.FindStringSubmatchIndex(l); m != nil {
+			cur.WriteString(l[:m[3]])
 			open = true
 			continue
 		}
@@ -180,6 +184,9 @@ func checkInstructions(lines []string) (images, stages []string, rule string) {
 		if rule != "" {
 			return nil, nil, rule
 		}
+		if hasHeredoc(keyword, rest) {
+			return nil, nil, ruleHeredoc
+		}
 		imgs, rule := checkInstruction(keyword, flags, args, &st)
 		if rule != "" {
 			return nil, nil, rule
@@ -190,6 +197,21 @@ func checkInstructions(lines []string) (images, stages []string, rule string) {
 		return nil, nil, ruleNoFrom
 	}
 	return images, st.names, ""
+}
+
+// hasHeredoc reports a possible here-document (<<EOF, <<-EOF, 3<<EOF) in
+// an instruction that takes one. BuildKit ends its body at the author's
+// end word, which may look like a comment or a continuation to this check,
+// so a later instruction would be read as body, and a body line as an
+// instruction (v0.2 release pentest F2, F3). Any "<<" there is refused,
+// inside a shell command too: the check reads lines, not shell, and a
+// refused build only leaves findings probable.
+func hasHeredoc(keyword, rest string) bool {
+	switch keyword {
+	case "RUN", "COPY", "ADD":
+		return strings.Contains(rest, "<<")
+	}
+	return false
 }
 
 func checkInstruction(keyword string, flags map[string][]string, args []string, st *stageSet) ([]string, string) {
@@ -305,6 +327,10 @@ func image(ref string) ([]string, string) {
 
 // checkAdd refuses a source the builder would fetch: a URL, a git remote
 // (scp-like user@host:path too) or a variable that could expand to one.
+// BuildKit runs every source, in the JSON form too, through its shell
+// lexer, which drops quotes and escapes (`http:"//"x`, `http:\/\/x`), so
+// a source with a quote or a backslash is refused: the check does not
+// read shell words (PR #307 review).
 func checkAdd(args []string) string {
 	if joined := strings.Join(args, " "); strings.HasPrefix(joined, "[") {
 		args = jsonArgs(joined)
@@ -313,7 +339,7 @@ func checkAdd(args []string) string {
 		args = args[:len(args)-1] // the destination
 	}
 	for _, src := range args {
-		if strings.Contains(src, "://") || strings.HasPrefix(src, "git@") || strings.Contains(src, "$") ||
+		if strings.Contains(src, "://") || strings.HasPrefix(src, "git@") || strings.ContainsAny(src, `$"'\`) ||
 			(strings.Contains(src, "@") && strings.Contains(src, ":")) {
 			return ruleRemoteAdd
 		}
