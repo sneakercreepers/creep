@@ -6,6 +6,7 @@
 --expires         string   ""      accept
 --format          string   "text"  doctor scan estimate why accept reproduce clean resume version config
 --log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config
+--mode            string   ""      doctor scan estimate why accept reproduce clean resume version config
 --model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config
 --price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config
 --price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config

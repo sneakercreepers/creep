@@ -24,6 +24,7 @@ var (
 // not listed takes its default, or "x" when the default is empty.
 var flagSamples = map[string][]string{
 	"baseline-write": {"--baseline-write", "--baseline", "x"},
+	"mode":           {"--mode", "pr"},
 	"price-in":       {"--price-in", "1"},
 	"price-out":      {"--price-out", "1"},
 }

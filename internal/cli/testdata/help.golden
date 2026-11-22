@@ -20,6 +20,8 @@ Commands:
 Global flags (before or after the command; "--" ends flags):
   --config <path>     config file used instead of the user and project files
   --model-run <cmd>   model CLI for contract command: prompt on stdin, JSON out
+  --mode <mode>       scan: pr or nightly, which gate judges it (default pr, nightly
+                      on a GitHub Actions schedule event); only nightly verifies
   --format <format>   output format: text, json, sarif, markdown (default "text")
   --log-level <level> log level: debug, info, warn, error (default "info")
   --record            call every model and record the responses for replay
