@@ -31,6 +31,7 @@ type globalOptions struct {
 	stats       bool    // scan: print phase times, model calls, cache hits and tokens
 	priceIn     float64 // estimate and --stats: currency per 1M input tokens; 0 is unset
 	priceOut    float64 // estimate and --stats: currency per 1M output tokens; 0 is unset
+	changed     string  // scan and estimate: the file listing the changed paths (#26)
 	// The baseline (#27, ADR 0022): the file scan reads and accept writes,
 	// whether scan rewrites it, and accept's expiry and reason.
 	baseline      string
@@ -76,6 +77,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.StringVar(&opts.format, "format", opts.format, "")
 	fs.StringVar(&opts.configPath, "config", opts.configPath, "")
 	fs.StringVar(&opts.modelRun, "model-run", opts.modelRun, "")
+	fs.StringVar(&opts.changed, "changed", opts.changed, "")
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
 	fs.BoolVar(&opts.recalibrate, "recalibrate", opts.recalibrate, "")

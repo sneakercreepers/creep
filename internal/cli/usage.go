@@ -38,6 +38,9 @@ func globalFlagsHelp() string {
 		"  --replay            serve recorded responses only; never use the network\n"+
 		"  --recalibrate       calibrate the model again even if a calibration is cached\n"+
 		"  --stats             scan: print phase times, model calls, cache hits and tokens\n"+
+		"  --changed <file>    scan, estimate: only the paths listed in file, one per line or\n"+
+		"                      NUL-separated (git diff --name-only -z origin/main > changed.txt);\n"+
+		"                      every other source file is listed unchanged and not evaluated\n"+
 		"  --price-in <n>      estimate, --stats: price per 1M input tokens, for a cost\n"+
 		"  --price-out <n>     estimate, --stats: price per 1M output tokens, for a cost\n"+
 		"  --baseline <file>   scan: do not gate on findings the file's live entries match\n"+

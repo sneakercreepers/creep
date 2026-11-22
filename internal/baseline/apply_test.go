@@ -112,7 +112,8 @@ func TestBaselineWriteNeedsFullRun(t *testing.T) {
 		{"by design only", report.RunInfo{}, []report.NotEvaluated{{Path: "node_modules/x/a.js", Reason: report.SkipVendor}, {Path: "a_pb2.py", Reason: report.SkipGenerated}, {Path: "a.min.js", Reason: report.SkipMinified}}, ""},
 		{"incomplete", report.RunInfo{Incomplete: true, Reason: "budget"}, nil, "incomplete (budget)"},
 		{"a file gap", report.RunInfo{}, []report.NotEvaluated{{Path: "big.py", Reason: report.SkipTooLarge}}, "1 files"},
-		{"a reason Writable does not know", report.RunInfo{}, []report.NotEvaluated{{Path: "a.py", Reason: "unchanged"}}, "1 files"},
+		{"an incremental scan's unchanged file", report.RunInfo{}, []report.NotEvaluated{{Path: "a.py", Reason: report.SkipUnchanged}}, "1 files"},
+		{"a reason Writable does not know", report.RunInfo{}, []report.NotEvaluated{{Path: "a.py", Reason: "new_reason"}}, "1 files"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

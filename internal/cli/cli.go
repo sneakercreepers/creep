@@ -86,7 +86,7 @@ func runCommand(cmd command, args []string, opts globalOptions, e env) int {
 	if invalidOptions(opts, stderr) {
 		return exitcode.ConfigError
 	}
-	if err := checkBaselineFlags(cmd.name, opts); err != nil {
+	if err := errors.Join(checkChangedFlag(cmd.name, opts), checkBaselineFlags(cmd.name, opts)); err != nil {
 		printError(stderr, "creep "+cmd.name, err)
 		return exitcode.ConfigError
 	}

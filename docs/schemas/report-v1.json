@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/sneakercreepers/creep/blob/main/docs/schemas/report-v1.json",
   "title": "creep JSON report, schema_version 1",
-  "description": "Written by creep's JSON report format. There is no version 2: version 1 changes additively only (an optional field or a new enum value), never by removing or retyping a field (maintainer decision, ADR 0009 and ADR 0021); a committed fixture must stay valid (internal/report contract test).",
+  "description": "Written by creep's JSON report format. There is no version 2: version 1 changes additively only (an optional field or a new enum value, never a removed or retyped field), and a committed fixture per version must stay valid (internal/report contract test). Consumers must accept enum values they do not know; the reason unchanged appears only in a --changed run (ADR 0009, #26 amendment).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "tool", "run", "findings", "coverage", "data_handling"],
@@ -87,12 +87,12 @@
           "type": "array",
           "items": { "$ref": "#/definitions/lineRange" }
         },
-        "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0021). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0022). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
         "suppression": { "$ref": "#/definitions/suppression" }
       }
     },
     "suppression": {
-      "description": "The baseline entry that keeps a probable or verified finding from the gate until it expires (ADR 0021). The finding is still listed; a not-evaluated finding is never suppressed. Added to v1 additively by #27.",
+      "description": "The baseline entry that keeps a probable or verified finding from the gate until it expires (ADR 0022). The finding is still listed; a not-evaluated finding is never suppressed. Added to v1 additively by #27.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "expires"],
@@ -140,7 +140,7 @@
       "required": ["path", "reason"],
       "properties": {
         "path": { "type": "string" },
-        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language"] }
+        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language", "unchanged"] }
       }
     },
     "dataHandling": {

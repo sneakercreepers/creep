@@ -123,20 +123,26 @@ func readConfigFile(label, path string) ([]byte, error) {
 type configOpener func(label, path string) (*os.File, os.FileInfo, error)
 
 func readConfigWith(open configOpener, label, path string) ([]byte, error) {
+	return readCappedFile(open, label, path, maxConfigBytes)
+}
+
+// readCappedFile reads the whole file open returns, at most limit bytes;
+// --config and the --changed list share it, so both refuse the same files.
+func readCappedFile(open configOpener, label, path string, limit int64) ([]byte, error) {
 	f, info, err := open(label, path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	if info.Size() > maxConfigBytes {
-		return nil, fmt.Errorf("%s %q: larger than %d bytes", label, path, maxConfigBytes)
+	if info.Size() > limit {
+		return nil, fmt.Errorf("%s %q: larger than %d bytes", label, path, limit)
 	}
-	data, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
 		return nil, configError(label, path, err)
 	}
-	if len(data) > maxConfigBytes {
-		return nil, fmt.Errorf("%s %q: larger than %d bytes", label, path, maxConfigBytes)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s %q: larger than %d bytes", label, path, limit)
 	}
 	if int64(len(data)) != info.Size() {
 		return nil, fmt.Errorf("%s %q: size changed while reading or not a real file", label, path)

@@ -39,6 +39,10 @@ type session struct {
 	red   *redact.Redactor
 	repo  *os.Root
 	stats *runStats
+	// changed is the --changed list, nil for a full scan, and incremental
+	// the scope the walk applied it with (#26).
+	changed     *changedList
+	incremental report.Incremental
 	// baseline is --baseline, read before the run opened anything (#27).
 	baseline *scanBaseline
 	// staleReports are the report names the run could not remove when it
@@ -75,6 +79,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	changed, err := readChangedList(e.opts.changed)
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	base, err := loadScanBaseline(e.opts, e.deps.today())
 	if err != nil {
 		printError(e.stderr, "creep scan", err)
@@ -90,9 +99,10 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
+	s.changed = changed
 	s.baseline = base
 	warnPreset(e.stderr, resolved.Config.Model)
-	files, err := s.walk(ctx, e.stderr)
+	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
@@ -106,7 +116,7 @@ func runScan(e env, args []string) int {
 		return s.fail(e, "creep scan: calibration", err, failureCode(err))
 	}
 	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
-	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
+	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}

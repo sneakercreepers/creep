@@ -4,6 +4,7 @@
 - **Date:** 2026-11-14
 - **Deciders:** @Ludocius
 - **Changes:** the exit-code contract (architecture §4, `internal/exitcode`)
+- **Amended by:** [ADR 0009's #26 amendment](0009-scan-and-why-contract.md#amendment-26-2026-11-21-incremental-scans-with---changed): with `--changed`, exit 0 says only that the listed files are clean; files left off the list are `unchanged`, by design, and a gap in a listed file still exits 4.
 
 ## Context
 

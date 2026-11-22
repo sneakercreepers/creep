@@ -12,9 +12,11 @@
 //   - Every file the walk, discovery, the gateway or the reader did not evaluate
 //     in full is listed as not evaluated with its closed-enum reason. An
 //     unknown reason is an error, never dropped. Files left out by design
-//     (vendor, generated, minified: SkipReason.ByDesign) are also counted
-//     beside the class coverage in Markdown and SARIF (ByDesignSummary), so
-//     a covered class never reads as covering them (#213).
+//     (vendor, generated, minified, and unchanged files outside a --changed
+//     list: SkipReason.ByDesign) are also counted beside the class coverage
+//     in Markdown and SARIF (ByDesignSummary), so a covered class never
+//     reads as covering them (#213, #26). An incremental scan is also
+//     marked as one in Markdown and SARIF (Incremental), with counts only.
 //   - An incomplete run (the scan stopped, or the run state did not end
 //     complete) is marked incomplete in all three formats, and no class of
 //     it reads as covered: covered becomes partial. Callers map it to
