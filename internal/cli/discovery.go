@@ -121,17 +121,20 @@ func readRepoFile(root *os.Root) func(string) ([]byte, error) {
 
 // walk lists the repository and says, before any model call, how many
 // whole files discovery may send and where (ADR 0017 D1, consent option A).
-func (s *session) walk(ctx context.Context, stderr io.Writer) (repoFiles, error) {
+// It returns every walked file, which the sandbox builds from, and the
+// files the scan evaluates: with --changed, only the listed ones (#26).
+func (s *session) walk(ctx context.Context, stderr io.Writer) (all, scanned repoFiles, err error) {
 	done := s.stats.start(phaseWalk)
-	files, err := walkRepo(ctx, s.repo)
+	all, err = walkRepo(ctx, s.repo)
 	done()
 	if err != nil {
-		return repoFiles{}, err
+		return repoFiles{}, repoFiles{}, err
 	}
+	scanned, s.incremental = s.changed.scope(all)
 	if s.mode() != state.ModeReplay {
-		noteWholeFiles(stderr, wholeFileTarget(s.cfg.Model, s.link.command), files.sources())
+		noteWholeFiles(stderr, wholeFileTarget(s.cfg.Model, s.link.command), scanned.sources())
 	}
-	return files, nil
+	return all, scanned, nil
 }
 
 // noteWholeFiles is the scan-start notice: consent per endpoint carries

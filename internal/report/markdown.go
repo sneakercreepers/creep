@@ -16,6 +16,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	fmt.Fprintf(bw, "# creep report\n\n%s %s (commit %s) · report schema %d\n\n",
 		r.Tool.Name, codeSpan(r.Tool.Version), codeSpan(r.Tool.Commit), r.SchemaVersion)
 	writeRunStatus(bw, r.Run)
+	writeIncremental(bw, r.Incremental.Text(r.Coverage.NotEvaluated))
 	writeFindings(bw, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
 	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))

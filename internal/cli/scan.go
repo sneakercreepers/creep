@@ -40,6 +40,10 @@ type session struct {
 	repo  *os.Root
 	stats *runStats
 	gate  runGate // the mode and the gate that judges the run (#28)
+	// changed is the --changed list, nil for a full scan, and incremental
+	// the scope the walk applied it with (#26).
+	changed     *changedList
+	incremental report.Incremental
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
@@ -79,6 +83,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	changed, err := readChangedList(e.opts.changed)
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	// Only the scan deadline cancels the run's context (#260); it starts
 	// after calibration, and the redactor stops with it.
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -90,8 +99,9 @@ func runScan(e env, args []string) int {
 	}
 	defer s.close()
 	s.gate = gate
+	s.changed = changed
 	warnPreset(e.stderr, resolved.Config.Model)
-	files, err := s.walk(ctx, e.stderr)
+	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
@@ -105,7 +115,7 @@ func runScan(e env, args []string) int {
 		return s.fail(e, "creep scan: calibration", err, failureCode(err))
 	}
 	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
-	res, err := s.scanWithin(ctx, cancel, cal.Tier, files, e.stderr)
+	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}

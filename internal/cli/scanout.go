@@ -78,7 +78,7 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
 		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
-		Discovery: res.disc, Verification: res.verify,
+		Discovery: res.disc, Verification: res.verify, Incremental: s.incremental,
 	})
 }
 
@@ -163,6 +163,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 			return err
 		}
 		printVerification(e.stderr, rep.Verification)
+		printIncremental(e.stderr, rep)
 		if rep.Run.Incomplete {
 			fmt.Fprintln(e.stderr, incompleteMark(rep))
 		}
@@ -178,6 +179,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 		// Beside the class line, so "covered" never reads as covering them (#213).
 		fmt.Fprintf(w, "coverage excludes %s, listed above\n", summary)
 	}
+	printIncremental(w, rep)
 	printScanners(w, rep.Coverage.Scanners)
 	printVerification(w, rep.Verification)
 	if rep.Run.Incomplete {
