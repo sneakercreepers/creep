@@ -44,13 +44,18 @@ type merged struct {
 // mergeSpans sorts spans in place and joins overlapping ones, so every secret
 // byte is covered even when two rules disagree on the bounds. The label that
 // outranks the others names the merged span, so a GitHub token is not called
-// a generic key.
+// a generic key. Spans with the same bounds sort by label, the one that
+// outranks first, so the label a value is remembered under (rememberParts)
+// never depends on the order the spans came in.
 func mergeSpans(spans []span) []merged {
 	sort.Slice(spans, func(i, j int) bool {
 		if spans[i].start != spans[j].start {
 			return spans[i].start < spans[j].start
 		}
-		return spans[i].end > spans[j].end
+		if spans[i].end != spans[j].end {
+			return spans[i].end > spans[j].end
+		}
+		return outranks(spans[i].label, spans[j].label)
 	})
 	var out []merged
 	for i, s := range spans {
@@ -90,10 +95,14 @@ func (s *runState) render(text string, spans []merged, parts []span) string {
 // either order, and Unredact stays exact (#71). Any other merged span is one
 // value with one marker. A part the sweep found takes the label of the
 // marker its value already has, so an email masked in an earlier call still
-// counts as personal data.
+// counts as personal data. Only a secret's merged span can split, so only it
+// pays for naming its swept parts.
 func (s *runState) writeMerged(b *strings.Builder, text string, m merged, parts []span) {
-	parts = s.storedLabels(text, parts)
-	w, ok := secretInsidePII(m, parts)
+	w, ok := span{}, false
+	if labelRank(m.label) >= labelRank(genericLabel) {
+		parts = storedLabels(parts)
+		w, ok = secretInsidePII(m, parts)
+	}
 	if !ok {
 		b.WriteString(s.marker(text[m.start:m.end], m.label))
 		return
@@ -128,22 +137,18 @@ func secretInsidePII(m merged, parts []span) (span, bool) {
 }
 
 // storedLabels returns parts with each unlabelled part, a known value the
-// sweep found, named by the label of its marker. It copies parts only when
-// one needs a label.
-func (s *runState) storedLabels(text string, parts []span) []span {
+// sweep found, named by the label of its marker, even where format
+// characters split it in text. It copies parts only when one needs a label.
+func storedLabels(parts []span) []span {
 	var out []span
 	for i, p := range parts {
-		if p.label != "" {
-			continue
-		}
-		m, ok := s.byValue[text[p.start:p.end]]
-		if !ok {
+		if p.label != "" || p.known == "" {
 			continue
 		}
 		if out == nil {
 			out = append([]span(nil), parts...)
 		}
-		out[i].label = m[1:strings.LastIndexByte(m, '_')]
+		out[i].label = p.known
 	}
 	if out == nil {
 		return parts
