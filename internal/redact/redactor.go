@@ -21,7 +21,14 @@ import (
 // every detector run twice (format.go), so the same input with one costs
 // about twice that, 18 s (BenchmarkRedact, "every keyword, format char").
 // Re-masking the values of earlier fragments is linear in the input and does
-// not grow with the number of values known (BenchmarkSweepGrowth). Whole
+// not grow with the number of values known (BenchmarkSweepGrowth). Its worst
+// case is the overflow list full of runs of one byte (#106): each byte of a
+// run then checks 272 values, about 0.11 s at the cap
+// (BenchmarkSweepOverflow, "crafted"), and on MaxFileBytes about 1.2 s for
+// File with long runs and 1.8 s with short ones (BenchmarkFileOverflowFull),
+// against 0.4 to 0.5 s with the list empty; File then allocates about 20 MiB
+// and 100 MiB (TestFileOverflowFullMemory holds the long runs under 150), and
+// a format character about doubles both ("short runs, format char"). Whole
 // files go through File, which chunks them.
 const MaxInputBytes = 64 << 10
 
@@ -56,11 +63,13 @@ type runState struct {
 
 // span is a byte range of the input to replace; label names the marker kind.
 // A guess masks text a rule gave up searching (secretRule.find): it is not a
-// found value, so it is not remembered on its own.
+// found value, so it is not remembered on its own. A span the sweep found has
+// no label; known is the label of the marker of the value it found.
 type span struct {
 	start, end int
 	label      string
 	guess      bool
+	known      string
 }
 
 // New returns a Redactor loaded with the vendored and the local rules.
@@ -110,7 +119,11 @@ func (r *Redactor) finish(text string, found []span) (string, error) {
 		return "", ErrRunFull
 	}
 	r.state.call = callShare{}
-	found = append(found, withoutFormat(text, r.state.index.find)...)
+	swept, err := r.sweep(text)
+	if err != nil {
+		return "", err
+	}
+	found = append(found, swept...)
 	out := r.state.render(text, mergeSpans(found), found)
 	r.state.rememberParts(text, found)
 	switch {
@@ -250,11 +263,11 @@ func (s *runState) marker(value, label string) string {
 	if m, ok := s.byValue[value]; ok {
 		return m
 	}
-	if !s.store(value) {
-		return ""
-	}
 	if label == "" {
 		label = secretPrefix + "VALUE"
+	}
+	if !s.store(value, label) {
+		return ""
 	}
 	s.counters[label]++
 	m := "<" + label + "_" + strconv.Itoa(s.counters[label]) + ">"
@@ -266,7 +279,8 @@ func (s *runState) marker(value, label string) string {
 // store admits a new value within the call's share and the run's caps and
 // indexes it for the sweep, which re-masks it in later fragments even where
 // no rule matches it any more (a key reused without its variable name).
-func (s *runState) store(value string) bool {
+// label is the label of the value's marker.
+func (s *runState) store(value, label string) bool {
 	if s.full || !s.call.admits(value) {
 		return false
 	}
@@ -274,7 +288,7 @@ func (s *runState) store(value string) bool {
 		s.full = true
 		return false
 	}
-	if len(value) >= minSweepLen && !s.indexValue(value) {
+	if len(value) >= minSweepLen && !s.indexValue(value, label) {
 		return false
 	}
 	s.bytes += len(value)

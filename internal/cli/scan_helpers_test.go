@@ -35,10 +35,25 @@ type fakeModel struct {
 	claimAuth  bool              // discovery answers mark every repository line as an auth check
 	calls      int
 	discovered int // discovery calls
+	// poc answers every PoC request (#25); nil answers it like a reader
+	// call, which is invalid output for a PoC.
+	poc      any
+	pocCalls int
 }
+
+// pocRequest marks a PoC request: its system prompt.
+var pocRequest = []byte("proof of concept (PoC)")
 
 func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, error) {
 	m.calls++
+	if bytes.Contains(c.Payload, pocRequest) && (m.poc != nil || m.fail["poc"] != nil) {
+		m.pocCalls++
+		if err := m.fail["poc"]; err != nil {
+			return nil, err
+		}
+		body, err := chatReply(m.poc)
+		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
+	}
 	if answer, ok := discoveryAnswer(c.Payload, m.missCanary); ok {
 		m.discovered++
 		if err := m.fail["discover"]; err != nil {

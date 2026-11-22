@@ -48,7 +48,7 @@ func indexOf(t *testing.T, values []string) sweepIndex {
 		if len(v) < minSweepLen {
 			continue
 		}
-		if _, ok := x.add(v, true); !ok {
+		if _, ok := x.add(v, "SECRET_TEST", true); !ok {
 			t.Fatalf("add(%q) refused", v)
 		}
 	}
@@ -77,7 +77,7 @@ func TestSweepIndexMatchesSearchPerValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			x := indexOf(t, tt.values)
-			got := sortSpans(x.find(tt.text))
+			got := sortSpans(findAll(t, &x, tt.text))
 			want := sortSpans(indexSweep(tt.values, tt.text))
 			if !slices.Equal(got, want) {
 				t.Fatalf("find = %v, want %v", got, want)
@@ -99,11 +99,11 @@ func TestSweepIndexRandomized(t *testing.T) {
 		x := newSweepIndex()
 		var kept []string
 		for _, v := range values {
-			if _, ok := x.add(v, true); ok {
+			if _, ok := x.add(v, "SECRET_TEST", true); ok {
 				kept = append(kept, v)
 			}
 		}
-		got := sortSpans(x.find(text))
+		got := sortSpans(findAll(t, &x, text))
 		want := sortSpans(indexSweep(kept, text))
 		if !slices.Equal(got, want) {
 			t.Fatalf("round %d: find = %v, want %v", round, got, want)
@@ -230,7 +230,7 @@ func TestFileUnterminatedKeysStayWithinCap(t *testing.T) {
 func TestWindowLeastCrowded(t *testing.T) {
 	x := newSweepIndex()
 	for _, v := range []string{"-----BEGIN RSA", "-----BEGIN EC K"} {
-		if _, ok := x.add(v, true); !ok {
+		if _, ok := x.add(v, "SECRET_TEST", true); !ok {
 			t.Fatalf("add(%q) refused", v)
 		}
 	}

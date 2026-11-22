@@ -273,12 +273,15 @@ func printFindings(w io.Writer, findings []report.Finding) {
 		if f.Status != report.StatusVerified && f.Status != report.StatusProbable {
 			continue
 		}
-		partial := ""
+		notes := ""
 		if f.Partial {
 			// A verdict from a cut slice covers only part of the flow (#209).
-			partial = "  partial slice"
+			notes = "  partial slice"
 		}
-		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), partial)
+		if rate := f.PoC.Text(); rate != "" {
+			notes += "  " + rate
+		}
+		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), notes)
 	}
 }
 

@@ -11,12 +11,19 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/sandbox"
+	"github.com/sneakercreepers/creep/internal/verify"
 )
 
-// appBuilder is what a scan uses of a *sandbox.Sandbox: one offline build
-// of the app, then cleanup. sandboxDeps.open makes one; tests replace it.
-type appBuilder interface {
+// appSandbox is what a scan and creep reproduce use of a *sandbox.Sandbox:
+// one offline build of the app, its port, the database and the app on the
+// run network, the PoC runner (verify.Runner), then cleanup.
+// sandboxDeps.open makes one; tests replace it.
+type appSandbox interface {
 	Build(ctx context.Context, repo sandbox.Repo) (sandbox.App, error)
+	AppPort(ctx context.Context, app sandbox.App) (int, error)
+	StartDatabase(ctx context.Context, migrations []sandbox.Migration) (sandbox.Database, error)
+	StartApp(ctx context.Context, app sandbox.App) error
+	verify.Runner
 	Close() error
 }
 
@@ -38,7 +45,7 @@ func (d sandboxDeps) clock() time.Time {
 }
 
 // openSandbox is the production sandboxDeps.open.
-func openSandbox(st sandbox.Status, runID string) (appBuilder, error) {
+func openSandbox(st sandbox.Status, runID string) (appSandbox, error) {
 	s, err := sandbox.Open(st, runID)
 	if err != nil {
 		return nil, err
@@ -54,6 +61,8 @@ const (
 	verifySandboxError = "sandbox_error" // the sandbox did not open, or the run was aborted
 	verifyInterrupted  = "interrupted"   // Ctrl+C stopped the build
 	verifyDeadline     = reasonDeadline  // the scan deadline passed before or during the build
+	verifyNoPort       = "no_port"       // the built image declares no TCP port (EXPOSE)
+	verifyStartFailed  = "start_failed"  // the app did not start on the run network
 )
 
 // buildFileBytes bounds one repository file copied into the build
@@ -61,11 +70,15 @@ const (
 const buildFileBytes = 64 << 20
 
 // verifyApp builds the app in the sandbox when sandbox.enabled is set and a
-// runtime is usable, and says what verification the findings got. It never
-// fails the scan or changes its exit code: every way the build can stop is
-// a closed reason in the report, findings stay probable, and the sandbox is
-// closed on every path. The build ends by the scan deadline.
-func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, deadline time.Time) report.Verification {
+// runtime is usable, runs a PoC for each probable finding it can (#25)
+// and says what verification the findings got. It never fails the scan or
+// makes it incomplete: every way the build or a PoC can stop is a closed
+// reason or a count in the report, such findings stay probable, and the
+// sandbox is closed on every path. Only a PoC that verified moves a
+// finding, to verified, which changes the exit code only as the gate
+// reads verified (ADR 0009). The build and the PoCs end by the scan
+// deadline.
+func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, deadline time.Time, in pocInput) report.Verification {
 	if !s.cfg.Sandbox.Enabled {
 		return report.Verification{}
 	}
@@ -81,7 +94,7 @@ func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, d
 	case !s.deps.sandbox.clock().Before(deadline):
 		return unavailableVerification(verifyDeadline, "")
 	}
-	return s.buildApp(ctx, w, best, files, deadline)
+	return s.buildApp(ctx, w, best, files, deadline, in)
 }
 
 // buildApp opens a sandbox on the runtime, builds the app from the scan's
@@ -92,7 +105,7 @@ func (s *session) verifyApp(ctx context.Context, w io.Writer, files repoFiles, d
 // directory, which holds a copy of the repository, and any built image
 // never outlive the scan. The build's time is what the scan deadline
 // leaves, read from the sandbox clock.
-func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status, files repoFiles, deadline time.Time) report.Verification {
+func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status, files repoFiles, deadline time.Time, in pocInput) report.Verification {
 	ctx, stop := s.deps.sandbox.interruptible(ctx)
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, deadline.Sub(s.deps.sandbox.clock()))
@@ -105,7 +118,10 @@ func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status
 	}
 	defer closeSandbox(w, box)
 	app, err := box.Build(ctx, sandbox.Repo{Paths: files.paths, Read: buildReader(s.repo)})
-	return appVerification(ctx, app, err)
+	if v := appVerification(ctx, app, err); v.Status != report.VerificationAppBuilt {
+		return v
+	}
+	return s.runPoCs(ctx, w, box, app, files.paths, in)
 }
 
 // buildReader is the scan's own reader for the build context (TB1): it
@@ -145,7 +161,7 @@ func unavailableVerification(reason, detail string) report.Verification {
 
 // closeSandbox removes the run's containers, built images and network. A
 // failure is reported, not fatal: creep clean removes what is left.
-func closeSandbox(w io.Writer, box appBuilder) {
+func closeSandbox(w io.Writer, box appSandbox) {
 	if err := box.Close(); err != nil {
 		printError(w, "sandbox: cleanup failed (run creep clean)", err)
 	}

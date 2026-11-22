@@ -1,0 +1,8 @@
+{
+  "about": "A search page that always escapes its query: no run reflects it, so the PoC is discarded.",
+  "poc": {"template": "http_request", "http_request": {
+    "request": {"method": "GET", "path": "/search?q=__CREEP_NONCE__", "headers": [], "content_type": "", "body": ""},
+    "oracle": {"kind": "reflect", "status": 0}}},
+  "reflects": [false, false, false, false, false],
+  "want": {"verified": 0, "runs": 5}
+}

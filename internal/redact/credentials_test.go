@@ -56,6 +56,20 @@ func TestRedactURLPasswordOverlappingEmail(t *testing.T) {
 	}
 }
 
+// A secret of every rank from the generic rule up keeps its own marker when
+// only personal data reaches past it, and the email piece gets its own
+// (#71); writeMerged names swept parts only for these ranks (#106).
+func TestSecretInsidePIISplitsFromGenericRank(t *testing.T) {
+	text := "Q7xZ9kLmP4r2x@db.internal"
+	for _, label := range []string{genericLabel, passwordLabel, "SECRET_URL_PASSWORD"} {
+		s := &runState{byValue: map[string]string{}, byMarker: map[string]string{}, counters: map[string]int{}, index: newSweepIndex()}
+		found := []span{{start: 0, end: 13, label: label}, {start: 12, end: len(text), label: "PII_EMAIL"}}
+		if out, want := s.render(text, mergeSpans(found), found), "<"+label+"_1><PII_EMAIL_1>"; out != want {
+			t.Errorf("%s: render = %q, want %q", label, out, want)
+		}
+	}
+}
+
 func TestRedactPasswordAssignments(t *testing.T) {
 	tests := []struct {
 		name, text, secret, keep string

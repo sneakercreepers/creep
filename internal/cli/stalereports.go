@@ -9,7 +9,8 @@ import (
 	"slices"
 )
 
-// removeReports deletes every report file in .creep once the state store
+// removeReports deletes every report file and reproduction bundle in
+// .creep once the state store
 // has checked the directory, before the run does anything else. A report the
 // scanned repository committed there, or one an earlier run wrote in a
 // format report.formats no longer lists, would otherwise sit next to this
@@ -25,6 +26,9 @@ func removeReports(root *os.Root) []error {
 		if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, fmt.Errorf("remove stale %s: %w", name, err))
 		}
+	}
+	if err := removeBundles(root); err != nil {
+		errs = append(errs, err)
 	}
 	return errs
 }

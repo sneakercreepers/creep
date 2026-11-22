@@ -1,0 +1,8 @@
+{
+  "about": "A search page that never escapes its query: every run reflects it.",
+  "poc": {"template": "http_request", "http_request": {
+    "request": {"method": "GET", "path": "/search?q=__CREEP_NONCE__", "headers": [], "content_type": "", "body": ""},
+    "oracle": {"kind": "reflect", "status": 0}}},
+  "reflects": [true, true, true, true, true],
+  "want": {"verified": 5, "runs": 5}
+}

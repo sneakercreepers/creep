@@ -40,9 +40,12 @@ func (r *Redactor) stopped() error {
 
 // stopped reports whether the detectors must stop searching: the run's
 // context is done, and the caller drops whatever was found.
-func (s detectorSet) stopped() bool {
+func (s detectorSet) stopped() bool { return closed(s.done) }
+
+// closed reports whether done is closed; a nil channel never is.
+func closed(done <-chan struct{}) bool {
 	select {
-	case <-s.done:
+	case <-done:
 		return true
 	default:
 		return false

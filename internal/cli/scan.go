@@ -57,6 +57,9 @@ type scanResult struct {
 	disc     report.Discovery
 	scanners scannerRun
 	verify   report.Verification // the sandbox's outcome (#23)
+	// slices holds the reader's slice behind each probable finding, by
+	// finding index, for the PoC request (#25).
+	slices map[int]reader.Slice
 }
 
 // runScan scans the current directory: walk, calibrate, discovery (the
@@ -109,7 +112,7 @@ func runScan(e env, args []string) int {
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
-	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline)
+	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
 	return s.finish(e, cal, res)
 }
 
@@ -283,14 +286,14 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 		return scanResult{}, err
 	}
 	reads := newDeadlineReads(ctx, readRepoFile(s.repo))
-	stage := readStage{model: s.model, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read}}
+	stage := readStage{model: s.model, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read}, kept: map[int]reader.Slice{}}
 	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
 	done()
 	if err != nil {
 		return scanResult{}, err
 	}
-	return scanResult{findings: findings, gaps: append(rs.gaps, gaps...), stop: stop, planned: true}, nil
+	return scanResult{findings: findings, gaps: append(rs.gaps, gaps...), stop: stop, planned: true, slices: stage.kept}, nil
 }
 
 // rejectedScan fails the scan closed when the planner refuses its input

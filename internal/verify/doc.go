@@ -34,4 +34,13 @@
 // network, after the network canary, with the requests as read-only files
 // and never on a command line. This package starts no process and opens
 // no connection itself.
+//
+// Repeat runs a PoC several times (DefaultRuns in a scan, #25, ADR 0020)
+// and rates it: every run verified, some (intermittent), or none, which
+// never holds, so no finding is verified without a run that verified.
+// NewBundle keeps a held PoC as a reproduction bundle for creep
+// reproduce, with every text the model or the app wrote passed through
+// the caller's Scrub (redact.File): verify may not import redact, so a
+// bundle cannot be made without one. The PoC prompts (prompts/, one per
+// tier) and the closed Schema are data the CLI sends through the gateway.
 package verify

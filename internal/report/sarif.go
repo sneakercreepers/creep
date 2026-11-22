@@ -83,6 +83,9 @@ type sarifResult struct {
 type sarifResultProp struct {
 	ID     string `json:"creep_id"`
 	Status Status `json:"status"`
+	// The PoC's rate (#25), only on a finding a PoC verified.
+	PoCVerified int `json:"poc_verified_runs,omitempty"`
+	PoCRuns     int `json:"poc_runs,omitempty"`
 }
 
 type sarifLocation struct {
@@ -152,12 +155,21 @@ func sarifResults(findings []Finding, index map[string]int) []sarifResult {
 		}
 		results = append(results, sarifResult{
 			RuleID: f.Class, RuleIndex: index[f.Class], Kind: "fail", Level: level,
-			Message:    sarifMessage{Text: fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, f.Status)},
+			Message:    sarifMessage{Text: resultText(f)},
 			Locations:  []sarifLocation{fileLocation(f.Path, f.Line)},
-			Properties: sarifResultProp{ID: f.ID, Status: f.Status},
+			Properties: sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs},
 		})
 	}
 	return results
+}
+
+// resultText is a result's message: class, ID and status, and the PoC's
+// rate when one verified the finding.
+func resultText(f Finding) string {
+	if rate := f.PoC.Text(); rate != "" {
+		return fmt.Sprintf("%s finding %s (%s, %s)", f.Class, f.ID, f.Status, rate)
+	}
+	return fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, f.Status)
 }
 
 // sarifLevel is "" for statuses that are not code-scanning alerts.

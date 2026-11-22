@@ -4,6 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`)
 
 ## Context
 
@@ -149,6 +150,10 @@ A run that fails after opening its state (exit 2 or 3) also names, after its err
 `creep why` opens `.creep` through the state store's own checks (`state.OpenExisting`, which never creates it) and exits 2 when they refuse it: a link, a Windows junction, a file, a directory others can write, or a `.creep` swapped for another directory between its `Lstat` and its open (the two must be the same file). It still reads `report.json` without blocking on a FIFO. A `report.json` that git tracks is still read: `scan` removes it before its next run, and `report.ReadJSON` and escaping already bound what it can print. A git index check would not close this, since the same file can come in an archive with no index; telling this user's report from a planted one would need a signed report, which report v1 does not have.
 
 The text summary also changes. A probable or verified finding from a partial slice is listed with `partial slice`. The incomplete mark counts gaps (files and sinks not evaluated, partial verdicts) apart from what was left out by design (vendor, generated and minified files, tier S's `low_risk` skips): `N not evaluated or partial, M left out by design`. Report v1 does not change.
+
+## Amendment: PoC rates and `creep reproduce` (#25, ADR 0020)
+
+[ADR 0020](0020-poc-repetitions-and-bundle.md) runs each PoC 5 times from `creep scan` and adds `creep reproduce <id>`. For this ADR: a PoC that verified in 5 of 5 runs makes its finding `verified`; one that verified in 1 to 4 makes it `verified` with its rate, marked intermittent; one that verified in none leaves the finding `probable`, since the scanned repository builds the app and could otherwise discard its own finding. The rate follows the #23 decision above: it is in the text summary (`verified in 3/5 runs, intermittent` after the finding), in Markdown's notes and in SARIF (the result message and the `poc_verified_runs` and `poc_runs` properties), and **JSON v1 does not change** (`report.Finding.PoC` is `json:"-"`), so a JSON consumer reads `verified`. The verification summary counts the PoCs that ran, verified in every run, were intermittent, were not reproduced and were not run; `no_port` and `start_failed` join the closed reasons. The outcome still never makes a run incomplete; only `verified`, as the gate reads it, can move the exit code. `creep reproduce <id>` exits 0 when the PoC verified in at least one run, 1 when in none, 2 for usage, configuration or a missing or refused bundle, 3 for the sandbox (ADR 0007 codes, where 1 means the PoC did not reproduce).
 
 ## Amendment (#26, 2026-11-21): incremental scans with `--changed`
 
