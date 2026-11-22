@@ -207,6 +207,7 @@ func TestChangedFlagRules(t *testing.T) {
 		wantCode int
 		wantOut  string
 	}{
+		{"no --diff flag (out of the product)", []string{"scan", "--diff", "origin/main", "--config", cfg}, exitcode.ConfigError, "flag provided but not defined: -diff"},
 		{"why refuses it", []string{"why", "sink-1", "--changed", list}, exitcode.ConfigError, "limits only scan and estimate, not why"},
 		{"version refuses it", []string{"--changed", list, "version"}, exitcode.ConfigError, "not version"},
 		{"empty value", []string{"scan", "--changed", "", "--config", cfg}, exitcode.ConfigError, "needs a file"},
