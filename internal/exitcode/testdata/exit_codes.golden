@@ -1,0 +1,6 @@
+Exit codes:
+  0  nothing blocking
+  1  gate exceeded
+  2  usage or configuration error
+  3  model or sandbox error
+  4  incomplete run: report written, not everything evaluated
