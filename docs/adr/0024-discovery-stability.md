@@ -1,6 +1,6 @@
 # ADR 0024: Discovery stability across model runs (`--stability N`)
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) (report v1 gains `stability` on a finding; a new flag), [ADR 0011](0011-estimate-and-stats.md) (`creep estimate` counts every sample), [ADR 0017](0017-language-agnostic-analysis.md) (union across samples)
