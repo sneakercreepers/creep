@@ -59,7 +59,7 @@ Option A with verification a. The one reason: it verifies with what the runner a
 ## Consequences
 
 - `action.yml` and `action/*.sh` are a contract: renaming an input or output, or changing the exit-code mapping, needs an amendment here; adding an input is additive.
-- `--mode` and `--baseline` need creep v0.2 (ADR 0021, ADR 0022); with an older `version`, setting `mode` or `baseline` makes creep exit 2, which fails the job.
+- `--mode`, `--baseline` and `--changed` need creep v0.2 (ADR 0021, ADR 0022, #26); with an older `version`, setting `mode` or `baseline`, or leaving `incremental` at its default `true` on a pull request, makes creep exit 2, which fails the job, so a workflow pinned to v0.1.0 sets `incremental: "false"`.
 - Windows runners are refused until a release check for the `.zip` archives is added.
 - `internal/tools/actionscripts` tests every script's refusals under bash with fake `gh` and `creep`; they skip on Windows and run in the Linux CI test job.
 - No dependency is added.
