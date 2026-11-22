@@ -77,18 +77,7 @@ func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelL
 			return modelLink{}, err
 		}
 	}
-	consent, err := gateway.NewConsent(gateway.ConsentOptions{
-		CI: config.InCI(os.Getenv), Policy: r.PolicyConsent(),
-		StorePath: userFile("consent.json"), Prompt: gateway.TerminalPrompt(os.Stdin, stderr),
-	})
-	if err != nil {
-		return modelLink{}, err
-	}
-	budget, err := gateway.NewBudget(gateway.BudgetOptions{MaxTokens: cfg.Budget.MaxTokens, MaxCalls: cfg.Budget.MaxCalls})
-	if err != nil {
-		return modelLink{}, err
-	}
-	log, err := gateway.OpenEgressLog(runDir, consent, budget)
+	log, err := openEgress(r, runDir, stderr)
 	if err != nil {
 		return modelLink{}, err
 	}
@@ -103,6 +92,23 @@ func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelL
 	}
 	closeAll := func() error { client.CloseIdleConnections(); return log.Close() }
 	return modelLink{send: models.Through(log, client), egress: egress, close: closeAll}, nil
+}
+
+// openEgress opens the run's write-ahead egress.log behind consent and the
+// run's token and call budget.
+func openEgress(r *config.Resolved, runDir string, stderr io.Writer) (*gateway.EgressLog, error) {
+	consent, err := gateway.NewConsent(gateway.ConsentOptions{
+		CI: config.InCI(os.Getenv), Policy: r.PolicyConsent(),
+		StorePath: userFile("consent.json"), Prompt: gateway.TerminalPrompt(os.Stdin, stderr),
+	})
+	if err != nil {
+		return nil, err
+	}
+	budget, err := gateway.NewBudget(gateway.BudgetOptions{MaxTokens: r.Config.Budget.MaxTokens, MaxCalls: r.Config.Budget.MaxCalls})
+	if err != nil {
+		return nil, err
+	}
+	return gateway.OpenEgressLog(runDir, consent, budget)
 }
 
 // userFile is a file in the user's creep config directory, or "" (keep

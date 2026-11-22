@@ -175,7 +175,13 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 		}
 		return nil
 	}
-	w := e.stdout
+	printScanText(e.stdout, cal, rep, written)
+	return nil
+}
+
+// printScanText is the text summary: every section, then the incomplete
+// mark and the report files written.
+func printScanText(w io.Writer, cal calibrate.Calibration, rep *report.Report, written []string) {
 	fmt.Fprintf(w, "calibration: %s\n", escapeControl(cal.Header()))
 	printDiscovery(w, rep.Discovery)
 	printFindings(w, rep.Findings)
@@ -195,7 +201,6 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 	if len(written) > 0 {
 		fmt.Fprintf(w, "reports: %s\n", strings.Join(written, " "))
 	}
-	return nil
 }
 
 // printStats prints --stats after the result: on stdout with the text
