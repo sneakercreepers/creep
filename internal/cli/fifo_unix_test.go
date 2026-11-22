@@ -165,3 +165,17 @@ func TestBaselineSpecialFileRefused(t *testing.T) {
 		})
 	}
 }
+
+// A FIFO planted where a recipe is named is refused at once: no recipe
+// command waits for a writer.
+func TestRecipeRefusesFIFO(t *testing.T) {
+	scanRepo(t, nil, "")
+	if err := syscall.Mkfifo("f.json", 0o600); err != nil {
+		t.Skipf("mkfifo unsupported here: %v", err)
+	}
+	for _, sub := range []string{"lint", "test", "new"} {
+		if code, stderr := runRecipeWithin(t, sub, "f.json"); code != exitcode.ConfigError {
+			t.Errorf("recipe %s on a FIFO: exit %d: %s", sub, code, stderr)
+		}
+	}
+}

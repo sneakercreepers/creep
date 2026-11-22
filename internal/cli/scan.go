@@ -166,21 +166,27 @@ func openSession(ctx context.Context, e env, in scanInputs) (*session, error) {
 		s.close()
 		return nil, err
 	}
-	link, err := e.deps.connect(r, s.run.Dir(), e.stderr)
-	if err != nil {
+	if err := s.connect(ctx, e, r); err != nil {
 		s.close()
 		return nil, err
 	}
-	s.link = link
-	if err := s.openModel(ctx); err != nil {
-		s.close()
-		return nil, err
-	}
+	var err error
 	if s.repo, err = os.OpenRoot("."); err != nil {
 		s.close()
 		return nil, fmt.Errorf("open repository: %w", err)
 	}
 	return s, nil
+}
+
+// connect opens the model link into the run's directory, then the client
+// and redactor every model call of the run goes through.
+func (s *session) connect(ctx context.Context, e env, r *config.Resolved) error {
+	link, err := e.deps.connect(r, s.run.Dir(), e.stderr)
+	if err != nil {
+		return err
+	}
+	s.link = link
+	return s.openModel(ctx)
 }
 
 func checkModelConfig(m config.Model) error {
@@ -198,17 +204,23 @@ func checkModelConfig(m config.Model) error {
 }
 
 func (s *session) openState() error {
-	var err error
-	if s.store, err = state.OpenUser(stateDir); err != nil {
-		return err
-	}
 	// The run holds the state lock: a second scan must fail on it before
 	// it removes reports the first one is writing.
-	if s.run, err = s.store.NewRun(s.mode()); err != nil {
+	if err := s.openRun(); err != nil {
 		return err
 	}
 	s.staleReports = removeReports(s.store.Root())
 	return nil
+}
+
+// openRun opens the state store and a new run, which holds the state lock.
+func (s *session) openRun() error {
+	var err error
+	if s.store, err = state.OpenUser(stateDir); err != nil {
+		return err
+	}
+	s.run, err = s.store.NewRun(s.mode())
+	return err
 }
 
 func (s *session) mode() state.Mode {

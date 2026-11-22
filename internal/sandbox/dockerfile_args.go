@@ -67,19 +67,12 @@ func stageOrImage(ref string, st *stageSet) ([]string, string) {
 	return image(ref)
 }
 
-// stageByNameOrImage is a RUN --mount from= value. BuildKit looks it up
-// by name only: from=0 is the image docker.io/library/0, never stage 0.
-func stageByNameOrImage(ref string, st *stageSet) ([]string, string) {
-	if slices.Contains(st.names, strings.ToLower(ref)) {
-		return nil, ""
-	}
-	return image(ref)
-}
-
 func image(ref string) ([]string, string) {
 	switch {
 	case strings.Contains(ref, "$"):
 		return nil, ruleVariableImage
+	case hasTransport(ref):
+		return nil, ruleTransport
 	case !imageRef.MatchString(ref), imageIDLike.MatchString(ref):
 		return nil, ruleImageName
 	}
@@ -135,31 +128,34 @@ func execForm(args string) ([]string, bool) {
 }
 
 // checkMount reads a --mount value: keys from mountKeys in any case, a
-// type from mountTypes only (bind when none is given), from= an earlier
-// stage by name or an image, source= never above its root, no variable.
-func checkMount(spec string, st *stageSet) ([]string, string) {
-	var images []string
+// type from mountTypes only (bind when none is given), source= never
+// above its root, a target checkContainerPath accepts, no variable. A
+// from= is refused, of a stage or an image alike: Buildah < 1.35.3
+// resolved a link in the other stage's source on the host and mounted the
+// host's root (CVE-2024-1753), and the staged context, which holds no
+// link, is all a bind mount needs.
+func checkMount(spec string, _ *stageSet) ([]string, string) {
 	for _, kv := range strings.Split(spec, ",") {
 		key, value, hasValue := strings.Cut(kv, "=")
 		key = strings.ToLower(key)
 		switch {
+		case key == "from":
+			return nil, ruleMountFrom
 		case !hasValue && slices.Contains(bareMountKeys, key):
 			continue
 		case !hasValue || !slices.Contains(mountKeys, key):
 			return nil, ruleMount
-		case key == "from":
-			imgs, rule := stageByNameOrImage(value, st)
-			if rule != "" {
-				return nil, rule
-			}
-			images = append(images, imgs...)
 		case strings.Contains(value, "$"),
 			key == "type" && !slices.Contains(mountTypes, value),
 			(key == "source" || key == "src") && leavesRoot(value):
 			return nil, ruleMount
+		case key == "target" || key == "dst" || key == "destination":
+			if rule := checkContainerPath(value); rule != "" {
+				return nil, rule
+			}
 		}
 	}
-	return images, ""
+	return nil, ""
 }
 
 func leavesRoot(p string) bool {

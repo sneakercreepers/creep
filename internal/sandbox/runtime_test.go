@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
@@ -13,23 +14,33 @@ import (
 )
 
 const (
-	dockerRootless = `{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`
-	dockerRootful  = `{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`
-	dockerDesktop  = `{"OSType":"linux","OperatingSystem":"Docker Desktop","SecurityOptions":["name=seccomp,profile=builtin","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`
-	podmanRootless = `{"host":{"os":"linux","serviceIsRemote":false,"cgroupControllers":["cpu","memory","pids"],"security":{"rootless":true,"seccompEnabled":true}}}`
+	dockerRootless = `{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true,"DefaultRuntime":"runc"}`
+	dockerRootful  = `{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true,"DefaultRuntime":"runc"}`
+	dockerDesktop  = `{"OSType":"linux","OperatingSystem":"Docker Desktop","SecurityOptions":["name=seccomp,profile=builtin","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true,"DefaultRuntime":"runc"}`
+	podmanRootless = `{"host":{"os":"linux","serviceIsRemote":false,"cgroupControllers":["cpu","memory","pids"],"security":{"rootless":true,"seccompEnabled":true},"buildahVersion":"1.35.3","ociRuntime":{"name":"crun","version":"crun version 1.14.4\ncommit: a220ca661ce078f2c37b38c92e66cf66c012d9c1"}}}`
+	// dockerPatched is `docker version --format {{json .Server}}` of an
+	// engine at the minimums.
+	dockerPatched = `{"Version":"25.0.2","Components":[{"Name":"Engine","Version":"25.0.2"},{"Name":"containerd","Version":"v1.6.28"},{"Name":"runc","Version":"1.1.12"},{"Name":"docker-init","Version":"0.19.0"}]}`
 )
 
 // fakeRuntime answers detection calls by subcommand.
 type fakeRuntime struct {
 	context string // context inspect stdout; "" fails
 	info    string // info stdout; "" fails
+	version string // version stdout; "" is dockerPatched, "-" fails
 }
 
 func (f fakeRuntime) runner(rec *recorder) runFunc {
 	rec.reply = func(_ context.Context, args []string) (cliResult, error) {
 		out := f.info
-		if subcommand(args) == "context" {
+		switch subcommand(args) {
+		case "context":
 			out = f.context
+		case "version":
+			out = cmp.Or(f.version, dockerPatched)
+			if out == "-" {
+				out = ""
+			}
 		}
 		if out == "" {
 			return cliResult{exit: 1}, nil

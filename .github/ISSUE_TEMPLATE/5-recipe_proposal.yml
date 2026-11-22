@@ -1,10 +1,10 @@
 name: 📜 Recipe proposal
-description: Propose a recipe (YAML hints for a vulnerability class and framework).
+description: Propose a recipe (a JSON file of signatures, a hint and fixtures for one vulnerability class; ADR 0025).
 labels: ["type/feature", "area/recipes", "needs-triage"]
 body:
   - type: markdown
     attributes:
-      value: Recipes are **data, not code**. A recipe only loads if its vulnerable and safe fixtures pass.
+      value: Recipes are **data, not code**. A recipe only loads if its vulnerable and safe fixtures pass. Start from `creep recipe new my-recipe.json`, then run `creep recipe lint` and `creep recipe test` on it; the format is docs/schemas/recipe-v1.json.
   - type: input
     id: class
     attributes:
@@ -22,22 +22,27 @@ body:
     id: recipe
     attributes:
       label: Draft recipe
-      render: yaml
+      render: json
       value: |
-        id:
-        class:
-        applies_to: { lang: , framework: [] }
-        sources: []
-        sinks: []
-        hint: ""
-        poc: http_request
-        fixtures: { vulnerable: , safe: }
+        {
+          "version": 1,
+          "id": "",
+          "class": "",
+          "applies_to": [],
+          "sources": [],
+          "sinks": [],
+          "hint": "",
+          "fixtures": {
+            "vulnerable": {"code": "", "source_line": 1, "sink_line": 1},
+            "safe": {"code": "", "source_line": 1, "sink_line": 1}
+          }
+        }
     validations:
       required: true
   - type: textarea
     id: fixtures
     attributes:
-      label: Vulnerable and safe fixtures
+      label: Output of creep recipe test, and the model and tier it ran on
       render: text
     validations:
       required: true

@@ -56,10 +56,21 @@
 // escaped lines as "N| text" in file order, and "[slice truncated: ...]"
 // when lines were left out or cut. Budgets per tier: S 2048, M 4096, L 8192
 // bytes, a hard cap measured after escaping; a line is cut at budget/8.
+//
+// A Target from a recipe (internal/recipe, ADR 0025) may carry a Hint,
+// untrusted text like the code: Build refuses one over MaxHintBytes or
+// MaxHintLines, redacts it with redact.File, escapes it like a repository
+// line and shows it between the HYPOTHESIS line and CODE as a "HINT (...)"
+// header and "~ " lines, cut to budget/4 bytes. Evaluate then adds
+// prompts/hint.txt (HintVersion) to the system prompt: the hint is data,
+// and evidence cites CODE lines only. A target without a hint gets exactly
+// the user turn and prompt above, so no recording changes.
+//
 // Hypotheses that get no slice are listed in SliceReport.NotEvaluated with
 // a closed SkipReason: file_not_scanned (the file is in NotScanned with its
 // gateway.SkipReason), run_full, line_out_of_range (past the file's end or
-// MaxLine) and lines_shifted (redaction joined lines, as a multi-line
+// MaxLine), hint_refused (the hint is over its limits or redact.File
+// refused it) and lines_shifted (redaction joined lines, as a multi-line
 // private key does, so the file's numbers would not match; the file is
 // also in NotScanned with FileLinesShifted).
 //
@@ -100,9 +111,17 @@
 // variant, not_vulnerable on the safe twin. The replies are synthesized from
 // expected.json, not recorded from a live model, so they pin the reader path
 // (slicing, prompt, request, decoding, projection), not a model's judgement.
-// -update only writes synthesized replies; replacing them with live replies
-// (#204) needs a live-record mode, which does not exist yet, run by a
-// maintainer with a key. They are signed with a fixed public test secret,
+// They will be replaced by live-recorded replies once a maintainer with a
+// key runs the reader against a live model (#204). -update only writes
+// synthesized replies. `creep scan --record` exists (#8) but cannot
+// produce these files: it records into the user's run-state store under
+// the user's secret, keyed on the endpoint and request body, the
+// configured model and a reader.rN.cN label, while the fixtures key on
+// the body alone, model replay-model and reader.vN. Re-recording needs a live
+// source behind countingModel in replay_test.go, answering each call
+// through the gateway instead of synthesizedReply, followed by a review
+// of every reply that disagrees with expected.json; until then the
+// synthesized set stays. They are signed with a fixed public test secret,
 // so a real run, which uses the user's own secret, never serves them. A
 // missing, torn, edited, foreign or stale recording fails the test
 // (replay_fail_test.go). After changing a prompt, the schema, slicing or an

@@ -23,6 +23,7 @@ type dockerInfo struct {
 	MemoryLimit     bool
 	PidsLimit       bool
 	CPUShares       bool
+	DefaultRuntime  string
 }
 
 // probeDocker pins Docker's endpoint, then reads its info through it.
@@ -44,7 +45,20 @@ func probeDocker(ctx context.Context, run runFunc, getenv func(string) string, s
 		return st
 	}
 	st.Reachable = true
-	return classifyDocker(info, st)
+	st = classifyDocker(info, st)
+	if st.Usable() {
+		st = requireVersions(st, requireDocker(ctx, run, host, info.DefaultRuntime))
+	}
+	return st
+}
+
+// requireVersions makes a usable runtime unusable when its versions are
+// unknown or below the minimums.
+func requireVersions(st Status, r Reason) Status {
+	if r != ReasonOK {
+		st.Reason, st.Isolation = r, IsolationNone
+	}
+	return st
 }
 
 // dockerHost is the endpoint every Docker call uses: DOCKER_HOST when set,
@@ -125,7 +139,12 @@ type podmanInfo struct {
 		OS                string   `json:"os"`
 		ServiceIsRemote   bool     `json:"serviceIsRemote"`
 		CgroupControllers []string `json:"cgroupControllers"`
-		Security          struct {
+		BuildahVersion    string   `json:"buildahVersion"`
+		OCIRuntime        struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		} `json:"ociRuntime"`
+		Security struct {
 			Rootless       bool `json:"rootless"`
 			SeccompEnabled bool `json:"seccompEnabled"`
 		} `json:"security"`
@@ -171,7 +190,11 @@ func probePodman(ctx context.Context, run runFunc, st Status) Status {
 		return st
 	}
 	st.Reachable = true
-	return classifyPodman(info, st)
+	st = classifyPodman(info, st)
+	if st.Usable() {
+		st = requireVersions(st, requirePodman(info))
+	}
+	return st
 }
 
 func classifyPodman(info podmanInfo, st Status) Status {
