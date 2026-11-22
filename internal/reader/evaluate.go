@@ -15,11 +15,12 @@ const purpose = "reader"
 // only, and the call goes through h, whose SendFunc is the gateway in
 // production, so redaction counts reach egress.log. A tier other than
 // s.Tier, the one Slicer.Build cut s for, fails with ErrTier before any
-// call. An answer that fails the schema, Validate or Project is an error,
+// call. A slice with a recipe hint adds the hint note to the system prompt.
+// An answer that fails the schema, Validate or Project is an error,
 // never a verdict. The Signal carries s.Partial, so a verdict from a cut
 // slice is never read as one from the whole flow.
 func Evaluate(ctx context.Context, h *models.HTTP, tier Tier, s Slice) (Signal, error) {
-	system, err := System(tier)
+	system, err := systemFor(tier, s.Hinted)
 	if err != nil {
 		return Signal{}, err
 	}

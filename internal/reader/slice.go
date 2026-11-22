@@ -50,7 +50,18 @@ type Target struct {
 	Path       string // as given to Slicer.Read
 	SourceLine int    // the handler's def line
 	SinkLine   int
+	// Hint is a recipe's hint for this hypothesis, or "". It is untrusted
+	// text: Build redacts and escapes it like code, shows it only as "~ "
+	// lines of the HINT block, and refuses one over MaxHintBytes or
+	// MaxHintLines. It never reaches the planner (ADR 0025).
+	Hint string
 }
+
+// Hint limits, the same ones a recipe is held to (internal/recipe).
+const (
+	MaxHintBytes = 400
+	MaxHintLines = 8
+)
 
 // Slice is the user turn for one hypothesis. Text is built only from
 // redact.File output and holds the HYPOTHESIS line and numbered CODE lines;
@@ -66,6 +77,9 @@ type Slice struct {
 	// Tier is the budget Text was cut to; Evaluate refuses any other tier's
 	// prompt, so a slice is never sent with a prompt it was not sized for.
 	Tier Tier
+	// Hinted means Text holds a HINT block, so Evaluate adds the hint note
+	// to the system prompt.
+	Hinted bool
 	// Sink is the sink's line of redact.File output, escaped like Text, for
 	// the finding's baseline fingerprint (#27): it is hashed, never sent or
 	// printed, and never holds a secret redaction masked.
@@ -82,6 +96,7 @@ const (
 	SkipRunFull        SkipReason = "run_full"          // redact.ErrRunFull stopped the run
 	SkipLineRange      SkipReason = "line_out_of_range" // a line is past the file's end or MaxLine
 	SkipLinesShifted   SkipReason = "lines_shifted"     // redaction joined lines, so numbers would not match
+	SkipHintRefused    SkipReason = "hint_refused"      // the hint is over its limits or redact.File refused it
 )
 
 // FileLinesShifted is the NotScanned reason for a file whose redaction
@@ -211,8 +226,13 @@ func (s Slicer) buildTarget(t Target, lines []string, budget int, rep *SliceRepo
 		rep.NotEvaluated = append(rep.NotEvaluated, NotEvaluated{t.Hypothesis, SkipLineRange})
 		return
 	}
+	hint, ok := s.hintLines(t.Hint)
+	if !ok {
+		rep.NotEvaluated = append(rep.NotEvaluated, NotEvaluated{t.Hypothesis, SkipHintRefused})
+		return
+	}
 	fl := slicePicks(lines, t.SourceLine, t.SinkLine)
-	r := renderSlice(t.Class, t.SourceLine, t.SinkLine, lines, belowMaxLine(fl.lines), budget)
+	r := renderSlice(sliceHead{t.Class, t.SourceLine, t.SinkLine, hint}, lines, belowMaxLine(fl.lines), budget)
 	rep.Slices = append(rep.Slices, Slice{
 		Hypothesis: t.Hypothesis,
 		Text:       r.text,
@@ -220,8 +240,26 @@ func (s Slicer) buildTarget(t Target, lines []string, budget int, rep *SliceRepo
 		Partial:    r.partial || fl.partial,
 		Redactions: s.Redactor.MarkerCounts(r.text),
 		Tier:       s.Tier,
+		Hinted:     len(hint) > 0,
 		Sink:       lines[t.SinkLine-1],
 	})
+}
+
+// hintLines redacts and escapes a hint like a file, so the HINT block
+// holds only redact.File output. An empty hint gives no lines; one over
+// MaxHintBytes or MaxHintLines, or one redact.File refuses, is not ok.
+func (s Slicer) hintLines(hint string) ([]string, bool) {
+	if hint == "" {
+		return nil, true
+	}
+	if len(hint) > MaxHintBytes || len(splitLines(hint)) > MaxHintLines {
+		return nil, false
+	}
+	text, err := s.Redactor.File([]byte(hint))
+	if err != nil {
+		return nil, false
+	}
+	return repofile.EscapeLines(splitLines(text)), true
 }
 
 // belowMaxLine drops lines Project could never accept as evidence.

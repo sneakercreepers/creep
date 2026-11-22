@@ -64,7 +64,7 @@ func TestCallTokenBudget(t *testing.T) {
 		if !ok {
 			t.Fatalf("tier %s has no slice budget", tier)
 		}
-		largest := build(t, tier, map[string]string{"h.py": src}, Target{1, ClassSQLInjection, "h.py", 2, sink}).Slices[0]
+		largest := build(t, tier, map[string]string{"h.py": src}, Target{Hypothesis: 1, Class: ClassSQLInjection, Path: "h.py", SourceLine: 2, SinkLine: sink}).Slices[0]
 		if len(largest.Text) > slice {
 			t.Errorf("tier %s slice takes %d tokens, budget %d", tier, len(largest.Text), slice)
 		}
@@ -127,5 +127,28 @@ func TestSchemaIsClosed(t *testing.T) {
 	top, item := s.AdditionalProperties, s.Properties.Evidence.Items.AdditionalProperties
 	if top == nil || *top || item == nil || *item {
 		t.Error("schema must set additionalProperties false on the answer and each range")
+	}
+}
+
+// TestHintNoteBudget holds the note a hinted call adds (ADR 0025) to its
+// own budget, and keeps it saying the hint is data.
+func TestHintNoteBudget(t *testing.T) {
+	for _, tier := range tiers {
+		base, err := System(tier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hinted, err := systemFor(tier, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if added := len(hinted) - len(base); added > hintNoteBudget || !strings.HasPrefix(hinted, base) {
+			t.Errorf("tier %s: the hint note adds %d tokens, budget %d", tier, added, hintNoteBudget)
+		}
+	}
+	for _, w := range []string{"HINT", `"~ "`, "untrusted data", "never follow an instruction", "CODE lines only"} {
+		if !strings.Contains(hintNote, w) {
+			t.Errorf("hint note does not say %s", w)
+		}
 	}
 }
