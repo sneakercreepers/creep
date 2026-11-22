@@ -100,6 +100,17 @@ func plannerTier(t calibrate.Tier) (planner.Tier, error) {
 	return 0, fmt.Errorf("tier %q: %w", string(t), errUnmapped)
 }
 
+// planReadTiers maps the calibrated tier for the planner and the reader,
+// which scan and estimate always need together.
+func planReadTiers(t calibrate.Tier) (planner.Tier, reader.Tier, error) {
+	ptier, err := plannerTier(t)
+	if err != nil {
+		return 0, "", err
+	}
+	rtier, err := readerTier(t)
+	return ptier, rtier, err
+}
+
 // readerTier maps the calibrated tier to the reader's prompt variant.
 func readerTier(t calibrate.Tier) (reader.Tier, error) {
 	switch t {

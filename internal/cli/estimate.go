@@ -59,15 +59,7 @@ type estimateRun struct {
 // candidates and the exact request bodies the scan
 // would build, measured by a send function that never sends (ADR 0011).
 func runEstimate(e env, args []string) int {
-	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
-		printError(e.stderr, "creep estimate", fmt.Errorf("estimates a scan of the current directory; run it from the repository root (got %d arguments)", len(args)))
-		return exitcode.ConfigError
-	}
-	if e.opts.explicit["format"] && e.opts.format != "text" {
-		printError(e.stderr, "creep estimate", fmt.Errorf("prints text only, not --format %q", e.opts.format))
-		return exitcode.ConfigError
-	}
-	est, err := newEstimate(e)
+	est, err := newEstimate(e, args)
 	if err != nil {
 		printError(e.stderr, "creep estimate", err)
 		return exitcode.ConfigError
@@ -96,7 +88,15 @@ func runEstimate(e env, args []string) int {
 	return exitcode.OK
 }
 
-func newEstimate(e env) (*estimateRun, error) {
+// newEstimate checks the arguments and opens the estimate; any error is a
+// usage or config error (exit 2).
+func newEstimate(e env, args []string) (*estimateRun, error) {
+	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
+		return nil, fmt.Errorf("estimates a scan of the current directory; run it from the repository root (got %d arguments)", len(args))
+	}
+	if e.opts.explicit["format"] && e.opts.format != "text" {
+		return nil, fmt.Errorf("prints text only, not --format %q", e.opts.format)
+	}
 	resolved, err := loadConfig(e.opts)
 	if err != nil {
 		return nil, err
@@ -170,21 +170,14 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	if err != nil {
 		return t, err
 	}
-	ptier, err := plannerTier(tier)
-	if err != nil {
-		return t, err
-	}
-	rtier, err := readerTier(tier)
+	ptier, rtier, err := planReadTiers(tier)
 	if err != nil {
 		return t, err
 	}
 	findings := baseFindings(rs)
 	plan, err := planSinks(rs, ptier, planBudget(est.cfg.Budget.MaxTokens, rtier), findings, nil)
 	if errors.Is(err, planner.ErrInput) {
-		rejected := rejectedScan(findings, rs.gaps)
-		t.skipped[reasonPlannerRejected] = len(rejected.findings)
-		t.incomplete = rejected.stop
-		return t, nil
+		return t.rejected(findings, rs.gaps), nil
 	}
 	if err != nil {
 		return t, err
@@ -199,6 +192,15 @@ func (est *estimateRun) tier(ctx context.Context, tier calibrate.Tier) (tierEsti
 	countSkipped(findings, t.skipped)
 	t.incomplete = incompleteReason(stop, findings, rs.gaps)
 	return t, nil
+}
+
+// rejected is the estimate of a scan whose planner refuses its input: as
+// the scan, nothing is read, every sink is skipped and the run incomplete.
+func (t tierEstimate) rejected(findings []report.Finding, gaps []report.NotEvaluated) tierEstimate {
+	r := rejectedScan(findings, gaps)
+	t.skipped[reasonPlannerRejected] = len(r.findings)
+	t.incomplete = r.stop
+	return t
 }
 
 // measureReads builds every slice as the scan would and measures the

@@ -19,7 +19,8 @@ const maxContextFiles = 20_000
 var maxContextBytes = 512 << 20
 
 // leftOutNames are path components never copied into a build context: the
-// repository's .env files (the synthetic .env replaces them at run time),
+// repository's .env files (the app container gets none: StartApp mounts
+// no .env yet, and WriteSyntheticEnv holds placeholders only),
 // git's and creep's state, and files where credentials live. Matched
 // case-insensitively; .env matches every name that starts with it.
 var leftOutNames = map[string]bool{

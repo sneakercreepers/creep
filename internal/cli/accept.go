@@ -24,23 +24,13 @@ func runAccept(e env, args []string) int {
 }
 
 func acceptFinding(e env, args []string) error {
-	if len(args) != 1 || !report.ValidID(args[0]) {
-		return errors.New("want exactly one valid finding ID, from the last scan's report")
-	}
-	if !e.opts.explicit["expires"] || !e.opts.explicit["reason"] {
-		return errors.New("an accepted risk needs --expires <days>d and --reason <text>")
-	}
-	days, err := baseline.ParseDays(e.opts.expires)
+	days, err := acceptArgs(e.opts, args)
 	if err != nil {
 		return err
 	}
-	rep, err := readLastReport()
+	f, err := lastFinding(args[0])
 	if err != nil {
 		return err
-	}
-	f, ok := rep.Finding(args[0])
-	if !ok {
-		return fmt.Errorf("no finding %s in %s", args[0], path.Join(stateDir, reportNames["json"]))
 	}
 	file := e.opts.baseline
 	if file == "" {
@@ -62,4 +52,29 @@ func acceptFinding(e env, args []string) error {
 	fmt.Fprintf(e.stdout, "accepted %s (%s, %s) until %s in %s; scan with --baseline %s to apply it\n",
 		f.ID, f.Class, escapeControl(location(f)), expires, escapeControl(file), escapeControl(file))
 	return nil
+}
+
+// acceptArgs checks the ID and both required flags and returns the expiry
+// in days, before any file is read.
+func acceptArgs(o globalOptions, args []string) (int, error) {
+	if len(args) != 1 || !report.ValidID(args[0]) {
+		return 0, errors.New("want exactly one valid finding ID, from the last scan's report")
+	}
+	if !o.explicit["expires"] || !o.explicit["reason"] {
+		return 0, errors.New("an accepted risk needs --expires <days>d and --reason <text>")
+	}
+	return baseline.ParseDays(o.expires)
+}
+
+// lastFinding is the finding id of the last scan's JSON report.
+func lastFinding(id string) (report.Finding, error) {
+	rep, err := readLastReport()
+	if err != nil {
+		return report.Finding{}, err
+	}
+	f, ok := rep.Finding(id)
+	if !ok {
+		return report.Finding{}, fmt.Errorf("no finding %s in %s", id, path.Join(stateDir, reportNames["json"]))
+	}
+	return f, nil
 }
