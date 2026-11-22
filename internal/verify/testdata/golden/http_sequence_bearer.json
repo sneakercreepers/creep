@@ -1,0 +1,5 @@
+{"template": "http_sequence", "http_sequence": {
+  "auth": {"method": "POST", "path": "/api/login", "headers": [], "content_type": "json", "body": "{\"user\":\"creep\",\"password\":\"creep\"}"},
+  "session": "bearer", "token_field": "access_token",
+  "request": {"method": "PUT", "path": "/api/profile", "headers": [], "content_type": "json", "body": "{\"bio\":\"<b>__CREEP_NONCE__</b>\"}"},
+  "oracle": {"kind": "reflect", "status": 0}}}

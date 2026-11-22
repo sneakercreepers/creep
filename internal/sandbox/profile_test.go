@@ -166,8 +166,9 @@ func allowedOption(o string) bool {
 }
 
 // TestEveryContainerIsHardened is the protection test for the profile:
-// every container Run, RunBatch, StartDatabase and StartApp start (PoCs,
-// the canary, the database and its readiness poll, the built app),
+// every container Run, RunBatch, StartDatabase, StartApp, Exchange and
+// DatabaseHasTable start (PoCs, the canary, the database and its readiness
+// poll, the built app, the PoC runner, the marker lookup),
 // whatever the spec, gets the hardened options and nothing else, and the
 // endpoint stays pinned.
 func TestEveryContainerIsHardened(t *testing.T) {
@@ -201,10 +202,16 @@ func TestEveryContainerIsHardened(t *testing.T) {
 	if err := s.StartApp(context.Background(), app); err != nil {
 		t.Fatalf("StartApp: %v", err)
 	}
+	if _, err := s.Exchange(context.Background(), 8080, [][]byte{[]byte("GET / HTTP/1.1\r\n\r\n")}); err != nil {
+		t.Fatalf("Exchange: %v", err)
+	}
+	if _, err := s.DatabaseHasTable(context.Background(), "creep_0123456789abcdef"); err != nil {
+		t.Fatalf("DatabaseHasTable: %v", err)
+	}
 	runs := rec.to("run")
 	// Run, then canary, database and poll, then canary and the batch, then
-	// canary and the app.
-	if want := len(specs) + 3 + 1 + len(specs) + 2; len(runs) != want {
+	// canary and the app, then canary and the runner, then the marker lookup.
+	if want := len(specs) + 3 + 1 + len(specs) + 2 + 2 + 1; len(runs) != want {
 		t.Fatalf("got %d run calls, want %d", len(runs), want)
 	}
 	for _, argv := range runs {

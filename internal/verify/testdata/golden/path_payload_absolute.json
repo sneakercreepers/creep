@@ -1,0 +1,3 @@
+{"template": "path_payload", "path_payload": {
+  "request": {"method": "GET", "path": "/static?f=__CREEP_PAYLOAD__", "headers": [], "content_type": "", "body": ""},
+  "style": "absolute", "depth": 0}}

@@ -17,12 +17,17 @@ var pgVolumes = cliResult{stdout: []byte(`{"/var/lib/postgresql/data":{}}`)}
 
 // networkRecorder answers like a runtime: the canary prints canary, the
 // database's readiness poll exits ready, the database image declares its
-// VOLUME, and every other call succeeds with no output.
+// VOLUME, the runner reports an empty response per request, the marker
+// lookup finds its table, and every other call succeeds with no output.
 func networkRecorder(canary string, ready int) *recorder {
 	return &recorder{
 		images: map[string]cliResult{DatabaseImage: pgVolumes},
 		reply: func(_ context.Context, args []string) (cliResult, error) {
 			switch {
+			case subcommand(args) == "run" && isRunnerRun(args):
+				return cliResult{stdout: fakeRunnerAnswer(args)}, nil
+			case subcommand(args) == "run" && slices.Contains(args, "psql"):
+				return cliResult{stdout: []byte("t\n")}, nil
 			case subcommand(args) == "run" && slices.Contains(args, CanaryImage):
 				return cliResult{stdout: []byte(canary)}, nil
 			case subcommand(args) == "run" && slices.Contains(args, DatabaseImage) && !slices.Contains(args, "--detach"):

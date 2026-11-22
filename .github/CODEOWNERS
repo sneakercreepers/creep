@@ -12,6 +12,8 @@
 # Discovery sends whole redacted files to the model and decides what is read (ADR 0017).
 /internal/discover/      @Ludocius
 /internal/sandbox/       @Ludocius
+# PoCs: closed templates the model fills, sent only through the sandbox's runner (ADR 0019).
+/internal/verify/        @Ludocius
 /internal/planner/       @Ludocius
 # Run state: MAC keys, the public test key guard and the inter-process lock.
 /internal/state/         @Ludocius

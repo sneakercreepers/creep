@@ -1,0 +1,5 @@
+{"template": "http_sequence", "http_sequence": {
+  "auth": {"method": "POST", "path": "/login", "headers": [], "content_type": "form", "body": "username=creep&password=creep"},
+  "session": "cookie", "token_field": "",
+  "request": {"method": "POST", "path": "/comments", "headers": [{"name": "Accept", "value": "text/html"}], "content_type": "form", "body": "text=__CREEP_NONCE__"},
+  "oracle": {"kind": "reflect", "status": 0}}}

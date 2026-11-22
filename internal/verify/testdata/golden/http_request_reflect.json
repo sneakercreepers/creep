@@ -1,0 +1,3 @@
+{"template": "http_request", "http_request": {
+  "request": {"method": "GET", "path": "/search?q=__CREEP_NONCE__", "headers": [{"name": "Accept", "value": "text/html"}], "content_type": "", "body": ""},
+  "oracle": {"kind": "reflect", "status": 0}}}

@@ -1,0 +1,3 @@
+{"template": "http_request", "http_request": {
+  "request": {"method": "GET", "path": "/welcome", "headers": [{"name": "User-Agent", "value": "__CREEP_NONCE__"}], "content_type": "", "body": ""},
+  "oracle": {"kind": "reflect", "status": 200}}}

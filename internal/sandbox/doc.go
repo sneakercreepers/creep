@@ -68,6 +68,15 @@
 //     reader, and reports the reason (internal/cli). StartApp runs the built
 //     image on the run network, after the canary, with the hardened
 //     profile.
+//   - PoC requests (Exchange, internal/verify, ADR 0019) are raw bytes creep
+//     wrote, mounted read-only into one runner container from the pinned
+//     BusyBox, started through RunBatch (canary first). Its script is fixed
+//     and connects only to the app, on the caller's port; it prints every
+//     timing line before any response byte, and the answer is read
+//     strictly. DatabaseHasTable looks up only creep's marker table, with a
+//     fixed psql query. StartApp plants a file of fresh random content,
+//     read-only, at AppCanaryFile in the app; only a read of it there can
+//     put AppCanary in a response.
 //   - Every container carries creep's labels, its run ID and its own name
 //     as a label. A timeout or Ctrl+C removes the container by those labels,
 //     never by name alone; Close removes the run's containers, built

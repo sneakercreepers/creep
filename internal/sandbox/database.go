@@ -86,6 +86,9 @@ func (s *Sandbox) StartDatabase(ctx context.Context, migrations []Migration) (Da
 	if err := s.waitReady(ctx, db); err != nil {
 		return Database{}, err
 	}
+	s.mu.Lock()
+	s.ready = &db
+	s.mu.Unlock()
 	return db, nil
 }
 

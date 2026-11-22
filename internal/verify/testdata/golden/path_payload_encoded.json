@@ -1,0 +1,3 @@
+{"template": "path_payload", "path_payload": {
+  "request": {"method": "POST", "path": "/export", "headers": [{"name": "X-Requested-With", "value": "XMLHttpRequest"}], "content_type": "form", "body": "format=csv&name=__CREEP_PAYLOAD__"},
+  "style": "encoded", "depth": 3}}
