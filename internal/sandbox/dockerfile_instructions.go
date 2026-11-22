@@ -23,16 +23,17 @@ var instructionFlags = map[string][]string{
 // booleanFlags may stand alone, as BuildKit reads them: --link is --link=true.
 var booleanFlags = []string{"link", "parents"}
 
-// mountTypes leave nothing behind and read only the staged context or an
-// earlier stage. A cache mount outlives --no-cache, Close and creep clean,
-// so a later build of the operator's would read what this one wrote; a
-// secret or ssh mount has nothing to offer a build that gets none.
+// mountTypes leave nothing behind and read only the staged context (a
+// from= is refused, checkMount). A cache mount outlives --no-cache, Close
+// and creep clean, so a later build of the operator's would read what this
+// one wrote; a secret or ssh mount has nothing to offer a build that gets
+// none.
 var mountTypes = []string{"bind", "tmpfs"}
 
 // mountKeys are the keys a bind or tmpfs mount takes; bareMountKeys may
 // stand alone. Any other key is refused.
 var (
-	mountKeys     = []string{"type", "from", "source", "src", "target", "dst", "destination", "readonly", "ro", "readwrite", "rw", "size"}
+	mountKeys     = []string{"type", "source", "src", "target", "dst", "destination", "readonly", "ro", "readwrite", "rw", "size"}
 	bareMountKeys = []string{"readonly", "ro", "readwrite", "rw"}
 )
 
@@ -129,6 +130,8 @@ func checkInstruction(keyword string, flags map[string][]string, args string, st
 		return eachValue(flags["mount"], st, checkMount)
 	case "ARG":
 		return nil, checkArg(args, st.count == 0)
+	case "WORKDIR":
+		return nil, checkContainerPath(args)
 	}
 	return nil, ""
 }

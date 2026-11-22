@@ -56,10 +56,14 @@ func answer(args []string) int {
 	case "context":
 		fmt.Println(`"unix:///run/user/1000/docker.sock"`)
 	case "info":
-		fmt.Println(`{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true}`)
+		fmt.Println(`{"OSType":"linux","OperatingSystem":"Ubuntu","SecurityOptions":["name=seccomp,profile=builtin","name=rootless","name=cgroupns"],"MemoryLimit":true,"PidsLimit":true,"CPUShares":true,"DefaultRuntime":"runc"}`)
 	case "ps":
 		fmt.Println(fakeID)
 	case "version":
+		if slices.Contains(args, "{{json .Server}}") {
+			fmt.Println(dockerPatched)
+			break
+		}
 		fmt.Println(testPlatform)
 	case "image":
 		switch {

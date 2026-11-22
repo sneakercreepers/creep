@@ -58,7 +58,8 @@ var (
 	requiredBuildOptions = []string{"--quiet", "--network=none", "--no-cache",
 		"--label=" + LabelManaged + "=true", "--label=" + LabelRun + "=" + testRunID}
 	requiredBuildDocker = []string{"--pull=false"}
-	requiredBuildPodman = []string{"--pull=never", "--http-proxy=false", "--layers=false", "--force-rm"}
+	requiredBuildPodman = []string{"--pull=never", "--http-proxy=false", "--layers=false", "--force-rm",
+		"--memory=2g", "--memory-swap=2g", "--cpu-period=100000", "--cpu-quota=200000"}
 )
 
 // buildProblems checks one `build` argv: every required option, no option
@@ -233,7 +234,7 @@ func TestBuildRefusesEscapes(t *testing.T) {
 		"BOM frontend":       {dockerfileRepo("\xef\xbb\xbf# syntax=evil.example/fe\nFROM alpine:3\n"), BuildDockerfileRefused},
 		"slash frontend":     {dockerfileRepo("// syntax=evil.example/fe\nFROM alpine:3\n"), BuildDockerfileRefused},
 		"vertical tab FROM":  {dockerfileRepo("FROM alpine:3\nFROM\vmissing.example/base:1\n"), BuildDockerfileRefused},
-		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildBaseImageMissing},
+		"mount From upper":   {dockerfileRepo("FROM alpine:3\nRUN --mount=type=bind,From=missing.example/base:1,target=/m true\n"), BuildDockerfileRefused},
 		"numeric FROM":       {dockerfileRepo("FROM 1234\n"), BuildDockerfileRefused},
 		"base onbuild":       {dockerfileRepo("FROM onbuild.example/base:1\n"), BuildImageRefused},
 		"podman onbuild":     {dockerfileRepo("FROM podman.example/base:1\n"), BuildImageRefused},

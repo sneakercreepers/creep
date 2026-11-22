@@ -31,7 +31,7 @@ func TestStartAppAfterCanary(t *testing.T) {
 		t.Fatalf("runs %q: want the canary, then the app", runs)
 	}
 	appRun := runs[1]
-	for _, want := range []string{"--detach", "--network=creep-" + testRunID, "--network-alias=app", builtImage} {
+	for _, want := range []string{"--detach", "--network=creep-" + testRunID, "--network-alias=app", "--workdir=/", builtImage} {
 		if !slices.Contains(appRun, want) {
 			t.Errorf("app run lacks %s: %q", want, appRun)
 		}

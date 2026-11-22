@@ -13,7 +13,6 @@ func TestSplitImageCheckedWhole(t *testing.T) {
 	for _, file := range []string{
 		"FROM attacker.example/ev\\\nil\n",
 		"FROM busybox\nCOPY --from=attacker.example/ev\\\nil /a /b\n",
-		"FROM busybox\nRUN --mount=type=bind,from=attacker.example/ev\\\nil,target=/m true\n",
 	} {
 		images, _, rule := checkDockerfile([]byte(file))
 		if rule != "" || !slices.Contains(images, "attacker.example/evil") {

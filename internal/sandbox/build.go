@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -17,6 +18,18 @@ import (
 // ends the builder's session and cancels the build.
 const buildTimeout = 15 * time.Minute
 
+// Podman's limits for each build container, larger than the run
+// profile's: installing dependencies needs more than a PoC. Docker's
+// BuildKit takes no per-build limit from `docker build` (it ignores the
+// legacy --memory and --cpu-* flags), and neither builder has a pids
+// limit flag, so those are bounded by buildTimeout and the daemon's own
+// limits only.
+const (
+	buildMemory    = "2g" // memory and memory+swap alike: no swap
+	buildCPUPeriod = "100000"
+	buildCPUQuota  = "200000" // two CPUs
+)
+
 // appAlias is the app's name on the run network.
 const appAlias = "app"
 
@@ -27,6 +40,7 @@ type App struct {
 	Image       string      // local image ID, sha256:<hex>; "" unless built
 	Unavailable BuildReason // "" when built
 	Detail      string      // closed detail of Unavailable: a compose key, a Dockerfile rule, an exit status
+	workdir     string      // the image's checked working directory, set only by checkBuilt
 }
 
 // Built reports an image that StartApp can run.
@@ -106,15 +120,17 @@ func unavailableOrErr(why *refusal, err error) (App, error) {
 // stage name. No --build-arg, --secret, --ssh, --allow, --add-host,
 // --build-context, --cache-from, --output, --push or --platform is built.
 // Docker's --pull=false and Podman's --pull=never keep the builder from
-// pulling a newer base; Podman also gets --http-proxy=false, and
+// pulling a newer base; Podman also gets --http-proxy=false,
 // --layers=false with --force-rm so it keeps no intermediate image or
-// container.
+// container, and memory and CPU limits per build container.
 func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string) []string {
 	args := append(globalArgs(st), "build", "--quiet", "--network=none", "--no-cache",
 		"--iidfile="+iidfile, "--file="+dockerfile,
 		"--label="+LabelManaged+"=true", "--label="+LabelRun+"="+runID)
 	if st.Runtime == Podman {
-		args = append(args, "--pull=never", "--http-proxy=false", "--layers=false", "--force-rm")
+		args = append(args, "--pull=never", "--http-proxy=false", "--layers=false", "--force-rm",
+			"--memory="+buildMemory, "--memory-swap="+buildMemory,
+			"--cpu-period="+buildCPUPeriod, "--cpu-quota="+buildCPUQuota)
 	} else {
 		args = append(args, "--pull=false")
 	}
@@ -165,18 +181,46 @@ func readImageID(path string) (string, bool) {
 }
 
 // checkBuilt refuses a built image that declares a VOLUME, which Run would
-// refuse too: the app could not start.
+// refuse too (the app could not start), or whose working directory
+// checkContainerPath refuses: the image keeps its last WORKDIR, and
+// StartApp runs the app there.
 func (s *Sandbox) checkBuilt(ctx context.Context, image string) (App, error) {
 	err := s.checkImage(ctx, Spec{Image: image})
+	if err == nil {
+		return s.checkWorkdir(ctx, image)
+	}
 	switch {
-	case err == nil:
-		return App{Image: image}, nil
 	case ctx.Err() != nil:
 		return App{}, fmt.Errorf("sandbox build: %w", ctx.Err())
 	case errors.Is(err, ErrImageVolumes):
 		return unavailable(refuse(BuildImageRefused, "volume")), nil
 	}
 	return unavailable(refuse(BuildRuntimeError, "inspect")), nil
+}
+
+func (s *Sandbox) checkWorkdir(ctx context.Context, image string) (App, error) {
+	dir, err := s.imageWorkdir(ctx, image)
+	switch {
+	case ctx.Err() != nil:
+		return App{}, fmt.Errorf("sandbox build: %w", ctx.Err())
+	case err != nil:
+		return unavailable(refuse(BuildRuntimeError, "inspect")), nil
+	}
+	dir, ok := appWorkdir(dir)
+	if !ok {
+		return unavailable(refuse(BuildImageRefused, "workdir")), nil
+	}
+	return App{Image: image, workdir: dir}, nil
+}
+
+// appWorkdir is the directory the app starts in: "/" for an image without
+// one, else a clean absolute path checkContainerPath accepts.
+func appWorkdir(dir string) (string, bool) {
+	if dir == "" {
+		return "/", true
+	}
+	ok := path.IsAbs(dir) && path.Clean(dir) == dir && checkContainerPath(dir) == ""
+	return dir, ok
 }
 
 func (s *Sandbox) recordImage(id string) {
@@ -192,7 +236,8 @@ func (s *Sandbox) recordImage(id string) {
 // AppCanaryFile, for a path_payload PoC to prove a read (AppCanary). One
 // app per run.
 func (s *Sandbox) StartApp(ctx context.Context, app App) error {
-	if !app.Built() || !s.builtHere(app.Image) {
+	workdir, ok := appWorkdir(app.workdir)
+	if !app.Built() || !s.builtHere(app.Image) || app.workdir == "" || !ok {
 		return fmt.Errorf("start app: not an image this sandbox built: %w", ErrSpec)
 	}
 	if err := s.clearNetwork(ctx); err != nil {
@@ -205,7 +250,7 @@ func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}
-	res, err := s.start(ctx, Spec{Image: app.Image, Mounts: []Mount{canary}, networked: true, alias: appAlias, detach: true})
+	res, err := s.start(ctx, Spec{Image: app.Image, Mounts: []Mount{canary}, networked: true, alias: appAlias, detach: true, workdir: workdir})
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}

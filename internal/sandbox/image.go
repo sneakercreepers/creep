@@ -47,6 +47,26 @@ func (s *Sandbox) checkImage(ctx context.Context, spec Spec) error {
 	return nil
 }
 
+// imageWorkdir reads the working directory an image's last WORKDIR set;
+// "" when it has none.
+func (s *Sandbox) imageWorkdir(ctx context.Context, image string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	args := append(s.global(), "image", "inspect", "--format", "{{json .Config.WorkingDir}}", image)
+	res, err := s.run(ctx, args, imageInfoLimit)
+	if err != nil || res.exit != 0 || res.truncated {
+		return "", fmt.Errorf("inspect image (exit %d): %w", res.exit, ErrStart)
+	}
+	var dir *string
+	if err := json.Unmarshal(bytes.TrimSpace(res.stdout), &dir); err != nil {
+		return "", fmt.Errorf("inspect image: %w: %w", ErrStart, err)
+	}
+	if dir == nil {
+		return "", nil
+	}
+	return *dir, nil
+}
+
 // PinnedImage is one image the network and database need. creep never
 // pulls: the operator pulls it by digest (creep doctor prints how).
 type PinnedImage struct {
