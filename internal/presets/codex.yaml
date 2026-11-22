@@ -33,7 +33,10 @@
 #   --color never           no escape sequences in the reply.
 # Checked with codex-cli 0.171.0 on 2026-11-22 (#272), in the gateway's
 # empty private working directory with its argv and environment: every flag
-# and key exists (codex exec --help, codex features list). With these args
+# and key exists (codex exec --help, codex features list). Codex accepts an
+# unknown features.* name silently, so after an upgrade re-run
+# `codex features list` with these -c overrides and confirm each reads false.
+# With these args
 # the model could not read a canary file by absolute path, run a command
 # (echo, whoami) or list a directory, also through a sub-agent; the web
 # search, app connectors and image tool were gone; nothing was written.
