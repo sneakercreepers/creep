@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/sneakercreepers/creep/blob/main/docs/schemas/report-v1.json",
   "title": "creep JSON report, schema_version 1",
-  "description": "Written by creep's JSON report format. Once a release ships it, fields are added only with a schema_version bump and a new schema file; a committed fixture per version must stay valid (internal/report contract test). Before the first release, ADR 0009 amended version 1 additively.",
+  "description": "Written by creep's JSON report format. There is no version 2: version 1 changes additively only (an optional field or a new enum value, never a removed or retyped field), and a committed fixture per version must stay valid (internal/report contract test). Consumers must accept enum values they do not know; the reason unchanged appears only in a --changed run (ADR 0009, #26 amendment).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "tool", "run", "findings", "coverage", "data_handling"],

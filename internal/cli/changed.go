@@ -24,7 +24,7 @@ const maxChangedBytes = 16 << 20
 // the repository's, so they are untrusted: the list only selects among the
 // files the walk found, and is never opened or joined into a path.
 type changedList struct {
-	paths map[string]bool
+	paths map[string]bool // in lower case: scope matches without regard to case
 }
 
 // readChangedList reads the list at path, or returns nil when --changed
@@ -35,46 +35,41 @@ func readChangedList(path string) (*changedList, error) {
 	if path == "" {
 		return nil, nil
 	}
-	f, info, err := openConfig("--changed", path)
+	data, err := readCappedFile(openConfig, "--changed", path, maxChangedBytes)
 	if err != nil {
 		return nil, err
-	}
-	defer f.Close()
-	if info.Size() > maxChangedBytes {
-		return nil, fmt.Errorf("--changed %q: larger than %d bytes", path, maxChangedBytes)
-	}
-	data, err := io.ReadAll(io.LimitReader(f, maxChangedBytes+1))
-	if err != nil {
-		return nil, configError("--changed", path, err)
-	}
-	if len(data) > maxChangedBytes || int64(len(data)) != info.Size() {
-		return nil, fmt.Errorf("--changed %q: size changed while reading or not a real file", path)
 	}
 	return parseChangedList(data)
 }
 
 // parseChangedList reads one path per line, or, when the data holds a NUL
-// byte, one per NUL (git's -z). Blank entries are skipped and repeats
-// count once. Any entry that is not a clean repository-relative path
-// fails the whole list: a list the scan cannot read exactly would scan a
-// scope nobody chose.
+// byte, one per NUL (git's -z). Blank entries are skipped, and repeats
+// count once, case variants included. Any entry that is not a clean
+// repository-relative path fails the whole list: a list the scan cannot
+// read exactly would scan a scope nobody chose.
 func parseChangedList(data []byte) (*changedList, error) {
 	sep := byte('\n')
 	if bytes.IndexByte(data, 0) >= 0 {
 		sep = 0
 	}
 	list := &changedList{paths: map[string]bool{}}
-	for i, entry := range bytes.Split(data, []byte{sep}) {
+	// Cut, not Split, and a repeat skipped before it is copied: a 16 MiB
+	// list of short entries would otherwise allocate millions of slice
+	// headers and strings before the first check.
+	for i := 1; len(data) > 0; i++ {
+		var entry []byte
+		entry, data, _ = bytes.Cut(data, []byte{sep})
 		if sep == '\n' {
 			entry = bytes.TrimSuffix(entry, []byte{'\r'})
 		}
-		if len(entry) == 0 {
+		if len(entry) == 0 || list.paths[string(entry)] {
 			continue
 		}
-		if err := checkChangedPath(string(entry), sep); err != nil {
-			return nil, fmt.Errorf("--changed entry %d: %w", i+1, err)
+		p := string(entry)
+		if err := checkChangedPath(p, sep); err != nil {
+			return nil, fmt.Errorf("--changed entry %d: %w", i, err)
 		}
-		list.paths[string(entry)] = true
+		list.paths[strings.ToLower(p)] = true
 	}
 	return list, nil
 }
@@ -98,26 +93,30 @@ func checkChangedPath(p string, sep byte) error {
 
 // scope splits the walked files: the files the list names go to the scan,
 // and every other file that could be source is listed unchanged, by
-// design. The walk's own gaps stay as they are, so a link, a refused name
-// or a vendor file is listed as in a full scan. A listed path that is no
-// walked file (deleted, a directory, a link, under the root .git or
-// .creep) is only counted. A nil list scans every file.
+// design. Names match without regard to case: on a case-insensitive file
+// system git's index can spell a name differently from the disk, and
+// scanning one file more never hides a change. The walk's own gaps stay
+// as they are, so a link, a refused name or a vendor file is listed as in
+// a full scan. A listed path that is no walked file (deleted, a directory,
+// a link, under the root .git or .creep) is only counted. A nil list scans
+// every file.
 func (c *changedList) scope(files repoFiles) (repoFiles, report.Incremental) {
 	if c == nil {
 		return files, report.Incremental{}
 	}
+	matched := map[string]bool{}
 	out := repoFiles{gaps: slices.Clone(files.gaps)}
-	found := 0
 	for _, p := range files.paths {
+		key := strings.ToLower(p)
 		switch {
-		case c.paths[p]:
+		case c.paths[key]:
 			out.paths = append(out.paths, p)
-			found++
+			matched[key] = true
 		case discover.MaybeSource(p):
 			out.gaps = append(out.gaps, report.NotEvaluated{Path: p, Reason: report.SkipUnchanged})
 		}
 	}
-	return out, report.Incremental{On: true, Listed: len(c.paths), Missing: len(c.paths) - found}
+	return out, report.Incremental{On: true, Listed: len(c.paths), Missing: len(c.paths) - len(matched)}
 }
 
 // printIncremental states an incremental scan's scope; nothing for a full

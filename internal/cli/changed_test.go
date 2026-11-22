@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -44,6 +46,11 @@ func TestParseChangedList(t *testing.T) {
 		{"git-quoted name", "\"caf\\303\\251.py\"\n", nil, "git's -z"},
 		{"over the path cap", strings.Repeat("a", gitindex.MaxPathBytes+1), nil, "over 4096 bytes"},
 		{"bad entry in NUL list", "a.py\x00../b.py\x00", nil, "entry 2"},
+		{"one NUL makes the whole list NUL-separated", "a.py\nb.py\x00", []string{"a.py\nb.py"}, ""},
+		{"CR kept in a NUL list", "a.py\r\x00", []string{"a.py\r"}, ""},
+		{"case variants count once", "App.py\napp.py\nAPP.PY\n", []string{"app.py"}, ""},
+		{"entry numbers count blanks", "a.py\n\n\n../b.py\n", nil, "entry 4"},
+		{"bad entry after repeats", "a.py\na.py\r\n/etc/passwd\n", nil, "entry 3"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,6 +111,84 @@ func TestReadChangedList(t *testing.T) {
 	}
 }
 
+// sizedInfo is a FileInfo whose size the test chooses.
+type sizedInfo struct {
+	os.FileInfo
+	size int64
+}
+
+func (s sizedInfo) Size() int64 { return s.size }
+
+// Protection (#26, R22): a file that reads more or fewer bytes than its
+// stat said (virtual, or rewritten while read) is refused, for the list as
+// for --config.
+func TestReadCappedFileRefusesSizeChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "changed.txt")
+	writeFile(t, path, "app.py\n")
+	for _, size := range []int64{0, 3, 100} {
+		open := func(label, p string) (*os.File, os.FileInfo, error) {
+			f, info, err := openConfig(label, p)
+			return f, sizedInfo{info, size}, err
+		}
+		_, err := readCappedFile(open, "--changed", path, maxChangedBytes)
+		if err == nil || !strings.Contains(err.Error(), "size changed while reading") {
+			t.Errorf("stat size %d: err = %v, want a size refusal", size, err)
+		}
+	}
+}
+
+// Protection (#26): a list at the cap made of one repeated entry checks and
+// copies it once, so a garbled list costs no more than its own bytes.
+func TestParseChangedListRepeatsAreCheap(t *testing.T) {
+	data := []byte(strings.Repeat("web/app.js\n", maxChangedBytes/11))
+	allocs := testing.AllocsPerRun(1, func() {
+		if _, err := parseChangedList(data); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if allocs > 8 {
+		t.Fatalf("%v allocations for one repeated entry, want a few", allocs)
+	}
+}
+
+// BenchmarkParseChangedList is the documented worst case: a list at the
+// 16 MiB cap of distinct short paths.
+func BenchmarkParseChangedList(b *testing.B) {
+	var buf bytes.Buffer
+	for i := 0; buf.Len() < maxChangedBytes-16; i++ {
+		buf.WriteString(strconv.Itoa(i))
+		buf.WriteByte(0)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := parseChangedList(buf.Bytes()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Case variants (#26): a walked name that differs from a listed one only
+// in case is scanned too, so a case-insensitive disk spelling a name
+// otherwise than git's index never turns a changed file into an unchanged
+// one; a listed name no walked file folds to stays missing.
+func TestChangedScopeFoldsCase(t *testing.T) {
+	walked := repoFiles{paths: []string{"App.py", "app.py", "lib/Util.py", "web/app.js"}}
+	list, err := parseChangedList([]byte("APP.PY\nLIB/util.py\ngone.py\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, inc := list.scope(walked)
+	if want := []string{"App.py", "app.py", "lib/Util.py"}; !slices.Equal(got.paths, want) {
+		t.Errorf("scanned %q, want %q", got.paths, want)
+	}
+	if want := []report.NotEvaluated{{Path: "web/app.js", Reason: report.SkipUnchanged}}; !slices.Equal(got.gaps, want) {
+		t.Errorf("gaps %v, want %v", got.gaps, want)
+	}
+	if want := (report.Incremental{On: true, Listed: 3, Missing: 1}); inc != want {
+		t.Errorf("scope %+v, want %+v", inc, want)
+	}
+}
+
 // TestChangedScope: only walked files the list names reach the scan; every
 // other file that could be source is listed unchanged (by design); a
 // listed path the walk never handed over (deleted, a directory, a link,
@@ -114,10 +199,10 @@ func TestChangedScope(t *testing.T) {
 		paths: []string{"Makefile.bak.txt", "README.md", "app.py", "lib/util.py", "web/app.js"},
 		gaps:  []report.NotEvaluated{{Path: "link.py", Reason: report.SkipNotRegular}, {Path: "node_modules/p/i.js", Reason: report.SkipVendor}},
 	}
-	list := &changedList{paths: map[string]bool{
-		"web/app.js": true, "README.md": true, "deleted.py": true, "lib": true,
-		".git/hooks/evil.py": true, ".creep/evil.py": true, "link.py": true,
-	}}
+	list, err := parseChangedList([]byte("web/app.js\x00README.md\x00deleted.py\x00lib\x00.git/hooks/evil.py\x00.creep/evil.py\x00link.py\x00"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, inc := list.scope(walked)
 	if want := []string{"README.md", "web/app.js"}; !slices.Equal(got.paths, want) {
 		t.Errorf("scanned %q, want %q", got.paths, want)

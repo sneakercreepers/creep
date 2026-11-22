@@ -167,8 +167,9 @@ func TestScanChangedHostileLists(t *testing.T) {
 					t.Fatalf("a file the list may not reach was sent:\n%s", p)
 				}
 			}
-			if tt.wantCode == exitcode.ConfigError && (m.calls != 0 || fileExists(filepath.Join(stateDir, "report.json"))) {
-				t.Fatalf("a refused list made %d model calls or wrote a report", m.calls)
+			// The planted .creep/evil.py is all the state directory may hold.
+			if entries, _ := os.ReadDir(stateDir); tt.wantCode == exitcode.ConfigError && (m.calls != 0 || len(entries) != 1) {
+				t.Fatalf("a refused list made %d model calls or wrote state: %v", m.calls, entries)
 			}
 		})
 	}
@@ -192,6 +193,47 @@ func TestScanChangedLinkIsNotFollowed(t *testing.T) {
 	for _, p := range payloads {
 		if bytes.Contains(p, []byte(unchangedMarker)) {
 			t.Fatalf("the link's target was sent:\n%s", p)
+		}
+	}
+}
+
+// Protection (#26, R8): a path listed through a directory link (a junction
+// on Windows) names no walked file, so nothing outside the root is read;
+// the link itself stays not_regular, so the run is incomplete.
+func TestScanChangedThroughDirectoryLink(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "print(1)\n"}, "")
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "evil.py"), "os.system(x)  # "+unchangedMarker+"\n")
+	linkDir(t, outside, "j")
+	var payloads [][]byte
+	code, out, errOut := runScanWith(recordingDeps(&fakeModel{}, &payloads), "scan", "--changed", changedListFile(t, "j/evil.py\nj\n"), "--config", cfg)
+	if code != exitcode.Incomplete || !strings.Contains(out, "j  not_regular") || !strings.Contains(out, "2 listed paths are no file creep reads") {
+		t.Fatalf("exit %d, want %d with j not_regular and 2 missing\n%s\n%s", code, exitcode.Incomplete, out, errOut)
+	}
+	for _, p := range payloads {
+		if bytes.Contains(p, []byte(unchangedMarker)) {
+			t.Fatalf("a file behind the link was sent:\n%s", p)
+		}
+	}
+}
+
+// No false clean (#26, ADR 0007): a listed file the scan cannot evaluate
+// in full still makes the run incomplete (exit 4), and the mark reaches
+// stderr when stdout carries JSON; the same file left off the list is
+// only unchanged, so the run can exit 0.
+func TestScanChangedGapInListedFileIsIncomplete(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask", "big.go": tooLarge}, "")
+	tests := []struct {
+		list, wantLine string
+		wantCode       int
+	}{
+		{"big.go\n", `"reason": "too_large"`, exitcode.Incomplete},
+		{"app.py\n", `"reason": "unchanged"`, exitcode.OK},
+	}
+	for _, tt := range tests {
+		code, out, errOut := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--format", "json", "--changed", changedListFile(t, tt.list), "--config", cfg)
+		if code != tt.wantCode || !strings.Contains(out, tt.wantLine) || !strings.Contains(errOut, "incremental scan (--changed): 1 listed file scanned") {
+			t.Errorf("list %q: exit %d, want %d with %s and the mark on stderr\n%s\n%s", tt.list, code, tt.wantCode, tt.wantLine, out, errOut)
 		}
 	}
 }
@@ -230,9 +272,4 @@ func TestChangedFlagRules(t *testing.T) {
 			}
 		})
 	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil
 }
