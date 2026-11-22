@@ -108,7 +108,7 @@ Delete the temporary directory and the two config files afterwards.
   git config --global user.signingkey ~/.ssh/id_ed25519.pub
   git config --global commit.gpgsign true
   ```
-  Then add the public key on GitHub (Settings → SSH and GPG keys → New SSH key) with key type **Signing key**; an authentication key does not verify signatures. Check with `git log --show-signature -1`. See [GitHub docs](https://docs.github.com/authentication/managing-commit-signature-verification).
+  Then add the public key on GitHub (Settings → SSH and GPG keys → New SSH key) with key type **Signing key**; an authentication key does not verify signatures. Check with `git cat-file commit HEAD`, which shows a `gpgsig` header on a signed commit, and on GitHub, which marks the pushed commit **Verified** (`git log --show-signature` needs `gpg.ssh.allowedSignersFile` for SSH keys). See [GitHub docs](https://docs.github.com/authentication/managing-commit-signature-verification).
 - **DCO**: every commit needs `Signed-off-by` (`git commit -s`). By signing off you certify the [Developer Certificate of Origin](https://developercertificate.org/). We do not use a CLA.
 - Add a release-note label (see below).
 
