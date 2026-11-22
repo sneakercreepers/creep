@@ -14,12 +14,19 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.1.0%20released-green)
+![Status](https://img.shields.io/badge/status-v0.2%20complete%20on%20main-green)
 
 </div>
 
 > [!NOTE]
-> **v0.1 is released.** [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release; v0.2 is feature-complete on `main` and waits for its release pentest. v0.1 scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only; `main` (v0.2) is language-agnostic ([Languages](#languages)). With the sandbox enabled, a nightly scan on `main` (`--mode nightly`, #28) builds the app offline from the repository's own compose file or Dockerfile (#23) and runs a PoC 5 times against it for each probable SQL injection, path traversal or template injection finding (#24, #25): a finding is `verified` only when its PoC verified in at least one run, with its rate when it verified in some runs only.
+> **v0.2 is complete on `main`.** Every [v0.2 milestone](https://github.com/sneakercreepers/creep/milestone/2) issue is closed and its release pentest is fixed; `v0.2.0` is tagged next. Until then [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release, and it scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only.
+>
+> New in v0.2 on `main`:
+>
+> - **Language-agnostic analysis** ([Languages](#languages), [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)).
+> - **Sandbox and verification**: with the sandbox enabled, a nightly scan builds the app offline from the repository's own compose file or Dockerfile and runs a PoC 5 times against it for each probable SQL injection, path traversal or template injection finding; a finding is `verified` only when its PoC verified in at least one run, with its rate when it verified in some runs only ([Sandbox and verification](#sandbox-and-verification)). It needs Docker Engine >= 25.0.2 with runc >= 1.1.12, or Podman with Buildah >= 1.35.3 and runc >= 1.1.12 or crun >= 1.4.4.
+> - **Gate per mode** (`--mode pr|nightly`), **baseline and accepted risks** (`--baseline`, `creep accept`), **incremental scans** (`--changed`) and **discovery stability** (`--stability N`) ([Flags](#flags)).
+> - **`creep reproduce`** for a verified finding's bundle, **`creep recipe new|lint|test`** for recipe authors (v0.3 work merged early: `creep scan` loads no recipe until #34; [Commands](#commands-and-flags)), and the **[GitHub Action](#github-action)**.
 
 ---
 
@@ -116,7 +123,7 @@ creep reproduce <id>   # run a verified finding's PoC again in the sandbox, offl
 
 Outside CI, the first send to an endpoint asks for your consent; in CI only the org policy's consent list grants it (`creep doctor` prints the consent key).
 
-Guides in the [wiki](https://github.com/sneakercreepers/creep/wiki): [Quickstart](https://github.com/sneakercreepers/creep/wiki/Quickstart), [Sandbox](https://github.com/sneakercreepers/creep/wiki/Sandbox) (what runs where, isolation levels, Podman), [Verification statuses](https://github.com/sneakercreepers/creep/wiki/Verification-statuses), [CI with the Action](https://github.com/sneakercreepers/creep/wiki/CI-with-the-Action) and [FAQ](https://github.com/sneakercreepers/creep/wiki/FAQ). Where a guide and this README disagree, this README and the ADRs win.
+Guides in the [wiki](https://github.com/sneakercreepers/creep/wiki): [Quickstart](https://github.com/sneakercreepers/creep/wiki/Quickstart), [Sandbox](https://github.com/sneakercreepers/creep/wiki/Sandbox) (what runs where, isolation levels, Podman), [Verification statuses](https://github.com/sneakercreepers/creep/wiki/Verification-statuses), [CI with the Action](https://github.com/sneakercreepers/creep/wiki/CI-with-the-Action), [Nightly scan](https://github.com/sneakercreepers/creep/wiki/Nightly-scan), [Install and verify](https://github.com/sneakercreepers/creep/wiki/Install-and-verify) and [FAQ](https://github.com/sneakercreepers/creep/wiki/FAQ). Where a guide and this README disagree, this README and the ADRs win.
 
 ### Presets
 
@@ -126,7 +133,7 @@ A preset sets `contract: command` and a reviewed command line with the CLI's too
 |---|---|---|---|
 | `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` | no | yes |
 | `gemini` | `gemini --skip-trust --approval-mode default --extensions none --allowed-mcp-server-names creep-no-mcp-server --output-format text`. **API key only**: needs `env: [GEMINI_API_KEY]`; Google AI Pro and Ultra moved to Antigravity CLI, which has no preset (see below) | **yes**: tools, policies and include directories from `~/.gemini/settings.json` | no |
-| `codex` | `codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false -c features.view_image=false -c features.apps=false -c features.plugins=false -c features.image_generation=false -c web_search=disabled -c "project_root_markers=[]" --skip-git-repo-check --ephemeral --color never -` | **yes**: shell, image, web and app tools are off (checked with codex-cli 0.171.0, #272), but `apply_patch` cannot be switched off and tells whether any host file exists and holds a given line; `~/.codex/AGENTS.md` | no |
+| `codex` (unverified) | `codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false -c features.view_image=false -c features.apps=false -c features.plugins=false -c features.image_generation=false -c web_search=disabled -c "project_root_markers=[]" --skip-git-repo-check --ephemeral --color never -` | **yes**: shell, image, web and app tools are off (checked with codex-cli 0.171.0, #272), but `apply_patch` cannot be switched off: its host probing tells injected code whether any host file exists and holds a given line (#316); it also reads `~/.codex/AGENTS.md` | no |
 | `ollama` | `ollama run <model.name> --format json` (needs `name: <model>`) | no | no |
 
 > [!WARNING]
@@ -190,6 +197,7 @@ The sandbox is optional, and only a nightly scan uses it ([ADR 0021](docs/adr/00
 - **Runtime.** `creep doctor` lists Docker and Podman with their isolation (rootless first, then a Docker Desktop VM, then a rootful daemon, which it warns about). Only a local socket or named pipe is used, never a `tcp://` or `ssh://` endpoint ([ADR 0016](docs/adr/0016-sandbox-runtime.md)).
 - **Containers.** Every container runs with no network, no capabilities, a read-only root, user 65534, pids, memory and CPU limits and a timeout, and never mounts the Docker socket or host credentials. The app gets no `.env`: the build context leaves them out.
 - **Run network.** PoCs and a synthetic PostgreSQL seeded only from the project's SQL migrations (`migrations/`, `db/migrations/`, Prisma's and a few others) share one `--internal` network per run, `creep-<run>`, with no published port; before each PoC batch a canary container must fail to reach a public IP and to resolve a public name, or the run aborts. Rootful Podman gets no network (its bridge is reachable from the host).
+- **Engine versions.** A runtime is usable only with Docker Engine >= 25.0.2 (it embeds BuildKit 0.12.5) whose default runtime is runc >= 1.1.12, or Podman with Buildah >= 1.35.3 and runc >= 1.1.12 or crun >= 1.4.4: older engines let a build escape through links a Dockerfile check cannot see (CVE-2024-21626, CVE-2024-1753, CVE-2024-23652), and crun < 1.4.4 gave containers inheritable capabilities (CVE-2022-27650). creep reads the versions offline from the runtime; a version below a minimum is `old_runtime`, a missing, unparsable or other OCI runtime is `unknown_version`, and either makes the runtime unusable: `creep doctor` names the reason, a scan builds nothing (`no_runtime`) and `creep reproduce` exits `3`. A distribution backport to an older version is refused ([ADR 0016](docs/adr/0016-sandbox-runtime.md)).
 - **Images.** creep never pulls images: `creep doctor` lists the two digest-pinned images it needs (BusyBox for the canary and the PoC runner, PostgreSQL) and, for a missing one, the pull command for the endpoint it checked (`docker --host=<endpoint> pull <ref>`, or `podman --remote=false pull <ref>`).
 - **App build.** The app image is built only from the repository's own root compose file or `Dockerfile`, never a generated one and never through `docker compose`, and the build is offline: `--network=none`, base images must already be present, no build arguments or secrets, and the build context is a copy without `.env` files, `.git` or credential files. A compose or Dockerfile feature that could escape (privileged or host-network services, host volumes, remote contexts, build secrets, `ADD` of a URL, a `# syntax=` frontend) refuses the build, and any refused or failed build means verification unavailable, never a failed scan.
 - **When it runs.** With `sandbox.enabled: true` (user or policy config only; the project file cannot set it) and a usable runtime, a nightly scan (`creep scan --mode nightly`, [CI](#ci-pull-request-and-nightly-scans)) builds the app once, after the analysis and within the scan deadline, from the scan's own file list, and removes the image when it ends; a pr scan never builds it. The report (text, Markdown and SARIF; JSON v1 does not change) says whether the app was built or why verification is unavailable, as a closed reason such as `no_build_file`, `dockerfile_refused`, `base_image_missing`, `build_failed` or `no_runtime`; the build never fails the scan or makes it incomplete, and in a nightly scan a verification that did not run reads the nightly gate at probable.
@@ -377,11 +385,11 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| v0.2 | Language-agnostic analysis (#265 ✅, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md); replaces language kits, #217), coverage gaps (#213 ✅, #214 ✅), redaction and config hardening (#70 ✅, #71 ✅, #62 ✅, #63 ✅), preset policy (#229 ✅), sandbox runtime and hardened profile (#21 ✅), run network, canary and synthetic database (#22 ✅), offline app build in `creep scan` (#23 ✅), PoC verification (#24 ✅, #25 ✅), incremental scans with `--changed` (#26 ✅), baseline and accepted risks (#27 ✅, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28 ✅, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29 ✅, [ADR 0023](docs/adr/0023-github-action.md)), guides (#31 ✅), discovery stability `--stability N` (#37, [ADR 0024](docs/adr/0024-discovery-stability.md)), redaction bounds (#106 ✅, #190 ✅), gateway hardening (#115 ✅, #116 ✅), contract goldens (#135 ✅); open: #49, #204, #272; release pentest before `v0.2.0` |
-| v0.3 | Read-only MCP mode, JSON recipes (format and `creep recipe` built; installing pinned recipes, #34), public `creep-bench` |
+| **v0.2** ✅ | Language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)), coverage gaps (#213, #214), redaction and config hardening (#70, #71, #62, #63, #106, #190), preset policy (#229) and codex flags checked (#272), sandbox runtime and hardened profile (#21) with minimum engine versions (#311), run network, canary and synthetic database (#22), offline app build (#23), PoC verification and `creep reproduce` (#24, #25), incremental scans with `--changed` (#26), baseline and accepted risks (#27, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29, [ADR 0023](docs/adr/0023-github-action.md)), guides (#31), discovery stability `--stability N` (#37, [ADR 0024](docs/adr/0024-discovery-stability.md)), gateway hardening (#115, #116), contract goldens (#135), signed commits on `main` (#49, [ADR 0026](docs/adr/0026-signed-commits.md)); release pentest fixed (#307, #308, #311); `v0.2.0` to be tagged |
+| v0.3 (next) | Read-only MCP mode (#32), recipes: format and `creep recipe` built ([ADR 0025](docs/adr/0025-recipes.md)), installing pinned recipes next (#34), public `creep-bench` (#35, #36), registry mirror for the app build (#277), recipe, MCP and model results guides (#38) |
 | v1.0 | Organization policy features, HTML report |
 
-Full list: the [v0.2 milestone](https://github.com/sneakercreepers/creep/milestone/2) and the [Roadmap project](https://github.com/orgs/sneakercreepers/projects/1).
+Full list: the [v0.2 milestone](https://github.com/sneakercreepers/creep/milestone/2), the [v0.2 progress page](https://github.com/sneakercreepers/creep/wiki/v0.2-Progress) and the [Roadmap project](https://github.com/orgs/sneakercreepers/projects/1).
 
 ## Scope and responsible use
 
@@ -389,7 +397,7 @@ Full list: the [v0.2 milestone](https://github.com/sneakercreepers/creep/milesto
 
 ## Contributing
 
-Contributions are welcome, especially **false positive** and **false negative** reports, which become test cases. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). AI-assisted contributions are fine: see [AGENTS.md](AGENTS.md). To add or fix a preset, use the *Model preset* issue form ([CONTRIBUTING.md](CONTRIBUTING.md#model-presets)).
+Contributions are welcome, especially **false positive** and **false negative** reports, which become test cases. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). AI-assisted contributions are fine: see [AGENTS.md](AGENTS.md). Commits on `main` must be signed (SSH or GPG) and carry `Signed-off-by` (`git commit -s`; [ADR 0026](docs/adr/0026-signed-commits.md)). To add or fix a preset, use the *Model preset* issue form ([CONTRIBUTING.md](CONTRIBUTING.md#model-presets)).
 
 ## Security
 
