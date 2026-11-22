@@ -171,7 +171,7 @@ func TestScanWithoutRuntimeStaysProbable(t *testing.T) {
 		t.Fatal(err)
 	}
 	deps := withSandbox(fakeDeps(&fakeModel{verdict: verdict}, calibrate.TierM), []sandbox.Status{missingDocker, missingPodman}, nil, nil)
-	code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan")
+	code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan", "--mode", "nightly")
 	if code != base || code != exitcode.GateExceeded {
 		t.Fatalf("exit %d with the sandbox enabled, %d without (want %d)\n%s", code, base, exitcode.GateExceeded, stderr)
 	}

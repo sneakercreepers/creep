@@ -30,7 +30,11 @@ func (s *session) finish(e env, cal calibrate.Calibration, res scanResult) int {
 	}
 	written, unwritten := writeReports(s.store.Root(), s.cfg.Report.Formats, rep)
 	done()
-	gate, err := gateExceeded(s.cfg.Gates.PR, rep.Findings)
+	gateValue, err := s.gate.judging(e.stderr, res.verify)
+	if err != nil {
+		return s.fail(e, "creep scan", err, exitcode.ConfigError)
+	}
+	gate, err := gateExceeded(gateValue, rep.Findings)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}

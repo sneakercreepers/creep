@@ -73,7 +73,7 @@ func pocScan(t *testing.T, poc any, exchange func(int, [][]byte) ([]sandbox.Exch
 	opened := 0
 	deps := withBuilder(fakeDeps(m, calibrate.TierM), fb, nil, &opened)
 	files := map[string]string{"app.py": "@flask", "migrations/1_init.sql": "CREATE TABLE users (id int);\n"}
-	code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, files, sandboxOn), "scan")
+	code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, files, sandboxOn), "scan", "--mode", "nightly")
 	return code, stdout + stderr, fb, m
 }
 
@@ -102,8 +102,9 @@ func sqliFinding(t *testing.T) report.Finding {
 // its finding verified, an intermittent one verified with its rate in the
 // text and Markdown reports, and one that never verified, or that the
 // model could not give for the class, leaves the finding probable with no
-// bundle. The exit code is the same in every case: the gate reads
-// probable and verified alike (ADR 0009).
+// bundle. The nightly gate (verified:high) reads the result: a verified
+// finding trips it, a PoC that ran and never verified does not, and a PoC
+// that did not run reads the gate at probable (ADR 0021).
 func TestPoCRateDecidesStatus(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -112,18 +113,19 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 		status    report.Status
 		want      []string // in the output and report.md
 		exchanges int
+		code      int
 	}{
-		{"stable", sqlDelayPoC, repeatBool(true, 10), report.StatusVerified, []string{"verified in 5/5 runs", "PoCs ran for 2 findings: 2 verified in every run"}, 10},
+		{"stable", sqlDelayPoC, repeatBool(true, 10), report.StatusVerified, []string{"verified in 5/5 runs", "PoCs ran for 2 findings: 2 verified in every run"}, 10, exitcode.GateExceeded},
 		{"intermittent", sqlDelayPoC, []bool{true, false, true, true, false}, report.StatusVerified,
-			[]string{"verified in 3/5 runs, intermittent", "0 verified in every run, 1 intermittent, 1 not reproduced"}, 10},
-		{"never", sqlDelayPoC, nil, report.StatusProbable, []string{"2 not reproduced"}, 10},
-		{"template of another class", pathPoC, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0},
-		{"no valid PoC", nil, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0},
+			[]string{"verified in 3/5 runs, intermittent", "0 verified in every run, 1 intermittent, 1 not reproduced"}, 10, exitcode.GateExceeded},
+		{"never", sqlDelayPoC, nil, report.StatusProbable, []string{"2 not reproduced"}, 10, exitcode.OK},
+		{"template of another class", pathPoC, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0, exitcode.GateExceeded},
+		{"no valid PoC", nil, nil, report.StatusProbable, []string{"2 got no PoC run"}, 0, exitcode.GateExceeded},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			code, out, fb, _ := pocScan(t, tt.poc, delayApp(tt.slow, "[]"))
-			if code != exitcode.GateExceeded {
+			if code != tt.code {
 				t.Fatalf("exit %d\n%s", code, out)
 			}
 			f := sqliFinding(t)
@@ -132,6 +134,9 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 			}
 			assertContains(t, "output", out, tt.want)
 			assertContains(t, "report.md", readState(t, "report.md"), tt.want)
+			if tt.status == report.StatusProbable && tt.exchanges == 0 {
+				assertContains(t, "output", out, []string{`gates.nightly "verified:high" (default) read as "probable:high": 2 probable findings got no PoC run`})
+			}
 			_, err := os.Stat(filepath.Join(stateDir, bundleName(f.ID)))
 			if (err == nil) != (tt.status == report.StatusVerified) {
 				t.Errorf("bundle for a %s finding: %v", f.Status, err)
@@ -147,7 +152,8 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 // run. Every run answers, slowly on baselines and payload alike (a
 // tarpit), so nothing but the oracle can decide; the finding stays
 // probable, no bundle is written, and the report says it was not
-// reproduced.
+// reproduced. The nightly gate reads verified findings only, so the run
+// passes it; the PR gate judged these findings at probable (ADR 0021).
 func TestZeroRunsStayProbable(t *testing.T) {
 	tarpit := func(_ int, requests [][]byte) ([]sandbox.Exchange, error) {
 		out := make([]sandbox.Exchange, len(requests))
@@ -157,7 +163,7 @@ func TestZeroRunsStayProbable(t *testing.T) {
 		return out, nil
 	}
 	code, out, fb, m := pocScan(t, sqlDelayPoC, tarpit)
-	if code != exitcode.GateExceeded || fb.exchanges != 2*verify.DefaultRuns || m.pocCalls != 2 {
+	if code != exitcode.OK || fb.exchanges != 2*verify.DefaultRuns || m.pocCalls != 2 {
 		t.Fatalf("exit %d, %d exchanges, %d PoC calls\n%s", code, fb.exchanges, m.pocCalls, out)
 	}
 	assertAllProbable(t)
@@ -235,7 +241,7 @@ func TestPoCStageStopsOnModelError(t *testing.T) {
 	m := &fakeModel{verdict: sqliVulnerable, fail: map[string]error{"poc": errors.New("connection reset")}}
 	opened := 0
 	files := map[string]string{"app.py": "@flask", "migrations/1_init.sql": "CREATE TABLE users (id int);\n"}
-	code, stdout, stderr := runScanWith(withBuilder(fakeDeps(m, calibrate.TierM), fb, nil, &opened), "--config", scanRepo(t, files, sandboxOn), "scan")
+	code, stdout, stderr := runScanWith(withBuilder(fakeDeps(m, calibrate.TierM), fb, nil, &opened), "--config", scanRepo(t, files, sandboxOn), "scan", "--mode", "nightly")
 	out := stdout + stderr
 	if code != exitcode.GateExceeded || m.pocCalls == 0 || fb.exchanges != 0 {
 		t.Fatalf("exit %d, %d PoC calls, %d exchanges\n%s", code, m.pocCalls, fb.exchanges, out)

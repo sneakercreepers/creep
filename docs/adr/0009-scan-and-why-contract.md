@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`)
+- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan)
 
 ## Context
 
@@ -154,3 +154,7 @@ The text summary also changes. A probable or verified finding from a partial sli
 ## Amendment: PoC rates and `creep reproduce` (#25, ADR 0020)
 
 [ADR 0020](0020-poc-repetitions-and-bundle.md) runs each PoC 5 times from `creep scan` and adds `creep reproduce <id>`. For this ADR: a PoC that verified in 5 of 5 runs makes its finding `verified`; one that verified in 1 to 4 makes it `verified` with its rate, marked intermittent; one that verified in none leaves the finding `probable`, since the scanned repository builds the app and could otherwise discard its own finding. The rate follows the #23 decision above: it is in the text summary (`verified in 3/5 runs, intermittent` after the finding), in Markdown's notes and in SARIF (the result message and the `poc_verified_runs` and `poc_runs` properties), and **JSON v1 does not change** (`report.Finding.PoC` is `json:"-"`), so a JSON consumer reads `verified`. The verification summary counts the PoCs that ran, verified in every run, were intermittent, were not reproduced and were not run; `no_port` and `start_failed` join the closed reasons. The outcome still never makes a run incomplete; only `verified`, as the gate reads it, can move the exit code. `creep reproduce <id>` exits 0 when the PoC verified in at least one run, 1 when in none, 2 for usage, configuration or a missing or refused bundle, 3 for the sandbox (ADR 0007 codes, where 1 means the PoC did not reproduce).
+
+## Amendment: a gate per scan mode (#28, ADR 0021)
+
+[ADR 0021](0021-gate-per-mode.md) adds `--mode pr|nightly` (nightly also for a GitHub Actions `schedule` event). For this ADR: the **Gate** rule above reads the gate of the scan's mode, `gates.pr` or `gates.nightly`, with the same class severities, and exit 1 means that gate tripped. A pr scan never builds the app or runs a PoC, even with `sandbox.enabled`, so the #23 and #25 amendments apply to nightly scans only. The verification outcome still never makes a run incomplete and JSON v1 does not change, but in a nightly scan it decides which status the gate reads: when the sandbox is off, verification is unavailable or a PoC candidate got no completed run, `gates.nightly` is read with its status raised to probable (`verified:high` as `probable:high`), so a finding nothing verified fails the run at the gate's severity instead of passing it (the gate failure path, not exit 4). Each scan prints the mode and its gate on stderr (`gate: ...`).

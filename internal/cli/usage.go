@@ -32,6 +32,8 @@ func globalFlagsHelp() string {
 	return fmt.Sprintf("Global flags (before or after the command; \"--\" ends flags):\n"+
 		"  --config <path>     config file used instead of the user and project files\n"+
 		"  --model-run <cmd>   model CLI for contract command: prompt on stdin, JSON out\n"+
+		"  --mode <mode>       scan: pr or nightly, which gate judges it (default pr, nightly\n"+
+		"                      on a GitHub Actions schedule event); only nightly verifies\n"+
 		"  --format <format>   output format: %s (default %q)\n"+
 		"  --log-level <level> log level: %s (default %q)\n"+
 		"  --record            call every model and record the responses for replay\n"+

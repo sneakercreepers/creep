@@ -39,6 +39,7 @@ type session struct {
 	red   *redact.Redactor
 	repo  *os.Root
 	stats *runStats
+	gate  runGate // the mode and the gate that judges the run (#28)
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
@@ -73,6 +74,11 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
+	gate, err := chooseGate(e, resolved)
+	if err != nil {
+		printError(e.stderr, "creep scan", err)
+		return exitcode.ConfigError
+	}
 	// Only the scan deadline cancels the run's context (#260); it starts
 	// after calibration, and the redactor stops with it.
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -83,6 +89,7 @@ func runScan(e env, args []string) int {
 		return exitcode.ConfigError
 	}
 	defer s.close()
+	s.gate = gate
 	warnPreset(e.stderr, resolved.Config.Model)
 	files, err := s.walk(ctx, e.stderr)
 	if err != nil {

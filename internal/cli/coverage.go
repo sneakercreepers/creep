@@ -144,7 +144,8 @@ func fileGapped(gaps []report.NotEvaluated) bool {
 	return false
 }
 
-// gateExceeded reports whether a finding trips gate (gates.pr).
+// gateExceeded reports whether a finding trips gate (the mode's gates.*
+// value, see runGate).
 func gateExceeded(gate string, findings []report.Finding) (bool, error) {
 	for _, f := range findings {
 		severity, ok := classSeverity[f.Class]

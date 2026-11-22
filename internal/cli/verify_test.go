@@ -136,7 +136,7 @@ func TestBuildFailureNeverFailsScan(t *testing.T) {
 			opened := 0
 			deps := withBuilder(fakeDeps(&fakeModel{verdict: sqliVulnerable}, calibrate.TierM), &tt.fb, tt.openErr, &opened)
 			cfg := scanRepo(t, flask, sandboxOn)
-			code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan")
+			code, stdout, stderr := runScanWith(deps, "--config", cfg, "scan", "--mode", "nightly")
 			if code != base || code != exitcode.GateExceeded {
 				t.Fatalf("exit %d with the build, %d without\nstdout %s\nstderr %s", code, base, stdout, stderr)
 			}
@@ -189,7 +189,7 @@ func TestBuildUsesScanFiles(t *testing.T) {
 	deps := withBuilder(fakeDeps(&fakeModel{verdict: sqliVulnerable}, calibrate.TierM), fb, nil, &opened)
 	// A link pointing out of the repository is listed not_regular, so the
 	// run may end incomplete; it must still reach the build.
-	if code, _, stderr := runScanWith(deps, "--config", cfg, "scan"); code != exitcode.GateExceeded && code != exitcode.Incomplete {
+	if code, _, stderr := runScanWith(deps, "--config", cfg, "scan", "--mode", "nightly"); code != exitcode.GateExceeded && code != exitcode.Incomplete {
 		t.Fatalf("exit %d\n%s", code, stderr)
 	}
 	if want := []string{"Dockerfile", "app.py", "lib/util.py"}; !slices.Equal(fb.repo.Paths, want) {
@@ -249,7 +249,7 @@ func TestBuildOnlyWhenEnabled(t *testing.T) {
 			if tt.project != "" {
 				files["creep.yaml"] = tt.project
 			}
-			code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, files, tt.user), "scan")
+			code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, files, tt.user), "scan", "--mode", "nightly")
 			if code != tt.wantCode {
 				t.Fatalf("exit %d, want %d\n%s", code, tt.wantCode, stderr)
 			}
@@ -288,7 +288,7 @@ func TestCtrlCClosesTheSandbox(t *testing.T) {
 		interrupt = cancel
 		return ctx, cancel
 	}
-	code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, map[string]string{"app.py": "@flask"}, sandboxOn), "scan")
+	code, stdout, stderr := runScanWith(deps, "--config", scanRepo(t, map[string]string{"app.py": "@flask"}, sandboxOn), "scan", "--mode", "nightly")
 	if code != exitcode.GateExceeded {
 		t.Fatalf("exit %d\n%s", code, stderr)
 	}

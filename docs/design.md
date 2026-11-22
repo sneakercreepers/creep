@@ -59,8 +59,10 @@ Each protection has a test that is proven able to fail, run by the required CI j
 
 ## CI gates
 
-- PR: `probable:critical` (no sandbox). Classes map to severities in ADR 0009; scanner findings are `high`.
-- Nightly: `verified:high` needs the sandbox and the nightly mode, both v0.2 (#21–#25, #28). Until then nothing is `verified`.
+- The scan's mode picks the gate ([ADR 0021](adr/0021-gate-per-mode.md), #28): `--mode pr|nightly`; without the flag a GitHub Actions `schedule` event is nightly and anything else pr. The mode is never a config key, so the scanned repository cannot pick it. `creep config explain` and the scan's `gate:` line on stderr show the mode, how it was chosen and the gate's key and layer.
+- PR: `gates.pr`, `probable:critical`. A pr scan has no sandbox: it never builds the app or runs a PoC, even with `sandbox.enabled`, so it never waits for verified findings. Classes map to severities in ADR 0009; scanner findings are `high`.
+- Nightly: `gates.nightly`, `verified:high`. A nightly scan builds the app and runs PoCs (#23–#25). When the sandbox is off or unavailable, or a PoC candidate got no completed run, the nightly gate is read as `probable:<severity>`, so a finding nothing verified fails the run instead of passing it. A PoC that ran and never verified leaves its finding probable, which the nightly gate does not read; the PR gate judged it when it was merged (ADR 0021 residual).
+- The policy's `limits.gates.pr` and `limits.gates.nightly` floor both keys in every mode, and the project file may only make either gate stricter.
 - Exit codes: 0 ok · 1 gate · 2 usage, config or consent · 3 model, canary, calibration or sandbox · 4 incomplete. An incomplete run never exits 0, even when the gate also trips.
 
 ## Dependencies
@@ -83,7 +85,7 @@ The original version of this page is in the history ([0b256d8](https://github.co
 | Product never imports `os/exec` | `scanrun`, `sandbox` and `gateway` only, by an exact rule in `make budget` | Changed by ADR 0013, 0014, 0016 | Kept |
 | Exit codes 0–3 | Added 4 for incomplete runs, with fixed rules ([ADR 0007](adr/0007-exit-code-incomplete.md), [ADR 0009](adr/0009-scan-and-why-contract.md)) | Changed by ADR 0007, 0009 | Strengthened; a directory link the walk does not cover is listed `not_regular` and makes the run incomplete (#214) |
 | Reports SARIF, JSON, Markdown, HTML | SARIF, JSON v1, Markdown; HTML in v1.0 | None | Kept |
-| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; Action, `--diff`, baseline, nightly mode in v0.2 (#26–#29) | Moved to v0.2 | Kept for full scans |
+| CI: PR and nightly gates, Action, diff | PR gate in `gates.pr`; v0.2: `--mode pr\|nightly` with `gates.nightly` and a fail-closed nightly gate without verification ([ADR 0021](adr/0021-gate-per-mode.md), #28); Action, `--diff`, baseline in v0.2 (#26, #27, #29) | Moved to v0.2 | Kept for full scans |
 | Recorded model replies for tests | Reader fixtures are synthesized from `expected.json`; no real-model recording or public bench yet (#204, #35) | Moved (bench in v0.3) | Unproven: quality with a real small model is not measured yet |
 | ~3 dependencies (YAML, wazero, JSON Schema) | 1 (YAML) since #265; no schema validator in the binary | Changed (smaller) | Kept |
 | Privacy modes, `creep clean`, `init` | `creep clean` removes creep's containers (#21); privacy modes and `init` not built; redacted mode always on | Moved to v0.2 or later | Kept |
