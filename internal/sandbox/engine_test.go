@@ -87,30 +87,74 @@ func TestDockerVersionThroughPinnedHost(t *testing.T) {
 
 func TestParseVersion(t *testing.T) {
 	tests := map[string]struct {
-		in   string
-		want engineVersion
-		ok   bool
+		in     string
+		want   engineVersion
+		suffix string
+		ok     bool
 	}{
-		"plain":       {"1.1.12", engineVersion{1, 1, 12}, true},
-		"v prefix":    {"v2.2.5", engineVersion{2, 2, 5}, true},
-		"two parts":   {"1.15", engineVersion{1, 15, 0}, true},
-		"suffix":      {"1.1.12-0ubuntu2~22.04.1", engineVersion{1, 1, 12}, true},
-		"newline":     {"1.3.6\n", engineVersion{1, 3, 6}, true},
-		"build":       {"26.1.3+dfsg1", engineVersion{26, 1, 3}, true},
-		"one part":    {"25", engineVersion{}, false},
-		"four parts":  {"1.2.3.4", engineVersion{}, false},
-		"empty part":  {"1..2", engineVersion{}, false},
-		"sign":        {"1.+1.2", engineVersion{}, false},
-		"letters":     {"1.a.2", engineVersion{}, false},
-		"empty":       {"", engineVersion{}, false},
-		"too long":    {"1.1234567.0", engineVersion{}, false},
-		"just suffix": {"-rc1", engineVersion{}, false},
+		"plain":       {"1.1.12", engineVersion{1, 1, 12}, "", true},
+		"v prefix":    {"v2.2.5", engineVersion{2, 2, 5}, "", true},
+		"two parts":   {"1.15", engineVersion{1, 15, 0}, "", true},
+		"suffix":      {"1.1.12-0ubuntu2~22.04.1", engineVersion{1, 1, 12}, "-0ubuntu2~22.04.1", true},
+		"newline":     {"1.3.6\n", engineVersion{1, 3, 6}, "", true},
+		"build":       {"26.1.3+dfsg1", engineVersion{26, 1, 3}, "+dfsg1", true},
+		"one part":    {"25", engineVersion{}, "", false},
+		"four parts":  {"1.2.3.4", engineVersion{}, "", false},
+		"empty part":  {"1..2", engineVersion{}, "", false},
+		"sign":        {"1.+1.2", engineVersion{}, "", false},
+		"letters":     {"1.a.2", engineVersion{}, "", false},
+		"glued tag":   {"1.1.12rc1", engineVersion{}, "", false},
+		"empty":       {"", engineVersion{}, "", false},
+		"too long":    {"1.1234567.0", engineVersion{}, "", false},
+		"just suffix": {"-rc1", engineVersion{}, "", false},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, ok := parseVersion(tt.in)
-			if got != tt.want || ok != tt.ok {
-				t.Errorf("parseVersion(%q) = %v %v, want %v %v", tt.in, got, ok, tt.want, tt.ok)
+			got, suffix, ok := parseVersion(tt.in)
+			if got != tt.want || suffix != tt.suffix || ok != tt.ok {
+				t.Errorf("parseVersion(%q) = %v %q %v, want %v %q %v", tt.in, got, suffix, ok, tt.want, tt.suffix, tt.ok)
+			}
+		})
+	}
+}
+
+// TestPreReleaseAtMinimum is the protection test for the pre-release
+// finding (final v0.2 release pentest): a pre-release of the minimum
+// version predates its fix and is refused; a distribution's packaging
+// suffix is accepted; any other suffix at the minimum is unknown.
+func TestPreReleaseAtMinimum(t *testing.T) {
+	tests := map[string]struct {
+		in   string
+		min  engineVersion
+		want Reason
+	}{
+		"buildah dev":          {"1.35.3-dev", minBuildah, ReasonOldRuntime},
+		"engine rc dotted":     {"25.0.2-rc.1", minDockerEngine, ReasonOldRuntime},
+		"runc rc":              {"1.1.12-rc1", minRunc, ReasonOldRuntime},
+		"upper case":           {"1.1.12-RC1", minRunc, ReasonOldRuntime},
+		"tilde beta":           {"1.1.12~beta2", minRunc, ReasonOldRuntime},
+		"alpha":                {"1.4.4-alpha", minCrun, ReasonOldRuntime},
+		"preview":              {"1.4.4-preview", minCrun, ReasonOldRuntime},
+		"devel build":          {"1.35.3+devel", minBuildah, ReasonOldRuntime},
+		"rc after revision":    {"1.1.12-0ubuntu1~rc1", minRunc, ReasonOldRuntime},
+		"space dev":            {"1.35.3 dev", minBuildah, ReasonOldRuntime},
+		"plain minimum":        {"1.1.12", minRunc, ReasonOK},
+		"ubuntu revision":      {"1.1.12-0ubuntu2", minRunc, ReasonOK},
+		"ubuntu backport":      {"1.1.12-0ubuntu2~22.04.1", minRunc, ReasonOK},
+		"dfsg":                 {"25.0.2+dfsg", minDockerEngine, ReasonOK},
+		"community edition":    {"25.0.2-ce", minDockerEngine, ReasonOK},
+		"fedora revision":      {"1.35.3-1.fc39", minBuildah, ReasonOK},
+		"unknown word":         {"1.1.12-custom", minRunc, ReasonUnknownVersion},
+		"bare dash":            {"1.1.12-", minRunc, ReasonUnknownVersion},
+		"bare plus":            {"1.1.12+", minRunc, ReasonUnknownVersion},
+		"tilde before release": {"1.1.12~22.04", minRunc, ReasonUnknownVersion},
+		"rc above minimum":     {"1.2.0-rc.1", minRunc, ReasonOK},
+		"rc below minimum":     {"1.1.11-0ubuntu1", minRunc, ReasonOldRuntime},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := versionReason(tt.in, tt.min); got != tt.want {
+				t.Errorf("versionReason(%q, %v) = %s, want %s", tt.in, tt.min, got, tt.want)
 			}
 		})
 	}

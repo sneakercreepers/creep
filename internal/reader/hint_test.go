@@ -93,6 +93,39 @@ func TestHintLimits(t *testing.T) {
 				if len(block) > sliceBudget[tier]/hintCapDivisor || len(s.Text) > sliceBudget[tier] {
 					t.Errorf("tier %s: hint block %d bytes, slice %d bytes:\n%s", tier, len(block), len(s.Text), s.Text)
 				}
+				if cut := strings.Contains(block, hintCutNote) || strings.Contains(block, lineCutNote); cut && !s.Partial {
+					t.Errorf("tier %s: hint cut but slice not partial:\n%s", tier, s.Text)
+				}
+			}
+		})
+	}
+}
+
+// TestHintCutMarksPartial is the protection test for the hint finding
+// (final v0.2 release pentest): a hint line dropped at the block's cap or
+// cut at the line cap makes the slice partial, so a not_vulnerable from it
+// is never read as a verdict on the whole recipe.
+func TestHintCutMarksPartial(t *testing.T) {
+	tests := []struct {
+		name    string
+		hint    []string
+		partial bool
+		note    string
+	}{
+		{"fits", []string{"short", "hint"}, false, ""},
+		{"no hint", nil, false, ""},
+		{"line dropped at the block cap", []string{strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)}, true, hintCutNote},
+		{"line cut at the line cap", []string{strings.Repeat("a", 60)}, true, lineCutNote},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text, partial := writeHint(tt.hint, 120, 50)
+			if partial != tt.partial || (tt.note != "" && !strings.Contains(text, tt.note)) {
+				t.Errorf("writeHint = %q partial %v, want partial %v", text, partial, tt.partial)
+			}
+			r := renderSlice(sliceHead{class: ClassSQLInjection, source: 1, sink: 1, hint: tt.hint}, []string{"x"}, []int{1}, 400)
+			if r.partial != tt.partial || strings.HasSuffix(r.text, sliceCutNote) != tt.partial {
+				t.Errorf("renderSlice partial %v, want %v:\n%s", r.partial, tt.partial, r.text)
 			}
 		})
 	}

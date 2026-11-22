@@ -42,27 +42,30 @@ const (
 )
 
 // writeHint renders hint lines as the HINT block within hintCap bytes; no
-// lines give no block.
-func writeHint(hint []string, hintCap, lineCap int) string {
+// lines give no block. It reports whether a hint line was cut or dropped,
+// which makes the slice partial: the model did not see the whole recipe.
+func writeHint(hint []string, hintCap, lineCap int) (string, bool) {
 	if len(hint) == 0 {
-		return ""
+		return "", false
 	}
 	var b strings.Builder
 	b.WriteString(hintHeader)
 	used := len(hintHeader) + len(hintCutNote)
+	partial := false
 	for _, line := range hint {
-		text, _ := cutLine(line, lineCap)
+		text, cut := cutLine(line, lineCap)
 		cost := len(hintPrefix) + len(text) + 1
 		if used+cost > hintCap {
 			b.WriteString(hintCutNote)
-			break
+			return b.String(), true
 		}
 		used += cost
+		partial = partial || cut
 		b.WriteString(hintPrefix)
 		b.WriteString(text)
 		b.WriteByte('\n')
 	}
-	return b.String()
+	return b.String(), partial
 }
 
 // rendered is a user turn and what it shows.
@@ -83,15 +86,15 @@ type sliceHead struct {
 // renderSlice writes the user turn for one hypothesis within budget bytes.
 // picks are line numbers, most important first; lines are kept in that
 // order until the next one does not fit, then shown in file order. Any
-// line left out or cut makes the slice partial and adds a note, so a slice
-// over budget is truncated, never dropped.
+// code or hint line left out or cut makes the slice partial and adds a
+// note, so a slice over budget is truncated, never dropped.
 func renderSlice(h sliceHead, lines []string, picks []int, budget int) rendered {
 	lineCap := budget / lineCapDivisor
+	hint, partial := writeHint(h.hint, budget/hintCapDivisor, lineCap)
 	head := fmt.Sprintf("HYPOTHESIS: %s, source line %d, sink line %d\n", h.class, h.source, h.sink) +
-		writeHint(h.hint, budget/hintCapDivisor, lineCap) + "CODE:\n"
+		hint + "CODE:\n"
 	used := len(head) + len(sliceCutNote)
 	var kept []int
-	partial := false
 	for _, n := range dedupe(picks) {
 		text, cut := cutLine(lines[n-1], lineCap)
 		cost := numberedLen(n, text)

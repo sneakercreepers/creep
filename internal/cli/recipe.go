@@ -196,12 +196,46 @@ func verifyClass(class string) string {
 
 // readRecipeFile reads a recipe the operator named: a relative path
 // (report.ValidPath) inside the working directory, with no link or special
-// file at or above it, opened without blocking and capped.
+// file at or above it, opened without blocking and capped. The open goes
+// through the working directory's os.Root, so a directory swapped for a
+// link after checkRecipePath cannot move the read out of the tree.
 func readRecipeFile(name string) ([]byte, error) {
 	if err := checkRecipePath(name); err != nil {
 		return nil, err
 	}
-	return readCappedFile(openProjectConfig, "recipe", filepath.FromSlash(name), recipe.MaxFileBytes)
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		return nil, configError("recipe", name, err)
+	}
+	defer root.Close()
+	return readCappedFile(recipeOpener(root), "recipe", filepath.FromSlash(name), recipe.MaxFileBytes)
+}
+
+// recipeOpener opens a recipe inside root and accepts it only if it is the
+// regular, singly linked file root.Lstat saw: root follows a final link
+// that stays in the tree, which a recipe path must not be.
+func recipeOpener(root *os.Root) configOpener {
+	return func(label, file string) (*os.File, os.FileInfo, error) {
+		before, err := root.Lstat(file)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, fmt.Errorf("%s %q: %w", label, file, errNoFile)
+		}
+		if err != nil {
+			return nil, nil, configError(label, file, err)
+		}
+		if !before.Mode().IsRegular() {
+			return nil, nil, fmt.Errorf("%s %q: must be a regular file, not a link or special file", label, file)
+		}
+		f, info, err := openRegularInRoot(root, file)
+		if err != nil {
+			return nil, nil, configError(label, file, err)
+		}
+		if !os.SameFile(before, info) || linkCount(info) > 1 {
+			f.Close()
+			return nil, nil, fmt.Errorf("%s %q: changed while being opened or a hard link", label, file)
+		}
+		return f, info, nil
+	}
 }
 
 // checkRecipePath refuses a path outside report.ValidPath, one without
