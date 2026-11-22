@@ -168,7 +168,7 @@ Engine backstops:
 
 ## Amendment: minimum engine versions and engine-escape refusals (final v0.2 release pentest)
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-22
 - **Changes:** detection (two new closed reasons, `old_runtime` and `unknown_version`, shown by `creep doctor`; a Docker runtime now also answers `docker version --format {{json .Server}}` through the pinned endpoint); the Dockerfile check (rules `container_path`, `mount_from`, `transport`); the Podman `build` command line (memory and CPU limits); the app's `run` command line (`--workdir`); a built image whose working directory is refused is `image_refused` (`workdir`). No new dependency, network path, package or config key.
 
