@@ -126,7 +126,7 @@ A preset sets `contract: command` and a reviewed command line with the CLI's too
 |---|---|---|---|
 | `claude-code` | `claude -p --tools "" --strict-mcp-config --output-format text` | no | yes |
 | `gemini` | `gemini --skip-trust --approval-mode default --extensions none --allowed-mcp-server-names creep-no-mcp-server --output-format text`. **API key only**: needs `env: [GEMINI_API_KEY]`; Google AI Pro and Ultra moved to Antigravity CLI, which has no preset (see below) | **yes**: tools, policies and include directories from `~/.gemini/settings.json` | no |
-| `codex` | `codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false -c features.view_image=false -c "project_root_markers=[]" --skip-git-repo-check --ephemeral --color never -` | **yes** until checked: the flags that turn off its shell, image tool and user config are unverified; `~/.codex/AGENTS.md` | no |
+| `codex` | `codex exec --sandbox read-only --ignore-user-config -c features.shell_tool=false -c features.view_image=false -c features.apps=false -c features.plugins=false -c features.image_generation=false -c web_search=disabled -c "project_root_markers=[]" --skip-git-repo-check --ephemeral --color never -` | **yes**: shell, image, web and app tools are off (checked with codex-cli 0.171.0, #272), but `apply_patch` cannot be switched off and tells whether any host file exists and holds a given line; `~/.codex/AGENTS.md` | no |
 | `ollama` | `ollama run <model.name> --format json` (needs `name: <model>`) | no | no |
 
 > [!WARNING]

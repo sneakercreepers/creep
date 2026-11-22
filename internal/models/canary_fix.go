@@ -39,8 +39,14 @@ func claudeFix(args []string) string {
 	return "add " + strings.Join(missing, " and ") + " to the claude command"
 }
 
-// codexFix names the codex preset's tools-off flags (#229) missing from a
-// codex exec command line.
+// codexOverrides are the codex preset's -c tools-off overrides, in its order.
+var codexOverrides = []string{
+	"features.shell_tool=false", "features.view_image=false", "features.apps=false",
+	"features.plugins=false", "features.image_generation=false", "web_search=disabled",
+}
+
+// codexFix names the codex preset's tools-off flags (#229, #272) missing
+// from a codex exec command line.
 func codexFix(args []string) string {
 	var missing []string
 	if !hasValue(args, "read-only", "--sandbox", "-s") {
@@ -49,7 +55,7 @@ func codexFix(args []string) string {
 	if !slices.Contains(args, "--ignore-user-config") {
 		missing = append(missing, "--ignore-user-config")
 	}
-	for _, o := range []string{"features.shell_tool=false", "features.view_image=false"} {
+	for _, o := range codexOverrides {
 		if !hasValue(args, o, "-c", "--config") {
 			missing = append(missing, "-c "+o)
 		}
