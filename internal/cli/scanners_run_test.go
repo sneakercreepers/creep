@@ -30,6 +30,9 @@ func placeTool(t *testing.T, name string) string {
 	return dir
 }
 
+// skipNote is the summary's note for a suppression file left out (#226).
+const skipNote = "the repository's suppression file was not applied, so it hid no finding"
+
 // TestScanRunsOptionalScanners covers ADR 0013 through creep scan: an
 // evaluated scanner adds probable findings without changing the exit
 // code; a failed one makes the run incomplete (exit 4). The runner gets
@@ -44,12 +47,17 @@ func TestScanRunsOptionalScanners(t *testing.T) {
 		status   report.ScannerStatus
 		findings int
 		line     string
+		errLine  string // on stderr; "" checks nothing
+		noErr    string // never on stderr; "" checks nothing
 	}{
-		{"evaluated with findings", scanrun.Result{Outcome: scanrun.Evaluated, Findings: findings}, exitcode.OK, report.ScannerEvaluated, 1, "scanner gitleaks: evaluated; evaluated: hardcoded_secret"},
-		{"evaluated clean", scanrun.Result{Outcome: scanrun.Evaluated}, exitcode.OK, report.ScannerEvaluated, 0, "scanner gitleaks: evaluated"},
-		{"failed", scanrun.Result{Outcome: scanrun.Failed, Failure: scanrun.FailTimeout}, exitcode.Incomplete, report.ScannerFailed, 0, "scanner gitleaks: failed; not evaluated: hardcoded_secret"},
-		{"refused at run time", scanrun.Result{Outcome: scanrun.Refused}, exitcode.OK, report.ScannerRefused, 0, "scanner gitleaks: refused"},
-		{"unknown outcome fails closed", scanrun.Result{Outcome: scanrun.Outcome(200)}, exitcode.Incomplete, report.ScannerFailed, 0, "scanner gitleaks: failed"},
+		{"evaluated with findings", scanrun.Result{Outcome: scanrun.Evaluated, Findings: findings}, exitcode.OK, report.ScannerEvaluated, 1, "scanner gitleaks: evaluated; evaluated: hardcoded_secret", "", ".gitleaksignore"},
+		{"evaluated clean", scanrun.Result{Outcome: scanrun.Evaluated}, exitcode.OK, report.ScannerEvaluated, 0, "scanner gitleaks: evaluated", "", ".gitleaksignore"},
+		// #226: a repository .gitleaksignore that the run left out is said, in the summary and on stderr, and is not a gap.
+		{"repository ignore file left out", scanrun.Result{Outcome: scanrun.Evaluated, Findings: findings, SkippedRepoIgnore: true}, exitcode.OK, report.ScannerEvaluated, 1, "scanner gitleaks: evaluated; evaluated: hardcoded_secret; " + skipNote, "scanner gitleaks: the repository's .gitleaksignore was not applied", ""},
+		{"failed", scanrun.Result{Outcome: scanrun.Failed, Failure: scanrun.FailTimeout}, exitcode.Incomplete, report.ScannerFailed, 0, "scanner gitleaks: failed; not evaluated: hardcoded_secret", "scanner gitleaks failed: timeout", ""},
+		{"failed with a skip flag says only the failure", scanrun.Result{Outcome: scanrun.Failed, Failure: scanrun.FailRepoIgnore, SkippedRepoIgnore: true}, exitcode.Incomplete, report.ScannerFailed, 0, "scanner gitleaks: failed", "failed: repo_suppression_file", "was not applied"},
+		{"refused at run time", scanrun.Result{Outcome: scanrun.Refused}, exitcode.OK, report.ScannerRefused, 0, "scanner gitleaks: refused", "", ""},
+		{"unknown outcome fails closed", scanrun.Result{Outcome: scanrun.Outcome(200)}, exitcode.Incomplete, report.ScannerFailed, 0, "scanner gitleaks: failed", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,6 +76,12 @@ func TestScanRunsOptionalScanners(t *testing.T) {
 			code, out, errOut := runScanWith(deps, "scan", "--config", cfg)
 			if code != tt.wantCode || !strings.Contains(out, tt.line) {
 				t.Fatalf("exit %d (want %d), stdout lacks %q\nstdout:\n%s\nstderr:\n%s", code, tt.wantCode, tt.line, out, errOut)
+			}
+			if (tt.errLine != "" && !strings.Contains(errOut, tt.errLine)) || (tt.noErr != "" && strings.Contains(errOut, tt.noErr)) {
+				t.Errorf("stderr wants %q and not %q:\n%s", tt.errLine, tt.noErr, errOut)
+			}
+			if wantNote := tt.result.SkippedRepoIgnore && tt.status == report.ScannerEvaluated; strings.Contains(out, skipNote) != wantNote {
+				t.Errorf("summary note %q shown = %v, want %v:\n%s", skipNote, !wantNote, wantNote, out)
 			}
 			if len(jobs) != 1 || jobs[0].Scanner != repofile.ScannerGitleaks || !filepath.IsAbs(jobs[0].Bin) || jobs[0].Repo != repo {
 				t.Fatalf("jobs = %+v, want one gitleaks job with a final path in repository %s", jobs, repo)

@@ -216,10 +216,18 @@ func scannerNotifications(scanners []ScannerCoverage) []sarifNotification {
 		out[i] = sarifNotification{
 			Descriptor: sarifDescriptor{ID: "creep/scanner/" + string(s.Status)},
 			Level:      level,
-			Message:    sarifMessage{Text: fmt.Sprintf("optional scanner %s %s; %s: %s", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))},
+			Message:    sarifMessage{Text: scannerMessage(s, verb)},
 		}
 	}
 	return out
+}
+
+func scannerMessage(s ScannerCoverage, verb string) string {
+	text := fmt.Sprintf("optional scanner %s %s; %s: %s", s.Name, s.Status, verb, strings.Join(s.Classes, ", "))
+	if note := s.SkipNote(); note != "" {
+		text += "; " + note
+	}
+	return text
 }
 
 func fileLocation(path string, line int) sarifLocation {

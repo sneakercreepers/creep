@@ -1,6 +1,7 @@
 package repofile
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,6 @@ func TestIgnoreReason(t *testing.T) {
 		{"plain app", "app/views.py", routeSrc, 0},
 		{"vendor dir", "vendor/lib/app.py", routeSrc, IgnoredVendor},
 		{"nested node_modules", "web/node_modules/x/index.js", "", IgnoredVendor},
-		{"windows separators", `web\node_modules\x\index.js`, "", IgnoredVendor},
 		{"case-insensitive dir", "Lib/Site-Packages/flask/app.py", routeSrc, IgnoredVendor},
 		{"virtualenv", ".venv/lib/python3.12/m.py", "", IgnoredVendor},
 		{"vendor as file name only", "src/vendor.py", routeSrc, 0},
@@ -38,6 +38,13 @@ func TestIgnoreReason(t *testing.T) {
 		{"marker after code", "app.py", "import os\n# @generated\n" + routeSrc, 0},
 		{"trailing comment marker", "app.py", "x = 1 # @generated\n" + routeSrc, 0},
 		{"js block closed then code", "a.js", "/* lic */ var x = 1;\n// @generated\n", 0},
+		// #194: a block comment is a header only when it closes on its own line.
+		{"marker block closed on a code line", "a.js", "/* @generated */ var x;\n", 0},
+		{"multi-line marker block closed on code", "a.ts", "/**\n * @generated\n */ export const x = 1;\n", 0},
+		{"marker block then another block on code", "a.js", "/* @generated */ /* b */ x();\n", 0},
+		{"marker block alone on its line", "a.js", "/* @generated */\nvar x;\n", IgnoredGenerated},
+		{"marker block cut off by the head", "a.js", "/*\n * @generated\n" + strings.Repeat(" * pad\n", 200) + " */\n", 0},
+		{"line marker before a block on code", "a.js", "// @generated\n/* x */ var y;\n", IgnoredGenerated},
 		{"python star line is code", "a.py", "*a, b = c\n# @generated\n", 0},
 		{"marker past the head", "app.py", strings.Repeat("# pad\n", 200) + "# Code generated x DO NOT EDIT.\n", 0},
 		{"marker in a string, not a comment", "app.py", "s = '@generated'\n" + routeSrc, 0},
@@ -66,10 +73,62 @@ func TestIgnoreReason(t *testing.T) {
 // TestIgnoreReasonNeedsRepoRelativePath: directories above the repository
 // root (a checkout under /home/u/vendor/) must not decide what is skipped.
 func TestIgnoreReasonNeedsRepoRelativePath(t *testing.T) {
-	for _, name := range []string{"/home/u/vendor/proj/app.py", `C:\src\vendor\app.py`, "C:/x/app.py", `\\host\share\a.py`, "../vendor/a.py", "a/../../b.py", "", "."} {
+	for _, name := range []string{"/home/u/vendor/proj/app.py", `C:\src\vendor\app.py`, "C:/x/app.py", "c:x.py", "../vendor/a.py", "a/../../b.py", "", "."} {
 		if _, err := IgnoreReason(name, []byte(routeSrc)); err == nil {
 			t.Errorf("IgnoreReason(%q) accepted", name)
 		}
+	}
+}
+
+// TestIgnoreReasonSeparator (#194): the separator follows the host, like
+// the walk that produced the name. On Windows '\' separates; elsewhere it
+// is a byte of a legal file name, so a root file named vendor\x.py on
+// Linux is in no directory and gets no vendor mark, and a hostile name
+// cannot borrow a dependency tree's evidence.
+func TestIgnoreReasonSeparator(t *testing.T) {
+	win := runtime.GOOS == "windows"
+	cases := []struct {
+		name, path   string
+		winWant      Ignored // on Windows
+		winEvidence  string  // VendorEvidence on Windows; "" means none
+		elseWant     Ignored // on other hosts
+		elseEvidence string
+	}{
+		{"backslash vendor dir", `vendor\x.py`, IgnoredVendor, "", 0, ""},
+		{"backslash node_modules tree", `web\node_modules\x\index.js`, IgnoredVendor, "web/node_modules/x/package.json", 0, ""},
+		{"backslash venv tree", `venv\lib\m.py`, IgnoredVendor, "venv/pyvenv.cfg", 0, ""},
+		{"backslash in a slash vendor path", `vendor/a\b.py`, IgnoredVendor, "", IgnoredVendor, ""},
+		{"backslash in a slash node_modules path", `node_modules/a\b.js`, IgnoredVendor, "node_modules/a/package.json", IgnoredVendor, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			want, evidence := c.elseWant, c.elseEvidence
+			if win {
+				want, evidence = c.winWant, c.winEvidence
+			}
+			got, err := IgnoreReason(c.path, []byte(routeSrc))
+			if err != nil || got != want {
+				t.Errorf("IgnoreReason(%q) = %s, %v, want %s", c.path, got, err, want)
+			}
+			if ev, ok := VendorEvidence(c.path); ev != evidence || ok != (evidence != "") {
+				t.Errorf("VendorEvidence(%q) = %q, %v, want %q", c.path, ev, ok, evidence)
+			}
+		})
+	}
+}
+
+// TestIgnoreReasonUNCName: a UNC path is absolute on Windows; elsewhere it
+// is one file name at the root, which no mark can claim.
+func TestIgnoreReasonUNCName(t *testing.T) {
+	got, err := IgnoreReason(`\\host\share\vendor\a.py`, []byte(routeSrc))
+	if runtime.GOOS == "windows" {
+		if err == nil {
+			t.Errorf("IgnoreReason accepted a UNC path: %s", got)
+		}
+		return
+	}
+	if err != nil || got != 0 {
+		t.Errorf("IgnoreReason = %s, %v, want no mark", got, err)
 	}
 }
 

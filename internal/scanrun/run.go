@@ -32,18 +32,19 @@ type Failure uint8
 
 // Failures.
 const (
-	FailNone       Failure = iota
-	FailStart              // the program or its temporary directory could not be set up or started
-	FailTimeout            // it ran past Limits.Timeout
-	FailExit               // it exited with a status that is not success
-	FailTooLarge           // its report passed Limits.MaxOutput
-	FailMalformed          // its report is missing or does not decode
-	FailPath               // a finding names a path outside the repository
-	FailTooMany            // more than Limits.MaxFindings findings
-	FailRepoIgnore         // the repository holds a suppression file the tool always reads; not started
+	FailNone        Failure = iota
+	FailStart               // the program or its temporary directory could not be set up or started
+	FailTimeout             // it ran past Limits.Timeout
+	FailExit                // it exited with a status that is not success
+	FailTooLarge            // its report passed Limits.MaxOutput
+	FailMalformed           // its report is missing or does not decode
+	FailPath                // a finding names a path outside the repository
+	FailTooMany             // more than Limits.MaxFindings findings
+	FailRepoIgnore          // a suppression file the tool always reads cannot be left out; not started
+	FailEcosystemDB         // the local database lacks an ecosystem the repository's lockfiles use; not started
 )
 
-var failureNames = [...]string{"none", "start_failed", "timeout", "exit_status", "output_too_large", "malformed_output", "path_outside_repo", "too_many_findings", "repo_suppression_file"}
+var failureNames = [...]string{"none", "start_failed", "timeout", "exit_status", "output_too_large", "malformed_output", "path_outside_repo", "too_many_findings", "repo_suppression_file", "missing_ecosystem_db"}
 
 // String is the failure as an ID, safe to print.
 func (f Failure) String() string {
@@ -62,11 +63,14 @@ type Finding struct {
 	Key  string
 }
 
-// Result is one scanner run.
+// Result is one scanner run. SkippedRepoIgnore means the repository root
+// held a suppression file (gitleaks' .gitleaksignore) that the evaluated
+// run left out, so it hid nothing; the caller says so.
 type Result struct {
-	Outcome  Outcome
-	Failure  Failure
-	Findings []Finding
+	Outcome           Outcome
+	Failure           Failure
+	Findings          []Finding
+	SkippedRepoIgnore bool
 }
 
 // Limits bound one run.
@@ -107,10 +111,15 @@ func Run(ctx context.Context, job Job) Result {
 			return Result{Outcome: Refused}
 		}
 	}
-	if tool.repoSuppresses != nil && tool.repoSuppresses(job.Repo) {
-		return failed(FailRepoIgnore)
+	ctx, cancel := context.WithTimeout(ctx, job.Limits.Timeout)
+	defer cancel()
+	plan, failure := tool.plan(ctx, job)
+	if failure != FailNone {
+		return failed(failure)
 	}
-	return execute(ctx, job, tool, bin)
+	res := execute(ctx, job, tool, bin, plan.sources)
+	res.SkippedRepoIgnore = plan.skippedIgnore && res.Outcome == Evaluated
+	return res
 }
 
 // toolFor picks the scanner's fixed invocation; semgrep, and osv-scanner
@@ -125,50 +134,47 @@ func toolFor(job Job) (tool, bool) {
 	return tool{}, false
 }
 
-// usableOSVDB reports a local database osv-scanner can match against:
-// <db>/osv-scanner/<ecosystem>/all.zip, a non-empty regular file, for at
-// least one ecosystem. With none, osv-scanner logs the miss and reports no
-// advisories, which would read as evaluated.
-func usableOSVDB(db string) bool {
-	if db == "" || !filepath.IsAbs(db) {
-		return false
-	}
-	root := filepath.Join(db, "osv-scanner")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		info, err := os.Stat(filepath.Join(root, e.Name(), "all.zip"))
-		if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // runnableName refuses anything but an .exe on Windows: CreateProcess runs
 // a .bat or .cmd through cmd.exe, which would parse the arguments.
 func runnableName(bin string) bool {
 	return runtime.GOOS != "windows" || strings.EqualFold(filepath.Ext(bin), ".exe")
 }
 
-// execute runs the tool in a fresh temporary directory and reads its report.
-func execute(ctx context.Context, job Job, t tool, bin string) Result {
+// execute runs the tool over each source in turn, in one fresh temporary
+// directory, and merges the reports; the first failure fails the whole run.
+func execute(ctx context.Context, job Job, t tool, bin string, sources []string) Result {
 	tmp, err := newWorkspace(t)
 	if err != nil {
 		return failed(FailStart)
 	}
 	defer os.RemoveAll(tmp.root)
-	ctx, cancel := context.WithTimeout(ctx, job.Limits.Timeout)
-	defer cancel()
+	var all []Finding
+	for _, source := range sources {
+		res := runOnce(ctx, job, t, bin, tmp, source)
+		if res.Outcome != Evaluated {
+			return res
+		}
+		all = append(all, res.Findings...)
+		if len(all) > job.Limits.MaxFindings {
+			return failed(FailTooMany)
+		}
+	}
+	return Result{Outcome: Evaluated, Findings: all}
+}
+
+// runOnce runs the tool over one source and reads its report. The previous
+// source's report is removed first, so it can never be read twice.
+func runOnce(ctx context.Context, job Job, t tool, bin string, tmp workspace, source string) Result {
+	if err := os.Remove(tmp.report); err != nil && !os.IsNotExist(err) {
+		return failed(FailStart)
+	}
 	// G204: bin is a final path outside the repository, args are fixed
-	// per tool, and no shell is involved (ADR 0013).
-	cmd := exec.CommandContext(ctx, bin, t.args(tmp, job.Repo)...) //nolint:gosec // G204, see above
+	// per tool, the source is the repository or an entry of its root, and
+	// no shell is involved (ADR 0013).
+	cmd := exec.CommandContext(ctx, bin, t.args(tmp, source)...) //nolint:gosec // G204, see above
 	cmd.Dir, cmd.Env = tmp.work, environment(tmp, job)
 	cmd.WaitDelay = time.Second
-	killTreeOnCancel(cmd)
-	err = cmd.Run()
+	err := runTree(cmd)
 	if ctx.Err() != nil {
 		return failed(FailTimeout)
 	}

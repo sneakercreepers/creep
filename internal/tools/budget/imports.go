@@ -29,6 +29,9 @@ const gatewayDir = "internal/gateway"
 
 // execAllowed lists module-relative package trees whose shipped code may run
 // other programs. Running curl or a shell is a way around the network ban.
+// The gateway is not listed: checkImports exempts its whole tree from the
+// import rules (it owns the network), and gatewayExecProblem keeps os/exec
+// there to the model-command files (ADR 0014).
 var execAllowed = []string{
 	"internal/tools", // dev tooling run by make; the layers table keeps it out of the binary
 }
@@ -115,6 +118,7 @@ func checkImports(modPath string, files []sourceFile) []string {
 	var problems []string
 	for _, f := range files {
 		if underPath(f.Pkg, path.Join(modPath, gatewayDir)) {
+			problems = append(problems, gatewayExecProblem(modPath, f)...)
 			continue
 		}
 		for _, imp := range f.Imports {
@@ -124,6 +128,21 @@ func checkImports(modPath string, files []sourceFile) []string {
 		}
 	}
 	return problems
+}
+
+// gatewayExecProblem keeps os/exec in the gateway's shipped code to the
+// model-command files of the package itself (command*.go, proc_*.go), so
+// the exemption for the network owner is not a second exec path (#226).
+func gatewayExecProblem(modPath string, f sourceFile) []string {
+	if f.Test || !slices.Contains(f.Imports, "os/exec") {
+		return nil
+	}
+	base := path.Base(f.Name)
+	commandFile := strings.HasPrefix(base, "command") || strings.HasPrefix(base, "proc_")
+	if f.Pkg == path.Join(modPath, gatewayDir) && commandFile {
+		return nil
+	}
+	return []string{fmt.Sprintf("%s imports %q: the gateway runs programs only from its command files (command*.go, proc_*.go; ADR 0014)", f.Name, "os/exec")}
 }
 
 func forbiddenImport(modPath string, f sourceFile, imp string) string {
