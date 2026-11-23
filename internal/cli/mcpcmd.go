@@ -77,7 +77,7 @@ type mcpServer struct {
 	mu sync.Mutex
 }
 
-func (m *mcpServer) scan(_ context.Context, changed []string) (mcp.ScanRun, error) {
+func (m *mcpServer) scan(ctx context.Context, changed []string) (mcp.ScanRun, error) {
 	if !m.mu.TryLock() {
 		return mcp.ScanRun{}, errors.New("a scan is already running")
 	}
@@ -90,7 +90,7 @@ func (m *mcpServer) scan(_ context.Context, changed []string) (mcp.ScanRun, erro
 		return mcp.ScanRun{}, err
 	}
 	var out, log cappedBuffer
-	e := env{stdout: &out, stderr: &log, opts: mcpScanOptions(m.e.opts), deps: m.e.deps.forMCP(), changed: list}
+	e := env{stdout: &out, stderr: &log, opts: mcpScanOptions(m.e.opts), deps: m.e.deps.forMCP(), changed: list, done: ctx}
 	code := runScan(e, nil)
 	return mcp.ScanRun{ExitCode: code, Log: log.String()}, nil
 }

@@ -84,9 +84,10 @@ func runScan(e env, args []string) int {
 		printError(e.stderr, "creep scan", err)
 		return exitcode.ConfigError
 	}
-	// Only the scan deadline cancels the run's context (#260); it starts
-	// after calibration, and the redactor stops with it.
-	ctx, cancel := context.WithCancelCause(context.Background())
+	// The scan deadline (#260) or an MCP call the agent called off ends
+	// the run's context; the deadline starts after calibration, and the
+	// redactor stops with it.
+	ctx, cancel := context.WithCancelCause(e.parent())
 	defer cancel(nil)
 	s, err := openSession(ctx, e, in)
 	if err != nil {

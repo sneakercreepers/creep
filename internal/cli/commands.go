@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -17,6 +18,17 @@ type env struct {
 	// changed is a --changed list built in memory (creep mcp); nil reads
 	// --changed.
 	changed *changedList
+	// done is the MCP call that runs a scan: the caller calling it off, or
+	// closing stdin, stops the scan's model calls. nil never cancels.
+	done context.Context
+}
+
+// parent is the context a scan derives its own from.
+func (e env) parent() context.Context {
+	if e.done != nil {
+		return e.done
+	}
+	return context.Background()
 }
 
 type command struct {
