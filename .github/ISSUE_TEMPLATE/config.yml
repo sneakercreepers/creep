@@ -8,4 +8,7 @@ contact_links:
     about: How-to questions and help go to Discussions.
   - name: 📊 Share model results
     url: https://github.com/sneakercreepers/creep/discussions/categories/show-and-tell
-    about: Calibration or benchmark results with your model.
+    about: Calibration or benchmark results with your model. What to include is in the wiki guide Sharing model results.
+  - name: 📖 Contributor guides
+    url: https://github.com/sneakercreepers/creep/wiki#contributor-guides-v03
+    about: Writing recipes, using creep from an agent (MCP) and sharing model results.
