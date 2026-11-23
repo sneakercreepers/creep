@@ -53,9 +53,12 @@ func unavailable(r *refusal) App { return App{Unavailable: r.reason, Detail: r.d
 // creep never writes a Dockerfile and never runs `docker compose`. The
 // build is offline: --network=none for every RUN step, no build argument,
 // secret, SSH agent, extra host or entitlement, and only base images
-// already present locally (creep never pulls). The context is a copy of
-// the repository's files in the work directory, without .env files and
-// credential files (stageContext).
+// already present locally (creep never pulls). The one exception is the
+// operator's Mirror (UseMirror, ADR 0029): on rootless Podman, after
+// clearMirror, RUN steps join its internal network and get the proxy as
+// build arguments; base images still never come from it. The context is
+// a copy of the repository's files in the work directory, without .env
+// files and credential files (stageContext).
 //
 // Anything that stops the build (no build file, a refused file, a missing
 // base image, a failed or timed-out build, a built image that declares a
@@ -99,7 +102,13 @@ func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 	if why, err := s.checkBaseImages(ctx, plan.images); err != nil || why != nil {
 		return unavailableOrErr(why, err)
 	}
-	image, why, err := s.runBuild(ctx, dir, dockerfile, plan.target)
+	mirror := s.currentMirror()
+	if mirror.Set() {
+		if why, err := s.clearMirror(ctx, mirror); err != nil || why != nil {
+			return unavailableOrErr(why, err)
+		}
+	}
+	image, why, err := s.runBuild(ctx, dir, dockerfile, plan.target, mirror)
 	if err != nil || why != nil {
 		return unavailableOrErr(why, err)
 	}
@@ -122,15 +131,22 @@ func unavailableOrErr(why *refusal, err error) (App, error) {
 // Docker's --pull=false and Podman's --pull=never keep the builder from
 // pulling a newer base; Podman also gets --http-proxy=false,
 // --layers=false with --force-rm so it keeps no intermediate image or
-// container, and memory and CPU limits per build container.
-func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string) []string {
-	args := append(globalArgs(st), "build", "--quiet", "--network=none", "--no-cache",
+// container, and memory and CPU limits per build container. A Mirror,
+// which clearMirror checked, changes only Podman's line: the operator's
+// network in place of none, and the proxy build arguments (ADR 0029).
+func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string, m Mirror) []string {
+	network, proxy := "none", []string(nil)
+	if st.Runtime == Podman {
+		network, proxy = mirrorArgs(m)
+	}
+	args := append(globalArgs(st), "build", "--quiet", "--network="+network, "--no-cache",
 		"--iidfile="+iidfile, "--file="+dockerfile,
 		"--label="+LabelManaged+"=true", "--label="+LabelRun+"="+runID)
 	if st.Runtime == Podman {
 		args = append(args, "--pull=never", "--http-proxy=false", "--layers=false", "--force-rm",
 			"--memory="+buildMemory, "--memory-swap="+buildMemory,
 			"--cpu-period="+buildCPUPeriod, "--cpu-quota="+buildCPUQuota)
+		args = append(args, proxy...)
 	} else {
 		args = append(args, "--pull=false")
 	}
@@ -142,9 +158,9 @@ func buildArgs(st Status, runID, dir, dockerfile, target, iidfile string) []stri
 
 // runBuild runs the build and reads the new image's ID from the iidfile
 // the CLI writes, not from build output a RUN step could print.
-func (s *Sandbox) runBuild(ctx context.Context, dir, dockerfile, target string) (string, *refusal, error) {
+func (s *Sandbox) runBuild(ctx context.Context, dir, dockerfile, target string, m Mirror) (string, *refusal, error) {
 	iid := filepath.Join(s.work, "iid-"+strconv.FormatUint(s.seq.Add(1), 10))
-	args := buildArgs(s.status, s.runID, dir, dockerfile, target, iid)
+	args := buildArgs(s.status, s.runID, dir, dockerfile, target, iid, m)
 	buildCtx, cancel := context.WithTimeout(ctx, s.buildFor)
 	defer cancel()
 	res, err := s.run(buildCtx, args, outputLimit)

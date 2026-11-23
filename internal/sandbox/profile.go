@@ -64,6 +64,7 @@ type Spec struct {
 	// the run's network before the canary passed (RunBatch, StartDatabase)
 	// or keep one running past its timeout.
 	networked bool     // the run's internal network instead of none
+	bridge    string   // with networked: the operator's mirror network instead (the build canary only)
 	alias     string   // the container's name on that network
 	detach    bool     // a service: runs until Close
 	tmpfs     []string // extra tmpfs targets; each may cover an image VOLUME
@@ -151,6 +152,8 @@ func checkSpec(spec Spec) error {
 		return fmt.Errorf("too many arguments, variables or mounts: %w", ErrSpec)
 	case spec.Timeout < 0 || spec.Timeout > MaxTimeout:
 		return fmt.Errorf("timeout %s outside 0..%s: %w", spec.Timeout, MaxTimeout, ErrSpec)
+	case spec.bridge != "" && (!spec.networked || !(Mirror{Bridge: spec.bridge}).Valid()):
+		return fmt.Errorf("network %q: %w", spec.bridge, ErrSpec)
 	case spec.alias != "" && (!spec.networked || !aliasName.MatchString(spec.alias)):
 		return fmt.Errorf("network alias %q: %w", spec.alias, ErrSpec)
 	case spec.workdir != "" && checkContainerPath(spec.workdir) != "":

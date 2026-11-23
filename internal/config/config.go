@@ -57,6 +57,14 @@ type Scanners struct {
 type Sandbox struct {
 	Enabled bool   `yaml:"enabled" desc:"Run proofs of concept in a container (v0.2). The sandbox never has internet access. Cannot be set in the project file."`
 	Runtime string `yaml:"runtime" desc:"Container runtime for the sandbox. Cannot be set in the project file."`
+	Mirror  Mirror `yaml:"mirror"`
+}
+
+// Mirror is the operator's build mirror (ADR 0029). Empty keeps the app
+// build offline, the default.
+type Mirror struct {
+	Bridge string `yaml:"bridge" desc:"Name of an internal network the operator created, with a registry mirror or allowlisting proxy on it, for the app build's RUN steps (ADR 0029). Rootless Podman only; empty builds offline. The run phase never joins it. Cannot be set in the project file."`
+	Proxy  string `yaml:"proxy" desc:"http://host[:port] or https://host[:port] of the proxy on sandbox.mirror.bridge, given to build steps as HTTP_PROXY and HTTPS_PROXY. No credentials. Cannot be set in the project file."`
 }
 
 type Calibration struct {
@@ -102,7 +110,8 @@ var enums = map[string][]string{
 // switches between an HTTP API and that command. model.name picks what the
 // operator pays for and, on an aggregator endpoint, which provider reads the
 // code (pentest P2). sandbox.* would opt the operator into building and
-// running the repository's code (#62). scanners.enabled would run a program
+// running the repository's code (#62), and sandbox.mirror.* would give its
+// build a network (ADR 0029). scanners.enabled would run a program
 // on the host when it adds a scanner (ADR 0013), and when it removes one a
 // class of findings drops out of a run that still reads as complete, so a
 // pull request could pass the gate that judges it (#62). model.tier is
@@ -112,19 +121,21 @@ var enums = map[string][]string{
 // or parses (SARIF, report.json, stdout); a repository dropping them would
 // leave that step without its input (#250).
 var projectForbidden = map[string]bool{
-	"model.contract":   true,
-	"model.endpoint":   true,
-	"model.name":       true,
-	"model.tier":       true,
-	"model.run":        true,
-	"model.env":        true,
-	"model.preset":     true,
-	"egress.allow":     true,
-	"sandbox.enabled":  true,
-	"sandbox.runtime":  true,
-	"scanners.enabled": true,
-	"report.formats":   true,
-	"output.format":    true,
+	"model.contract":        true,
+	"model.endpoint":        true,
+	"model.name":            true,
+	"model.tier":            true,
+	"model.run":             true,
+	"model.env":             true,
+	"model.preset":          true,
+	"egress.allow":          true,
+	"sandbox.enabled":       true,
+	"sandbox.runtime":       true,
+	"sandbox.mirror.bridge": true,
+	"sandbox.mirror.proxy":  true,
+	"scanners.enabled":      true,
+	"report.formats":        true,
+	"output.format":         true,
 }
 
 // projectLowerOnly keys are the operator's limits on spend and time. The

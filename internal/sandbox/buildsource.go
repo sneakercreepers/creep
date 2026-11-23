@@ -24,6 +24,7 @@ const (
 	BuildTimeout           BuildReason = "build_timeout"      // the build ran past its time
 	BuildImageRefused      BuildReason = "image_refused"      // the built image declares a VOLUME
 	BuildRuntimeError      BuildReason = "runtime_error"      // the runtime CLI did not start or answer
+	BuildMirrorRefused     BuildReason = "mirror_refused"     // the operator's build mirror failed its checks (ADR 0029)
 )
 
 // BuildReasons lists every BuildReason, so the report's closed set can be
@@ -31,7 +32,7 @@ const (
 func BuildReasons() []BuildReason {
 	return []BuildReason{
 		BuildNoFile, BuildComposeRefused, BuildDockerfileRefused, BuildContextRefused, BuildBaseImageMissing,
-		BuildFailed, BuildTimeout, BuildImageRefused, BuildRuntimeError,
+		BuildFailed, BuildTimeout, BuildImageRefused, BuildRuntimeError, BuildMirrorRefused,
 	}
 }
 
