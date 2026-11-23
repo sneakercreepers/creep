@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "ruby-template-erb",
+  "class": "template_injection",
+  "language": "ruby",
+  "file": "banner.rb",
+  "vulnerable": {"entry": "get '/banner' do", "sink": "ERB.new(\"<h1>"},
+  "safe": {"entry": "get '/banner' do", "sink": "BANNER.result_with_hash("}
+}

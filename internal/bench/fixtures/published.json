@@ -1,0 +1,710 @@
+{
+  "schema_version": 1,
+  "synthesized": true,
+  "model": {
+    "contract": "openai",
+    "endpoint": "https://models.replay.invalid/v1",
+    "name": "replay-model",
+    "structured": "json_schema",
+    "max_output_tokens": 1024,
+    "retries": 1
+  },
+  "replies": [
+    {
+      "request_sha256": "00829a0538b3fae38d582d43688c8d07b3a8d35602437df89f048dd65e832dac",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":21,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "0120ec193989e7e95fc2d8dfee168bd7081d636fad8b5c7063ce560e3410cab8",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "017c5c3477ef500576d397c7e06636e5d01e7099a5f6b5f31dd176471636bf27",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "025b6257f59c65e3721f172d2ab65be2846e19063ad0ab6895a7e06e7e27a954",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "05188fe16b7eb257fdbc15656f21ce1fa2061ea4d4b52d215c3fa5109234e602",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "054e51ff06d90133d15b0d421d2afc0e658193f31a90a5ea97e71eae66f5c3fd",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":34,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":17}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "05a01ba8859a3d2143b6498fbc07020de0285c3b077be373cff65afed4fb4346",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "06fbd96d1d881e47a2199e44f2ee14ced2067cac6c804532f92299cce8a36a4e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":213,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "0c496e38d4583cc1dbb4e34920021fc2e781ad1c755925e6f6f035211a5679b2",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "0e902a8a67ea9f68f15040ae1106e6e4a74985041599a2d76ebfa6cdef1a4026",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "0fc6e33c3d2a47915e0440cdcfb527c25e26b5fb7d070f3081f2adb335e2b26c",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":16,\\\"start\\\":16}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1030598a27de3b505c73e139735f40baab9b6aa591a89994b19cfb43a0d84b3d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":34,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":17}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "10c3c612af607ad53d3949ef55ff5db85668cf25cf9d1b2c0f64facb27a43bfa",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":18,\\\"start\\\":18}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "12368d59cf61be0b0132c1125241fdb52311d7dec5a4db41fc1523668b32f570",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":213,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "14c5f6e19ecfd96ad48712e198536241e9402843b9a6e19e334dc1a4e3160a03",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":208,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1a75103942ec210b52db63bd84b40f471a4fe56775e156336d7234a2b1d139e5",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":28,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1b6abf4ae9d9b0ea6cbcf36f0324df36dc5f36a533deb5d417be83095b38eae6",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1d53d2e26d3e842a17296e4c0e7a635c4e98b9e64f37b930a4835e2adba4e556",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1d551557d35c07c844dafce32497ae35c0c5785c7142332474722a631a57d3e2",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":5}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":214,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1e518f23d923663d3490fe0a06e7f9ff09f83b430d853f2ac491b8a118c413ab",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "1eafb4ff7e59ec378891c181026ae8b994fec14bc144d55318f7e51653b8882a",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2351fdc9ee6490fece6168f199d82e816660c1810e6285d98f88a188778c1c5b",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "241129b272c4389113358a30551368593d2a30aca02c01228b55e452ea4b47bc",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "244441a0807bf1e851127da5b341852e8d77215a242351b7aa7d7df3be06e990",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2a5e9063ee38f827f5e2b75045db4aa302dc0abfc287a84ba0d48f0058735bd3",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2e3d6e124d651db1fce38bdd5c915882004d264e8ac7a442e13433623e0caa74",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":8,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2eb0fdb2c3553156eed4ddff1566fd843892878e2cc34ad9e8d4958b4f06cc5e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2f37e8b5cd17efe092654b8b190272469c273ddd6f09e08054782182348ed113",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":22}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "2ff749e4db865888c2544c52a4bbee3512f1c5bfa41e69f6987b1424e3d91b64",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":29,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3429a7f74ac93bc6e71e16bfdeea5660c0feb877e913e770de78748674b848d3",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "379e4a870f214502e25167b40b0221c131c159212c76dcbf9f14024ba817f323",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":13,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3954a9381662fb2c4e2f9a67003a1f0f6e48c5be671f2d03984409d87270afa2",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "397a49f0f2e896c2d2676855cfcfcf1dc196840e2a3b784b36d5e54932e5f508",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3a46b293985b2d4e18d4d50382d3786bc3a90f1d38e1f2c3faed036896e044c9",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3a7f33505a8c0b7548b47aa07766af990d19a9f8ee1fcb5bb522e95bdfa34747",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3be24458f739ee95e8c7ebadfd04d4c887dd13364244e8d023d73242f11fa89f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "3bfd250947c62bfafd0b431405f1b191832843c7e5e0b5c080064c87cadfac8f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "437163c9dc5e6aac47b5e1e2bd26c6871e1e8338b6888866658f051160001f05",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "44398c9732e700dfff651996d639c3bdb645a0155e41c04cbf50d09d5cb1f351",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "456ec08172abdb9389a2f8bdbac77285d5909f9464114dc63165d2507b1eb920",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "46e06e969005cf02dba87b2e0350a20bc5223b002c12a78c976bb1d5eb223873",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "477eca3d558208c49ecd11998f19d3f23ec6c225994b50c2ada2635cc162d41f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "493807970ffc1c5f05d8842d0970714c1aa6279c36ae3a54cb47d594ee36a851",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "4a633f2e2d7807374057a6141d7bda242a21e5cadc872be251a36f1917770630",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "4abe62e424bcce75ddb947e9ea3f0a6fd90d28c0674fa151ef1fefc8ad6cc16c",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "4cf59c53a120409f3784f332cbc10bbb790f21302ed908d3c100e95f1e47da40",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "50268fbc5b75843acaf478e904bc85b19f770d6e0868f60e9eb05fcc39945d51",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "532d904a45b125f89c31d236f0d7fac5b4280eedc26b36e256652a15fb430f44",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":16,\\\"start\\\":16}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "53cb24c328e9b5f7bfd72f9e10d9cba4125a77fd7ba034d1119ea443ab1c8e47",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":5,\\\"start\\\":5}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "574b82484d85017c53f1fb60d27cde7bd260e4de9f64532f7253af3576123624",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":18,\\\"start\\\":18}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "57e8e0639e17571e8f98f4058596f699a5bed030ab82b4386159e1df0d4b2bab",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "5aa6511ce5d39a7cbc60463f8690dbcd0d593fff7c131ecd876024904e97eb5a",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "5dd7ef7ccd9f8a7222331e0b8645d65cd32fd9abc317d157629fe5d9a389dbad",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":22}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "5e5817236583d600a4b1a562ddaa2d1018605640e4fc9e29618c1c362a0538bd",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":10}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":16}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "5ee6413b83090b06275e24e28a45152bc31041d02227a8def8ff694b54544fd9",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "5fe89aad496ee83f0299266d4a3f7d0c2e8a3e7e5e3a7624d82951b3479953e4",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "61acf0432cd0ebce6f9b5a69a0f371ac54cc98bfd261beb5b84d6d2fe893236e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "61d1d9d48403d2b83d165937872a164d925c664f75f11347efb3e989840b1326",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":7,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "64fb5f5a4bb46f9fff4802b91a9485bd1f3184306361c651b838a622e909e346",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "6672315f94a15fc73d9a5c6c92f80480115bc6ca9ff4ae5035a4aef87861987f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "67a93375b4943142044db29b4befd8fcf11843569afcdeffd690a3c2f678c077",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "67da1ade919bf9ebb98b1aff7f08a0393e4704c76fa15002c3f00e7c486889f7",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "6ae00337414319400b7333964771ce82a74564b108a5d7129f28a014707b3cd0",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "6b2b1ad10d2a7f280871fcc197ac5d296de50748e4c8d0f2644261cd508ee0ed",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "6d35c87607bd1db5481c232a3c5a0257b4675b8796a140d5c8d2f2b55e130162",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":29,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "6e1b028f73266b2371ba3bd0fd741e6962a4e2a7cd416eea73e601245d860aa6",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "71fe9ff786325bdc47243573153698da48d595f5a7f21b2363531b1bda39560b",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "72dfc27920df671ac18dbf08d8bfa4d81745c58be2766b1b299cb9a735fd6afe",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "72e4ff6be9a303696ac0227ec6be0a0f77be825639bfd2b92b93ab48ed673d4d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "760b2b32c21ea18ba2fe90d6ebd4777ab8c1ca1d4ad84cb0a3ec7d71e2ceddce",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "76144217ab72393bce67c69560451bd758f7ce97f87e5f0916b64c8985e89f91",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "77e1769d70e45243d135bb28773d740e6344f39106fbefb8dca1b0466141833d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":8,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "77e50091a079bab0b4e1c70ddf763fb2871b608b2849badbea38d5d9755bc6af",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7924acae18b73deb13bfdaaf9bccd4ca341864d69df8c51b15ff8716b49bac93",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7925090bb4f66fbb5aa085736f58b43e9c6d84f468978e8b914efe0e2e4d3365",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "79cd5eeb949867bf56ffbb20e3b8d205bb1a4613d5f095f9e43208d9b17dce56",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":9}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":212,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7a1468f5e051a2b7e7f90871f87510073eaf82f5e583179a2706625fd984bb5c",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7a59255d7fe076f8c9030d5bbbdd0ac421674d0117e90dae3125681899272f99",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7c8bfd8a212362916054b5111ba41fd97a697cad94c1e0aaf1bddd73d88969ae",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7ccccd4c312bed55d1d4f102e2cef2673946217099ccd5eaee8194518d3fe7cf",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7e0b506222d508c9b8431cbb39995b0fec699ede50757fb33a7e0dbd19f496c7",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7f949f7612e7d6ec0ced4dc74adefa7e0c86630d7c3de08f10d3f6314b58a40f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "7fa54d7d00b5efbd954f693f92c5818334859fd9304f28cae653b021cebc183e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "80c062b77d9ab998c4e1168bd629468ce9b40513b355ce820016cce0299c252a",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "810827cca2ad481d46993d953b98ff474dfca8ba95c41c191f84d69e27794a1a",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "821b519232b512b522f4bf8e65d4f9772506aa94b7f090071b54eb06b324641b",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":13,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "824676adb1140b88c6df2e4b3653da36b97b93ca655ca2e1afe4e254530d3c37",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "840443663b15fa7608d05c8de2427aaf841210888a20ece24021bb2f8736ed01",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":34,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":17}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "8437b7b6b3e6867854f798e8133806804b2df2dbad8016f29110b69879f0c8d9",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":21,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "86d17c2f4e83bbda0627f1cce3a830e322f2cf88561a090526d5d995ad3ee703",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "881eb3da8f3610d7828e5d40dc26f9270fc8c4ebc198442d2ff58c9a7b2ff0b3",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "88dbabdd0fa228ef4af630f38f508b4d0505b7f00599ddb55db29e21f890f3ec",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "8a373bfee0ad89cc1fb07ac54e675074ad86c6f9565a2f238a06b81f0334a3ec",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "8cc6ec2c46090cf1f30b5801f7f4ec962ba7e626c7c6472ab8193a11fd4ea31b",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "8fdabf541d34fd583bbffceee73b0d07b18ed91de3e1d1cc4cfd8c5f9721b54d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "90afc23dd1377ab56aa60eeefa0c5422126b59ef897a26c517710228f8126cc5",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":2}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":4}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "937c652a406be45502396ab5488958be678f27d2cd56d0b27544edecc4ab1dd7",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "939348505682d8d2333d77524079bdaa4a9a45248e019a8a3148dad9cf41bcef",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":28,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "948bda75171501d98811f80fac6d66b18d6dbdbb863a06cc526fb22482bd2c20",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":13,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9a0dc4d7f14531e5993e4e936f6b18530abbcdef4704fd067a277fafcbc38d90",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":16,\\\"start\\\":16}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9b09291bf888da6816635961c6b6242637cfe0a37ab52f4285a5827d6b9a1790",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9b3ca5f23c78c03368c0c70a2eacf64a1826e4d3a23eba1b3f6be07540d278d1",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":36,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":18}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":21}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9beb239f9178034cac75b710f94caa9bfa875d9ba1917500fd55d8c437762528",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9cbde9bd0e0ff6da9e6b6677ae4f0970f40b6b443405d62773aebdddd563384d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9e303db6ba086a93a4fcd0decf7e0cad19d8013c0b26ca4114bcfcc7b0f0b98f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "9efa15c78920cb0c6c803e12b74941ad8a18b9e90a4f5e1e5751133caf5a0c0f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a095a94185705d4d94914fe8fd1211222093e3fff43ec8a7fecb0a56508fcb65",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":22}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a0beb2a77328043a9e61646dfe2f526fcf1d6874bf8028c59b22c225fc6090f5",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":2}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":4}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a42e8fef5b4643bf78ed52b87952c5283e1313542f0202149239d6818d993fff",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a4cc9decd0add3060b7ce6d9d834965e42165eed02e300c9dd8054d7ea71e078",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":27,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":13}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":217,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a52b9940b02b59ae2e7e8b7abe8477e9d06245aa47e1f6819cbe1730d2f970c3",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "a7e2034b49677ae10ac4bdacb3547a5b8929b3f28526d3d3a516fa7e0b51ee63",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "ab52b09d1cf4c8df0098e087c234217c54bda04fd0a903dd4f0577096d16f569",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":27,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":13}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":217,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "ac321b2a5c45f63356296db9ade6df6395b16bb5ef74e6a259d11a683cb53f74",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "ad258253b3e7052638550995590e2e493357349f58e01a8632cd3dd3c170a61e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "adcbb4d141138ac74a89d4e98fb075d61a59ff9ba210393b03c3ab63c4661b8e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "aeb5c2b80d6fe8ffac55d697a6681a8b51b4db685453bc42e95f7d230f221807",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":7,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "af12761d16e3bfd7972cc8cd8d702891bab60968350fd5d9ba664db728013454",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"template\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":213,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "af2c96adbe86dc63f0244663d3d1307e9e50db6420383954528e6a0cb8e7e283",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "aff51c598dd12926b38e30b064b8cf8fd97f13b9b23190068e3a2583fafe741f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b08deabee2809149f00148f49f7d4dd5f6857f35c0330063537caf9592ec9e54",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b097725d76d36724067543bfbe6a1131873b4f46c143939968bf1fd9759056a2",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b1af91d1286c6d34db5f3db2ecbe055c87ccae1240bec9aaf6460fe2bd30141d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b33f63b76e3e10b0d478295bd2f86bc2cde84a2a54949d008e27b7b9d5e05dcf",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":8,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b4c9828363b51971cc7dd9c747b8470587ffe75ee81ddfb5f842d1867c6efc63",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":9}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":212,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "b73b4e6f6e757cd7452c164e9d2e76b098e532044274af4425ed746fabc13f12",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "ba9f4fd05d9756a0a6b5f51a07763ef8d6dc9e6d253c41c5805e74719e554763",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":21,\\\"start\\\":21}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "bc46321ccaa36ca315df15081ed4c5452c630b3c951c283b50c20e182c7a5bcc",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":7,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "bf12c5f5ce851c5ce3c57b41ef545272302402335bcdbd5fe95fee762f738df4",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":36,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":18}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":21}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c013ffa03b4dbea02c3ec9a21382909080ddf21ee1d6076209bf0ada3283cc55",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c09adaf6e818757c430afa24d454a935b1ed45d541e0b36819be88f1e4fa766f",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c38763a96c01d49391f21a351b173be9f2233defb894a7720e707d2fc9910e04",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":22,\\\"start\\\":22}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c3975c889fbc799058cf33cbd8bb14966ce441fbeeaa509706ccc8a2f6f0cd5a",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":2}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":4}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c3a03fa53853e9c91e870d777ecbb8dd361a2988021ec8d5d650f4da1c5d5997",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c8caebf0a934b4845066c03032afd62411dcaa9b273399a7e7ad405856120559",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":27,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":13}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":217,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "c9bccebada7dc355803ba38725ced0bce73541e4adcd8e00122ffd3fd4169023",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":208,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cb7c589ac3c27ff2854aeaff6ef3516137f12ec7ac18f80f31ba9edce264e362",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":28,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cbe108bfe85ecf5e5824a5afc170c2485b68fd8ec124191ee9b77cad9738674d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":18,\\\"start\\\":18}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cecc5b5372c37adb1b7ccde5e99a35766b6d5797c9b13cecfae30be1f8aa7463",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cf20a2101eae788d50b78ee0be8b0faae8e646b3121f4d64966a92356aba87fd",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cf3ea251e4d106c4fc0e48a416881bc4985e0b04bdb5caf5525d2e5059ca5df1",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "cf65178e7c6c5a2c4a6095a2a0606066c5d164f2c7114f6b03228418cab78316",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d126e99a1874c5bb6b157aeb8930e5d65db4cf1e775a2bd2cf1aee402aeb0751",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":5,\\\"start\\\":5}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d4c7f88cf905939fbe8b72551b40663018f8c95519d3ff2af9bfc644fe6b0976",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d501acac7243b3d0a7e9486ba2920e7712d7feb9e00a74c94323ba4f60532be9",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":10}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":16}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d53584a481a3379f005ca682f3dcbb15a8a2fbd999d185f2e6bd9ff2b1fb05d5",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":21,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":16}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":19}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":210,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d7c55459a40c7e648dafdfc42d9d896ae184080da4cb9d89654e41863fb984a8",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d7dab2706717ac6323d073d982162b87ad509316874c0510dfc3594fc67a24dd",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":5,\\\"start\\\":5}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d7fdb2caa34a5ffe382ec0b633144d031410d0a085c7a2c682c04d39847228a6",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "d8b9bd591b562df68add149a566801fab72212bc2bdc98a4988d68ff7f6b34db",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "db8d7ca9e3f5d4f4911409b1fa89ba3e4cab303a80fa6751644728c31a16e29d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":18,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":8}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":10}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":216,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "dbf7349337233e3e22953e727b6ebc761e4011b5069732864fe84a75d664d354",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":7,\\\"start\\\":7}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "dd307c55c574df1a4cd0990515044d6cdda7651cc1e67730e46c188265c83b1c",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":207,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "dd62d978bfa7c656c2f51b4646983bdc94907553a01a35942a0012cd7b489489",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "dd8ac405eda811a9b53585108544deeb2f74eb0ba454c7b040e6fd562f514056",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "df19d30148c30353367b7d15f083d5f7b0f8a350a0e4edf36ec394658e86ff5e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":12,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":6}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"nosql\\\",\\\"line\\\":8}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e0b5a4b393ccae46475df2cd177787f14feb56cc60930dc874b73a66227fe327",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":6}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":208,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e19a8097b4bb2673d85e5b0be7b2d62b291a5fdfea391b4ea40b52634e260fd0",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e41b4f304ef09c89fcbf105b3621b6ced4b24b0228fb9d9d2c02f8a5f738fa5e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":75,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e478d35dfbddcf98c7b4c9d4a9841d7c81362637d1039a77881d47a012249df8",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e49caa76d32cd9d0eb7baa78344d66676025eff8d7a63415498aaaddf491ed57",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":9,\\\"start\\\":9}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "e95431e12a4c412cf5e7f3aa7c7e88c18541f8358f6c8fb314d24a01781b0302",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":8,\\\"start\\\":8}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "ea10db16d05ee8323895893abe4dd4b1d552043b26def64e2a6f7dbabe20b10e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":6,\\\"start\\\":6}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":77,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "edde1c41664048c3089f092d115e8a757c08c55b992dda51c75374afc7bb1595",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":14,\\\"start\\\":14}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "edffbb1f533cdff0099ce912fb354155009f7797b87875bc122e2e829fe63080",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f0c2621bd5576c759717b7411cc088505a10047b263fa3746e3ebaa518393a9c",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":29,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":15}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":165,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f0cb12ebc6bee245a8eb6c244311794e119a11490f8b62f26134b086805e9d49",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":24,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":10}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":1,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":0,\\\"kind\\\":\\\"shell\\\",\\\"line\\\":16}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":211,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f0dbeab3f2e2d02b39a8fcec7f28a91a83cac7f6ad05205729e9105e2ae6efe0",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":5}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":214,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f1a3585ec74b6eda013b52f7fc144e1f686ace9d32645005d49526fbbca31e0d",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":9,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":5}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"http_client\\\",\\\"line\\\":7}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":214,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f316d2c8bdbfe9df67074a7841c921e0f63a8927c9ceb8e09fa06485598b9f5e",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":19,\\\"start\\\":19}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f3f1fe4080e722f91e1b58b0a1d45505a7bec96a6c2f09f961b14c5091217b97",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":36,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":18}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"sql\\\",\\\"line\\\":21}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":209,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "f403efe8bbc1f9b01f8f75ad05957a5a9ee36c79c8a339628cb4fdb21cae23d4",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":90,\\\"evidence\\\":[{\\\"end\\\":4,\\\"start\\\":4}],\\\"verdict\\\":\\\"vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":73,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "fbd089bee2792dadbddd9021f3e4d02d70ad6471df908325ae05223b88ea7f82",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"auth\\\":[],\\\"entries\\\":[{\\\"end\\\":6,\\\"file\\\":0,\\\"kind\\\":\\\"http\\\",\\\"start\\\":4},{\\\"end\\\":14,\\\"file\\\":1,\\\"kind\\\":\\\"http\\\",\\\"start\\\":7}],\\\"sinks\\\":[{\\\"entry\\\":0,\\\"file\\\":0,\\\"kind\\\":\\\"file\\\",\\\"line\\\":5},{\\\"entry\\\":1,\\\"file\\\":1,\\\"kind\\\":\\\"template\\\",\\\"line\\\":9}]}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":212,\"prompt_tokens\":0}}"
+    },
+    {
+      "request_sha256": "fddb5e83fc1dd6d2f3e7b2784b87cf276952cfd82338602f6ec96124141e40fe",
+      "body": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"{\\\"confidence\\\":80,\\\"evidence\\\":[{\\\"end\\\":10,\\\"start\\\":10}],\\\"verdict\\\":\\\"not_vulnerable\\\"}\",\"role\":\"assistant\"}}],\"id\":\"chatcmpl-fake\",\"model\":\"test-model\",\"object\":\"chat.completion\",\"usage\":{\"completion_tokens\":79,\"prompt_tokens\":0}}"
+    }
+  ]
+}

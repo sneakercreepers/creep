@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "js-nosql-koa",
+  "class": "nosql_injection",
+  "language": "javascript",
+  "file": "giftcodes.js",
+  "vulnerable": {"entry": "router.post(\"/api/gift-codes/check\"", "sink": "giftCodes.findOne("},
+  "safe": {"entry": "router.post(\"/api/gift-codes/check\"", "sink": "giftCodes.findOne("}
+}

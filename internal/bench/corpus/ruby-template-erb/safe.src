@@ -1,0 +1,9 @@
+require 'sinatra'
+require 'erb'
+
+BANNER = ERB.new('<h1><%= ERB::Util.html_escape(text) %></h1>')
+
+get '/banner' do
+  text = params['text'].to_s
+  BANNER.result_with_hash(text: text)
+end

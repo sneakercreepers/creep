@@ -1,0 +1,24 @@
+package media
+
+import (
+	"net/http"
+	"os/exec"
+)
+
+var sizes = map[string]string{"small": "64x64", "medium": "256x256", "large": "1024x1024"}
+
+func Thumbnail(w http.ResponseWriter, r *http.Request) {
+	size, ok := sizes[r.FormValue("size")]
+	if !ok {
+		http.Error(w, "unknown size", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("convert", "/srv/media/logo.png", "-resize", size, "png:-")
+	out, err := cmd.Output()
+	if err != nil {
+		http.Error(w, "convert failed", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	_, _ = w.Write(out)
+}

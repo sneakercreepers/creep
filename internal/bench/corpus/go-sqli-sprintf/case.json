@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "go-sqli-sprintf",
+  "class": "sqli",
+  "language": "go",
+  "file": "catalog.go",
+  "vulnerable": {"entry": "func (c Catalog) Search(", "sink": "c.DB.Query(query)"},
+  "safe": {"entry": "func (c Catalog) Search(", "sink": "c.DB.Query(\"SELECT"}
+}

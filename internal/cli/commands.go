@@ -34,6 +34,7 @@ var commands = []command{
 	{"resume", "resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)", runResume},
 	{"version", "print version, commit and Go version", runVersion},
 	{"config", "explain: show each effective config value and the layer it came from", runConfig},
+	{"bench", "run creep-bench: the embedded corpus and its safe twins at tiers S, M and L, scored for recall, false positives and honesty per class; --replay reproduces the published numbers with no network (ADR 0030)", runBench},
 	{"recipe", "new|lint|test <file.json>: write a recipe template, check a recipe, or load it by running its fixtures through the reader with your model (ADR 0025); add github.com/<owner>/<repo>@<commit> <clone>: install a source's recipes from your clone at that commit, pinned in creep.lock (ADR 0028)", runRecipe},
 }
 

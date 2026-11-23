@@ -1,0 +1,27 @@
+package preview
+
+import (
+	"io"
+	"net/http"
+)
+
+var sites = map[string]string{
+	"docs":   "https://docs.example.invalid/index.html",
+	"status": "https://status.example.invalid/summary.json",
+}
+
+func LinkPreview(w http.ResponseWriter, r *http.Request) {
+	target, ok := sites[r.URL.Query().Get("site")]
+	if !ok {
+		http.Error(w, "unknown site", http.StatusBadRequest)
+		return
+	}
+	resp, err := http.Get(target)
+	if err != nil {
+		http.Error(w, "fetch failed", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.Copy(w, io.LimitReader(resp.Body, 64<<10))
+}

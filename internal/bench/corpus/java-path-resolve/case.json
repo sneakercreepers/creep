@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "java-path-resolve",
+  "class": "path_traversal",
+  "language": "java",
+  "file": "ManualController.java",
+  "vulnerable": {"entry": "@GetMapping(\"/manuals\")", "sink": "Files.readAllBytes(file)"},
+  "safe": {"entry": "@GetMapping(\"/manuals\")", "sink": "Files.readAllBytes(file)"}
+}

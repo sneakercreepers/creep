@@ -1,0 +1,24 @@
+package com.example.docs;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class ManualController {
+    private static final Path MANUALS = Paths.get("/srv/manuals").toAbsolutePath().normalize();
+
+    @GetMapping("/manuals")
+    public ResponseEntity<byte[]> manual(@RequestParam String name) throws IOException {
+        Path file = MANUALS.resolve(name).normalize();
+        if (!file.startsWith(MANUALS) || !Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(Files.readAllBytes(file));
+    }
+}

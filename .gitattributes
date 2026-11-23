@@ -3,3 +3,5 @@
 docs/map.md linguist-generated=true
 *.wasm binary
 testdata/apps/** linguist-vendored=true
+internal/bench/corpus/** linguist-vendored=true
+internal/bench/fixtures/** linguist-generated=true -diff

@@ -1,0 +1,12 @@
+require 'sinatra'
+require 'net/http'
+require 'uri'
+
+PARTNER_HOOKS = %w[hooks.partner.invalid ci.partner.invalid].freeze
+
+post '/webhooks/test' do
+  uri = URI.parse(params['callback'].to_s)
+  halt 400 unless uri.is_a?(URI::HTTPS) && uri.port == 443 && PARTNER_HOOKS.include?(uri.host)
+  Net::HTTP.get_response(uri)
+  status 204
+end

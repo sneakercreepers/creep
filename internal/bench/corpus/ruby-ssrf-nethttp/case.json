@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "ruby-ssrf-nethttp",
+  "class": "ssrf",
+  "language": "ruby",
+  "file": "webhooks.rb",
+  "vulnerable": {"entry": "post '/webhooks/test' do", "sink": "Net::HTTP.get_response(uri)"},
+  "safe": {"entry": "post '/webhooks/test' do", "sink": "Net::HTTP.get_response(uri)"}
+}

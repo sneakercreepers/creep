@@ -1,0 +1,7 @@
+require 'sinatra'
+require 'erb'
+
+get '/banner' do
+  text = params['text'].to_s
+  ERB.new("<h1>#{text}</h1>").result(binding)
+end

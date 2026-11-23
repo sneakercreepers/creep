@@ -1,0 +1,8 @@
+<?php
+const LANGS = ['en', 'es', 'fr'];
+const PAGES = ['home', 'about', 'contact'];
+$lang = in_array($_GET['lang'] ?? '', LANGS, true) ? $_GET['lang'] : 'en';
+$page = in_array($_GET['page'] ?? '', PAGES, true) ? $_GET['page'] : 'home';
+$text = file_get_contents(__DIR__ . '/content/' . $lang . '/' . $page . '.html');
+header('Content-Type: text/html; charset=utf-8');
+echo $text === false ? 'not found' : $text;

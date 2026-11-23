@@ -1,0 +1,14 @@
+from aiohttp import web
+from jinja2 import Environment
+
+env = Environment(autoescape=True)
+
+
+async def greeting(request):
+    name = request.query.get("name", "friend")
+    template = env.from_string("<p>Hello " + name + "!</p>")
+    return web.Response(text=template.render(), content_type="text/html")
+
+
+app = web.Application()
+app.add_routes([web.get("/greeting", greeting)])
