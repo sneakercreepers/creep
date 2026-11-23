@@ -1,6 +1,6 @@
 # Design summary
 
-The short version of the design, as built at v0.1 (2026-11-16) and kept current with `main` (v0.2 feature-complete at the per-version architecture review, 2026-11-22; release pentest pending). [architecture.md](architecture.md) is the source of truth for layers, contracts and fitness functions; this page keeps the original design's outline and says where the system moved away from it. Decisions that change it go through an [ADR](adr/0000-template.md).
+The short version of the design, as built at v0.1 (2026-11-16) and kept current with `main` (v0.2 feature-complete at the per-version architecture review, 2026-11-22; release pentest fixed in #319 and `v0.2.0` released the same day). [architecture.md](architecture.md) is the source of truth for layers, contracts and fitness functions; this page keeps the original design's outline and says where the system moved away from it. Decisions that change it go through an [ADR](adr/0000-template.md).
 
 Main purpose: find real vulnerabilities in local source code, with any model, without code leaving the machine except redacted through the gateway, saying honestly what was not evaluated, and gating CI deterministically.
 
