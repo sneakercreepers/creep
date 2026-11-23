@@ -144,7 +144,7 @@ func TestBuildThroughRealExec(t *testing.T) {
 		}
 	}
 	broken := newExecRunner(bin, st.env)
-	argv := buildArgs(st, testRunID, s.work, filepath.Join(s.work, "Dockerfile"), "", filepath.Join(s.work, "iid-x"))
+	argv := buildArgs(st, testRunID, s.work, filepath.Join(s.work, "Dockerfile"), "", filepath.Join(s.work, "iid-x"), Mirror{})
 	if res, err := broken(context.Background(), argv, 1024); err != nil || res.exit != 42 {
 		t.Errorf("build with the operator's config was not caught: exit %d, %v", res.exit, err)
 	}

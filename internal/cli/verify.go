@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/sandbox"
 	"github.com/sneakercreepers/creep/internal/verify"
@@ -44,13 +45,28 @@ func (d sandboxDeps) clock() time.Time {
 	return d.now()
 }
 
-// openSandbox is the production sandboxDeps.open.
-func openSandbox(st sandbox.Status, runID string) (appSandbox, error) {
+// openSandbox is the production sandboxDeps.open. The mirror comes from
+// the operator's config only (the project file cannot set it, ADR 0029).
+func openSandbox(st sandbox.Status, runID string, mirror sandbox.Mirror) (appSandbox, error) {
 	s, err := sandbox.Open(st, runID)
 	if err != nil {
 		return nil, err
 	}
+	s.UseMirror(mirror)
 	return s, nil
+}
+
+// buildMirror is the sandbox's view of sandbox.mirror.
+func buildMirror(cfg config.Sandbox) sandbox.Mirror {
+	return sandbox.Mirror{Bridge: cfg.Mirror.Bridge, Proxy: cfg.Mirror.Proxy}
+}
+
+// buildHow says how the build reaches packages, for the scan's stderr.
+func buildHow(m sandbox.Mirror) string {
+	if m.Set() {
+		return "through the operator's mirror (sandbox.mirror)"
+	}
+	return "offline"
 }
 
 // Reasons verification is unavailable that the sandbox's build does not
@@ -111,8 +127,9 @@ func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status
 	defer stop()
 	ctx, cancel := context.WithTimeout(ctx, deadline.Sub(s.deps.sandbox.clock()))
 	defer cancel()
-	fmt.Fprintf(w, "sandbox: building the app offline with %s (isolation %s)\n", best.Runtime, best.Isolation)
-	box, err := s.deps.sandbox.open(best, s.run.ID())
+	mirror := buildMirror(s.cfg.Sandbox)
+	fmt.Fprintf(w, "sandbox: building the app %s with %s (isolation %s)\n", buildHow(mirror), best.Runtime, best.Isolation)
+	box, err := s.deps.sandbox.open(best, s.run.ID(), mirror)
 	if err != nil {
 		printError(w, "sandbox", err)
 		return unavailableVerification(verifySandboxError, "open")

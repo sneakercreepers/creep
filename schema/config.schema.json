@@ -206,6 +206,22 @@
           "description": "Run proofs of concept in a container (v0.2). The sandbox never has internet access. Cannot be set in the project file.",
           "type": "boolean"
         },
+        "mirror": {
+          "additionalProperties": false,
+          "properties": {
+            "bridge": {
+              "default": "",
+              "description": "Name of an internal network the operator created, with a registry mirror or allowlisting proxy on it, for the app build's RUN steps (ADR 0029). Rootless Podman only; empty builds offline. The run phase never joins it. Cannot be set in the project file.",
+              "type": "string"
+            },
+            "proxy": {
+              "default": "",
+              "description": "http://host[:port] or https://host[:port] of the proxy on sandbox.mirror.bridge, given to build steps as HTTP_PROXY and HTTPS_PROXY. No credentials. Cannot be set in the project file.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "runtime": {
           "default": "docker",
           "description": "Container runtime for the sandbox. Cannot be set in the project file.",

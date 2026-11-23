@@ -157,7 +157,7 @@ func TestBuildIsOffline(t *testing.T) {
 func TestBuildCheckCatchesWeakenedBuild(t *testing.T) {
 	s := testSandbox(t, &recorder{})
 	ctxDir := filepath.Join(s.work, "build-1")
-	good := buildArgs(s.status, testRunID, ctxDir, filepath.Join(ctxDir, "Dockerfile"), "run", filepath.Join(s.work, "iid-2"))
+	good := buildArgs(s.status, testRunID, ctxDir, filepath.Join(ctxDir, "Dockerfile"), "run", filepath.Join(s.work, "iid-2"), Mirror{})
 	if p := buildProblems(good, Docker, s.work); len(p) > 0 {
 		t.Fatalf("the real build fails the check: %v", p)
 	}

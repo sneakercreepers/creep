@@ -19,7 +19,7 @@ type sandboxDeps struct {
 	detect func(context.Context, sandbox.Env) sandbox.Report
 	clean  func(context.Context, sandbox.Status) (sandbox.Removed, error)
 	images func(context.Context, sandbox.Status) []sandbox.PinnedImage
-	open   func(st sandbox.Status, runID string) (appSandbox, error)
+	open   func(st sandbox.Status, runID string, mirror sandbox.Mirror) (appSandbox, error)
 	// interrupt and now default to Ctrl+C and time.Now; tests replace them.
 	interrupt func(context.Context) (context.Context, context.CancelFunc)
 	now       func() time.Time

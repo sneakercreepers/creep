@@ -45,7 +45,7 @@ const (
 // test keeps both in step) and the scan's own.
 var verificationReasons = map[string]bool{
 	"no_build_file": true, "compose_refused": true, "dockerfile_refused": true, "context_refused": true,
-	"base_image_missing": true, "build_failed": true, "build_timeout": true, "image_refused": true, "runtime_error": true,
+	"base_image_missing": true, "build_failed": true, "build_timeout": true, "image_refused": true, "runtime_error": true, "mirror_refused": true,
 	"no_runtime": true, "not_checked": true, "sandbox_error": true, "interrupted": true, "budget": true,
 	"no_port": true, "start_failed": true,
 }
