@@ -223,3 +223,27 @@ func TestDockerBuildLineIgnoresMirror(t *testing.T) {
 		t.Errorf("Docker build line with a mirror %q, want the offline %q", got, want)
 	}
 }
+
+// TestMirrorProxyPort pins the port range: a proxy port outside 1-65535
+// or with a leading zero is refused instead of reaching the builder.
+func TestMirrorProxyPort(t *testing.T) {
+	cases := []struct {
+		proxy string
+		want  bool
+	}{
+		{"http://mirror", true},
+		{"http://mirror:1", true},
+		{"http://mirror:3128", true},
+		{"http://mirror:65535", true},
+		{"http://mirror:0", false},
+		{"http://mirror:065535", false},
+		{"http://mirror:65536", false},
+		{"http://mirror:99999", false},
+		{"http://mirror:", false},
+	}
+	for _, c := range cases {
+		if got := (Mirror{Bridge: testBridge, Proxy: c.proxy}).Valid(); got != c.want {
+			t.Errorf("proxy %q: Valid() = %v, want %v", c.proxy, got, c.want)
+		}
+	}
+}
