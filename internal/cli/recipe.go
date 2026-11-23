@@ -20,12 +20,20 @@ import (
 	"github.com/sneakercreepers/creep/internal/verify"
 )
 
-// runRecipe dispatches the recipe authoring commands (ADR 0025). Each takes
-// one recipe file, named relative to the working directory; none reads a
-// recipe from config, and scan loads none.
+// runRecipe dispatches the recipe commands. The authoring commands (ADR
+// 0025) take one recipe file, named relative to the working directory;
+// add (ADR 0028) takes a pinned source and the operator's clone of it.
+// None reads a recipe from config; scan loads only what add installed.
 func runRecipe(e env, args []string) int {
+	if len(args) > 0 && args[0] == "add" {
+		if len(args) != 3 {
+			printError(e.stderr, "creep recipe add", errors.New("want github.com/<owner>/<repo>@<full commit SHA> and the directory of your clone at that commit"))
+			return exitcode.ConfigError
+		}
+		return runRecipeAdd(e, args[1], args[2])
+	}
 	if len(args) != 2 {
-		printError(e.stderr, "creep recipe", errors.New("want new, lint or test and one recipe file"))
+		printError(e.stderr, "creep recipe", errors.New("want new, lint or test and one recipe file, or add github.com/<owner>/<repo>@<commit> <clone directory>"))
 		return exitcode.ConfigError
 	}
 	switch args[0] {
@@ -36,7 +44,7 @@ func runRecipe(e env, args []string) int {
 	case "test":
 		return runRecipeTest(e, args[1])
 	}
-	printError(e.stderr, "creep recipe", fmt.Errorf("unknown subcommand %q: want new, lint or test", args[0]))
+	printError(e.stderr, "creep recipe", fmt.Errorf("unknown subcommand %q: want new, lint, test or add", args[0]))
 	return exitcode.ConfigError
 }
 

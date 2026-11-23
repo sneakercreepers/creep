@@ -34,7 +34,7 @@ var commands = []command{
 	{"resume", "resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)", runResume},
 	{"version", "print version, commit and Go version", runVersion},
 	{"config", "explain: show each effective config value and the layer it came from", runConfig},
-	{"recipe", "new|lint|test <file.json>: write a recipe template, check a recipe, or load it by running its fixtures through the reader with your model (ADR 0025)", runRecipe},
+	{"recipe", "new|lint|test <file.json>: write a recipe template, check a recipe, or load it by running its fixtures through the reader with your model (ADR 0025); add github.com/<owner>/<repo>@<commit> <clone>: install a source's recipes from your clone at that commit, pinned in creep.lock (ADR 0028)", runRecipe},
 }
 
 func findCommand(name string) (command, bool) {

@@ -64,10 +64,13 @@ func System(tier Tier) (string, error) {
 }
 
 // hintNoteBudget is the most tokens the hint note adds to a hinted call's
-// system prompt. Only `creep recipe test` sends hinted slices; CallTokens,
-// which the scan plans with, covers hint-free calls, and the gateway still
-// enforces real spend on both.
+// system prompt. CallTokens covers hint-free calls; a scan with installed
+// recipes (ADR 0028) adds HintNoteTokens to each step it plans, and the
+// gateway still enforces real spend on both.
 const hintNoteBudget = 450
+
+// HintNoteTokens is hintNoteBudget, for callers that plan hinted calls.
+const HintNoteTokens = hintNoteBudget
 
 // systemFor is System, followed by the hint note when the slice has a HINT
 // block, so a model is told the hint is data before it reads one.
