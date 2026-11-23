@@ -1,6 +1,6 @@
 # ADR 0029: Operator-provided mirror network for the app build
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-23)
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0016](0016-sandbox-runtime.md) (the offline-build amendment, #23, whose maintainer decision of 2026-11-20 deferred this mode to v0.3)

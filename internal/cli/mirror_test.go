@@ -50,7 +50,7 @@ func TestMirrorRulesMatchConfig(t *testing.T) {
 		"ns:/proc/1/ns/net", "container:abc", "a b", "-x", ".x", strings.Repeat("a", 64), strings.Repeat("a", 65)}
 	proxies := []string{"", "http://mirror", "https://10.89.0.2:3128/", "http://169.254.169.254", "http://localhost:3128",
 		"http://u:p@mirror:3128", "http://mirror:3128/x", "http://mirror:3128?a=b", "socks5://mirror:1080", "file:///etc/passwd",
-		"http://[::1]:3128", "mirror:3128", "http://-mirror", "http://:3128", "http://mirror:123456", "HTTP://mirror"}
+		"http://[::1]:3128", "mirror:3128", "http://-mirror", "http://:3128", "http://mirror:123456", "HTTP://mirror", "http://mirror:99999", "http://mirror:0", "http://mirror:65535", "http://mirror:065535"}
 	for _, b := range bridges {
 		for _, p := range proxies {
 			yaml := "sandbox:\n  mirror:\n    bridge: \"" + b + "\"\n    proxy: \"" + p + "\"\n"
