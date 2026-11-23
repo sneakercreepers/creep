@@ -1,6 +1,6 @@
 # ADR 0027: Read-only MCP server on the official Go MCP SDK, stdio only
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-23)
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
 - **Fitness function:** the rows "Only `gateway` reaches the network (invariant 1)", "No dependency without an ADR (invariant 6)" and "MCP tools write only under `.creep/` and start no container" of [architecture.md §9](../architecture.md#9-fitness-functions)
