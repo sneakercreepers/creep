@@ -188,9 +188,18 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep recipe new\|lint\|test <file.json>` | Write a recipe template, check a recipe with no model call, or load it: its vulnerable fixture must be flagged and its safe fixture clean, through the reader and your model. Exit 0 only when it loads, 2 when it is refused, 3 on a model failure ([ADR 0025](docs/adr/0025-recipes.md), schema in [docs/schemas/recipe-v1.json](docs/schemas/recipe-v1.json)) |
 | `creep recipe add github.com/<owner>/<repo>@<commit> <clone>` | Install the `recipes/*.json` files of your own git clone of that repository, checked out (detached) at that full 40-hex commit; branch names and tags are refused and creep makes no network call. Files go to `~/.creep/recipes`, pinned by SHA-256 in `creep.lock`. Every `scan` then checks each checksum (a changed file exits 2), the policy's `recipe_sources` allowlist and each recipe's fixtures before giving its hint to the reader ([ADR 0028](docs/adr/0028-recipe-install-and-lock.md)) |
 | `creep bench` | Run creep-bench: 12 embedded cases, each a planted vulnerability and its safe twin in Go, Java, JavaScript, PHP, Python or Ruby, kept apart from the calibration templates, through discovery, the planner and the reader at tiers S, M and L. Prints recall, false positives and honesty (of the runs that claimed a class covered, how many found the planted vulnerability) per class, as Markdown or `--format json`. `--replay` reproduces the [published numbers](docs/bench/results.md) from the embedded fixture with no config, state, key or network; without it your model answers through the gateway like a scan (HTTP contracts only), and `--record` also writes the run's fixture. The published fixture is synthesized, so today's numbers measure the pipeline, not a model. Smoke runs on OWASP Juice Shop and PyGoat are not downloaded: scan your own local clone ([ADR 0030](docs/adr/0030-creep-bench.md)) |
+| `creep mcp` | Serve the read-only MCP tools `scan` (changed files only), `findings` and `why` over stdio for a coding agent ([MCP server](#mcp-server)) |
 | `creep version` | Print version, commit and Go version |
 
 `creep init` and continuing a run with `creep resume` are not implemented yet and fail closed.
+
+### MCP server
+
+`creep mcp` lets a coding agent call creep as an MCP tool over stdio ([ADR 0027](docs/adr/0027-mcp-server.md)). Start it from the repository root in your agent's MCP configuration, for example `{"command": "creep", "args": ["mcp"]}`.
+
+- **Tools.** `scan` takes `changed`, 1 to 1000 repository-relative paths (as `git diff --name-only` prints them), runs a pr-mode scan of only those files (`--changed`) and returns the exit code and the findings; `findings` lists the last report's findings by `status`, a page (`offset`, `limit` up to 200) at a time; `why` returns one finding's evidence by `id`.
+- **Read-only.** No tool edits source or applies a fix, writes outside `.creep/`, starts a container, runs a PoC or an optional scanner, or reaches the network: sandbox verification stays CLI-only. The agent is treated as possibly prompt-injected: every argument is bounded and checked, paths outside the repository are refused, and every path and error it gets back is escaped.
+- **Before the first call.** Run `creep scan` once from the CLI with the same model: the MCP scan never asks for consent (stdin carries the protocol), never runs a calibration and never creates the state key, so it refuses until those exist. `creep mcp` refuses `--mode nightly`, `--record` and `--recalibrate`.
 
 ### Sandbox and verification
 

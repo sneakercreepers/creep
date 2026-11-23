@@ -119,6 +119,9 @@ func rootReach(modPath string, pkgs map[string]listedPackage, starters map[strin
 	}
 	var problems []string
 	for _, root := range roots {
+		if linkExempt(modPath, pkgs, from.Pkg, root) {
+			continue
+		}
 		if why := reachesProcess(modPath, pkgs, starters, root, map[string]bool{}); why != "" {
 			problems = append(problems, fmt.Sprintf("%s reaches a process start through %s: %s (AGENTS.md invariant 1)", who, root, why))
 		}

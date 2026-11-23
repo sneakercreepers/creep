@@ -43,6 +43,12 @@ type scanDeps struct {
 	// getenv reads the CI environment that picks the scan's mode; nil
 	// reads none, so a test never takes its mode from the machine running it.
 	getenv func(string) string
+	// connectNoPrompt is connect for creep mcp, whose stdin carries the
+	// protocol: consent is never asked, so an endpoint without stored
+	// consent is refused (ADR 0027). nil keeps connect (tests).
+	connectNoPrompt func(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error)
+	// stdin is creep mcp's protocol input; nil is os.Stdin.
+	stdin io.ReadCloser
 }
 
 // scannerRunner is runScanner, or scanrun.Run when none is set.
@@ -63,7 +69,7 @@ type modelLink struct {
 
 func productionDeps() scanDeps {
 	return scanDeps{
-		connect: connectGateway, calibrate: calibrateWithUserCache, recordStability: recordStabilityInUserCache,
+		connect: connectGateway, connectNoPrompt: connectWithoutPrompt, calibrate: calibrateWithUserCache, recordStability: recordStabilityInUserCache,
 		now: time.Now, getenv: os.Getenv,
 		sandbox: sandboxDeps{detect: sandbox.Detect, clean: sandbox.Clean, images: sandbox.Images, open: openSandbox},
 	}
@@ -73,6 +79,16 @@ func productionDeps() scanDeps {
 // write-ahead egress.log and the allowlisted client, in the run directory.
 // A command model runs through the same log with gateway.EgressLog.Exec.
 func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error) {
+	return connectWithPrompt(r, runDir, stderr, gateway.TerminalPrompt(os.Stdin, stderr))
+}
+
+// connectWithoutPrompt is connectGateway with no consent prompt: a nil
+// Prompt declines every endpoint not already consented.
+func connectWithoutPrompt(r *config.Resolved, runDir string, stderr io.Writer) (modelLink, error) {
+	return connectWithPrompt(r, runDir, stderr, nil)
+}
+
+func connectWithPrompt(r *config.Resolved, runDir string, stderr io.Writer, prompt gateway.Prompt) (modelLink, error) {
 	cfg := r.Config
 	var cmd *gateway.Command
 	if cfg.Model.Contract == "command" {
@@ -81,7 +97,7 @@ func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelL
 			return modelLink{}, err
 		}
 	}
-	log, err := openEgress(r, runDir, stderr)
+	log, err := openEgress(r, runDir, prompt)
 	if err != nil {
 		return modelLink{}, err
 	}
@@ -100,10 +116,10 @@ func connectGateway(r *config.Resolved, runDir string, stderr io.Writer) (modelL
 
 // openEgress opens the run's write-ahead egress.log behind consent and the
 // run's token and call budget.
-func openEgress(r *config.Resolved, runDir string, stderr io.Writer) (*gateway.EgressLog, error) {
+func openEgress(r *config.Resolved, runDir string, prompt gateway.Prompt) (*gateway.EgressLog, error) {
 	consent, err := gateway.NewConsent(gateway.ConsentOptions{
 		CI: config.InCI(os.Getenv), Policy: r.PolicyConsent(),
-		StorePath: userFile("consent.json"), Prompt: gateway.TerminalPrompt(os.Stdin, stderr),
+		StorePath: userFile("consent.json"), Prompt: prompt,
 	})
 	if err != nil {
 		return nil, err
@@ -132,7 +148,12 @@ func calibrateWithUserCache(ctx context.Context, opts calibrate.CacheOptions) (c
 	if err != nil {
 		return calibrate.Calibration{}, fmt.Errorf("calibration cache: %w", err)
 	}
-	store, err := state.OpenUser(filepath.Join(base, "creep"))
+	dir := filepath.Join(base, "creep")
+	// A cache-only lookup must not create the cache directory (ADR 0027).
+	if _, err := os.Lstat(dir); opts.CacheOnly && err != nil {
+		return calibrate.Calibration{}, calibrate.ErrNotCached
+	}
+	store, err := state.OpenUser(dir)
 	if err != nil {
 		return calibrate.Calibration{}, err
 	}

@@ -56,8 +56,8 @@ func TestMakeCheckRunsBudget(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^check:[^\n]*\sbudget(\s|$)`).Match(data) {
 		t.Error("Makefile: check does not depend on budget")
 	}
-	if !regexp.MustCompile(`(?m)^budget:\r?\n\tgo run \./internal/tools/budget\s*$`).Match(data) {
-		t.Error("Makefile: budget does not run ./internal/tools/budget")
+	if !regexp.MustCompile(`(?m)^budget:\r?\n\tgo run \./internal/tools/budget\r?\n\tgo run \./internal/tools/linkcheck\s*$`).Match(data) {
+		t.Error("Makefile: budget does not run ./internal/tools/budget, then ./internal/tools/linkcheck (ADR 0027)")
 	}
 	// directModules trusts go.mod's // indirect marks only because tidy -diff checks them.
 	if !regexp.MustCompile(`(?m)^check:[^\n]*\stidy(\s|$)`).Match(data) || !regexp.MustCompile(`(?m)^tidy:\r?\n\tgo mod tidy -diff\s*$`).Match(data) {
