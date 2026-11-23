@@ -2,17 +2,17 @@
 --baseline        string   ""      scan accept
 --baseline-write  bool     "false" scan
 --changed         string   ""      scan estimate
---config          string   ""      doctor scan estimate why accept reproduce clean resume version config bench recipe
+--config          string   ""      doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
 --expires         string   ""      accept
---format          string   "text"  doctor scan estimate why accept reproduce clean resume version config bench recipe
---log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config bench recipe
---mode            string   ""      doctor scan estimate why accept reproduce clean resume version config bench recipe
---model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config bench recipe
---price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config bench recipe
---price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config bench recipe
+--format          string   "text"  doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
+--log-level       string   "info"  doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
+--mode            string   ""      doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
+--model-run       string   ""      doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
+--price-in        float64  "0"     doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
+--price-out       float64  "0"     doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
 --reason          string   ""      accept
 --recalibrate     bool     "false" doctor scan estimate why accept reproduce clean resume version config bench recipe
 --record          bool     "false" doctor scan estimate why accept reproduce clean resume version config bench recipe
---replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config bench recipe
+--replay          bool     "false" doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
 --stability       int      "1"     scan estimate
---stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config bench recipe
+--stats           bool     "false" doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
