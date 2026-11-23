@@ -130,6 +130,10 @@ func TestCloneFiles(t *testing.T) {
 		{"https://user:pass@github.com/acme/recipes.git", ""},
 		{"https://gitlab.com/acme/recipes.git", ""},
 		{"/home/me/recipes", ""},
+		{"github.com/acme/recipes", ""}, // git reads it as a local directory
+		{"file:///github.com/acme/recipes", ""},
+		{"https://github.com.evil/acme/recipes", ""},
+		{"git@github.com.evil:acme/recipes", ""},
 		{"https://github.com/acme/recipes/extra", ""},
 	}
 	for _, tt := range origins {

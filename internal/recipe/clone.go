@@ -68,14 +68,17 @@ func isOriginSection(line string) bool {
 // githubPath turns the GitHub URL forms git clone takes into
 // github.com/<owner>/<repo>: https://github.com/o/r(.git),
 // git@github.com:o/r(.git) and ssh://git@github.com/o/r(.git). Anything
-// else comes back as it is and fails parseRepository.
+// else, such as a bare github.com/o/r that git reads as a local path,
+// comes back empty and fails parseRepository.
 func githubPath(url string) string {
-	rest := url
+	rest, ok := "", false
 	for _, prefix := range []string{"https://", "ssh://git@", "git@"} {
-		if r, ok := strings.CutPrefix(rest, prefix); ok {
-			rest = r
+		if rest, ok = strings.CutPrefix(url, prefix); ok {
 			break
 		}
+	}
+	if !ok {
+		return ""
 	}
 	rest = strings.Replace(rest, "github.com:", "github.com/", 1)
 	rest = strings.TrimSuffix(rest, "/")
