@@ -78,11 +78,15 @@ func canaryScript(alias string) string {
 // canary runs the canary container on the run's network and judges what
 // it saw. Each canary gets its own alias, so a canary still being removed
 // cannot answer for the next one.
-func (s *Sandbox) canary(ctx context.Context) error {
+func (s *Sandbox) canary(ctx context.Context) error { return s.canaryOn(ctx, "") }
+
+// canaryOn runs the canary on bridge, the operator's mirror network, or
+// on the run's network when bridge is "".
+func (s *Sandbox) canaryOn(ctx context.Context, bridge string) error {
 	alias := "canary-" + strconv.FormatUint(s.canaries.Add(1), 10)
 	res, err := s.start(ctx, Spec{
 		Image: CanaryImage, Cmd: []string{"sh", "-c", canaryScript(alias)}, Timeout: canaryTimeout,
-		networked: true, alias: alias,
+		networked: true, alias: alias, bridge: bridge,
 	})
 	if err != nil {
 		return fmt.Errorf("network canary: %w: %w", ErrCanary, err)

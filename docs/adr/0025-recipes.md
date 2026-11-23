@@ -3,6 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** @Ludocius
+- **Amended by:** [ADR 0028](0028-recipe-install-and-lock.md) (#34): `creep scan` loads recipes `creep recipe add` installed, only after `creep.lock` verification, the policy's `recipe_sources` and `Checker.Load`
 - **Changes:** a new stable contract, the recipe format (`internal/recipe`, `docs/schemas/recipe-v1.json`); a new command, `creep recipe new|lint|test`; a new package row in the layer table (`internal/recipe`, layer 5); an optional HINT block in the reader's user turn with its own prompt note (`HintVersion`)
 - **Fitness function:** the row "Recipe text never reaches planner input; a recipe with failing fixtures is refused" of [architecture.md §9](../architecture.md#9-fitness-functions)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
+	"github.com/sneakercreepers/creep/internal/recipe"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
@@ -48,6 +49,11 @@ type session struct {
 	incremental report.Incremental
 	// baseline is --baseline, read before the run opened anything (#27).
 	baseline *scanBaseline
+	// installed are the recipes creep.lock verified before the run opened
+	// anything; recipes are those whose fixtures passed at the calibrated
+	// tier (checkRecipes), the only ones the reader gets hints from.
+	installed []installedRecipe
+	recipes   []*recipe.Recipe
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
@@ -100,6 +106,9 @@ func runScan(e env, args []string) int {
 	if err != nil {
 		return s.fail(e, "creep scan: calibration", err, failureCode(err))
 	}
+	if err := s.checkRecipes(ctx, cal.Tier, e.stderr); err != nil {
+		return s.fail(e, "creep scan: recipes", err, recipeFailureCode(err))
+	}
 	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
 	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
 	if err != nil {
@@ -111,12 +120,14 @@ func runScan(e env, args []string) int {
 }
 
 // scanInputs is what a scan reads and checks before it opens anything:
-// the config, the gate of its mode, the --changed list and the baseline.
+// the config, the gate of its mode, the --changed list, the baseline and
+// the installed recipes, verified against creep.lock (ADR 0028).
 type scanInputs struct {
 	resolved *config.Resolved
 	gate     runGate
 	changed  *changedList
 	baseline *scanBaseline
+	recipes  []installedRecipe
 }
 
 // loadScanInputs reads the scan's inputs; any error is a usage or config
@@ -137,6 +148,9 @@ func loadScanInputs(e env, args []string) (scanInputs, error) {
 		return scanInputs{}, err
 	}
 	if in.baseline, err = loadScanBaseline(e.opts, e.deps.today()); err != nil {
+		return scanInputs{}, err
+	}
+	if in.recipes, err = loadInstalledRecipes(in.resolved); err != nil {
 		return scanInputs{}, err
 	}
 	return in, nil
@@ -161,7 +175,7 @@ func openSession(ctx context.Context, e env, in scanInputs) (*session, error) {
 		return nil, err
 	}
 	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps, stats: newRunStats(e.deps.now),
-		gate: in.gate, changed: in.changed, baseline: in.baseline}
+		gate: in.gate, changed: in.changed, baseline: in.baseline, installed: in.recipes}
 	if err := s.openState(); err != nil {
 		s.close()
 		return nil, err
@@ -327,7 +341,8 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 	}
 	findings := baseFindings(rs)
 	done := s.stats.start(phasePlan)
-	plan, err := planSinks(rs, ptier, planBudget(s.cfg.Budget.MaxTokens, rtier, s.opts.stability), findings, s.deps.planned)
+	budget := hintedBudget(planBudget(s.cfg.Budget.MaxTokens, rtier, s.opts.stability), len(s.recipes) > 0, s.opts.stability)
+	plan, err := planSinks(rs, ptier, budget, findings, s.deps.planned)
 	done()
 	if errors.Is(err, planner.ErrInput) {
 		return rejectedScan(findings, rs.gaps), nil
@@ -337,7 +352,7 @@ func (s *session) planAndRead(ctx context.Context, tier calibrate.Tier, rs repoS
 	}
 	reads := newDeadlineReads(ctx, readRepoFile(s.repo))
 	stage := readStage{model: s.model, reruns: s.reruns, tier: rtier, reads: reads, slicer: reader.Slicer{Redactor: s.red, Tier: rtier, Read: reads.Read},
-		kept: map[int]reader.Slice{}, votes: map[int]uint8{}}
+		kept: map[int]reader.Slice{}, votes: map[int]uint8{}, recipes: s.recipes}
 	done = s.stats.start(phaseRead)
 	gaps, stop, err := stage.run(ctx, plan, rs, findings)
 	done()

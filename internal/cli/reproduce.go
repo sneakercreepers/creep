@@ -88,7 +88,7 @@ func reproduce(e env, cfg config.Config, b verify.Bundle, p verify.PoC) int {
 		printError(e.stderr, "creep reproduce", err)
 		return exitcode.ConfigError
 	}
-	box, err := e.deps.sandbox.open(best, reproduceRunID())
+	box, err := e.deps.sandbox.open(best, reproduceRunID(), buildMirror(cfg.Sandbox))
 	if err != nil {
 		printError(e.stderr, "creep reproduce: sandbox", err)
 		return exitcode.ModelOrSandbox

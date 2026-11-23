@@ -13,6 +13,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
+	"github.com/sneakercreepers/creep/internal/recipe"
 )
 
 // Default file locations. The user file is shown as "~/..." so messages and
@@ -84,7 +85,8 @@ func loadConfig(opts globalOptions) (*config.Resolved, error) {
 }
 
 // resolve resolves the layers and checks the policy's consent entries
-// with the gateway's own parser, so a bad entry is a configuration error
+// with the gateway's own parser, and its recipe_sources with recipe's, so
+// a bad entry is a configuration error
 // (exit 2) for every command, before any run starts (#116).
 func resolve(in config.Inputs) (*config.Resolved, error) {
 	r, err := config.Load(in)
@@ -92,6 +94,10 @@ func resolve(in config.Inputs) (*config.Resolved, error) {
 		return nil, err
 	}
 	if err := gateway.CheckPolicyConsent(r.PolicyConsent()); err != nil {
+		return nil, fmt.Errorf("%s: %w", policyEnv, err)
+	}
+	sources, _ := r.PolicyRecipeSources()
+	if err := recipe.CheckAllowlist(sources); err != nil {
 		return nil, fmt.Errorf("%s: %w", policyEnv, err)
 	}
 	return r, nil

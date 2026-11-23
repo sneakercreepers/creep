@@ -55,11 +55,15 @@ func (s *Sandbox) ensureNetwork(ctx context.Context) error {
 	return nil
 }
 
-// networkFor is the --network value of a spec: none, or the run's network
-// once it exists.
+// networkFor is the --network value of a spec: none, the operator's
+// mirror network for the build canary, or the run's network once it
+// exists.
 func (s *Sandbox) networkFor(spec Spec) (string, error) {
 	if !spec.networked {
 		return "none", nil
+	}
+	if spec.bridge != "" {
+		return spec.bridge, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

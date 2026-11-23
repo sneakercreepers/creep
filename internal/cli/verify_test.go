@@ -29,7 +29,8 @@ type fakeBuilder struct {
 	app      sandbox.App
 	err      error
 	closeErr error
-	wait     bool // block until the build's context ends, as a hung build would
+	wait     bool           // block until the build's context ends, as a hung build would
+	mirror   sandbox.Mirror // what open was given
 	probe    func(sandbox.Repo)
 	repo     sandbox.Repo
 	builds   int
@@ -91,7 +92,8 @@ func (f *fakeBuilder) Close() error {
 // fails to open with openErr; opened counts the opens.
 func withBuilder(deps scanDeps, fb *fakeBuilder, openErr error, opened *int) scanDeps {
 	deps = withSandbox(deps, []sandbox.Status{rootlessDocker}, nil, nil)
-	deps.sandbox.open = func(st sandbox.Status, runID string) (appSandbox, error) {
+	deps.sandbox.open = func(st sandbox.Status, runID string, mirror sandbox.Mirror) (appSandbox, error) {
+		fb.mirror = mirror
 		*opened++
 		if st.Runtime != sandbox.Docker || runID == "" {
 			return nil, errors.New("wrong runtime or run")

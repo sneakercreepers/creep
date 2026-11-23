@@ -18,6 +18,8 @@ report.formats          ["sarif"]                         user "~/.creep/config.
 scanners.enabled        ["gitleaks", "semgrep"]           user "~/.creep/config.yaml"
 sandbox.enabled         false                             default
 sandbox.runtime         "docker"                          default
+sandbox.mirror.bridge   ""                                default
+sandbox.mirror.proxy    ""                                default
 calibration.cache_days  7                                 project "creep.yaml"
 output.format           "text"                            default
 log.level               "debug"                           flag --log-level

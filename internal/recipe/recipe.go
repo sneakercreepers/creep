@@ -101,7 +101,7 @@ func Parse(data []byte, check PoCCheck) (*Recipe, error) {
 		return nil, fmt.Errorf("%w: not UTF-8", ErrInvalid)
 	}
 	var r Recipe
-	if err := decodeStrict(data, &r); err != nil {
+	if err := decodeStrict(data, &r, "recipe"); err != nil {
 		return nil, err
 	}
 	if err := r.validate(check); err != nil {
@@ -110,26 +110,27 @@ func Parse(data []byte, check PoCCheck) (*Recipe, error) {
 	return &r, nil
 }
 
-// decodeStrict decodes one JSON object into r: unknown fields, trailing
-// data, and keys repeated or spelled in another case are refused, since
-// encoding/json would match "Hint" to hint and keep the last of two.
-func decodeStrict(data []byte, r *Recipe) error {
+// decodeStrict decodes one JSON object into out, a recipe or a lock (what
+// names it): unknown fields, trailing data, and keys repeated or spelled in
+// another case are refused, since encoding/json would match "Hint" to hint
+// and keep the last of two.
+func decodeStrict(data []byte, out any, what string) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(r); err != nil {
-		return fmt.Errorf("%w: not the recipe JSON format", ErrInvalid)
+	if err := dec.Decode(out); err != nil {
+		return fmt.Errorf("%w: not the %s JSON format", ErrInvalid, what)
 	}
 	if len(bytes.TrimSpace(data[dec.InputOffset():])) > 0 {
-		return fmt.Errorf("%w: trailing data after the recipe", ErrInvalid)
+		return fmt.Errorf("%w: trailing data after the %s", ErrInvalid, what)
 	}
-	return checkKeys(data)
+	return checkKeys(data, what)
 }
 
 // checkKeys refuses a key that is not lower-case snake case, as every
-// recipe and verify.Request key is, or that repeats in one object. data is
+// recipe, lock and verify.Request key is, or that repeats in one object. data is
 // one valid JSON value (decodeStrict decoded it), so a token error cannot
 // happen; the walk is linear in data.
-func checkKeys(data []byte) error {
+func checkKeys(data []byte, what string) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	var stack []map[string]bool // keys seen per open object; nil for an array
 	wantKey := false
@@ -139,7 +140,7 @@ func checkKeys(data []byte) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("%w: not the recipe JSON format", ErrInvalid)
+			return fmt.Errorf("%w: not the %s JSON format", ErrInvalid, what)
 		}
 		top := len(stack) - 1
 		if wantKey && tok != json.Delim('}') {
