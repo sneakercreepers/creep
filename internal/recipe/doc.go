@@ -29,7 +29,14 @@
 //     whole slice.
 //
 // Recipes never come from the scanned repository: no config key names one,
-// so creep.yaml cannot add or loosen any, and `creep scan` loads none yet
-// (installing pinned recipes is #34). `creep recipe lint` runs Parse,
+// so creep.yaml cannot add or loosen any. `creep recipe lint` runs Parse,
 // `creep recipe test` runs Load, and `creep recipe new` writes Template.
+//
+// Installed recipes (ADR 0028) are pinned, never fetched: ParseSource takes
+// github.com/<owner>/<repo> at a full 40-hex commit only (no branch or
+// tag); DetachedHead and OriginRepository check the operator's own clone;
+// Lock (creep.lock) is a closed format whose Pin.Verify checks each
+// installed file's SHA-256; Allowed applies the org policy's
+// recipe_sources; HintFor picks the hint a hypothesis gets. The package
+// does no file I/O: internal/cli reads the clone and the store.
 package recipe

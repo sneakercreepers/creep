@@ -15,12 +15,15 @@ import (
 // Consent lists the model endpoints the organization consents to sending
 // redacted code to; it is the only source of consent in CI (see
 // Resolved.PolicyConsent). It is not a Config key, so no user, project or
-// --config file can express it.
+// --config file can express it. RecipeSources, when present, is the only
+// list of recipe sources that may be installed and loaded (ADR 0028); it is
+// policy-only for the same reason.
 type policyFile struct {
-	Locked   []string `yaml:"locked"`
-	Limits   Limits   `yaml:"limits"`
-	Defaults Config   `yaml:"defaults"`
-	Consent  []string `yaml:"consent"`
+	Locked        []string  `yaml:"locked"`
+	Limits        Limits    `yaml:"limits"`
+	Defaults      Config    `yaml:"defaults"`
+	Consent       []string  `yaml:"consent"`
+	RecipeSources *[]string `yaml:"recipe_sources"`
 }
 
 // Limits are the loosest values a later layer may choose.
