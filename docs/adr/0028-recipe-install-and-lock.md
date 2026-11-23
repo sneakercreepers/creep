@@ -1,6 +1,6 @@
 # ADR 0028: Installing recipes pinned by commit, with `creep.lock`
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-23)
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0025](0025-recipes.md) (decision 6: `creep scan` now loads installed recipes, only after lock verification and `Checker.Load`)
