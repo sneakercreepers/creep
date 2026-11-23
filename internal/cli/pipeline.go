@@ -9,6 +9,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
+	"github.com/sneakercreepers/creep/internal/recipe"
 	"github.com/sneakercreepers/creep/internal/redact"
 	"github.com/sneakercreepers/creep/internal/report"
 )
@@ -92,12 +93,19 @@ type readStage struct {
 	// votes, when set, gets for each finding every sample answered the
 	// samples whose answer was vulnerable, bit k for sample k+1.
 	votes map[int]uint8
+	// recipes are the installed recipes that passed their fixtures this
+	// run (ADR 0028); a hypothesis gets the hint of the first that covers
+	// its class and file extension.
+	recipes []*recipe.Recipe
 }
 
 // run slices and evaluates every hypothesis. It returns the files the
 // slicer could not use and the reason the run stopped early, if it did.
 func (r readStage) run(ctx context.Context, plan planner.Plan, rs repoScan, findings []report.Finding) ([]report.NotEvaluated, string, error) {
 	targets, sinkOf := targetsFor(plan, rs, findings)
+	for i := range targets {
+		targets[i].Hint = recipe.HintFor(r.recipes, targets[i].Class, targets[i].Path)
+	}
 	// Past the deadline the slicer still lists every file, without reading
 	// it (deadlineReads), so a file discovery read but nothing sliced is in
 	// coverage too.
