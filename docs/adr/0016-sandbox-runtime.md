@@ -3,7 +3,7 @@
 - **Status:** Accepted (maintainer approval 2026-11-19)
 - **Date:** 2026-11-19
 - **Deciders:** @Ludocius
-- **Amended by:** [ADR 0019](0019-poc-templates.md) (Accepted (maintainer, 2026-11-21): the PoC runner, after the canary, and the database marker lookup join the run network; the app gets one read-only mount, creep's canary file)
+- **Amended by:** [ADR 0019](0019-poc-templates.md) (Accepted (maintainer, 2026-11-21): the PoC runner, after the canary, and the database marker lookup join the run network; the app gets one read-only mount, creep's canary file); [ADR 0029](0029-build-mirror.md) (Proposed: an operator-provided internal mirror network for rootless Podman builds, `sandbox.mirror.*`)
 - **Changes:** the exec rule in `internal/tools/budget` (one new package, `internal/sandbox`, matched exactly); the layers table (`sandbox` moves to layer 5 and imports `static`; `verify` and `mcp` move to 6, `cli` to 7, `cmd/creep` to 8); the CLI contract (`creep clean`, the sandbox section of `creep doctor`, one stderr line in `creep scan` when `sandbox.enabled`)
 
 ## Context

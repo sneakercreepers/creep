@@ -67,6 +67,7 @@ type Sandbox struct {
 	app        bool      // StartApp ran
 	fileCanary string    // the content of the app's canary file, once planted
 	images     []string  // image IDs Build made
+	mirror     Mirror    // the operator's build mirror (UseMirror); zero builds offline
 	aborted    error     // why the run was aborted (a canary failure); sticky
 }
 

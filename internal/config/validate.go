@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -48,6 +49,10 @@ func validateKey(c *Config, key string) error {
 		return checkRange(c.Model.TimeoutSeconds, minTimeoutSeconds, maxTimeoutSeconds)
 	case "model.max_output_bytes":
 		return checkRange(c.Model.MaxOutputBytes, minOutputBytes, maxOutputBytes)
+	case "sandbox.mirror.bridge":
+		return checkBridge(c.Sandbox.Mirror.Bridge)
+	case "sandbox.mirror.proxy":
+		return checkProxy(c.Sandbox.Mirror.Proxy)
 	}
 	return nil
 }
@@ -127,6 +132,32 @@ func checkCommandLine(s string) error {
 	}
 	if strings.IndexFunc(s, func(r rune) bool { return r != ' ' && (unicode.IsSpace(r) || !unicode.IsPrint(r)) }) >= 0 {
 		return fmt.Errorf("invalid command line %q: contains control characters or whitespace other than spaces", s)
+	}
+	return nil
+}
+
+// The same rules as internal/sandbox's, which checks again before a build:
+// a network name no flag can be read from and no network mode, and a proxy
+// with only a scheme, host and port, so it carries no credentials.
+var (
+	bridgePattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
+	proxyPattern    = regexp.MustCompile(`^https?://[A-Za-z0-9]([A-Za-z0-9.-]{0,252})(:[0-9]{1,5})?/?$`)
+	reservedBridges = []string{"none", "host", "bridge", "default", "private", "slirp4netns", "pasta", "podman", "container", "ns"}
+)
+
+func checkBridge(s string) error {
+	if s == "" {
+		return nil
+	}
+	if !bridgePattern.MatchString(s) || slices.Contains(reservedBridges, strings.ToLower(s)) {
+		return fmt.Errorf("invalid network %q: want the name of an internal network the operator created (letters, digits, _ . -), not a network mode", s)
+	}
+	return nil
+}
+
+func checkProxy(s string) error {
+	if s != "" && !proxyPattern.MatchString(s) {
+		return errors.New("invalid proxy: want http://host[:port] or https://host[:port], without credentials or a path (the value is not printed, since it may hold one)")
 	}
 	return nil
 }

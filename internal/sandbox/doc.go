@@ -62,8 +62,12 @@
 //     in its work directory without .env, git, creep or credential files,
 //     with one fixed command line: --network=none, no build arguments,
 //     secrets, SSH agent, extra hosts or entitlements, no pull, creep's
-//     labels. Anything that stops the build is a closed reason
-//     (verification unavailable), never an error; creep scan builds once
+//     labels. The one exception is the operator's build mirror (ADR
+//     0029, mirror.go): on rootless Podman only, after a fixed-format
+//     network inspect and a canary on the operator's internal network,
+//     RUN steps join it and get the proxy as build arguments; the mirror
+//     comes only from operator config. Anything that stops the build is a
+//     closed reason (verification unavailable), never an error; creep scan builds once
 //     per run when the sandbox is enabled, with its own file list and
 //     reader, and reports the reason (internal/cli). StartApp runs the built
 //     image on the run network, after the canary, with the hardened
