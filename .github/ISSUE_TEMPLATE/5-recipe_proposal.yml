@@ -4,7 +4,7 @@ labels: ["type/feature", "area/recipes", "needs-triage"]
 body:
   - type: markdown
     attributes:
-      value: Recipes are **data, not code**. A recipe only loads if its vulnerable and safe fixtures pass. Start from `creep recipe new my-recipe.json`, then run `creep recipe lint` and `creep recipe test` on it; the format is docs/schemas/recipe-v1.json.
+      value: Recipes are **data, not code**. A recipe only loads if its vulnerable and safe fixtures pass. Start from `creep recipe new my-recipe.json`, then run `creep recipe lint` and `creep recipe test` on it; the format is docs/schemas/recipe-v1.json. The step-by-step guide is [Writing recipes](https://github.com/sneakercreepers/creep/wiki/Writing-recipes).
   - type: input
     id: class
     attributes:
