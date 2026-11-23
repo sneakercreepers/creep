@@ -165,7 +165,7 @@ func changedOutside(before, after map[string]string, allowed string) []string {
 }
 
 func underDir(p, dir string) bool {
-	return dir != "" && p == dir || strings.HasPrefix(p, dir+string(filepath.Separator))
+	return dir != "" && (p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)))
 }
 
 func TestMCPRefusesUnsafeFlags(t *testing.T) {
