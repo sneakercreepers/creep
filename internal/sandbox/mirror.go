@@ -62,8 +62,11 @@ func (s *Sandbox) currentMirror() Mirror {
 	return s.mirror
 }
 
-// checkMirrorConfig refuses a mirror creep would not pass to a builder.
-func checkMirrorConfig(m Mirror) bool {
+// Valid reports whether creep would pass m to a builder: a bridge name
+// that is no network mode or flag, and a proxy with only a scheme, host
+// and port. internal/config checks the same rules when it loads the
+// setting; cli.TestMirrorRulesMatchConfig keeps the two in step.
+func (m Mirror) Valid() bool {
 	if !bridgeName.MatchString(m.Bridge) || slices.Contains(reservedBridges, strings.ToLower(m.Bridge)) {
 		return false
 	}
@@ -76,7 +79,7 @@ func checkMirrorConfig(m Mirror) bool {
 // build; only the caller's cancel returns an error.
 func (s *Sandbox) clearMirror(ctx context.Context, m Mirror) (*refusal, error) {
 	switch {
-	case !checkMirrorConfig(m):
+	case !m.Valid():
 		return refuse(BuildMirrorRefused, mirrorConfig), nil
 	case s.status.Runtime != Podman:
 		return refuse(BuildMirrorRefused, mirrorBuilder), nil

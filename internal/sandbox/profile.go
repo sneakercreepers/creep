@@ -152,7 +152,7 @@ func checkSpec(spec Spec) error {
 		return fmt.Errorf("too many arguments, variables or mounts: %w", ErrSpec)
 	case spec.Timeout < 0 || spec.Timeout > MaxTimeout:
 		return fmt.Errorf("timeout %s outside 0..%s: %w", spec.Timeout, MaxTimeout, ErrSpec)
-	case spec.bridge != "" && (!spec.networked || !checkMirrorConfig(Mirror{Bridge: spec.bridge})):
+	case spec.bridge != "" && (!spec.networked || !(Mirror{Bridge: spec.bridge}).Valid()):
 		return fmt.Errorf("network %q: %w", spec.bridge, ErrSpec)
 	case spec.alias != "" && (!spec.networked || !aliasName.MatchString(spec.alias)):
 		return fmt.Errorf("network alias %q: %w", spec.alias, ErrSpec)

@@ -136,7 +136,8 @@ func checkCommandLine(s string) error {
 	return nil
 }
 
-// The same rules as internal/sandbox's, which checks again before a build:
+// The same rules as internal/sandbox's Mirror.Valid, which runs again before
+// a build (cli.TestMirrorRulesMatchConfig keeps them in step):
 // a network name no flag can be read from and no network mode, and a proxy
 // with only a scheme, host and port, so it carries no credentials.
 var (
