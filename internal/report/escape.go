@@ -27,6 +27,10 @@ func codeSpan(s string) string {
 	return fence + body + fence
 }
 
+// Visible is visible for other packages: an untrusted string with every
+// rune that is not printable shown as a Go escape (creep mcp, #32).
+func Visible(s string) string { return visible(s) }
+
 // visible escapes everything but printable runes and spaces, plus '|' and
 // the backslash that starts every escape.
 func visible(s string) string {
