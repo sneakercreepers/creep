@@ -25,6 +25,10 @@ type CacheOptions struct {
 	// Recalibrate (--recalibrate) runs and stores a new calibration even when
 	// a valid one is cached.
 	Recalibrate bool
+	// CacheOnly returns ErrNotCached instead of running and storing a new
+	// calibration when no valid one is cached: creep mcp writes nothing
+	// outside .creep/ (ADR 0027).
+	CacheOnly bool
 	// Now is the clock; tests inject one.
 	Now func() time.Time
 }
@@ -52,6 +56,9 @@ type cacheKeyFields struct {
 	TaskSet       string          `json:"task_set"`
 	PromptVersion int             `json:"prompt_version"`
 }
+
+// ErrNotCached means CacheOnly found no valid cached calibration.
+var ErrNotCached = errors.New("no valid cached calibration for this model; run creep scan from the CLI to calibrate it")
 
 // RunCached returns the cached calibration for the model, seed, task set and
 // PromptVersion when it is younger than MaxAge, and otherwise calls Run and
@@ -91,6 +98,9 @@ func runCached(ctx context.Context, opts CacheOptions, tasks []Task, want cacheK
 		if err != nil || ok {
 			return c, err
 		}
+	}
+	if opts.CacheOnly {
+		return Calibration{}, ErrNotCached
 	}
 	r, err := run(ctx, opts.Options, tasks)
 	if err != nil {

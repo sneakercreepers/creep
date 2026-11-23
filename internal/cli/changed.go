@@ -42,6 +42,14 @@ func readChangedList(path string) (*changedList, error) {
 	return parseChangedList(data)
 }
 
+// changedList is the list creep mcp built in memory, or --changed.
+func (e env) changedList() (*changedList, error) {
+	if e.changed != nil {
+		return e.changed, nil
+	}
+	return readChangedList(e.opts.changed)
+}
+
 // parseChangedList reads one path per line, or, when the data holds a NUL
 // byte, one per NUL (git's -z). Blank entries are skipped, and repeats
 // count once, case variants included. Any entry that is not a clean

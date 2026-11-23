@@ -6,6 +6,29 @@ import (
 	"sort"
 )
 
+// linkProven lists third-party modules whose import graph reaches package
+// net or a process start, each with the one main-module package that may
+// import them. The net and process reach checks skip such an import there
+// because internal/tools/linkcheck proves, on the linked binary of every
+// release target, that no third-party code creep links reaches a function
+// that opens a connection or starts a program (ADR 0027). Any other
+// package importing the module still fails both checks.
+var linkProven = map[string]string{
+	"github.com/modelcontextprotocol/go-sdk": "internal/mcp",
+}
+
+// linkExempt reports an import of a linkProven module by the one package
+// allowed to import it. The module comes from the listing, not from the
+// import path, so a look-alike path gets no exemption.
+func linkExempt(modPath string, pkgs map[string]listedPackage, importer, imp string) bool {
+	m := pkgs[imp].Module
+	if m == nil || m.Main {
+		return false
+	}
+	allowed, ok := linkProven[m.Path]
+	return ok && importer == path.Join(modPath, allowed)
+}
+
 // reachProblems runs the transitive net and process-start checks over one
 // listing of the import graph.
 func reachProblems(cfg config) ([]string, error) {
@@ -37,7 +60,7 @@ func checkNetReach(modPath string, pkgs map[string]listedPackage) []string {
 		}
 		roots := append(append(append([]string{}, p.Imports...), p.TestImports...), p.XTestImports...)
 		for _, root := range roots {
-			if isMain(pkgs, root) {
+			if isMain(pkgs, root) || linkExempt(modPath, pkgs, p.ImportPath, root) {
 				continue
 			}
 			if reachesNet(pkgs, root, map[string]bool{}) {

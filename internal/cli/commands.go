@@ -14,6 +14,9 @@ type env struct {
 	stderr io.Writer
 	opts   globalOptions
 	deps   scanDeps
+	// changed is a --changed list built in memory (creep mcp); nil reads
+	// --changed.
+	changed *changedList
 }
 
 type command struct {
@@ -34,6 +37,7 @@ var commands = []command{
 	{"resume", "resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)", runResume},
 	{"version", "print version, commit and Go version", runVersion},
 	{"config", "explain: show each effective config value and the layer it came from", runConfig},
+	{"mcp", "serve the read-only MCP tools scan (changed files only), findings and why over stdio, for a coding agent (ADR 0027)", runMCP},
 	{"recipe", "new|lint|test <file.json>: write a recipe template, check a recipe, or load it by running its fixtures through the reader with your model (ADR 0025)", runRecipe},
 }
 

@@ -133,7 +133,7 @@ func loadScanInputs(e env, args []string) (scanInputs, error) {
 	if in.gate, err = chooseGate(e, in.resolved); err != nil {
 		return scanInputs{}, err
 	}
-	if in.changed, err = readChangedList(e.opts.changed); err != nil {
+	if in.changed, err = e.changedList(); err != nil {
 		return scanInputs{}, err
 	}
 	if in.baseline, err = loadScanBaseline(e.opts, e.deps.today()); err != nil {
