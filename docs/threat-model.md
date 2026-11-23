@@ -1,6 +1,6 @@
 # Threat model
 
-What `creep` protects, from whom, where the trust boundaries are, and which control and test holds each one. It describes the code on `main` (v0.2 in progress), not the roadmap: anything not built yet is marked **planned** with its issue, and §7 lists the requirements it must meet before it ships.
+What `creep` protects, from whom, where the trust boundaries are, and which control and test holds each one. It describes the code on `main` (v0.2.0 released, v0.3 in progress), not the roadmap: anything not built yet is marked **planned** with its issue, and §7 lists the requirements it must meet before it ships.
 
 Review it:
 
