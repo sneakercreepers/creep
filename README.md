@@ -6,7 +6,7 @@
 `creep` measures what your model can actually do, plans around it, sends it only redacted code, and tells you plainly what it did *not* check.
 
 [![Release](https://img.shields.io/github/v/release/sneakercreepers/creep?include_prereleases&sort=semver)](https://github.com/sneakercreepers/creep/releases)
-[![v0.2 progress](https://img.shields.io/github/milestones/progress-percent/sneakercreepers/creep/2?label=v0.2)](https://github.com/sneakercreepers/creep/milestone/2)
+[![v0.3 progress](https://img.shields.io/github/milestones/progress-percent/sneakercreepers/creep/3?label=v0.3)](https://github.com/sneakercreepers/creep/milestone/3)
 [![Open issues](https://img.shields.io/github/issues/sneakercreepers/creep)](https://github.com/sneakercreepers/creep/issues)
 [![CI](https://github.com/sneakercreepers/creep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sneakercreepers/creep/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/sneakercreepers/creep/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/sneakercreepers/creep/actions/workflows/codeql.yml)
@@ -14,14 +14,14 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.2%20complete%20on%20main-green)
+![Status](https://img.shields.io/badge/status-v0.2.0%20released-green)
 
 </div>
 
 > [!NOTE]
-> **v0.2 is complete on `main`.** Every [v0.2 milestone](https://github.com/sneakercreepers/creep/milestone/2) issue is closed and its release pentest is fixed; `v0.2.0` is tagged next. Until then [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0) is the current release, and it scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only.
+> **[`v0.2.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.2.0) is the current release** (2026-11-22): every [v0.2 milestone](https://github.com/sneakercreepers/creep/milestone/2) issue is closed and its release pentest is fixed. The previous release, [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0), scans **Python (Flask, FastAPI)** and **JavaScript/TypeScript (Express)** only.
 >
-> New in v0.2 on `main`:
+> New in v0.2.0:
 >
 > - **Language-agnostic analysis** ([Languages](#languages), [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)).
 > - **Sandbox and verification**: with the sandbox enabled, a nightly scan builds the app offline from the repository's own compose file or Dockerfile and runs a PoC 5 times against it for each probable SQL injection, path traversal or template injection finding; a finding is `verified` only when its PoC verified in at least one run, with its rate when it verified in some runs only ([Sandbox and verification](#sandbox-and-verification)). It needs Docker Engine >= 25.0.2 with runc >= 1.1.12, or Podman with Buildah >= 1.35.3 and runc >= 1.1.12 or crun >= 1.4.4.
@@ -76,17 +76,17 @@ Limits:
 
 ### From the GitHub release
 
-Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.1.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.1.0).
+Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.2.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.2.0).
 
-Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.1.0` on linux/amd64:
+Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.2.0` on linux/amd64:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.1.0' \
+  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.2.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
-gh attestation verify creep_0.1.0_linux_amd64.tar.gz \
+gh attestation verify creep_0.2.0_linux_amd64.tar.gz \
   --repo sneakercreepers/creep \
   --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
@@ -385,7 +385,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | Version | Scope |
 |---|---|
 | **v0.1** ✅ | CLI, static analysis (Flask, FastAPI, Express; replaced in v0.2 by language-agnostic discovery, #265), calibration, planner/reader triage, coverage report, redaction gateway, command presets, optional scanners, signed releases |
-| **v0.2** ✅ | Language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)), coverage gaps (#213, #214), redaction and config hardening (#70, #71, #62, #63, #106, #190), preset policy (#229) and codex flags checked (#272), sandbox runtime and hardened profile (#21) with minimum engine versions (#311), run network, canary and synthetic database (#22), offline app build (#23), PoC verification and `creep reproduce` (#24, #25), incremental scans with `--changed` (#26), baseline and accepted risks (#27, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29, [ADR 0023](docs/adr/0023-github-action.md)), guides (#31), discovery stability `--stability N` (#37, [ADR 0024](docs/adr/0024-discovery-stability.md)), gateway hardening (#115, #116), contract goldens (#135), signed commits on `main` (#49, [ADR 0026](docs/adr/0026-signed-commits.md)); release pentest fixed (#307, #308, #311); `v0.2.0` to be tagged |
+| **v0.2** ✅ | Language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)), coverage gaps (#213, #214), redaction and config hardening (#70, #71, #62, #63, #106, #190), preset policy (#229) and codex flags checked (#272), sandbox runtime and hardened profile (#21) with minimum engine versions (#311), run network, canary and synthetic database (#22), offline app build (#23), PoC verification and `creep reproduce` (#24, #25), incremental scans with `--changed` (#26), baseline and accepted risks (#27, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29, [ADR 0023](docs/adr/0023-github-action.md)), guides (#31), discovery stability `--stability N` (#37, [ADR 0024](docs/adr/0024-discovery-stability.md)), gateway hardening (#115, #116), contract goldens (#135), signed commits on `main` (#49, [ADR 0026](docs/adr/0026-signed-commits.md)); release pentest fixed (#307, #308, #311); released as [`v0.2.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.2.0) (2026-11-22) |
 | v0.3 (next) | Read-only MCP mode (#32), recipes: format and `creep recipe` built ([ADR 0025](docs/adr/0025-recipes.md)), installing pinned recipes next (#34), public `creep-bench` (#35, #36), registry mirror for the app build (#277), recipe, MCP and model results guides (#38) |
 | v1.0 | Organization policy features, HTML report |
 
