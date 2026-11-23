@@ -27,7 +27,7 @@ func (m Mirror) Set() bool { return m.Bridge != "" || m.Proxy != "" }
 // instead of a network: host would give RUN steps the host's network.
 var (
 	bridgeName      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
-	proxyURL        = regexp.MustCompile(`^https?://[A-Za-z0-9]([A-Za-z0-9.-]{0,252})(:[0-9]{1,5})?/?$`)
+	proxyURL        = regexp.MustCompile(`^https?://[A-Za-z0-9]([A-Za-z0-9.-]{0,252})(:(6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3}))?/?$`)
 	reservedBridges = []string{"none", "host", "bridge", "default", "private", "slirp4netns", "pasta", "podman", "container", "ns"}
 )
 
