@@ -64,7 +64,8 @@
 //     redact.ErrRunFull reported by the caller as OutcomeIncomplete) loads as
 //     incomplete, so it can never be read back as a clean scan.
 //
-// What it does not do: redact. Events hold only IDs and enums (Step and
+// What it does not do: redact. Events hold only IDs, enums, step times and
+// the start line's Header of hex digests (#335; Step and
 // Reason are checked against an ID alphabet), and the cache holds model
 // responses exactly as the gateway returned them for already redacted
 // requests. Callers must not store anything else.

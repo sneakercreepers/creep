@@ -22,10 +22,11 @@ var errScanDeadline = errors.New("scan deadline reached (budget.max_seconds)")
 // incomplete.
 const reasonDeadline = string(report.SkipBudget)
 
-// startDeadline cancels ctx with errScanDeadline after seconds. The returned
-// stop disarms it and reports whether it fired.
-func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, seconds int) (stop func() bool) {
-	timer := time.AfterFunc(time.Duration(seconds)*time.Second, func() { cancel(errScanDeadline) })
+// startDeadline cancels ctx with errScanDeadline after left (at once when
+// it is not positive). The returned stop disarms it and reports whether it
+// fired.
+func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, left time.Duration) (stop func() bool) {
+	timer := time.AfterFunc(left, func() { cancel(errScanDeadline) })
 	return func() bool {
 		timer.Stop()
 		return errors.Is(context.Cause(ctx), errScanDeadline)
@@ -38,7 +39,8 @@ func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, seconds 
 // lists what the deadline cut; a run it cut stops with reason budget and is
 // never clean.
 func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc, tier calibrate.Tier, files repoFiles, stderr io.Writer) (scanResult, error) {
-	stop := startDeadline(ctx, cancel, s.cfg.Budget.MaxSeconds)
+	// A resumed run gets only what the original left (#335).
+	stop := startDeadline(ctx, cancel, s.timeLeft())
 	res, err := s.scan(ctx, tier, files)
 	if err == nil {
 		res.scanners = runScanners(ctx, s.cfg.Scanners.Enabled, s.deps.scannerRunner(), stderr)

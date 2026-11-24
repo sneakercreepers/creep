@@ -170,6 +170,17 @@ var errNotRecordable = errors.New("reply not recordable")
 // and the default serves this user's recordings and records new ones. Keys
 // hash the exact request body, so a changed prompt, slice or model misses.
 func recordedSend(store *state.Store, mode state.Mode, send models.SendFunc) models.SendFunc {
+	return respondingSend(func(k state.Key, call func() ([]byte, error)) ([]byte, error) {
+		return store.Respond(mode, k, call)
+	}, send)
+}
+
+// responder answers a cache key from the run-state cache or call, as
+// state.Store.Respond does for one mode; a scan's is session.respond.
+type responder func(k state.Key, call func() ([]byte, error)) ([]byte, error)
+
+// respondingSend is recordedSend with the cache lookup left to respond.
+func respondingSend(respond responder, send models.SendFunc) models.SendFunc {
 	return func(ctx context.Context, c gateway.Call) (*gateway.Reply, error) {
 		// A replayed answer needs no transport to notice a done context, so
 		// the scan deadline is checked here too (#260).
@@ -177,7 +188,7 @@ func recordedSend(store *state.Store, mode state.Mode, send models.SendFunc) mod
 			return nil, fmt.Errorf("model call: %w", context.Cause(ctx))
 		}
 		var live *gateway.Reply
-		body, err := store.Respond(mode, cacheKey(c), func() ([]byte, error) {
+		body, err := respond(cacheKey(c), func() ([]byte, error) {
 			r, err := send(ctx, c)
 			if err != nil {
 				return nil, err

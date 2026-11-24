@@ -119,6 +119,10 @@ type requestLine struct {
 	SHA256      string         `json:"sha256"`
 	Redactions  map[string]int `json:"redactions"`
 	PayloadFile string         `json:"payload_file"`
+	// Reserve is the tokens the budget charged before sending, which a
+	// reopened log charges again when the call has no reported usage
+	// (#335). Added after v1; a line without it charges the whole budget.
+	Reserve int `json:"reserve,omitempty"`
 }
 
 // resultLine follows the request line with the same ID once the call ends.
@@ -289,7 +293,7 @@ func (l *EgressLog) logRequest(call Call, endpoint string) (string, error) {
 		V: logVersion, Type: "request", ID: id, Time: now(),
 		Endpoint: endpoint, Model: call.Model, Purpose: call.Purpose,
 		Bytes: len(call.Payload), SHA256: hex.EncodeToString(sum[:]),
-		Redactions: redactions, PayloadFile: file,
+		Redactions: redactions, PayloadFile: file, Reserve: call.ReserveTokens,
 	})
 }
 

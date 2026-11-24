@@ -1,7 +1,7 @@
 # flag, type, default, commands that accept it (implemented commands only)
---baseline        string   ""      scan accept
---baseline-write  bool     "false" scan
---changed         string   ""      scan estimate
+--baseline        string   ""      scan accept resume
+--baseline-write  bool     "false" scan resume
+--changed         string   ""      scan estimate resume
 --config          string   ""      init doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
 --expires         string   ""      accept
 --format          string   "text"  init doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
@@ -14,5 +14,5 @@
 --recalibrate     bool     "false" init doctor scan estimate why accept reproduce clean resume version config bench recipe
 --record          bool     "false" init doctor scan estimate why accept reproduce clean resume version config bench recipe
 --replay          bool     "false" init doctor scan estimate why accept reproduce clean resume version config bench mcp recipe
---stability       int      "1"     scan estimate
+--stability       int      "1"     scan estimate resume
 --stats           bool     "false" init doctor scan estimate why accept reproduce clean resume version config bench mcp recipe

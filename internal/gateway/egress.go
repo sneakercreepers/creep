@@ -66,7 +66,8 @@ type EgressLog struct {
 // (doc.go).
 //
 // consent gates and budget limits every Send before anything is written or
-// sent; a nil consent or budget refuses every call.
+// sent; a nil consent or budget refuses every call. An existing log's
+// calls and tokens are charged to budget first (a resumed run, #335).
 func OpenEgressLog(runDir string, consent *Consent, budget *Budget) (*EgressLog, error) {
 	run, err := openRunDir(runDir)
 	if err != nil {
@@ -83,6 +84,12 @@ func OpenEgressLog(runDir string, consent *Consent, budget *Budget) (*EgressLog,
 		return nil, err
 	}
 	l.consent, l.budget = consent, budget
+	// A reopened log is a resumed run (#335): what it already spent counts
+	// against this budget, so resuming cannot reset a limit.
+	if err := l.chargeLogged(); err != nil {
+		_ = l.Close()
+		return nil, err
+	}
 	return l, nil
 }
 

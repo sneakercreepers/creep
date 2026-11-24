@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
@@ -70,7 +71,7 @@ func runEstimate(e env, args []string) int {
 	// and a cut estimate fails closed (exit 4), never reading as whole.
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	stop := startDeadline(ctx, cancel, est.cfg.Budget.MaxSeconds)
+	stop := startDeadline(ctx, cancel, time.Duration(est.cfg.Budget.MaxSeconds)*time.Second)
 	err = est.run(ctx, e.deps)
 	cut := stop()
 	if err != nil {

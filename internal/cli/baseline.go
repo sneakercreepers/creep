@@ -34,10 +34,10 @@ func checkBaselineFlags(cmd string, o globalOptions) error {
 	switch {
 	case o.explicit["baseline"] && o.baseline == "":
 		return errors.New("--baseline needs a file path")
-	case o.explicit["baseline"] && cmd != "scan" && cmd != "accept":
-		return errors.New("--baseline is only for scan and accept")
-	case o.baselineWrite && cmd != "scan":
-		return errors.New("--baseline-write is only for scan")
+	case o.explicit["baseline"] && cmd != "scan" && cmd != "resume" && cmd != "accept":
+		return errors.New("--baseline is only for scan, resume and accept")
+	case o.baselineWrite && cmd != "scan" && cmd != "resume":
+		return errors.New("--baseline-write is only for scan and resume")
 	case o.baselineWrite && o.baseline == "":
 		return errors.New("--baseline-write needs --baseline <file>, the file it writes")
 	case (o.explicit["expires"] || o.explicit["reason"]) && cmd != "accept":

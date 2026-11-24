@@ -185,6 +185,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep reproduce <id>` | Run a verified finding's PoC again from its bundle in `.creep/bundles/`, against a fresh offline build, as many times as the scan did; no model is read, configured or called. Needs `sandbox.enabled`. Exit 0 when it verified in at least one run, 1 when in none ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)) |
 | `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level, the pinned images it needs |
 | `creep clean` | Remove every container, app image and network creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
+| `creep resume <run>` | Continue a scan that stopped before writing its report (killed, or a calibration failure), with the same config and flags; the run ID is its folder in `.creep/runs/`. A changed config, model, contract, endpoint, tier, mode, creep version, prompt or file is refused with exit 2 and nothing sent. Finished calls are served from `.creep/cache` and never sent again; the call that was cut is sent again, and `egress.log` lists both attempts. The budget and `budget.max_seconds` keep counting what the run already spent ([ADR 0032](docs/adr/0032-resume.md)) |
 | `creep config explain` | Show each effective config value and its source layer |
 | `creep recipe new\|lint\|test <file.json>` | Write a recipe template, check a recipe with no model call, or load it: its vulnerable fixture must be flagged and its safe fixture clean, through the reader and your model. Exit 0 only when it loads, 2 when it is refused, 3 on a model failure ([ADR 0025](docs/adr/0025-recipes.md), schema in [docs/schemas/recipe-v1.json](docs/schemas/recipe-v1.json)) |
 | `creep recipe add github.com/<owner>/<repo>@<commit> <clone>` | Install the `recipes/*.json` files of your own git clone of that repository, checked out (detached) at that full 40-hex commit; branch names and tags are refused and creep makes no network call. Files go to `~/.creep/recipes`, pinned by SHA-256 in `creep.lock`. Every `scan` then checks each checksum (a changed file exits 2), the policy's `recipe_sources` allowlist and each recipe's fixtures before giving its hint to the reader ([ADR 0028](docs/adr/0028-recipe-install-and-lock.md)) |
@@ -192,7 +193,6 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep mcp` | Serve the read-only MCP tools `scan` (changed files only), `findings` and `why` over stdio for a coding agent ([MCP server](#mcp-server)) |
 | `creep version` | Print version, commit and Go version |
 
-Continuing a run with `creep resume` is not implemented yet and fails closed.
 
 ### MCP server
 

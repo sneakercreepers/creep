@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan), [ADR 0024](0024-discovery-stability.md) (`--stability N`; report v1 gains `stability` on a finding)
+- **Amended by:** [ADR 0032](0032-resume.md) (`creep resume` continues an interrupted scan), [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan), [ADR 0024](0024-discovery-stability.md) (`--stability N`; report v1 gains `stability` on a finding)
 
 ## Context
 
@@ -51,7 +51,7 @@ Vendor, generated and minified files (a source file of any listed language under
 - `internal/cli` holds the static→planner and planner→reader mappings as explicit switches; `plannermap_test.go` fails when either side gains a value. A static kind with no planner support yet is named in `pendingKinds` with its issue (empty since #212 mapped `static.SinkNoSQL` to `planner.SinkNoSQL` and `nosql_injection`); its sinks are listed as not evaluated (`unmapped_kind`) and never planned. The scan extracts Python with Flask and FastAPI and JavaScript, TypeScript and TSX with Express (#87).
 - `reader.Signal` gains `Partial`; `reader.CallTokens` gives the planner its per-step cost.
 - From the first release on, report fields change only with a `schema_version` bump. Amended by the #26 amendment below: there is no report v2, and v1 changes additively only, as the schema now says.
-- `resume` still fails closed; continuing a run needs per-step resume, a follow-up.
+- `resume` still fails closed; continuing a run needs per-step resume, a follow-up. Superseded by [ADR 0032](0032-resume.md): `creep resume` continues the run.
 - `--diff`, a `--gate` choice (`gates.nightly`) and a severity per finding are not decided here. Incremental scans are decided in the #26 amendment below (`--changed`).
 
 ## Follow-up: what counts as left out by design (v0.1 release pentest P4, #213)

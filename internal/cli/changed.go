@@ -137,7 +137,7 @@ func printIncremental(w io.Writer, rep *report.Report) {
 
 // changedCommands are the commands --changed limits; any other command
 // refuses it rather than run a scope nobody asked for.
-var changedCommands = map[string]bool{"scan": true, "estimate": true}
+var changedCommands = map[string]bool{"scan": true, "estimate": true, "resume": true}
 
 func checkChangedFlag(command string, opts globalOptions) error {
 	switch {
@@ -146,7 +146,7 @@ func checkChangedFlag(command string, opts globalOptions) error {
 	case opts.changed == "":
 		return errors.New("--changed needs a file listing the changed paths; leave the flag out to scan every file")
 	case !changedCommands[command]:
-		return fmt.Errorf("--changed limits only scan and estimate, not %s", command)
+		return fmt.Errorf("--changed limits only scan, resume and estimate, not %s", command)
 	}
 	return nil
 }

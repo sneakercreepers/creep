@@ -324,8 +324,8 @@ func TestStabilityFlag(t *testing.T) {
 		{[]string{"estimate", "--stability", "6"}, "--stability 6: want 1 to 5 runs"},
 		{[]string{"scan", "--stability", "two"}, "invalid value"},
 		{[]string{"scan", "--stability", "1.5"}, "invalid value"},
-		{[]string{"why", "sink-1", "--stability", "2"}, "--stability changes only scan and estimate, not why"},
-		{[]string{"doctor", "--stability", "1"}, "--stability changes only scan and estimate, not doctor"},
+		{[]string{"why", "sink-1", "--stability", "2"}, "--stability changes only scan, resume and estimate, not why"},
+		{[]string{"doctor", "--stability", "1"}, "--stability changes only scan, resume and estimate, not doctor"},
 	}
 	for _, tt := range tests {
 		code, _, errOut := runScanWith(noModelDeps, tt.args...)

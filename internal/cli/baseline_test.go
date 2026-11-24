@@ -255,8 +255,8 @@ func TestBaselineFlagRules(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"baseline on why", []string{"why", "sink-1", "--baseline", "b.json"}, "only for scan and accept"},
-		{"baseline on estimate", []string{"estimate", "--baseline", "b.json"}, "only for scan and accept"},
+		{"baseline on why", []string{"why", "sink-1", "--baseline", "b.json"}, "only for scan, resume and accept"},
+		{"baseline on estimate", []string{"estimate", "--baseline", "b.json"}, "only for scan, resume and accept"},
 		{"empty baseline", []string{"scan", "--baseline="}, "needs a file path"},
 		{"write without baseline", []string{"scan", "--baseline-write"}, "needs --baseline"},
 		{"write on accept", []string{"accept", "sink-1", "--baseline-write", "--baseline", "b.json"}, "only for scan"},

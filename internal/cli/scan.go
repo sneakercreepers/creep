@@ -10,7 +10,6 @@ import (
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
-	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/models"
 	"github.com/sneakercreepers/creep/internal/planner"
 	"github.com/sneakercreepers/creep/internal/reader"
@@ -57,6 +56,18 @@ type session struct {
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
+	// resumed is what a resumed run had finished (#335): its steps, served
+	// from recordings only, and the scan time it spent. Empty for a scan.
+	resumed resumedRun
+	// scanStart is when the deadline phase began; zero before it.
+	scanStart time.Time
+	// boxID names the run's sandbox: the run ID, or for a resumed run a
+	// fresh name, so it never meets what the interrupted run built.
+	boxID string
+	// refused is a resume refusal found mid-pipeline (session.refuse), and
+	// cancel the run context's cancel it stops the run with.
+	refused *resumeRefusal
+	cancel  context.CancelCauseFunc
 }
 
 // scanResult is what the pipeline decided, for the report.
@@ -73,111 +84,18 @@ type scanResult struct {
 	slices map[int]reader.Slice
 }
 
-// runScan scans the current directory: walk, calibrate, discovery (the
-// inventory, the tripwire and the model, ADR 0017), plan, reader, report.
-// Errors before a report exists exit 2 (or 3 for the model); afterwards
-// the exit code is exitcode.ForReport, never 0 for an incomplete run
-// (ADR 0007).
-func runScan(e env, args []string) int {
-	in, err := loadScanInputs(e, args)
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
-	// The scan deadline (#260) or an MCP call the agent called off ends
-	// the run's context; the deadline starts after calibration, and the
-	// redactor stops with it.
-	ctx, cancel := context.WithCancelCause(e.parent())
-	defer cancel(nil)
-	s, err := openSession(ctx, e, in)
-	if err != nil {
-		printError(e.stderr, "creep scan", err)
-		return exitcode.ConfigError
-	}
-	defer s.close()
-	warnPreset(e.stderr, in.resolved.Config.Model)
-	files, scanned, err := s.walk(ctx, e.stderr)
-	if err != nil {
-		return s.fail(e, "creep scan", err, exitcode.ConfigError)
-	}
-	if err := s.checkTools(ctx); err != nil {
-		return s.fail(e, "creep scan: tool canary", err, failureCode(err))
-	}
-	cal, err := s.calibrate(ctx)
-	if err != nil {
-		return s.fail(e, "creep scan: calibration", err, failureCode(err))
-	}
-	if err := s.checkRecipes(ctx, cal.Tier, e.stderr); err != nil {
-		return s.fail(e, "creep scan: recipes", err, recipeFailureCode(err))
-	}
-	deadline := s.deps.sandbox.clock().Add(time.Duration(s.cfg.Budget.MaxSeconds) * time.Second)
-	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
-	if err != nil {
-		return s.fail(e, "creep scan", err, exitcode.ConfigError)
-	}
-	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
-	cal = s.feedStability(e.stderr, cal, res.findings)
-	return s.finish(e, cal, res)
-}
-
-// scanInputs is what a scan reads and checks before it opens anything:
-// the config, the gate of its mode, the --changed list, the baseline and
-// the installed recipes, verified against creep.lock (ADR 0028).
-type scanInputs struct {
-	resolved *config.Resolved
-	gate     runGate
-	changed  *changedList
-	baseline *scanBaseline
-	recipes  []installedRecipe
-}
-
-// loadScanInputs reads the scan's inputs; any error is a usage or config
-// error (exit 2), reported before a session, state or model is touched.
-func loadScanInputs(e env, args []string) (scanInputs, error) {
-	if len(args) > 1 || (len(args) == 1 && args[0] != ".") {
-		return scanInputs{}, fmt.Errorf("scans the current directory; run it from the repository root (got %d arguments)", len(args))
-	}
-	var in scanInputs
-	var err error
-	if in.resolved, err = loadConfig(e.opts); err != nil {
-		return scanInputs{}, err
-	}
-	if in.gate, err = chooseGate(e, in.resolved); err != nil {
-		return scanInputs{}, err
-	}
-	if in.changed, err = e.changedList(); err != nil {
-		return scanInputs{}, err
-	}
-	if in.baseline, err = loadScanBaseline(e.opts, e.deps.today()); err != nil {
-		return scanInputs{}, err
-	}
-	if in.recipes, err = loadInstalledRecipes(in.resolved); err != nil {
-		return scanInputs{}, err
-	}
-	return in, nil
-}
-
-// failureCode maps a model failure to its exit code: consent and other
-// errors that carry their own code (2), anything else 3.
-func failureCode(err error) int {
-	var coded interface{ ExitCode() int }
-	if errors.As(err, &coded) {
-		return coded.ExitCode()
-	}
-	return exitcode.ModelOrSandbox
-}
-
 // openSession checks the model settings before touching the disk, then
-// opens the state store, a new run, the model link and the repository.
-// The redactor stops with ctx.
-func openSession(ctx context.Context, e env, in scanInputs) (*session, error) {
+// opens the state store and the run (openState for a scan, a reopened run
+// for resume), the model link and the repository. The redactor stops with
+// ctx.
+func openSession(ctx context.Context, e env, in scanInputs, open func(*session) error) (*session, error) {
 	r := in.resolved
 	if err := checkModelConfig(r.Config.Model); err != nil {
 		return nil, err
 	}
 	s := &session{cfg: r.Config, opts: e.opts, deps: e.deps, stats: newRunStats(e.deps.now),
 		gate: in.gate, changed: in.changed, baseline: in.baseline, installed: in.recipes}
-	if err := s.openState(); err != nil {
+	if err := open(s); err != nil {
 		s.close()
 		return nil, err
 	}
@@ -229,13 +147,17 @@ func (s *session) openState() error {
 }
 
 // openRun opens the state store and a new run, which holds the state lock.
+// Its header records the settings a resume must match (#335).
 func (s *session) openRun() error {
 	var err error
 	if s.store, err = state.OpenUser(stateDir); err != nil {
 		return err
 	}
-	s.run, err = s.store.NewRun(s.mode())
-	return err
+	if s.run, err = s.store.NewRunWith(s.mode(), s.header()); err != nil {
+		return err
+	}
+	s.boxID = s.run.ID()
+	return nil
 }
 
 func (s *session) mode() state.Mode {
@@ -264,7 +186,7 @@ func (s *session) openModel(ctx context.Context) error {
 // run-state cache, the stats and the gateway, sample k's calls labeled
 // for it (sampleSend).
 func (s *session) sampleModel(k int) (*models.HTTP, error) {
-	send := s.stats.countRequests(sampleSend(k, recordedSend(s.store, s.mode(), s.stats.countSent(s.link.send))))
+	send := s.stats.countRequests(sampleSend(k, respondingSend(s.respond, s.stats.countSent(s.link.send))))
 	opts, err := sessionModelOptions(s.cfg.Model, s.link.command, send)
 	if err != nil {
 		return nil, err
