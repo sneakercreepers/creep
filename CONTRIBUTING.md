@@ -94,8 +94,8 @@ Delete the temporary directory and the two config files afterwards.
 | Preset | `verified` | Help wanted |
 |---|---|---|
 | `claude-code` | `true` | |
-| `gemini` | `false` | run the check with Gemini CLI |
-| `codex` | `false` | run the check with Codex CLI |
+| `gemini` | `false` | run the check with Gemini CLI and a Google AI Studio key (a Google account login fails headless, #333) |
+| `codex` | `false` | run the check with Codex CLI on Linux or macOS, where the tools-on control must fail (on Windows it passes, #316, #333) |
 | `ollama` | `false` | run the check with Ollama and a local model |
 
 ## Pull requests
