@@ -318,7 +318,7 @@ func TestRunRefusesSpec(t *testing.T) {
 }
 
 func TestOpenRefuses(t *testing.T) {
-	if _, err := Open(Status{Runtime: Docker, Reason: ReasonNoSeccomp}, testRunID); !errors.Is(err, ErrUnusable) {
+	if _, err := Open(Status{Runtime: Docker, Reason: ReasonNoSeccomp}, testRunID, Mirror{}); !errors.Is(err, ErrUnusable) {
 		t.Errorf("unusable runtime: %v", err)
 	}
 	for _, id := range []string{"", "-rm", "a b", "a/b", strings.Repeat("a", 65)} {

@@ -15,8 +15,7 @@ func TestRealMirrorBuild(t *testing.T) {
 	eachRuntime(t, func(t *testing.T, st Status) {
 		pullPinned(t, st)
 		internal := operatorNetwork(t, st, true)
-		s := openReal(t, st)
-		s.UseMirror(Mirror{Bridge: internal, Proxy: "http://mirror.invalid:3128"})
+		s := openRealMirror(t, st, Mirror{Bridge: internal, Proxy: "http://mirror.invalid:3128"})
 		reach := (&memRepo{files: map[string]string{
 			"Dockerfile": "FROM " + CanaryImage + "\nRUN wget -q -T 5 -O /dev/null http://1.1.1.1/ || nc -w 3 8.8.8.8 53 </dev/null\n",
 		}}).repo()
@@ -35,7 +34,7 @@ func TestRealMirrorBuild(t *testing.T) {
 		if st.Runtime != Podman || !st.Rootless {
 			return
 		}
-		s.UseMirror(Mirror{Bridge: operatorNetwork(t, st, false)})
+		s = openRealMirror(t, st, Mirror{Bridge: operatorNetwork(t, st, false)})
 		if got, err := s.Build(context.Background(), reach); err != nil || got.Detail != mirrorNotInternal {
 			t.Errorf("a routed network: %+v, %v; want mirror_refused/not_internal", got, err)
 		}

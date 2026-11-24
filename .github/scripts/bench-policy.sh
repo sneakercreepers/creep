@@ -28,9 +28,16 @@ if [[ "$endpoint" =~ $https_re ]]; then
   port="${BASH_REMATCH[6]}"
   allow="$host${port:+:$port}"
   origin="https://$allow"
+  # Workflow logs are public: a cloud endpoint (a private gateway or
+  # resource host) is masked for the rest of the job and never printed
+  # (v0.3 release review L2, threat model B6).
+  echo "::add-mask::$endpoint"
+  echo "::add-mask::$host"
+  shown="a cloud endpoint (masked)"
 elif [[ "$endpoint" =~ $local_re ]]; then
   allow="127.0.0.1:${BASH_REMATCH[1]}"
   origin="http://$allow"
+  shown="$origin"
 else
   fail "BENCH_ENDPOINT must be an https:// URL with a lowercase DNS name, or http://127.0.0.1:<port>"
 fi
@@ -42,4 +49,4 @@ defaults:
   egress: { allow: ["$allow"] }
 consent: ["$origin"]
 POLICY
-echo "bench-policy: $contract model $model at $origin"
+echo "bench-policy: $contract model $model at $shown"

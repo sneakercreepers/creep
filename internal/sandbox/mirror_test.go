@@ -43,7 +43,7 @@ func mirrorBuild(t *testing.T, st Status, m Mirror, rec *recorder, dockerfile st
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	s.UseMirror(m)
+	s.mirror = m
 	app, err := s.Build(context.Background(), dockerfileRepo(dockerfile))
 	if err != nil {
 		t.Fatalf("Build: %v", err)

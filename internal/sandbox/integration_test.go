@@ -153,7 +153,7 @@ func realContainerIsHardened(t *testing.T, st Status) {
 	// The operator's docker config sets proxies with a password; none of it
 	// may reach the container (the probe fails on any proxy variable).
 	st.env = withEnv(st.env, "DOCKER_CONFIG", proxiedDockerConfig(t))
-	s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()))
+	s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()), Mirror{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func realContainerIsHardened(t *testing.T, st Status) {
 func TestRealImageVolumesRefused(t *testing.T) {
 	eachRuntime(t, func(t *testing.T, st Status) {
 		image := probeImage(t, st, "VOLUME /data")
-		s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()))
+		s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()), Mirror{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,7 +287,7 @@ func TestKilledRunChild(t *testing.T) {
 	if i < 0 {
 		t.Fatalf("%s is not usable in the child", rt)
 	}
-	s, err := Open(usable[i], runID)
+	s, err := Open(usable[i], runID, Mirror{})
 	if err != nil {
 		t.Fatal(err)
 	}

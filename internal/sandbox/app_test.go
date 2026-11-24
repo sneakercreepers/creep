@@ -129,7 +129,7 @@ func TestBuildThroughRealExec(t *testing.T) {
 	bin := installFake(t, "docker")
 	st := usableDocker()
 	st.Path, st.env = bin, []string{"DOCKER_CONFIG=" + proxiedDockerConfig(t)}
-	s, err := Open(st, testRunID)
+	s, err := Open(st, testRunID, Mirror{})
 	if err != nil {
 		t.Fatal(err)
 	}

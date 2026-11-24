@@ -3,11 +3,16 @@ name: Changes
 # Tells CI and CodeQL whether a pull request changes only prose, so their
 # heavy jobs can skip while every required check still reports success
 # (ADR 0018 amendment, maintainer request of 2026-11-23). paths-ignore
-# would leave required checks pending. The classification is prcheck's
-# -ci-scope, built from the base commit, so a pull request cannot edit the
-# prcheck rule that skips its own tests. It can still edit this workflow or
-# its callers, a workflow change in its diff that review must catch. Anything but a pull request, and any failure
-# here, leaves docs_only empty: the callers then run every job.
+# would leave required checks pending. The callers run this file from
+# main (`sneakercreepers/creep/...@main`), not from the pull request's head,
+# and the classification is prcheck's -ci-scope built from the base commit,
+# so a pull request can change neither this workflow nor the prcheck rule
+# to skip its own tests; any change under .github/ runs everything. It can
+# still edit the callers' job conditions, a change to ci.yml or codeql.yml
+# in its diff that review must catch (threat model S9). An edit to this
+# file takes effect for pull requests only once it is on main. Anything
+# but a pull request, and any failure here, leaves docs_only empty: the
+# callers then run every job.
 on:
   workflow_call:
     outputs:

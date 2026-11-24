@@ -33,6 +33,52 @@ func TestBenchModelNameCarriesDigest(t *testing.T) {
 	}
 }
 
+// Protection (v0.3 release review L2): workflow logs and artifacts of this
+// public repository are public. The cloud job uploads only the results
+// (counts and the model name), never the recorded fixture (endpoint, raw
+// replies) or the run directory (egress.log), and the policy script masks
+// a cloud endpoint before it prints anything.
+func TestCloudBenchPublishesNoEndpointOrReplies(t *testing.T) {
+	wf := readRepo(t, ".github", "workflows", "bench.yml")
+	start := strings.Index(wf, "\n  cloud:\n")
+	if start < 0 {
+		t.Fatal("bench.yml: no cloud job")
+	}
+	cloud := wf[start:]
+	policy := readRepo(t, ".github", "scripts", "bench-policy.sh")
+	tests := []struct {
+		name, text, needle string
+		want               bool
+	}{
+		{"uploads only the results", cloud, "path: ${{ runner.temp }}/bench-out/results.json\n", true},
+		{"no fixture collected", cloud, "bench-fixture.json", false},
+		{"no run directory uploaded", cloud, ".creep/runs", false},
+		{"no debug artifact", cloud, "bench-cloud-debug", false},
+		{"endpoint is no variable", cloud, "vars.BENCH_ENDPOINT", false},
+		{"endpoint only in the policy step", cloud, "      - name: Policy, outside the repository\n        env:\n          BENCH_ENDPOINT: ${{ secrets.BENCH_ENDPOINT }}\n", true},
+		{"endpoint masked", policy, `echo "::add-mask::$endpoint"`, true},
+		{"host masked", policy, `echo "::add-mask::$host"`, true},
+		{"origin never printed", policy, `at $origin"`, false},
+	}
+	for _, tt := range tests {
+		if got := strings.Contains(tt.text, tt.needle); got != tt.want {
+			t.Errorf("%s: contains %q = %t, want %t", tt.name, tt.needle, got, tt.want)
+		}
+	}
+	if n := strings.Count(cloud, "BENCH_ENDPOINT:"); n != 1 {
+		t.Errorf("the cloud job names BENCH_ENDPOINT %d times; only the policy step may get it", n)
+	}
+}
+
+func readRepo(t *testing.T, elem ...string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(append([]string{"..", "..", ".."}, elem...)...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.ReplaceAll(string(data), "\r\n", "\n")
+}
+
 // A re-pinned model fails against the old baseline.
 func TestRepinFailsAgainstOldBaseline(t *testing.T) {
 	base := withModel(results(baseTier), "creep-bench-qwen2.5-coder-1.5b-d7372fd82851")

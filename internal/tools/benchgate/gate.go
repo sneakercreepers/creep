@@ -10,26 +10,6 @@ import (
 // slack absorbs float rounding, so a drop of exactly the threshold passes.
 const slack = 1e-9
 
-// tierTotals are one tier's counts summed over its classes. The gate
-// compares tiers, not classes: with one or two cases a class swings by 0.5
-// on a single reply, a tier by about 0.08.
-type tierTotals struct {
-	vulnerable, detected, safe, falsePositives, claimed, silent int
-}
-
-func sumTier(t bench.TierResult) tierTotals {
-	var s tierTotals
-	for _, c := range t.Classes {
-		s.vulnerable += c.Vulnerable
-		s.detected += c.Detected
-		s.safe += c.Safe
-		s.falsePositives += c.FalsePositives
-		s.claimed += c.ClaimedCovered
-		s.silent += c.SilentMisses
-	}
-	return s
-}
-
 // metric is one rate of a tier, in the baseline and in the new results.
 // worseUp is true when a higher value is worse (the false-positive rate).
 type metric struct {
@@ -38,21 +18,17 @@ type metric struct {
 	worseUp   bool
 }
 
-func metrics(base, got tierTotals) []metric {
+// metrics compares tiers, not classes: with one or two cases a class
+// swings by 0.5 on a single reply, a tier by about 0.08. The rates come
+// from bench.TierResult.Totals, the bench's own definition, rounded to
+// three decimals as published; a nil rate is unmeasured.
+func metrics(base, got bench.TierResult) []metric {
+	b, g := base.Totals(), got.Totals()
 	return []metric{
-		{"recall", rate(base.detected, base.vulnerable), rate(got.detected, got.vulnerable), false},
-		{"false-positive rate", rate(base.falsePositives, base.safe), rate(got.falsePositives, got.safe), true},
-		{"honesty", rate(base.claimed-base.silent, base.claimed), rate(got.claimed-got.silent, got.claimed), false},
+		{"recall", b.Recall, g.Recall, false},
+		{"false-positive rate", b.FalsePositiveRate, g.FalsePositiveRate, true},
+		{"honesty", b.Honesty, g.Honesty, false},
 	}
-}
-
-// rate is n/d, or nil when d is 0: a rate over nothing is unmeasured.
-func rate(n, d int) *float64 {
-	if d == 0 {
-		return nil
-	}
-	v := float64(n) / float64(d)
-	return &v
 }
 
 // check reports why m regressed by more than maxDrop, or "" when it did
@@ -108,7 +84,15 @@ func tierProblems(base, got bench.Results, maxDrop float64) []string {
 			problems = append(problems, fmt.Sprintf("tier %s: in the baseline, missing from the results", bt.Tier))
 			continue
 		}
-		for _, m := range metrics(sumTier(bt), sumTier(gt)) {
+		if mostlyIncomplete(bt) {
+			continue // reported by noisyTiers: a noisy baseline proves nothing
+		}
+		if mostlyIncomplete(gt) {
+			problems = append(problems, fmt.Sprintf("tier %s: %d of %d case runs incomplete against a baseline with %d of %d: the model stopped answering in the schema; if the runner or model pull failed, re-dispatch the Bench workflow with model: local on main",
+				bt.Tier, gt.IncompleteRuns, gt.Runs, bt.IncompleteRuns, bt.Runs))
+			continue
+		}
+		for _, m := range metrics(bt, gt) {
 			if why := m.check(maxDrop); why != "" {
 				problems = append(problems, fmt.Sprintf("tier %s: %s", bt.Tier, why))
 			}
@@ -136,4 +120,31 @@ func findTier(r bench.Results, tier string) (bench.TierResult, bool) {
 		}
 	}
 	return bench.TierResult{}, false
+}
+
+// mostlyIncomplete reports a tier where more than half the case runs did
+// not finish (a reply broke the schema, say): its counts rest on the few
+// runs that did, so one reply swings them past any threshold (v0.3
+// tester T3). A baseline tier like that is not compared; a results tier
+// like that against a complete baseline is a regression, fail closed (T4).
+func mostlyIncomplete(t bench.TierResult) bool {
+	return t.IncompleteRuns*2 > t.Runs
+}
+
+// noisyTiers names each tier the gate did not compare because the
+// baseline ran it mostly incomplete.
+func noisyTiers(base, got bench.Results) []string {
+	if len(base.Tiers) == 0 {
+		return nil
+	}
+	var notes []string
+	for _, bt := range base.Tiers {
+		gt, ok := findTier(got, bt.Tier)
+		if !ok || !mostlyIncomplete(bt) {
+			continue
+		}
+		notes = append(notes, fmt.Sprintf("tier %s not compared: incomplete runs %d of %d in the baseline, %d of %d in the results (a baseline more than half incomplete is noise; set it again from a mostly complete nightly)",
+			bt.Tier, bt.IncompleteRuns, bt.Runs, gt.IncompleteRuns, gt.Runs))
+	}
+	return notes
 }

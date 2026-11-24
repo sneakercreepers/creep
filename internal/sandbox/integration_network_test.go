@@ -41,7 +41,12 @@ func cliCode(t *testing.T, st Status, args ...string) (string, int) {
 
 func openReal(t *testing.T, st Status) *Sandbox {
 	t.Helper()
-	s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()))
+	return openRealMirror(t, st, Mirror{})
+}
+
+func openRealMirror(t *testing.T, st Status, m Mirror) *Sandbox {
+	t.Helper()
+	s, err := Open(st, "itest-"+strings.ToLower(uniqueSuffix()), m)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -67,12 +67,18 @@ type Sandbox struct {
 	app        bool      // StartApp ran
 	fileCanary string    // the content of the app's canary file, once planted
 	images     []string  // image IDs Build made
-	mirror     Mirror    // the operator's build mirror (UseMirror); zero builds offline
 	aborted    error     // why the run was aborted (a canary failure); sticky
+
+	// mirror is the operator's build mirror, set once by Open and never
+	// changed; the zero Mirror builds offline.
+	mirror Mirror
 }
 
 // Open prepares a sandbox for runID on a usable runtime from Detect.
-func Open(st Status, runID string) (*Sandbox, error) {
+// Builds run on mirror's network instead of none when it is set (ADR
+// 0029); Build checks it before each build and refuses the build
+// (BuildMirrorRefused), never the scan, when it does not hold.
+func Open(st Status, runID string, mirror Mirror) (*Sandbox, error) {
 	if !st.Usable() || st.Path == "" {
 		return nil, fmt.Errorf("open sandbox on %s (%s): %w", st.Runtime, st.Reason, ErrUnusable)
 	}
@@ -80,6 +86,7 @@ func Open(st Status, runID string) (*Sandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.mirror = mirror
 	config := filepath.Join(s.work, "docker-config")
 	if err := os.Mkdir(config, 0o700); err != nil {
 		_ = os.RemoveAll(s.work)

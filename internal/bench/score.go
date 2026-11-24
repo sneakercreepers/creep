@@ -154,6 +154,22 @@ func detects(findings []Finding, class string, sink int) bool {
 	})
 }
 
+// Totals sums the tier's counts over its classes, with the rates computed
+// as for one class (three decimals). internal/tools/benchgate compares
+// these, so recall, false-positive rate and honesty have one definition.
+func (t TierResult) Totals() ClassResult {
+	var s ClassResult
+	for _, c := range t.Classes {
+		s.Vulnerable += c.Vulnerable
+		s.Detected += c.Detected
+		s.Safe += c.Safe
+		s.FalsePositives += c.FalsePositives
+		s.ClaimedCovered += c.ClaimedCovered
+		s.SilentMisses += c.SilentMisses
+	}
+	return s.withRates()
+}
+
 func (r ClassResult) withRates() ClassResult {
 	r.Recall = ratio(r.Detected, r.Vulnerable)
 	r.FalsePositiveRate = ratio(r.FalsePositives, r.Safe)

@@ -48,11 +48,10 @@ func (d sandboxDeps) clock() time.Time {
 // openSandbox is the production sandboxDeps.open. The mirror comes from
 // the operator's config only (the project file cannot set it, ADR 0029).
 func openSandbox(st sandbox.Status, runID string, mirror sandbox.Mirror) (appSandbox, error) {
-	s, err := sandbox.Open(st, runID)
+	s, err := sandbox.Open(st, runID, mirror)
 	if err != nil {
-		return nil, err
+		return nil, err // never a nil *Sandbox inside a non-nil appSandbox
 	}
-	s.UseMirror(mirror)
 	return s, nil
 }
 

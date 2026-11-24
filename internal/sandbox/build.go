@@ -54,7 +54,7 @@ func unavailable(r *refusal) App { return App{Unavailable: r.reason, Detail: r.d
 // build is offline: --network=none for every RUN step, no build argument,
 // secret, SSH agent, extra host or entitlement, and only base images
 // already present locally (creep never pulls). The one exception is the
-// operator's Mirror (UseMirror, ADR 0029): on rootless Podman, after
+// operator's Mirror (passed to Open, ADR 0029): on rootless Podman, after
 // clearMirror, RUN steps join its internal network and get the proxy as
 // build arguments; base images still never come from it. The context is
 // a copy of the repository's files in the work directory, without .env
@@ -102,7 +102,7 @@ func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 	if why, err := s.checkBaseImages(ctx, plan.images); err != nil || why != nil {
 		return unavailableOrErr(why, err)
 	}
-	mirror := s.currentMirror()
+	mirror := s.mirror
 	if mirror.Set() {
 		if why, err := s.clearMirror(ctx, mirror); err != nil || why != nil {
 			return unavailableOrErr(why, err)

@@ -27,9 +27,9 @@ func (s *session) checkRecipes(ctx context.Context, tier calibrate.Tier, stderr 
 	fmt.Fprintf(stderr, "recipes: checking the fixtures of %d installed recipe files from ~/%s/%s, redacted, with the model before the scan uses their hints\n", len(s.installed), recipeStore, recipe.LockFile)
 	checker := recipe.Checker{Model: s.model, Redactor: s.red, Tier: rtier}
 	for _, in := range s.installed {
-		r, _, err := checker.Load(ctx, in.data, checkRecipePoC)
+		r, _, err := checker.Load(ctx, in.Data, checkRecipePoC)
 		if err != nil {
-			return fmt.Errorf("installed recipe %s from %s: %w", in.pin.File, in.pin.Source, err)
+			return fmt.Errorf("installed recipe %s from %s: %w", in.Pin.File, in.Pin.Source, err)
 		}
 		s.recipes = append(s.recipes, r)
 	}

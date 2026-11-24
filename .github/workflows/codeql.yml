@@ -14,7 +14,8 @@ permissions: {}
 # the schedule and a failed changes job run it.
 jobs:
   changes:
-    uses: ./.github/workflows/changes.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this repository at the same commit
+    # From protected main, not the pull request's head (ADR 0018 amendment, L3).
+    uses: sneakercreepers/creep/.github/workflows/changes.yml@main # zizmor: ignore[unpinned-uses] main is protected and signed; a SHA pin would drift from the base
     permissions:
       contents: read
 
