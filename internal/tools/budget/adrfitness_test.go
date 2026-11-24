@@ -112,11 +112,11 @@ func fitnessRows(arch []byte) []string {
 	return rows
 }
 
-// hasRow reports whether a §9 Property cell starts with name; a cell may
-// add its issue or ADR in parentheses.
+// hasRow reports whether a §9 Property cell is name, or name followed by
+// its issue or ADR in parentheses; a truncated name does not match.
 func hasRow(rows []string, name string) bool {
 	for _, r := range rows {
-		if strings.HasPrefix(r, name) {
+		if r == name || strings.HasPrefix(r, name+" (") {
 			return true
 		}
 	}
@@ -140,6 +140,7 @@ func TestADRFitnessCheck(t *testing.T) {
 		{"not an ADR file", "dependencies.txt", "- **Status:** Accepted\n", false},
 		{"names no real row", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** the row \"Imagined row\" of §9\n", true},
 		{"one of two rows is not real", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** the rows \"Real row\" and \"Imagined row\"\n", true},
+		{"truncated row name", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** the row \"Real\" of §9\n", true},
 		{"names no row at all", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** see §9\n", true},
 		{"manual", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** manual: auditor\n", false},
 	}
