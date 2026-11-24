@@ -29,7 +29,7 @@ var headerFields = []struct{ key, name string }{
 	{"endpoint", "model endpoint or command (model.endpoint, model.run, model.preset, model.env)"},
 	{"model", "model name (model.name)"},
 	{"mode", "scan mode (--mode or the CI environment)"},
-	{"options", "scan flags (--stability, --changed, --baseline, --baseline-write, --recalibrate) or installed recipes"},
+	{"options", "scan flags (--stability, --changed, --baseline and its entries, --baseline-write, --recalibrate) or installed recipes"},
 	{"config", "resolved config (creep config explain)"},
 }
 
@@ -67,6 +67,15 @@ func (s *session) optionsDigest() string {
 		}
 		slices.Sort(changed)
 		parts = append(append(parts, "changed"), changed...)
+	}
+	if s.baseline != nil {
+		// The baseline's entries, not only its path: an edited baseline
+		// changes the report, so it is refused like any other flag.
+		data, err := json.Marshal(s.baseline.file)
+		if err != nil {
+			data = []byte(err.Error())
+		}
+		parts = append(parts, "baseline", string(data))
 	}
 	for _, r := range s.installed {
 		parts = append(parts, string(r.Data))

@@ -64,6 +64,10 @@ type session struct {
 	// boxID names the run's sandbox: the run ID, or for a resumed run a
 	// fresh name, so it never meets what the interrupted run built.
 	boxID string
+	// refused is a resume refusal found mid-pipeline (session.refuse), and
+	// cancel the run context's cancel it stops the run with.
+	refused *resumeRefusal
+	cancel  context.CancelCauseFunc
 }
 
 // scanResult is what the pipeline decided, for the report.

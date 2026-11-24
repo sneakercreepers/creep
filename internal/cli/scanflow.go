@@ -40,6 +40,7 @@ func runScan(e env, args []string) int {
 // from its recordings (session.respond), so it reaches the report an
 // uninterrupted run would.
 func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFunc, e env) int {
+	s.cancel = cancel
 	warnPreset(e.stderr, s.cfg.Model)
 	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {
@@ -50,20 +51,33 @@ func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFun
 	}
 	cal, prefix, err := s.toolsAndCalibration(ctx)
 	if err != nil {
-		return s.fail(e, prefix, err, failureCode(err))
+		return s.failStage(e, prefix, err, failureCode(err))
 	}
 	if err := s.checkRecipes(ctx, cal.Tier, e.stderr); err != nil {
-		return s.fail(e, "creep scan: recipes", err, recipeFailureCode(err))
+		return s.failStage(e, "creep scan: recipes", err, recipeFailureCode(err))
 	}
 	s.scanStart = s.deps.sandbox.clock()
 	deadline := s.scanStart.Add(s.timeLeft())
 	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
-	if err != nil {
-		return s.fail(e, "creep scan", err, exitcode.ConfigError)
+	if err != nil || s.refused != nil {
+		return s.failStage(e, "creep scan", err, exitcode.ConfigError)
 	}
 	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
+	if s.refused != nil {
+		return s.failStage(e, "creep scan", nil, exitcode.ConfigError)
+	}
 	cal = s.feedStability(e.stderr, cal, res.findings)
 	return s.finish(e, cal, res)
+}
+
+// failStage is fail for a stage that may have met a resume refusal
+// (session.refuse): the refusal wins, exits 2 and leaves no end line, so
+// no report mixes recordings the run did not get.
+func (s *session) failStage(e env, prefix string, err error, code int) int {
+	if s.refused != nil {
+		return s.fail(e, "creep resume", s.refused, exitcode.ConfigError)
+	}
+	return s.fail(e, prefix, err, code)
 }
 
 // toolsAndCalibration runs the tool canary and calibration, and returns
