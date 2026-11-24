@@ -1,6 +1,6 @@
 # ADR 0032: `creep resume` continues an interrupted scan
 
-- **Status:** Proposed (maintainer approval on the PR for #335)
+- **Status:** Accepted (maintainer, 2026-11-24)
 - **Date:** 2026-11-24
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0009](0009-scan-and-why-contract.md) ("`resume` still fails closed; continuing a run needs per-step resume, a follow-up")
