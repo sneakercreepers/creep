@@ -74,8 +74,32 @@ jobs:
       - name: Tagged commit is on main
         run: bash .github/scripts/tag-ancestry.sh "$GITHUB_SHA"
 
+  # A release is blocked when the newest nightly bench on main is worse than
+  # the committed baseline by more than the threshold, or when there is no
+  # nightly result from the last 14 days (#36, ADR 0030 amendment).
+  bench-gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # list the Bench workflow's runs and download their results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Newest nightly bench results on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/bench-latest.sh "$GITHUB_REPOSITORY" "$RUNNER_TEMP/bench"
+      - name: Regression gate
+        run: go run ./internal/tools/benchgate -results "$RUNNER_TEMP/bench/results.json"
+
   release:
-    needs: ancestry
+    needs: [ancestry, bench-gate]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: release

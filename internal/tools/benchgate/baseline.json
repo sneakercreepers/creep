@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "corpus": {"cases": 0, "sha256": ""},
+  "model": {"contract": "", "name": "", "synthesized": false},
+  "tiers": [],
+  "unmeasured_classes": [],
+  "smoke": []
+}

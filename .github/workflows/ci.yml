@@ -12,7 +12,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Docs-only pull requests (ADR 0018 amendment, 2026-11-23): the changes job
+# says whether a pull request changes only prose no check reads; the heavy
+# jobs then skip, which GitHub reports as success for a required check. The
+# test matrix skips its steps instead, because a skipped matrix job reports
+# no check under its expanded name. A push to main, and a failed changes job,
+# run everything. secrets, dependency-review and docs-only always run.
 jobs:
+  changes:
+    uses: ./.github/workflows/changes.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this repository at the same commit
+    permissions:
+      contents: read
+
   test:
     name: test (${{ matrix.os }})
     strategy:
@@ -20,29 +31,37 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ !cancelled() }}
     permissions:
       contents: read
     defaults:
       run:
         shell: bash
     steps:
+      - name: Docs-only pull request, tests skipped
+        if: needs.changes.outputs.docs_only == 'true'
+        run: echo "only prose no check reads changed (ADR 0018 amendment); a push to main runs everything"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: needs.changes.outputs.docs_only != 'true'
         with:
           go-version-file: go.mod
           cache: false
       # Windows matches local dev (no cgo, so no -race); Linux runs -race.
       - name: Disable cgo on Windows
-        if: runner.os == 'Windows'
+        if: needs.changes.outputs.docs_only != 'true' && runner.os == 'Windows'
         run: echo "CGO_ENABLED=0" >> "$GITHUB_ENV"
       # The runner has Docker: the sandbox integration tests fail rather
       # than skip there, so the hardened profile is proven on a real engine.
       - name: Require the sandbox runtime on Linux
-        if: runner.os == 'Linux'
+        if: needs.changes.outputs.docs_only != 'true' && runner.os == 'Linux'
         run: echo "CREEP_REQUIRE_SANDBOX=1" >> "$GITHUB_ENV"
       - name: make check
+        if: needs.changes.outputs.docs_only != 'true'
         run: |
           make_bin="make"
           command -v make >/dev/null || make_bin=mingw32-make
@@ -51,11 +70,13 @@ jobs:
       # make check is quiet on success, so this names the runtimes (and
       # their isolation) the sandbox tests ran on, and any one they skipped.
       - name: Sandbox runtimes tested
-        if: runner.os == 'Linux'
+        if: needs.changes.outputs.docs_only != 'true' && runner.os == 'Linux'
         run: go test -count=1 -v -run '^TestRealCleanRemovesNetworks$' ./internal/sandbox | grep -E 'isolation|not usable|--- (PASS|SKIP|FAIL)'
 
   lint:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -73,6 +94,8 @@ jobs:
 
   vuln:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -124,6 +147,8 @@ jobs:
 
   workflows:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -154,6 +179,8 @@ jobs:
 
   budget:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -172,6 +199,8 @@ jobs:
   # bounded fuzz of the gateway's redaction path.
   protections:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
     steps:
@@ -204,6 +233,8 @@ jobs:
   # proven against a real release, not only against fakes.
   action:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       contents: read
       attestations: read # gh attestation verify reads this repository's release provenance

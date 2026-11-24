@@ -1,0 +1,177 @@
+name: Bench
+
+# creep bench against a live model (#36, ADR 0030 amendment). Nightly, and on
+# demand, the local job runs a small pinned model in an Ollama service
+# container on the GitHub-hosted runner, so it costs the project nothing,
+# uploads the results for 14 days and fails when a tier is worse than
+# internal/tools/benchgate/baseline.json by more than the threshold; the
+# release workflow runs the same gate on the newest of these results. The
+# cloud job runs only on a manual dispatch from main of this repository,
+# with the model and key of the protected bench-cloud environment. A pull
+# request that changes this workflow or the gate runs the local job only: no
+# secret, read-only token. Never pull_request_target.
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "local: the pinned Ollama model on the runner (free); cloud: the bench-cloud environment's model and key"
+        type: choice
+        options: [local, cloud]
+        default: local
+  pull_request:
+    paths:
+      - .github/workflows/bench.yml
+      - .github/scripts/bench-*.sh
+      - internal/tools/benchgate/**
+
+permissions: {}
+
+concurrency:
+  group: bench-${{ github.ref }}-${{ inputs.model || 'local' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  local:
+    if: github.event_name != 'workflow_dispatch' || inputs.model == 'local'
+    runs-on: ubuntu-latest
+    # 72 case runs on CPU; budget.max_seconds (7200) ends the bench first.
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    services:
+      ollama:
+        image: ollama/ollama@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754 # 0.40.17
+        ports:
+          - 127.0.0.1:11434:11434
+    env:
+      OLLAMA_URL: http://127.0.0.1:11434
+      BASE_MODEL: qwen2.5-coder:1.5b
+      # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai.
+      BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
+      # Ends with the digest prefix, so a re-pin is another model to the gate
+      # and its baseline must be set again (ADR 0030 amendment).
+      BENCH_MODEL: creep-bench-qwen2.5-coder-1.5b-d7372fd82851
+      BENCH_CONTRACT: openai
+      BENCH_ENDPOINT: http://127.0.0.1:11434/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build creep
+        run: go build -trimpath -o "$RUNNER_TEMP/creep" ./cmd/creep
+      - name: Pinned local model
+        run: bash .github/scripts/bench-ollama.sh
+      - name: Policy, outside the repository
+        run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
+      # Exit 4 means some case runs were incomplete: the results still count
+      # them, and the gate judges the numbers. Any other failure stops here.
+      - name: creep bench
+        working-directory: ${{ runner.temp }}
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/policy.yaml
+        run: |
+          mkdir -p bench-out
+          code=0
+          ./creep bench --record --format json >bench-out/results.json || code=$?
+          echo "creep bench exited $code"
+          [ "$code" = 0 ] || [ "$code" = 4 ]
+      # bench-local holds results only from a bench that finished (exit 0
+      # or 4), so the release gate never reads a broken run's output; a run
+      # whose gate then fails keeps them, so a regression still blocks.
+      - name: Collect the recorded fixture
+        working-directory: ${{ runner.temp }}
+        run: find .creep/runs -name bench-fixture.json -exec cp {} bench-out/ \; 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-local
+          path: ${{ runner.temp }}/bench-out/
+          retention-days: 14
+          if-no-files-found: error
+      # A bench that did not finish leaves its run directory (egress.log,
+      # redacted corpus text, no key) for debugging, under another name.
+      - name: Collect the failed run
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: mkdir -p bench-debug && cp -R bench-out .creep/runs bench-debug/ 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: bench-local-debug
+          path: ${{ runner.temp }}/bench-debug/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Regression gate
+        run: |
+          set -o pipefail
+          go run ./internal/tools/benchgate -results "$RUNNER_TEMP/bench-out/results.json" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  cloud:
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.model == 'cloud'
+      && github.repository == 'sneakercreepers/creep' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment: bench-cloud
+    permissions:
+      contents: read
+    env:
+      BENCH_CONTRACT: ${{ vars.BENCH_CONTRACT }}
+      BENCH_ENDPOINT: ${{ vars.BENCH_ENDPOINT }}
+      BENCH_MODEL: ${{ vars.BENCH_MODEL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build creep
+        run: go build -trimpath -o "$RUNNER_TEMP/creep" ./cmd/creep
+      - name: Policy, outside the repository
+        run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
+      # The key reaches only this step, as CREEP_API_KEY: creep sends it in
+      # a header through the gateway and never writes it to egress.log, the
+      # fixture or the results.
+      - name: creep bench
+        working-directory: ${{ runner.temp }}
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/policy.yaml
+          CREEP_API_KEY: ${{ secrets.CREEP_API_KEY }}
+        run: |
+          mkdir -p bench-out
+          code=0
+          ./creep bench --record --format json >bench-out/results.json || code=$?
+          echo "creep bench exited $code"
+          [ "$code" = 0 ] || [ "$code" = 4 ]
+      # bench-cloud holds results only from a bench that finished (exit 0
+      # or 4), so the release gate never reads a broken run's output; a run
+      # whose gate then fails keeps them, so a regression still blocks.
+      - name: Collect the recorded fixture
+        working-directory: ${{ runner.temp }}
+        run: find .creep/runs -name bench-fixture.json -exec cp {} bench-out/ \; 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-cloud
+          path: ${{ runner.temp }}/bench-out/
+          retention-days: 14
+          if-no-files-found: error
+      # A bench that did not finish leaves its run directory (egress.log,
+      # redacted corpus text, no key) for debugging, under another name.
+      - name: Collect the failed run
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: mkdir -p bench-debug && cp -R bench-out .creep/runs bench-debug/ 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: bench-cloud-debug
+          path: ${{ runner.temp }}/bench-debug/
+          retention-days: 7
+          if-no-files-found: ignore

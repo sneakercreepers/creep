@@ -25,7 +25,11 @@ func main() {
 	flag.StringVar(&in.files, "files", "", "changed paths, NUL-separated (git diff --name-only -z)")
 	flag.StringVar(&in.baseAgents, "base-agents", "", "AGENTS.md on the base commit (git show HEAD^1:AGENTS.md)")
 	flag.StringVar(&in.root, "root", ".", "checked-out pull request tree")
+	ciScope := flag.Bool("ci-scope", false, "print docs_only=true|false for $GITHUB_OUTPUT: whether CI may skip its heavy jobs (needs only -files)")
 	flag.Parse()
+	if *ciScope {
+		os.Exit(runCIScope(in.files, os.Stdout, os.Stderr))
+	}
 	os.Exit(run(in, os.Stdout))
 }
 

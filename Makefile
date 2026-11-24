@@ -120,8 +120,12 @@ rulesets:
 # only when missing because POSTing a duplicate fails. allowed_actions must be
 # selected before the allowlist is accepted. immutable-releases.json records
 # the expected state for the drift check; code never turns immutable releases off.
+# bench-cloud, which holds the cloud bench key (#36), deploys only the main
+# branch (a custom policy: main is protected by a ruleset, not classic branch
+# protection) and needs the maintainer's approval.
 repo-settings:
 	@echo "update environment release"; gh api -X PUT "repos/$(REPO)/environments/release" --input .github/settings/release-environment.json >/dev/null
+	@echo "update environment bench-cloud"; gh api -X PUT "repos/$(REPO)/environments/bench-cloud" --input .github/settings/bench-cloud-environment.json >/dev/null
 	@extra="$$(gh api --paginate "repos/$(REPO)/environments/release/deployment-branch-policies" --jq '.branch_policies[] | select(.name != "v*" or .type != "tag") | "\(.type) \(.name)"')" || exit 1; \
 	if [ -n "$$extra" ]; then \
 		echo "environment release has deployment policies other than the v* tag; remove them in its settings:" >&2; \
@@ -130,6 +134,15 @@ repo-settings:
 	@n="$$(gh api "repos/$(REPO)/environments/release/deployment-branch-policies" --jq '[.branch_policies[] | select(.name == "v*" and .type == "tag")] | length')" || exit 1; \
 	if [ "$$n" = 0 ]; then \
 		echo "add tag policy v*"; gh api -X POST "repos/$(REPO)/environments/release/deployment-branch-policies" -f name='v*' -f type=tag >/dev/null || exit 1; \
+	fi
+	@extra="$$(gh api --paginate "repos/$(REPO)/environments/bench-cloud/deployment-branch-policies" --jq '.branch_policies[] | select(.name != "main" or .type != "branch") | "\(.type) \(.name)"')" || exit 1; \
+	if [ -n "$$extra" ]; then \
+		echo "environment bench-cloud has deployment policies other than the main branch; remove them in its settings:" >&2; \
+		printf '%s\n' "$$extra" | LC_ALL=C tr -c '[:graph:]\n' ' ' >&2; exit 1; \
+	fi
+	@n="$$(gh api "repos/$(REPO)/environments/bench-cloud/deployment-branch-policies" --jq '[.branch_policies[] | select(.name == "main" and .type == "branch")] | length')" || exit 1; \
+	if [ "$$n" = 0 ]; then \
+		echo "add branch policy main"; gh api -X POST "repos/$(REPO)/environments/bench-cloud/deployment-branch-policies" -f name=main -f type=branch >/dev/null || exit 1; \
 	fi
 	@echo "update actions permissions"; gh api -X PUT "repos/$(REPO)/actions/permissions" --input .github/settings/actions-permissions.json >/dev/null
 	@echo "update allowed actions"; gh api -X PUT "repos/$(REPO)/actions/permissions/selected-actions" --input .github/settings/actions-selected.json >/dev/null

@@ -9,10 +9,20 @@ on:
 
 permissions: {}
 
+# A docs-only pull request skips the analysis (ADR 0018 amendment,
+# 2026-11-23); a skipped job reports success for the required check. A push,
+# the schedule and a failed changes job run it.
 jobs:
+  changes:
+    uses: ./.github/workflows/changes.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this repository at the same commit
+    permissions:
+      contents: read
+
   analyze:
     name: analyze (go)
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     permissions:
       actions: read
       contents: read
