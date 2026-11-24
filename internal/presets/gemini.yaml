@@ -42,4 +42,4 @@ tools_off:
 no_tools: false
 host_reads: unbounded
 host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply
-verified: false
+verified: true
