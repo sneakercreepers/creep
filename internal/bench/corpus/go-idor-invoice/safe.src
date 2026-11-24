@@ -1,0 +1,29 @@
+package billing
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+)
+
+type ctxKey int
+
+const accountKey ctxKey = 0
+
+type Invoices struct{ DB *sql.DB }
+
+func (s Invoices) Get(w http.ResponseWriter, r *http.Request) {
+	account, ok := r.Context().Value(accountKey).(int64)
+	if !ok {
+		http.Error(w, "login required", http.StatusUnauthorized)
+		return
+	}
+	var total int64
+	err := s.DB.QueryRow("SELECT total FROM invoices WHERE id = $1 AND account_id = $2", r.PathValue("id"), account).Scan(&total)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]int64{"total": total})
+}

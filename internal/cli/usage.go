@@ -36,8 +36,10 @@ func globalFlagsHelp() string {
 		"                      on a GitHub Actions schedule event); only nightly verifies\n"+
 		"  --format <format>   output format: %s (default %q)\n"+
 		"  --log-level <level> log level: %s (default %q)\n"+
-		"  --record            call every model and record the responses for replay\n"+
-		"  --replay            serve recorded responses only; never use the network\n"+
+		"  --record            call every model and record the responses for replay;\n"+
+		"                      bench also writes the run's fixture file\n"+
+		"  --replay            serve recorded responses only; never use the network;\n"+
+		"                      bench serves its published fixture\n"+
 		"  --recalibrate       calibrate the model again even if a calibration is cached\n"+
 		"  --stats             scan: print phase times, model calls, cache hits and tokens\n"+
 		"  --changed <file>    scan, estimate: only the paths listed in file, one per line or\n"+

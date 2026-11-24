@@ -1,0 +1,36 @@
+package catalog
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+)
+
+// Catalog serves the public product list.
+type Catalog struct{ DB *sql.DB }
+
+type product struct {
+	Name  string `json:"name"`
+	Price int64  `json:"price"`
+}
+
+func (c Catalog) Search(w http.ResponseWriter, r *http.Request) {
+	term := r.URL.Query().Get("q")
+	query := fmt.Sprintf("SELECT name, price FROM products WHERE name LIKE '%%%s%%'", term)
+	rows, err := c.DB.Query(query)
+	if err != nil {
+		http.Error(w, "search failed", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	var found []product
+	for rows.Next() {
+		var p product
+		if rows.Scan(&p.Name, &p.Price) == nil {
+			found = append(found, p)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(found)
+}

@@ -187,6 +187,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep config explain` | Show each effective config value and its source layer |
 | `creep recipe new\|lint\|test <file.json>` | Write a recipe template, check a recipe with no model call, or load it: its vulnerable fixture must be flagged and its safe fixture clean, through the reader and your model. Exit 0 only when it loads, 2 when it is refused, 3 on a model failure ([ADR 0025](docs/adr/0025-recipes.md), schema in [docs/schemas/recipe-v1.json](docs/schemas/recipe-v1.json)) |
 | `creep recipe add github.com/<owner>/<repo>@<commit> <clone>` | Install the `recipes/*.json` files of your own git clone of that repository, checked out (detached) at that full 40-hex commit; branch names and tags are refused and creep makes no network call. Files go to `~/.creep/recipes`, pinned by SHA-256 in `creep.lock`. Every `scan` then checks each checksum (a changed file exits 2), the policy's `recipe_sources` allowlist and each recipe's fixtures before giving its hint to the reader ([ADR 0028](docs/adr/0028-recipe-install-and-lock.md)) |
+| `creep bench` | Run creep-bench: 12 embedded cases, each a planted vulnerability and its safe twin in Go, Java, JavaScript, PHP, Python or Ruby, kept apart from the calibration templates, through discovery, the planner and the reader at tiers S, M and L. Prints recall, false positives and honesty (of the runs that claimed a class covered, how many found the planted vulnerability) per class, as Markdown or `--format json`. `--replay` reproduces the [published numbers](docs/bench/results.md) from the embedded fixture with no config, state, key or network; without it your model answers through the gateway like a scan (HTTP contracts only), and `--record` also writes the run's fixture. The published fixture is synthesized, so today's numbers measure the pipeline, not a model. Smoke runs on OWASP Juice Shop and PyGoat are not downloaded: scan your own local clone ([ADR 0030](docs/adr/0030-creep-bench.md)) |
 | `creep mcp` | Serve the read-only MCP tools `scan` (changed files only), `findings` and `why` over stdio for a coding agent ([MCP server](#mcp-server)) |
 | `creep version` | Print version, commit and Go version |
 
@@ -223,7 +224,7 @@ The sandbox is optional, and only a nightly scan uses it ([ADR 0021](docs/adr/00
 | `--config <path>` | Use this file instead of the user and project files (the policy still applies) |
 | `--model-run <cmd>` | Model CLI for the command contract |
 | `--mode pr\|nightly` | `scan`: the gate that judges the run; only `nightly` builds the app and runs PoCs (default `pr`, `nightly` on a GitHub Actions `schedule` event; [CI](#ci-pull-request-and-nightly-scans)) |
-| `--record` / `--replay` | Record every model response / serve only recorded responses, never the network |
+| `--record` / `--replay` | Record every model response / serve only recorded responses, never the network; `bench` writes its run's fixture / serves its published fixture |
 | `--recalibrate` | Calibrate again even if a calibration is cached (30 days) |
 | `--stats` | `scan`: print phase times, model calls, cache hits and tokens |
 | `--changed <file>` | `scan` and `estimate`: evaluate only the paths listed in the file (see Incremental scans) |

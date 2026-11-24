@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "php-sqli-concat",
+  "class": "sqli",
+  "language": "php",
+  "file": "article.php",
+  "vulnerable": {"entry": "function find_article(", "sink": "$db->query("},
+  "safe": {"entry": "function find_article(", "sink": "$db->prepare("}
+}

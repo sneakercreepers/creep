@@ -1,0 +1,13 @@
+require 'sinatra'
+require 'json'
+require 'open3'
+
+HOSTNAME = /\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\z/
+
+get '/tools/dns' do
+  name = params['name'].to_s.downcase
+  halt 400, 'bad name' unless HOSTNAME.match?(name)
+  output, _status = Open3.capture2('dig', '+short', name)
+  content_type :json
+  { answers: output.split("\n") }.to_json
+end

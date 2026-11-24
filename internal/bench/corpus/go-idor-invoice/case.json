@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "go-idor-invoice",
+  "class": "idor",
+  "language": "go",
+  "file": "invoices.go",
+  "vulnerable": {"entry": "func (s Invoices) Get(", "sink": "s.DB.QueryRow("},
+  "safe": {"entry": "func (s Invoices) Get(", "sink": "s.DB.QueryRow("}
+}

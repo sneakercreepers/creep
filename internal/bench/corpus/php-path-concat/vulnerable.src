@@ -1,0 +1,6 @@
+<?php
+$lang = $_GET['lang'] ?? 'en';
+$page = $_GET['page'] ?? 'home';
+$text = file_get_contents(__DIR__ . '/content/' . $lang . '/' . $page . '.html');
+header('Content-Type: text/html; charset=utf-8');
+echo $text === false ? 'not found' : $text;

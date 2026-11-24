@@ -1,0 +1,9 @@
+require 'sinatra'
+require 'net/http'
+require 'uri'
+
+post '/webhooks/test' do
+  uri = URI.parse(params['callback'].to_s)
+  Net::HTTP.get_response(uri)
+  status 204
+end

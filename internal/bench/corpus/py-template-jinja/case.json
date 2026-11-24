@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "py-template-jinja",
+  "class": "template_injection",
+  "language": "python",
+  "file": "greeting.py",
+  "vulnerable": {"entry": "async def greeting(", "sink": "env.from_string("},
+  "safe": {"entry": "async def greeting(", "sink": "GREETING.render("}
+}

@@ -15,6 +15,7 @@ Commands:
   resume   resume <run>: continue an interrupted run (checks the run; continuing it is not implemented yet)
   version  print version, commit and Go version
   config   explain: show each effective config value and the layer it came from
+  bench    run creep-bench: the embedded corpus and its safe twins at tiers S, M and L, scored for recall, false positives and honesty per class; --replay reproduces the published numbers with no network (ADR 0030)
   mcp      serve the read-only MCP tools scan (changed files only), findings and why over stdio, for a coding agent (ADR 0027)
   recipe   new|lint|test <file.json>: write a recipe template, check a recipe, or load it by running its fixtures through the reader with your model (ADR 0025); add github.com/<owner>/<repo>@<commit> <clone>: install a source's recipes from your clone at that commit, pinned in creep.lock (ADR 0028)
   help     show this help
@@ -26,8 +27,10 @@ Global flags (before or after the command; "--" ends flags):
                       on a GitHub Actions schedule event); only nightly verifies
   --format <format>   output format: text, json, sarif, markdown (default "text")
   --log-level <level> log level: debug, info, warn, error (default "info")
-  --record            call every model and record the responses for replay
-  --replay            serve recorded responses only; never use the network
+  --record            call every model and record the responses for replay;
+                      bench also writes the run's fixture file
+  --replay            serve recorded responses only; never use the network;
+                      bench serves its published fixture
   --recalibrate       calibrate the model again even if a calibration is cached
   --stats             scan: print phase times, model calls, cache hits and tokens
   --changed <file>    scan, estimate: only the paths listed in file, one per line or

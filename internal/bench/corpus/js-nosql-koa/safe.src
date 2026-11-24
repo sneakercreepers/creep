@@ -1,0 +1,12 @@
+const Router = require("@koa/router");
+const { giftCodes } = require("./mongo");
+
+const router = new Router();
+
+router.post("/api/gift-codes/check", async (ctx) => {
+  const code = String(ctx.request.body.code ?? "");
+  const gift = await giftCodes.findOne({ code: code, redeemed: false });
+  ctx.body = { valid: Boolean(gift) };
+});
+
+module.exports = { router };

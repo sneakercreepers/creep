@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "go-ssrf-get",
+  "class": "ssrf",
+  "language": "go",
+  "file": "preview.go",
+  "vulnerable": {"entry": "func LinkPreview(", "sink": "http.Get(target)"},
+  "safe": {"entry": "func LinkPreview(", "sink": "http.Get(target)"}
+}

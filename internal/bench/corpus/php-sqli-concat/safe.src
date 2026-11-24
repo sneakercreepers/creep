@@ -1,0 +1,14 @@
+<?php
+require __DIR__ . '/db.php';
+
+function find_article(mysqli $db): array
+{
+    $slug = $_GET['slug'] ?? '';
+    $stmt = $db->prepare("SELECT title, body FROM articles WHERE slug = ? AND published = 1");
+    $stmt->bind_param('s', $slug);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+
+header('Content-Type: application/json');
+echo json_encode(find_article(db_connect()));

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "go-cmd-shell",
+  "class": "command_injection",
+  "language": "go",
+  "file": "thumbnail.go",
+  "vulnerable": {"entry": "func Thumbnail(", "sink": "exec.Command(\"sh\""},
+  "safe": {"entry": "func Thumbnail(", "sink": "exec.Command(\"convert\""}
+}

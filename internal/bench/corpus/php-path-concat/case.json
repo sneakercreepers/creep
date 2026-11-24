@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "php-path-concat",
+  "class": "path_traversal",
+  "language": "php",
+  "file": "page.php",
+  "vulnerable": {"entry": "$lang = ", "sink": "file_get_contents("},
+  "safe": {"entry": "$lang = ", "sink": "file_get_contents("}
+}

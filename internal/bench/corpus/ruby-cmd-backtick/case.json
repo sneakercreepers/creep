@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "ruby-cmd-backtick",
+  "class": "command_injection",
+  "language": "ruby",
+  "file": "dns.rb",
+  "vulnerable": {"entry": "get '/tools/dns' do", "sink": "`dig +short"},
+  "safe": {"entry": "get '/tools/dns' do", "sink": "Open3.capture2("}
+}
