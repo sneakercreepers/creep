@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Downloads the newest nightly bench results from main into $2 (#36), for
 # the release workflow's regression gate. It takes the newest completed run
-# of bench.yml on main that still holds a bench-local artifact, whatever its
-# conclusion: a run the gate failed still uploads its results, and the gate
-# runs on them again. Artifacts last 14 days, so no run in that window, or a
-# failed read, fails the release: run the Bench workflow, then tag again.
+# of bench.yml on main that holds a bench-local artifact. The bench uploads
+# it only when it finished (exit 0 or 4), so a night whose model, Ollama or
+# runner failed falls back to the last run that measured something; a run
+# whose gate failed keeps its results, and the gate fails on them again, so
+# a regression blocks until a newer run measures better. Artifacts last 14
+# days: no run in that window, or a failed read, fails the release. To
+# recover, dispatch the Bench workflow (model: local) on main, then re-run
+# the release.
 # Only schedule and workflow_dispatch runs of this repository count: a pull
 # request run, a fork's branch named main included, never feeds the gate.
 # Needs GH_TOKEN with actions: read.

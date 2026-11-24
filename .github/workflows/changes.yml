@@ -5,7 +5,8 @@ name: Changes
 # (ADR 0018 amendment, maintainer request of 2026-11-23). paths-ignore
 # would leave required checks pending. The classification is prcheck's
 # -ci-scope, built from the base commit, so a pull request cannot edit the
-# rule that skips its own tests. Anything but a pull request, and any failure
+# prcheck rule that skips its own tests. It can still edit this workflow or
+# its callers, a workflow change in its diff that review must catch. Anything but a pull request, and any failure
 # here, leaves docs_only empty: the callers then run every job.
 on:
   workflow_call:

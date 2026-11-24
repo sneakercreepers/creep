@@ -79,10 +79,16 @@ env_shape='{
 }'
 fetch environments/release "$env_shape"
 compare "environment release" .github/settings/release-environment.json
-# bench-cloud holds the cloud bench key (#36): reviewer approval, protected
-# branches (main) only.
+# bench-cloud holds the cloud bench key (#36): reviewer approval, the main
+# branch only, by a custom deployment policy.
 fetch environments/bench-cloud "$env_shape"
 compare "environment bench-cloud" .github/settings/bench-cloud-environment.json
+policies="$(gh api --paginate "repos/$repo/environments/bench-cloud/deployment-branch-policies" \
+  --jq '.branch_policies[] | select(.name != "main" or .type != "branch") | "\(.type) \(.name)"')" || fail "cannot read bench-cloud deployment policies"
+[ -z "$policies" ] || report "environment bench-cloud: deployment policies other than the main branch: $(printf '%s' "$policies" | LC_ALL=C tr -c '[:graph:]' ' ')"
+n="$(gh api "repos/$repo/environments/bench-cloud/deployment-branch-policies" \
+  --jq '[.branch_policies[] | select(.name == "main" and .type == "branch")] | length')" || fail "cannot read bench-cloud deployment policies"
+[ "$n" != 0 ] || report "environment bench-cloud: no main branch deployment policy"
 policies="$(gh api --paginate "repos/$repo/environments/release/deployment-branch-policies" \
   --jq '.branch_policies[] | select(.name != "v*" or .type != "tag") | "\(.type) \(.name)"')" || fail "cannot read release deployment policies"
 [ -z "$policies" ] || report "environment release: deployment policies other than the v* tag: $(printf '%s' "$policies" | LC_ALL=C tr -c '[:graph:]' ' ')"

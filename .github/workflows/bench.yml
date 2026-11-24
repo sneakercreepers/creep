@@ -79,17 +79,31 @@ jobs:
           ./creep bench --record --format json >bench-out/results.json || code=$?
           echo "creep bench exited $code"
           [ "$code" = 0 ] || [ "$code" = 4 ]
+      # bench-local holds results only from a bench that finished (exit 0
+      # or 4), so the release gate never reads a broken run's output; a run
+      # whose gate then fails keeps them, so a regression still blocks.
       - name: Collect the recorded fixture
-        if: always()
         working-directory: ${{ runner.temp }}
         run: find .creep/runs -name bench-fixture.json -exec cp {} bench-out/ \; 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
         with:
           name: bench-local
           path: ${{ runner.temp }}/bench-out/
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
+      # A bench that did not finish leaves its run directory (egress.log,
+      # redacted corpus text, no key) for debugging, under another name.
+      - name: Collect the failed run
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: mkdir -p bench-debug && cp -R bench-out .creep/runs bench-debug/ 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: bench-local-debug
+          path: ${{ runner.temp }}/bench-debug/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Regression gate
         run: |
           set -o pipefail
@@ -134,14 +148,28 @@ jobs:
           ./creep bench --record --format json >bench-out/results.json || code=$?
           echo "creep bench exited $code"
           [ "$code" = 0 ] || [ "$code" = 4 ]
+      # bench-cloud holds results only from a bench that finished (exit 0
+      # or 4), so the release gate never reads a broken run's output; a run
+      # whose gate then fails keeps them, so a regression still blocks.
       - name: Collect the recorded fixture
-        if: always()
         working-directory: ${{ runner.temp }}
         run: find .creep/runs -name bench-fixture.json -exec cp {} bench-out/ \; 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
         with:
           name: bench-cloud
           path: ${{ runner.temp }}/bench-out/
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error
+      # A bench that did not finish leaves its run directory (egress.log,
+      # redacted corpus text, no key) for debugging, under another name.
+      - name: Collect the failed run
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: mkdir -p bench-debug && cp -R bench-out .creep/runs bench-debug/ 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: bench-cloud-debug
+          path: ${{ runner.temp }}/bench-debug/
+          retention-days: 7
+          if-no-files-found: ignore
