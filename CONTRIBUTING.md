@@ -4,8 +4,9 @@ Thanks for helping. The most valuable contributions are often not code:
 
 - **False negative**: a vulnerability `creep` missed. Use the *False negative* issue form with a minimal vulnerable example. It becomes a test case.
 - **False positive**: a finding that is wrong. Use the *False positive* issue form.
-- **Model results**: calibration or benchmark results with your model. Post them in [Discussions → Show and tell](https://github.com/sneakercreepers/creep/discussions/categories/show-and-tell).
-- **Recipes and model presets**: data, not code. See the issue forms and [Model presets](#model-presets).
+- **Model results**: calibration or `creep bench` results with your model. Post them in [Discussions → Show and tell](https://github.com/sneakercreepers/creep/discussions/categories/show-and-tell); what to run and what is safe to share is in the wiki guide [Sharing model results](https://github.com/sneakercreepers/creep/wiki/Sharing-model-results).
+- **Recipes and model presets**: data, not code. Write and test a recipe with the wiki guide [Writing recipes](https://github.com/sneakercreepers/creep/wiki/Writing-recipes), then propose it with the *Recipe proposal* issue form; presets are under [Model presets](#model-presets).
+- **Agent integrations**: to call creep from a coding agent over MCP (`creep mcp`), see the wiki guide [Using creep from an agent (MCP)](https://github.com/sneakercreepers/creep/wiki/Using-creep-from-an-agent).
 
 ## Before you start
 

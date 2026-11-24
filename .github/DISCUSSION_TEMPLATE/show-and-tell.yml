@@ -3,7 +3,7 @@ labels: ["model-results"]
 body:
   - type: markdown
     attributes:
-      value: Share how `creep` performs with your model. These results help everyone pick a model and help us tune strategies per tier.
+      value: Share how `creep` performs with your model. These results help everyone pick a model and help us tune strategies per tier. What to run and what is safe to post (never code, reports or `egress.log` of a private repository, keys or endpoint URLs) is in the guide [Sharing model results](https://github.com/sneakercreepers/creep/wiki/Sharing-model-results).
   - type: input
     id: model
     attributes:
@@ -25,8 +25,8 @@ body:
   - type: textarea
     id: calibration
     attributes:
-      label: Calibration summary
-      description: Output of `creep calibrate --summary` (per class, with confidence intervals).
+      label: Results
+      description: The output of `creep bench --format json` with your model, or the `calibration:` line a scan prints and the Coverage by class table from `.creep/report.md` (per class, with 95% intervals).
       render: text
     validations:
       required: true
