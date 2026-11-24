@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/sneakercreepers/creep/internal/config"
+	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/sandbox"
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
@@ -145,5 +147,22 @@ func TestKeepTimePersistsScanTime(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if after := s.run.Summary().Steps; len(after) != steps || !strings.HasPrefix(after[0], state.StepTime) {
 		t.Fatalf("steps %v after stop; want only time steps, none after stop", after)
+	}
+}
+
+// Regression (v0.4 release pentest P4; tester T2): the scan's deadline
+// phase runs keepTime, so a sandbox build that records no step of its own
+// still leaves time: steps in the run state.
+func TestDeadlinePhaseKeepsTime(t *testing.T) {
+	fb := &fakeBuilder{app: sandbox.App{Unavailable: sandbox.BuildNoFile}, probe: func(sandbox.Repo) { time.Sleep(50 * time.Millisecond) }}
+	opened := 0
+	deps := withBuilder(tierMDeps(newCutModel(sqliVulnerable, "", 0)), fb, nil, &opened)
+	deps.timeEvery = time.Millisecond
+	cfg := scanRepo(t, resumeFiles(t), sandboxOn)
+	if code, _, errOut := runScanWith(deps, "scan", "--config", cfg, "--mode", "nightly"); code != exitcode.GateExceeded {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if events := readState(t, filepath.Join("runs", onlyRun(t), "events.jsonl")); !strings.Contains(events, `"step":"`+state.StepTime) {
+		t.Fatalf("no time: step while the sandbox built:\n%s", events)
 	}
 }

@@ -10,6 +10,14 @@ import (
 // timeEvery is how often the deadline phase persists its scan time.
 const timeEvery = 15 * time.Second
 
+// timeInterval is the deadline phase's keepTime interval.
+func (d scanDeps) timeInterval() time.Duration {
+	if d.timeEvery <= 0 {
+		return timeEvery
+	}
+	return d.timeEvery
+}
+
 // keepTime persists the scan time spent every interval until the returned
 // stop is called (v0.4 release pentest P4). Model calls record their time
 // with their step, but a sandbox build, PoC runs, the scanners and local

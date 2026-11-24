@@ -71,7 +71,7 @@ func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFun
 func (s *session) deadlinePhase(ctx context.Context, cancel context.CancelCauseFunc, e env, tier calibrate.Tier, files, scanned repoFiles) (scanResult, error) {
 	s.resume.scanStart = s.deps.sandbox.clock()
 	deadline := s.resume.scanStart.Add(s.timeLeft())
-	stop := s.keepTime(timeEvery)
+	stop := s.keepTime(s.deps.timeInterval())
 	defer stop()
 	res, err := s.scanWithin(ctx, cancel, tier, scanned, e.stderr)
 	if err != nil || s.resume.refused != nil {

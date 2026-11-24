@@ -141,8 +141,9 @@ func TestResumeRefusesDamagedRun(t *testing.T) {
 }
 
 // Acceptance (#335): budget.max_seconds counts the time the original run
-// spent. A run that already used its deadline resumes into a run the
-// deadline cut (exit 4, reason budget) and sends nothing.
+// spent. A run that already used its deadline is cut during the resume's
+// files digest (v0.4 release pentest P1; tester T3): exit 4, nothing sent,
+// a time: step recorded and the run still resumable.
 func TestResumeKeepsSpentDeadline(t *testing.T) {
 	budget := "budget:\n  max_seconds: 60\n"
 	clocked := func(m *cutModel) scanDeps {
@@ -155,6 +156,15 @@ func TestResumeKeepsSpentDeadline(t *testing.T) {
 	code, _, errOut := runScanWith(tierMDeps(m), "resume", id, "--config", cfg)
 	if code != exitcode.Incomplete || len(m.bodies) != 0 || !strings.Contains(errOut, "scan deadline") {
 		t.Fatalf("exit %d after %d calls: %s; want the deadline to cut the resumed run", code, len(m.bodies), errOut)
+	}
+	if !strings.Contains(errOut, "while creep hashed the repository's files") {
+		t.Fatalf("stderr %s; want the files digest named as cut", errOut)
+	}
+	if events := readState(t, filepath.Join("runs", id, "events.jsonl")); !strings.Contains(events, `"step":"time:`) {
+		t.Fatalf("the cut digest recorded no time: step:\n%s", events)
+	}
+	if _, err := loadResumable(id); err != nil {
+		t.Fatalf("the cut run was ended or damaged: %v", err)
 	}
 }
 

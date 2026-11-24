@@ -25,15 +25,21 @@ const adrHeaderLines = 15
 
 var adrName = regexp.MustCompile(`^(\d{4})-[a-z0-9-]+\.md$`)
 
-// adrProblems lists every Accepted ADR from 0019 on that names no fitness
-// function (docs/adr/0000-template.md), so a decision cannot land without
-// a check or an explicit "manual: auditor" (v0.4 architecture review A3,
-// which recurred from the v0.3 review).
+// adrProblems lists every Accepted ADR from 0019 on whose Fitness function
+// header line is missing or names, in quotes, no row of architecture.md §9
+// (docs/adr/0000-template.md), so a decision cannot land without a real
+// check or an explicit "manual: auditor" (v0.4 architecture review A3,
+// which recurred from the v0.3 review; tester T6).
 func adrProblems(root string) ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(root, "docs", "adr"))
 	if err != nil {
 		return nil, err
 	}
+	arch, err := readPolicyFile(root, "docs/architecture.md")
+	if err != nil {
+		return nil, err
+	}
+	rows := fitnessRows(arch)
 	var problems []string
 	for _, e := range entries {
 		m := adrName.FindStringSubmatch(e.Name())
@@ -47,30 +53,80 @@ func adrProblems(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if missesFitness(data) {
-			problems = append(problems, fmt.Sprintf("docs/adr/%s is Accepted but has no \"- **Fitness function:**\" header line", e.Name()))
+		if why := fitnessProblem(data, rows); why != "" {
+			problems = append(problems, fmt.Sprintf("docs/adr/%s: %s", e.Name(), why))
 		}
 	}
 	return problems, nil
 }
 
-// missesFitness reports whether an ADR's header says Accepted but has no
-// Fitness function line.
-func missesFitness(data []byte) bool {
-	accepted, fitness := false, false
+// fitnessProblem says why an Accepted ADR's header does not name a real
+// fitness function, or "" when it does or is not Accepted.
+func fitnessProblem(data []byte, rows []string) string {
+	accepted, line := false, ""
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	for i := 0; i < adrHeaderLines && sc.Scan(); i++ {
-		line := sc.Bytes()
-		accepted = accepted || bytes.HasPrefix(line, []byte("- **Status:** Accepted"))
-		fitness = fitness || bytes.HasPrefix(line, []byte("- **Fitness function:** "))
+		accepted = accepted || strings.HasPrefix(sc.Text(), "- **Status:** Accepted")
+		if v, ok := strings.CutPrefix(sc.Text(), "- **Fitness function:** "); ok {
+			line = v
+		}
 	}
-	return accepted && !fitness
+	switch {
+	case !accepted || strings.HasPrefix(line, "manual: auditor"):
+		return ""
+	case line == "":
+		return "Accepted but has no \"- **Fitness function:**\" header line"
+	}
+	names := quoted.FindAllStringSubmatch(line, -1)
+	if len(names) == 0 {
+		return "the Fitness function line names no §9 row in quotes"
+	}
+	for _, n := range names {
+		if !hasRow(rows, n[1]) {
+			return fmt.Sprintf("the Fitness function line names %q, which is no row of architecture.md §9", n[1])
+		}
+	}
+	return ""
+}
+
+var quoted = regexp.MustCompile(`"([^"]+)"`)
+
+// fitnessRows are the Property cells of architecture.md §9's table.
+func fitnessRows(arch []byte) []string {
+	text := string(arch)
+	start := strings.Index(text, "## 9. Fitness functions")
+	if start < 0 {
+		return nil
+	}
+	text = text[start:]
+	if end := strings.Index(text[1:], "\n## "); end >= 0 {
+		text = text[:end+1]
+	}
+	var rows []string
+	for _, line := range strings.Split(text, "\n") {
+		cells := strings.Split(line, " | ")
+		if strings.HasPrefix(line, "| ") && len(cells) > 1 {
+			rows = append(rows, strings.TrimPrefix(cells[0], "| "))
+		}
+	}
+	return rows
+}
+
+// hasRow reports whether a §9 Property cell starts with name; a cell may
+// add its issue or ADR in parentheses.
+func hasRow(rows []string, name string) bool {
+	for _, r := range rows {
+		if strings.HasPrefix(r, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // v0.4 review A3: an Accepted ADR from 0019 on must name its fitness
 // function; older, proposed and superseded ADRs and other files pass.
 func TestADRFitnessCheck(t *testing.T) {
-	const fitness = "- **Fitness function:** the row \"x\" of architecture.md §9\n"
+	const fitness = "- **Fitness function:** the row \"Real row\" of architecture.md §9\n"
 	tests := []struct {
 		name, file, content string
 		problem             bool
@@ -82,11 +138,16 @@ func TestADRFitnessCheck(t *testing.T) {
 		{"superseded", "0033-x.md", "# ADR\n\n- **Status:** Superseded by ADR-0040\n", false},
 		{"before the template line", "0018-old.md", "# ADR\n\n- **Status:** Accepted\n", false},
 		{"not an ADR file", "dependencies.txt", "- **Status:** Accepted\n", false},
+		{"names no real row", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** the row \"Imagined row\" of §9\n", true},
+		{"one of two rows is not real", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** the rows \"Real row\" and \"Imagined row\"\n", true},
+		{"names no row at all", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** see §9\n", true},
+		{"manual", "0033-x.md", "- **Status:** Accepted\n- **Fitness function:** manual: auditor\n", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
 			writeFile(t, root, "docs/adr/"+tt.file, tt.content)
+			writeFile(t, root, "docs/architecture.md", "## 9. Fitness functions\n\n| Property | Check |\n|---|---|\n| Real row (ADR 0033) | `TestX` |\n\n## 10. Next\n| Imagined row | no |\n")
 			problems, err := adrProblems(root)
 			if err != nil || (len(problems) > 0) != tt.problem {
 				t.Fatalf("problems %v, err %v; want a problem: %v", problems, err, tt.problem)

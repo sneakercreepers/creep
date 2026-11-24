@@ -15,15 +15,24 @@ import (
 // TestVerifiedPresetsArePinned until it sets verified: false again (#229).
 var verifiedPins = map[string]string{
 	"claude-code": "448088925e425c2b5a60c20cb1d05cda76a847b43bf4e2d6aca8e948c0405e5d",
-	"gemini":      "b4067602a0f4dfb06646fcdcd85b48472c9c0831000b204cb7fc8cba62c8dd12",
+	"gemini":      "d2f9cb5f5eaca0a7e487b1e1df2c2a0d808bca2dd847c5c3a42632ca44e7f6dc",
 }
 
 // commandDigest hashes the program and its arguments, each length-prefixed
-// so moving text between arguments ("a b" vs "a", "b") changes the digest.
+// so moving text between arguments ("a b" vs "a", "b") changes the digest,
+// and the verified_env names the manual check set (v0.4 review), so
+// dropping one fails the pin as an argument change would. A preset without
+// verified_env keeps the digest it had before the field existed.
 func commandDigest(p Preset) string {
 	h := sha256.New()
 	for _, s := range append([]string{p.Program}, p.Args...) {
 		fmt.Fprintf(h, "%d:%s\n", len(s), s)
+	}
+	if len(p.VerifiedEnv) > 0 {
+		fmt.Fprintf(h, "verified_env\n")
+		for _, s := range p.VerifiedEnv {
+			fmt.Fprintf(h, "%d:%s\n", len(s), s)
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -35,7 +44,7 @@ func checkVerifiedPin(p Preset, pins map[string]string) error {
 	case p.IsVerified() && !pinned:
 		return fmt.Errorf("preset %q is verified but has no pin: add %s to verifiedPins in the PR that records the manual check", p.Name, commandDigest(p))
 	case p.IsVerified() && pin != commandDigest(p):
-		return fmt.Errorf("preset %q: program or args changed since the manual check: set verified: false until it passes again", p.Name)
+		return fmt.Errorf("preset %q: program, args or verified_env changed since the manual check: set verified: false until it passes again", p.Name)
 	case !p.IsVerified() && pinned:
 		return fmt.Errorf("preset %q is not verified: remove its stale pin", p.Name)
 	}
@@ -99,6 +108,37 @@ func TestVerifiedPinCatchesEdits(t *testing.T) {
 		case tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)):
 			t.Errorf("%s: err = %v, want it to mention %q", tt.name, err, tt.want)
 		}
+	}
+}
+
+// The pin covers gemini's verified_env: dropping GEMINI_CLI_HOME from it,
+// which would silence the "not verified for this run" warning, fails like
+// an argument change (v0.4 review, auditor finding 3).
+func TestVerifiedPinCoversVerifiedEnv(t *testing.T) {
+	base, err := Lookup("gemini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins := map[string]string{"gemini": commandDigest(base)}
+	tests := []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"unchanged", base.VerifiedEnv, ""},
+		{"removed", nil, "verified_env changed"},
+		{"replaced", []string{"GEMINI_OTHER"}, "verified_env changed"},
+	}
+	for _, tt := range tests {
+		p := base
+		p.VerifiedEnv = tt.env
+		err := checkVerifiedPin(p, pins)
+		if (tt.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tt.want)) {
+			t.Errorf("%s: err = %v, want %q", tt.name, err, tt.want)
+		}
+	}
+	if !slices.Equal(base.VerifiedEnv, []string{"GEMINI_CLI_HOME"}) {
+		t.Errorf("gemini verified_env = %q, want [GEMINI_CLI_HOME]", base.VerifiedEnv)
 	}
 }
 

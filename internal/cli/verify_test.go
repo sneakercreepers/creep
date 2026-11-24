@@ -223,14 +223,11 @@ func writeBeside(t *testing.T, path, content string) {
 func TestBuildOnlyWhenEnabled(t *testing.T) {
 	const budget = "budget:\n  max_seconds: 60\n"
 	tests := []struct {
-		name    string
-		user    string
-		project string
-		checked []sandbox.Status
-		// elapsed is what the clock says after the deadline is set; 0 is the
-		// real clock. The files digest's real time also comes off the
-		// deadline (v0.4 pentest P1), so "during" leaves it a margin.
-		elapsed  time.Duration
+		name     string
+		user     string
+		project  string
+		checked  []sandbox.Status
+		elapsed  time.Duration // what the clock says after the deadline is set; 0 is the real clock
 		builds   int
 		wantCode int
 		want     string // in stdout+stderr; "" for no sandbox line
@@ -239,7 +236,7 @@ func TestBuildOnlyWhenEnabled(t *testing.T) {
 		{"project file", "", sandboxOn, []sandbox.Status{rootlessDocker}, 0, 0, exitcode.GateExceeded, ""},
 		{"no runtime", sandboxOn, "", []sandbox.Status{missingDocker, missingPodman}, 0, 0, exitcode.GateExceeded, "verification unavailable (no_runtime)"},
 		{"deadline before the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute, 0, exitcode.GateExceeded, "verification unavailable (budget)"},
-		{"deadline during the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute - 10*time.Second, 1, exitcode.GateExceeded, "verification unavailable (budget)"},
+		{"deadline during the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute - time.Millisecond, 1, exitcode.GateExceeded, "verification unavailable (budget)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -268,17 +265,22 @@ func TestBuildOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
-// steppedClock reads a fixed time once, when the scan sets its deadline,
-// and that time plus elapsed on every later read.
+// steppedClock reads a fixed time until the scan sets its deadline (the
+// files digest reads it twice before, so it takes no time) and that time
+// plus elapsed on every later read.
 func steppedClock(elapsed time.Duration) func() time.Time {
 	start, reads := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), 0
 	return func() time.Time {
-		if reads++; reads == 1 {
+		if reads++; reads <= clockReadsBeforeDeadline {
 			return start
 		}
 		return start.Add(elapsed)
 	}
 }
+
+// clockReadsBeforeDeadline is how often a scan reads the sandbox clock up to
+// setting its deadline: the files digest's start and end, then the deadline.
+const clockReadsBeforeDeadline = 3
 
 // TestCtrlCClosesTheSandbox (#23 F2): Ctrl+C while the sandbox is open
 // cancels the build instead of killing creep, so the sandbox is closed and

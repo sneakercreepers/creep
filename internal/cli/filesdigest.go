@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"hash"
 	"io/fs"
-	"time"
 
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/state"
@@ -97,9 +96,9 @@ var errFilesCut = errors.New("the scan stopped while creep hashed the repository
 func (s *session) stepFiles(ctx context.Context, all, scanned repoFiles) error {
 	ctx, cancel := context.WithTimeoutCause(ctx, s.timeLeft(), errScanDeadline)
 	defer cancel()
-	start := time.Now()
+	start := s.deps.sandbox.clock()
 	digest, err := s.filesDigester(scanned).digest(ctx, all)
-	s.resume.hashing = time.Since(start)
+	s.resume.hashing = max(s.deps.sandbox.clock().Sub(start), 0)
 	if err != nil {
 		// The hashing time stays spent for a resume of this run.
 		if recErr := s.record(state.TimeStep(s.elapsed())); recErr != nil {

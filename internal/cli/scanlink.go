@@ -33,6 +33,7 @@ type scanDeps struct {
 	recordStability func(opts calibrate.CacheOptions, seen map[calibrate.Class]calibrate.ClassStability) (map[calibrate.Class]calibrate.ClassStability, error)
 	now             func() time.Time // --stats clock; nil is time.Now
 	date            func() time.Time // the baseline's today (#27); nil is time.Now
+	timeEvery       time.Duration    // how often the deadline phase persists its time; 0 is timeEvery
 	// runScanner runs one optional scanner; nil is scanrun.Run, the only
 	// code that starts a program (ADR 0013).
 	runScanner func(ctx context.Context, job scanrun.Job) scanrun.Result
