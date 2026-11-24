@@ -138,3 +138,28 @@ func snapshot(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+// TestInitRefusesNonTextFormat checks that init, which prints only text,
+// refuses a machine format instead of ignoring it, and writes nothing.
+func TestInitRefusesNonTextFormat(t *testing.T) {
+	for _, format := range []string{"json", "sarif", "markdown"} {
+		t.Run(format, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			isolateUserConfig(t)
+			code, _, stderr := run("--format", format, "init")
+			if code != exitcode.ConfigError || !bytes.Contains([]byte(stderr), []byte("prints text only")) {
+				t.Fatalf("exit %d, stderr %q", code, stderr)
+			}
+			if _, err := os.Lstat(projectFile); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("creep.yaml written: %v", err)
+			}
+		})
+	}
+	t.Run("explicit text", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		isolateUserConfig(t)
+		if code, _, stderr := run("--format", "text", "init"); code != exitcode.OK {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+	})
+}

@@ -3,7 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-24)
 - **Date:** 2026-11-24
 - **Deciders:** @Ludocius
-- **Changes:** one command, `creep init`, built after being a fail-closed stub since #1 (no new flag: it takes no argument and ignores the global flags); one new public data contract, the project file template (`internal/config/project_template.yaml`, embedded, header `# creep.yaml template v1`), exported as `config.ProjectTemplate`. No new dependency, package, config key, network path or exit code.
+- **Changes:** one command, `creep init`, built after being a fail-closed stub since #1 (no new flag: it takes no argument, refuses a `--format` other than text with exit 2, and ignores the other global flags); one new public data contract, the project file template (`internal/config/project_template.yaml`, embedded, header `# creep.yaml template v1`), exported as `config.ProjectTemplate`. No new dependency, package, config key, network path or exit code.
 - **Threat model:** [threat-model.md](../threat-model.md) R26
 
 ## Context

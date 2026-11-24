@@ -27,6 +27,10 @@ func runInit(e env, args []string) int {
 		printError(e.stderr, "creep init", fmt.Errorf("unexpected arguments: %q", args))
 		return exitcode.ConfigError
 	}
+	if e.opts.explicit["format"] && e.opts.format != "text" {
+		printError(e.stderr, "creep init", fmt.Errorf("prints text only, not --format %q", e.opts.format))
+		return exitcode.ConfigError
+	}
 	if err := writeProjectTemplate(); err != nil {
 		printError(e.stderr, "creep init", err)
 		return exitcode.ConfigError
