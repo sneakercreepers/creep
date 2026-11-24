@@ -1,0 +1,24 @@
+# creep.yaml template v1
+#
+# Project settings for creep, read from the root of the repository it scans.
+# Every setting is commented out at its built-in default, so this file
+# changes nothing until you remove the "# " before a line and its section.
+# The project file may only tighten what your user file, --config or the
+# policy set: gates only stricter, limits only lower (creep config explain
+# shows each value and the layer that set it).
+# The model, egress.allow, sandbox, scanners.enabled, report.formats and
+# output.format cannot be set here, because the scanned repository must not
+# choose where its code goes or what runs; set them in ~/.creep/config.yaml,
+# a --config file or the policy.
+
+# gates:
+#   pr: probable:critical      # pull request gate: exit 1 when a finding reaches it; only stricter here
+#   nightly: verified:high     # nightly gate (--mode nightly); only stricter here
+# budget:
+#   max_tokens: 2000000        # model tokens one scan may spend; only lower here
+#   max_calls: 500             # model calls one scan may make; only lower here
+#   max_seconds: 7200          # scan deadline after calibration, past it the run is incomplete (exit 4); only lower here
+# calibration:
+#   cache_days: 30             # days a model calibration stays valid; only lower here
+# log:
+#   level: info                # log level: debug, info, warn or error
