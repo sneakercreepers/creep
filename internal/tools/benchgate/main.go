@@ -39,10 +39,13 @@ func main() {
 // baseline is set, 1 on a regression and 2 when an input cannot be read,
 // so the gate fails closed.
 func run(a gateArgs, out io.Writer) int {
-	problems, set, err := gate(a)
+	problems, notes, set, err := gate(a)
 	if err != nil {
 		fmt.Fprintln(out, "benchgate:", err)
 		return 2
+	}
+	for _, n := range notes {
+		fmt.Fprintln(out, "benchgate:", n)
 	}
 	for _, p := range problems {
 		fmt.Fprintln(out, "benchgate: regression:", p)
@@ -53,28 +56,30 @@ func run(a gateArgs, out io.Writer) int {
 	case !set:
 		fmt.Fprintln(out, "benchgate: no baseline set yet (no tiers in", a.baseline+"); nothing to compare")
 	default:
-		fmt.Fprintf(out, "benchgate: ok, no tier worse than the baseline by more than %.3f\n", a.maxDrop)
+		fmt.Fprintf(out, "benchgate: ok, no compared tier worse than the baseline by more than %.3f\n", a.maxDrop)
 	}
 	return 0
 }
 
-func gate(a gateArgs) ([]string, bool, error) {
+// gate returns the regressions, the tiers it did not compare and whether a
+// baseline is set.
+func gate(a gateArgs) (problems, notes []string, set bool, err error) {
 	if a.results == "" {
-		return nil, false, errors.New("-results is required")
+		return nil, nil, false, errors.New("-results is required")
 	}
 	if a.maxDrop < 0 || a.maxDrop > 1 {
-		return nil, false, fmt.Errorf("-max-drop %v is outside 0 to 1", a.maxDrop)
+		return nil, nil, false, fmt.Errorf("-max-drop %v is outside 0 to 1", a.maxDrop)
 	}
 	base, err := readResults(a.baseline)
 	if err != nil {
-		return nil, false, fmt.Errorf("baseline: %w", err)
+		return nil, nil, false, fmt.Errorf("baseline: %w", err)
 	}
 	got, err := readResults(a.results)
 	if err != nil {
-		return nil, false, fmt.Errorf("results: %w", err)
+		return nil, nil, false, fmt.Errorf("results: %w", err)
 	}
-	problems, err := compare(base, got, a.maxDrop)
-	return problems, len(base.Tiers) > 0, err
+	problems, err = compare(base, got, a.maxDrop)
+	return problems, noisyTiers(base, got), len(base.Tiers) > 0, err
 }
 
 // readResults decodes one results document. Unknown fields pass, since

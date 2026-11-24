@@ -54,6 +54,8 @@ func TestCloudBenchPublishesNoEndpointOrReplies(t *testing.T) {
 		{"no fixture collected", cloud, "bench-fixture.json", false},
 		{"no run directory uploaded", cloud, ".creep/runs", false},
 		{"no debug artifact", cloud, "bench-cloud-debug", false},
+		{"endpoint is no variable", cloud, "vars.BENCH_ENDPOINT", false},
+		{"endpoint only in the policy step", cloud, "      - name: Policy, outside the repository\n        env:\n          BENCH_ENDPOINT: ${{ secrets.BENCH_ENDPOINT }}\n", true},
 		{"endpoint masked", policy, `echo "::add-mask::$endpoint"`, true},
 		{"host masked", policy, `echo "::add-mask::$host"`, true},
 		{"origin never printed", policy, `at $origin"`, false},
@@ -62,6 +64,9 @@ func TestCloudBenchPublishesNoEndpointOrReplies(t *testing.T) {
 		if got := strings.Contains(tt.text, tt.needle); got != tt.want {
 			t.Errorf("%s: contains %q = %t, want %t", tt.name, tt.needle, got, tt.want)
 		}
+	}
+	if n := strings.Count(cloud, "BENCH_ENDPOINT:"); n != 1 {
+		t.Errorf("the cloud job names BENCH_ENDPOINT %d times; only the policy step may get it", n)
 	}
 }
 

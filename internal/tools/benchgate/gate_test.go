@@ -135,7 +135,7 @@ func TestRun(t *testing.T) {
 		code int
 		want string
 	}{
-		{"no regression", gateArgs{base, same, DefaultMaxDrop}, 0, "ok, no tier worse"},
+		{"no regression", gateArgs{base, same, DefaultMaxDrop}, 0, "ok, no compared tier worse"},
 		{"regression", gateArgs{base, worse, DefaultMaxDrop}, 1, "regression: tier S: recall"},
 		{"baseline not set", gateArgs{unset, worse, DefaultMaxDrop}, 0, "no baseline set yet"},
 		{"no results flag", gateArgs{base, "", DefaultMaxDrop}, 2, "-results is required"},
@@ -181,5 +181,46 @@ func TestCommittedBaseline(t *testing.T) {
 	}
 	if base.Corpus.SHA256 != digest {
 		t.Fatalf("baseline.json measured corpus %s, the embedded corpus is %s: set the baseline again", base.Corpus.SHA256, digest)
+	}
+}
+
+// withRuns sets a tier's run counts.
+func withRuns(t bench.TierResult, runs, incomplete int) bench.TierResult {
+	t.Runs, t.IncompleteRuns = runs, incomplete
+	return t
+}
+
+// A tier run mostly incomplete on either side is noise: it is reported,
+// never compared, so the gate neither fails on it nor passes on it as a
+// measurement (v0.3 tester T3). Half or fewer incomplete is still compared.
+func TestMostlyIncompleteTierNotCompared(t *testing.T) {
+	worse := tier("S", class("sqli", 6, 1, 6, 6, 5, 4), class("xss", 4, 0, 4, 4, 3, 3))
+	tests := []struct {
+		name       string
+		base, got  bench.TierResult
+		regression bool
+		noted      bool
+	}{
+		{"complete on both sides", withRuns(baseTier, 20, 0), withRuns(worse, 20, 0), true, false},
+		{"exactly half incomplete is compared", withRuns(baseTier, 20, 10), withRuns(worse, 20, 10), true, false},
+		{"baseline mostly incomplete", withRuns(baseTier, 24, 23), withRuns(worse, 24, 0), false, true},
+		{"results mostly incomplete", withRuns(baseTier, 24, 0), withRuns(worse, 24, 13), false, true},
+		{"all incomplete, numbers equal", withRuns(baseTier, 24, 24), withRuns(baseTier, 24, 24), false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base, got := results(tt.base), results(tt.got)
+			problems, err := compare(base, got, DefaultMaxDrop)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(problems) > 0) != tt.regression {
+				t.Errorf("problems %q, want regression %t", problems, tt.regression)
+			}
+			notes := noisyTiers(base, got)
+			if (len(notes) > 0) != tt.noted || (tt.noted && !strings.Contains(notes[0], "tier S not compared")) {
+				t.Errorf("notes %q, want noted %t", notes, tt.noted)
+			}
+		})
 	}
 }

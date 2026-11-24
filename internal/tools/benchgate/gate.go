@@ -84,6 +84,9 @@ func tierProblems(base, got bench.Results, maxDrop float64) []string {
 			problems = append(problems, fmt.Sprintf("tier %s: in the baseline, missing from the results", bt.Tier))
 			continue
 		}
+		if mostlyIncomplete(bt) || mostlyIncomplete(gt) {
+			continue // reported by noisyTiers, never a regression
+		}
 		for _, m := range metrics(bt, gt) {
 			if why := m.check(maxDrop); why != "" {
 				problems = append(problems, fmt.Sprintf("tier %s: %s", bt.Tier, why))
@@ -112,4 +115,30 @@ func findTier(r bench.Results, tier string) (bench.TierResult, bool) {
 		}
 	}
 	return bench.TierResult{}, false
+}
+
+// mostlyIncomplete reports a tier where more than half the case runs did
+// not finish (a reply broke the schema, say): its counts rest on the few
+// runs that did, so one reply swings them past any threshold (v0.3
+// tester T3). Such a tier is not compared, on either side.
+func mostlyIncomplete(t bench.TierResult) bool {
+	return t.IncompleteRuns*2 > t.Runs
+}
+
+// noisyTiers names each tier the gate did not compare because the
+// baseline or the results ran it mostly incomplete.
+func noisyTiers(base, got bench.Results) []string {
+	if len(base.Tiers) == 0 {
+		return nil
+	}
+	var notes []string
+	for _, bt := range base.Tiers {
+		gt, ok := findTier(got, bt.Tier)
+		if !ok || (!mostlyIncomplete(bt) && !mostlyIncomplete(gt)) {
+			continue
+		}
+		notes = append(notes, fmt.Sprintf("tier %s not compared: incomplete runs %d of %d in the baseline, %d of %d in the results (more than half on a side is noise)",
+			bt.Tier, bt.IncompleteRuns, bt.Runs, gt.IncompleteRuns, gt.Runs))
+	}
+	return notes
 }

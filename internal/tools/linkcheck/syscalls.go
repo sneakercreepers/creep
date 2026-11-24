@@ -19,10 +19,11 @@ const (
 var sysPackages = []string{syscallPkg, xsysUnix, xsysWin}
 
 // sysPrimitive names the wrappers that open a socket, send on one or start
-// a program, on every release OS. They are watched on any path; the
+// a program, on every release OS, with the lower-case internal wrappers
+// the exported ones call on Linux and macOS. They are watched on any path; the
 // standard library reaches them only through net, os/exec and
 // os.StartProcess, which stop the walk first.
-var sysPrimitive = regexp.MustCompile(`^(Socket|Connect|ConnectEx|Sendto|Sendmsg|SendmsgN|Sendmmsg|Exec|ForkExec|forkExec|StartProcess|CreateProcess|CreateProcessAsUser|ShellExecute|ShellExecuteEx|WSASocket|WSAConnect|WSASendTo|WSAIoctl)$`)
+var sysPrimitive = regexp.MustCompile(`^(socket|connect|sendto|sendmsg|sendmsgN|sendmmsg|Socket|Connect|ConnectEx|Sendto|Sendmsg|SendmsgN|Sendmmsg|Exec|ForkExec|forkExec|StartProcess|CreateProcess|CreateProcessAsUser|ShellExecute|ShellExecuteEx|WSASocket|WSAConnect|WSASendTo|WSAIoctl)$`)
 
 // rawCall names the entry points that make any system call by number or
 // any DLL call by name: a program can open a socket or start a program

@@ -72,8 +72,12 @@ func releaseLinkGraphs(root string, targets []target) ([]linkGraph, error) {
 	return graphs, nil
 }
 
+// dumpLinkGraph links without inlining (-gcflags=all=-l): an inlined
+// function's calls are charged to its caller, so a third-party call
+// inlined into creep's code, or a syscall wrapper inlined into the
+// third-party caller, would hide the edge (v0.3 tester T1).
 func dumpLinkGraph(root string, t target, out string) (linkGraph, error) {
-	cmd := exec.Command("go", "build", "-trimpath", "-ldflags=-dumpdep", "-o", out, "./cmd/creep") //nolint:gosec // G204: fixed arguments; out is our own temp file
+	cmd := exec.Command("go", "build", "-trimpath", "-gcflags=all=-l", "-ldflags=-dumpdep", "-o", out, "./cmd/creep") //nolint:gosec // G204: fixed arguments; out is our own temp file
 	cmd.Dir = root
 	// A go.work above the root must not change what is linked.
 	cmd.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0", "GOOS="+t.goos, "GOARCH="+t.goarch)

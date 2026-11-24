@@ -14,6 +14,8 @@ import (
 // shrinks.
 var linkReviewed = map[string]string{
 	"github.com/modelcontextprotocol/go-sdk/oauthex.newDiscoveryTransport -> net/http.(*Transport).Clone": "oauthex's package init clones http.DefaultTransport into an unused variable; only its OAuth discovery sends through it, and that code is not linked (creep's MCP server has no auth)",
+	// Seen once the analysis link stops inlining (v0.3 tester T1).
+	"github.com/modelcontextprotocol/go-sdk/oauthex.proxyConfigured -> net/http.NewRequest": "oauthex.proxyConfigured (v1.8.0 oauth2.go) only builds a GET request value to ask the transport's Proxy func whether a proxy is set, and never sends it; the request is a struct, not a connection",
 }
 
 // watchedPackages hold the functions that open connections or start

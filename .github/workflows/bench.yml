@@ -122,7 +122,6 @@ jobs:
       contents: read
     env:
       BENCH_CONTRACT: ${{ vars.BENCH_CONTRACT }}
-      BENCH_ENDPOINT: ${{ vars.BENCH_ENDPOINT }}
       BENCH_MODEL: ${{ vars.BENCH_MODEL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -134,7 +133,13 @@ jobs:
           cache: false
       - name: Build creep
         run: go build -trimpath -o "$RUNNER_TEMP/creep" ./cmd/creep
+      # The endpoint is an environment secret, not a variable, and reaches
+      # only this step: the runner prints job and step env of variables in
+      # the public log before any ::add-mask:: runs, while a secret is
+      # masked everywhere (v0.3 tester T2). Only the policy file carries it on.
       - name: Policy, outside the repository
+        env:
+          BENCH_ENDPOINT: ${{ secrets.BENCH_ENDPOINT }}
         run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
       # The key reaches only this step, as CREEP_API_KEY: creep sends it in
       # a header through the gateway and never writes it to egress.log, the
