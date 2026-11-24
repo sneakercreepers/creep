@@ -14,15 +14,8 @@ import (
 // the linker deduplicates by content, and it judges type descriptors,
 // itabs and static data only by what they lead to, never by their name.
 func checkLinkReach(modPath string, g linkGraph, seen map[string]bool) []string {
-	parent := map[string]string{}
-	var queue []string
-	for _, sym := range sortedSymbols(g) {
-		if isThirdParty(modPath, symbolPackage(sym)) && !isAux(sym) {
-			parent[sym] = ""
-			queue = append(queue, sym)
-		}
-	}
-	var problems []string
+	parent, queue := thirdPartySeeds(modPath, g)
+	problems := linkedPrimitives(queue)
 	for len(queue) > 0 {
 		sym := queue[0]
 		queue = queue[1:]
@@ -40,9 +33,39 @@ func checkLinkReach(modPath string, g linkGraph, seen map[string]bool) []string 
 			switch {
 			case isWatched(next):
 				problems = append(problems, fmt.Sprintf("third-party code links %s: %s (AGENTS.md invariant 1, ADR 0027)", next, linkPath(parent, next)))
+			case isRawSysEdge(modPath, sym, next):
+				problems = append(problems, fmt.Sprintf("third-party code makes a raw system call %s: %s (AGENTS.md invariant 1, ADR 0027)", next, linkPath(parent, next)))
 			default:
 				queue = append(queue, next)
 			}
+		}
+	}
+	return problems
+}
+
+// thirdPartySeeds start the walk: every third-party symbol but
+// deduplicated funcdata.
+func thirdPartySeeds(modPath string, g linkGraph) (map[string]string, []string) {
+	parent := map[string]string{}
+	var queue []string
+	for _, sym := range sortedSymbols(g) {
+		if isThirdParty(modPath, symbolPackage(sym)) && !isAux(sym) {
+			parent[sym] = ""
+			queue = append(queue, sym)
+		}
+	}
+	return parent, queue
+}
+
+// linkedPrimitives reports the x/sys socket and exec wrappers among the
+// seeds: x/sys is third-party, so its wrappers are seeds, and an edge
+// into a seed is never followed. Being linked at all means some code
+// calls one.
+func linkedPrimitives(seeds []string) []string {
+	var problems []string
+	for _, sym := range seeds {
+		if isWatched(sym) {
+			problems = append(problems, fmt.Sprintf("third-party code links %s (AGENTS.md invariant 1, ADR 0027)", sym))
 		}
 	}
 	return problems
@@ -86,7 +109,7 @@ func isWatched(sym string) bool {
 	if strings.HasPrefix(sym, "type:") || strings.HasPrefix(sym, "go:") || strings.Contains(sym, ".stmp_") {
 		return false
 	}
-	if slices.Contains(watchedSymbols, sym) {
+	if slices.Contains(watchedSymbols, sym) || isSysPrimitive(sym) {
 		return true
 	}
 	pkg := symbolPackage(sym)

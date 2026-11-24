@@ -128,9 +128,14 @@ func keyColumn(line string) int {
 	return len(line) - len(rest)
 }
 
+// baseClassifier is the one reference not pinned by SHA: the docs-only
+// classifier must come from protected main, not the pull request's head,
+// or the pull request could skip its own checks (ADR 0018 amendment).
+const baseClassifier = "sneakercreepers/creep/.github/workflows/changes.yml@main"
+
 func unpinned(ref string) string {
 	switch {
-	case strings.HasPrefix(ref, "./"):
+	case strings.HasPrefix(ref, "./"), ref == baseClassifier:
 		return ""
 	case strings.HasPrefix(ref, "docker://"):
 		if digestPin.MatchString(ref) {

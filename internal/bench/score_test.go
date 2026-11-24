@@ -163,3 +163,42 @@ func TestScoreRefusesBadOutcomes(t *testing.T) {
 		})
 	}
 }
+
+// TierResult.Totals is the one definition of a tier's rates: the release
+// gate (internal/tools/benchgate) compares these, so a change to how
+// recall, false-positive rate or honesty is computed reaches both.
+func TestTierTotals(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	tests := []struct {
+		name                 string
+		classes              []ClassResult
+		recall, fpr, honesty *float64
+	}{
+		{"no classes, nothing measured", nil, nil, nil, nil},
+		{"summed over classes", []ClassResult{
+			{Vulnerable: 2, Detected: 1, Safe: 2, FalsePositives: 0, ClaimedCovered: 1, SilentMisses: 1},
+			{Vulnerable: 1, Detected: 1, Safe: 1, FalsePositives: 1, ClaimedCovered: 2},
+		}, f(0.667), f(0.333), f(0.667)},
+		{"no claims leaves honesty unmeasured", []ClassResult{{Vulnerable: 1, Safe: 1}}, f(0), f(0), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TierResult{Classes: tt.classes}.Totals()
+			for _, r := range []struct {
+				name      string
+				got, want *float64
+			}{{"recall", got.Recall, tt.recall}, {"false-positive rate", got.FalsePositiveRate, tt.fpr}, {"honesty", got.Honesty, tt.honesty}} {
+				if (r.got == nil) != (r.want == nil) || (r.got != nil && *r.got != *r.want) {
+					t.Errorf("%s = %v, want %v", r.name, deref(r.got), deref(r.want))
+				}
+			}
+		})
+	}
+}
+
+func deref(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}

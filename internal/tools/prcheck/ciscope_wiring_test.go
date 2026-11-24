@@ -49,6 +49,13 @@ func TestDocsOnlySkipWiring(t *testing.T) {
 		if strings.Contains(wf, "paths-ignore") || strings.Contains(wf, "paths:") {
 			t.Error("a path filter leaves required checks pending; use the changes job")
 		}
+		// The pull request's head must not supply its own classifier (L3).
+		if !strings.Contains(jobBlock(t, wf, "changes"), "    uses: sneakercreepers/creep/.github/workflows/changes.yml@main ") {
+			t.Error("the changes job must run changes.yml from main, not ./ from the pull request's head")
+		}
+	}
+	if !ciSkippable("docs/x.md") || ciSkippable(".github/workflows/changes.yml") || ciSkippable(".github/CODEOWNERS") {
+		t.Error("only prose may skip; any .github/ change must run everything")
 	}
 	if !strings.Contains(ci, "  push:\n    branches: [main]\n") {
 		t.Error("ci.yml must run on every push to main")

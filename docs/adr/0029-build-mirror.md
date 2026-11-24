@@ -5,6 +5,7 @@
 - **Deciders:** @Ludocius
 - **Amends:** [ADR 0016](0016-sandbox-runtime.md) (the offline-build amendment, #23, whose maintainer decision of 2026-11-20 deferred this mode to v0.3)
 - **Changes:** two config keys, `sandbox.mirror.bridge` and `sandbox.mirror.proxy` (operator layers only: user file, `--config`, `CREEP_POLICY`, flags; never `./creep.yaml`); the Podman `build` command line when a mirror is set (`--network=<bridge>` in place of `--network=none`, and four proxy build arguments); one new closed build reason, `mirror_refused`, in the report's verification reasons (ADR 0009's closed set gains one value); the scan's stderr line names the build mode. No new dependency, package, network path in creep's own process, or exit code.
+- **Fitness function:** [architecture.md §9](../architecture.md#9-fitness-functions), row "The build mirror is the only way out of `--network=none`, and only on rootless Podman" (added by the v0.3 architecture review, A1); since that review the mirror is passed to `sandbox.Open` and fixed for the sandbox's life (A7), not set by a later call
 
 ## Context
 

@@ -9,8 +9,13 @@
 // with an exact one: for every release target in .goreleaser.yaml it links
 // cmd/creep with -ldflags=-dumpdep and walks the linker's graph from every
 // third-party symbol. A path to a function in net, net/http, net/rpc,
-// net/smtp, os/exec or crypto/tls, or to os.StartProcess, fails, unless
-// that exact edge is in linkReviewed with its reason. It also parses every
+// net/smtp, os/exec or crypto/tls, to os.StartProcess, or to a socket,
+// connect, send or exec wrapper in syscall, x/sys/unix or x/sys/windows
+// (syscalls.go) fails, and so does a third-party edge outside x/sys into a
+// raw system-call entry point (Syscall*, RawSyscall*, a DLL proc call) or
+// into any x/sys/unix or x/sys/windows function, unless that exact edge is
+// in linkReviewed with its reason. Assembly and go:linkname into the
+// runtime are not seen; ADR 0027 keeps them to review. It also parses every
 // .go file of the module and refuses any SDK name outside sdkAllowed, so
 // tests cannot use a network transport either.
 //

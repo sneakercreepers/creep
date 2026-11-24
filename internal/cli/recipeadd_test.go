@@ -10,6 +10,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/recipe"
+	"github.com/sneakercreepers/creep/internal/recipestore"
 )
 
 const (
@@ -50,7 +51,7 @@ func makeClone(t *testing.T, files map[string]string) string {
 // storeFile is a path under the isolated home's recipe store.
 func storeFile(t *testing.T, name string) string {
 	t.Helper()
-	dir, ok := recipeStorePath()
+	dir, ok := recipestore.Path()
 	if !ok {
 		t.Fatal("no home directory")
 	}

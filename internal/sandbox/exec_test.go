@@ -27,7 +27,7 @@ func TestThroughRealExec(t *testing.T) {
 	if !ok || st.Isolation != IsolationRootless || st.Host != "unix:///run/user/1000/docker.sock" {
 		t.Fatalf("detect = %+v", rep.Checked)
 	}
-	s, err := Open(st, testRunID)
+	s, err := Open(st, testRunID, Mirror{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestOperatorProxiesNeverReachContainers(t *testing.T) {
 	bin := installFake(t, "docker")
 	st := usableDocker()
 	st.Path, st.env = bin, []string{"DOCKER_CONFIG=" + proxiedDockerConfig(t)}
-	s, err := Open(st, testRunID)
+	s, err := Open(st, testRunID, Mirror{})
 	if err != nil {
 		t.Fatal(err)
 	}

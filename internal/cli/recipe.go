@@ -226,7 +226,9 @@ func recipeOpener(root *os.Root) configOpener {
 	return func(label, file string) (*os.File, os.FileInfo, error) {
 		before, err := root.Lstat(file)
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, fmt.Errorf("%s %q: %w", label, file, errNoFile)
+			// os.ErrNotExist, which recipestore.ReadFunc promises for an
+			// absent file; its text matches errNoFile's.
+			return nil, nil, fmt.Errorf("%s %q: %w", label, file, os.ErrNotExist)
 		}
 		if err != nil {
 			return nil, nil, configError(label, file, err)

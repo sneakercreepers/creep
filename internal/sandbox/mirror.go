@@ -47,21 +47,6 @@ const (
 	mirrorCanary      = "canary"       // the canary was inconclusive
 )
 
-// UseMirror makes later builds run on the operator's mirror network
-// instead of none. Build checks it before each build and refuses the
-// build (BuildMirrorRefused), never the scan, when it does not hold.
-func (s *Sandbox) UseMirror(m Mirror) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.mirror = m
-}
-
-func (s *Sandbox) currentMirror() Mirror {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mirror
-}
-
 // Valid reports whether creep would pass m to a builder: a bridge name
 // that is no network mode or flag, and a proxy with only a scheme, host
 // and port. internal/config checks the same rules when it loads the

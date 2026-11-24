@@ -1,8 +1,303 @@
 {
   "schema_version": 1,
-  "corpus": {"cases": 0, "sha256": ""},
-  "model": {"contract": "", "name": "", "synthesized": false},
-  "tiers": [],
-  "unmeasured_classes": [],
-  "smoke": []
+  "corpus": {
+    "cases": 12,
+    "sha256": "5b862f5513587a558d5c215730a20bc9ed393d07b45eeefa0dfa92cba795f975"
+  },
+  "model": {
+    "contract": "openai",
+    "name": "creep-bench-qwen2.5-coder-1.5b-d7372fd82851",
+    "synthesized": false
+  },
+  "tiers": [
+    {
+      "tier": "S",
+      "runs": 24,
+      "incomplete_runs": 23,
+      "classes": [
+        {
+          "class": "command_injection",
+          "vulnerable": 2,
+          "detected": 1,
+          "recall": 0.5,
+          "safe": 2,
+          "false_positives": 1,
+          "false_positive_rate": 0.5,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "idor",
+          "vulnerable": 1,
+          "detected": 0,
+          "recall": 0,
+          "safe": 1,
+          "false_positives": 1,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "nosql_injection",
+          "vulnerable": 1,
+          "detected": 1,
+          "recall": 1,
+          "safe": 1,
+          "false_positives": 1,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "path_traversal",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "sqli",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "ssrf",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "template_injection",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        }
+      ]
+    },
+    {
+      "tier": "M",
+      "runs": 24,
+      "incomplete_runs": 22,
+      "classes": [
+        {
+          "class": "command_injection",
+          "vulnerable": 2,
+          "detected": 1,
+          "recall": 0.5,
+          "safe": 2,
+          "false_positives": 1,
+          "false_positive_rate": 0.5,
+          "claimed_covered": 1,
+          "silent_misses": 1,
+          "honesty": 0
+        },
+        {
+          "class": "idor",
+          "vulnerable": 1,
+          "detected": 0,
+          "recall": 0,
+          "safe": 1,
+          "false_positives": 1,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "nosql_injection",
+          "vulnerable": 1,
+          "detected": 1,
+          "recall": 1,
+          "safe": 1,
+          "false_positives": 1,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "path_traversal",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 1,
+          "silent_misses": 0,
+          "honesty": 1
+        },
+        {
+          "class": "sqli",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "ssrf",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "template_injection",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 1,
+          "silent_misses": 0,
+          "honesty": 1
+        }
+      ]
+    },
+    {
+      "tier": "L",
+      "runs": 24,
+      "incomplete_runs": 24,
+      "classes": [
+        {
+          "class": "command_injection",
+          "vulnerable": 2,
+          "detected": 1,
+          "recall": 0.5,
+          "safe": 2,
+          "false_positives": 0,
+          "false_positive_rate": 0,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "idor",
+          "vulnerable": 1,
+          "detected": 0,
+          "recall": 0,
+          "safe": 1,
+          "false_positives": 1,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "nosql_injection",
+          "vulnerable": 1,
+          "detected": 1,
+          "recall": 1,
+          "safe": 1,
+          "false_positives": 0,
+          "false_positive_rate": 0,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "path_traversal",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "sqli",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "ssrf",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        },
+        {
+          "class": "template_injection",
+          "vulnerable": 2,
+          "detected": 2,
+          "recall": 1,
+          "safe": 2,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 0,
+          "silent_misses": 0,
+          "honesty": null
+        }
+      ]
+    }
+  ],
+  "unmeasured_classes": [
+    "missing_auth",
+    "prototype_pollution"
+  ],
+  "smoke": [
+    {
+      "target": "OWASP Juice Shop",
+      "status": "skipped",
+      "reason": "creep downloads nothing (invariant 5) and these apps have no ground truth to score; run creep scan inside your own local clone"
+    },
+    {
+      "target": "PyGoat",
+      "status": "skipped",
+      "reason": "creep downloads nothing (invariant 5) and these apps have no ground truth to score; run creep scan inside your own local clone"
+    }
+  ]
 }
