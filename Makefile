@@ -120,8 +120,11 @@ rulesets:
 # only when missing because POSTing a duplicate fails. allowed_actions must be
 # selected before the allowlist is accepted. immutable-releases.json records
 # the expected state for the drift check; code never turns immutable releases off.
+# bench-cloud, which holds the cloud bench key (#36), deploys only protected
+# branches (main) and needs the maintainer's approval.
 repo-settings:
 	@echo "update environment release"; gh api -X PUT "repos/$(REPO)/environments/release" --input .github/settings/release-environment.json >/dev/null
+	@echo "update environment bench-cloud"; gh api -X PUT "repos/$(REPO)/environments/bench-cloud" --input .github/settings/bench-cloud-environment.json >/dev/null
 	@extra="$$(gh api --paginate "repos/$(REPO)/environments/release/deployment-branch-policies" --jq '.branch_policies[] | select(.name != "v*" or .type != "tag") | "\(.type) \(.name)"')" || exit 1; \
 	if [ -n "$$extra" ]; then \
 		echo "environment release has deployment policies other than the v* tag; remove them in its settings:" >&2; \

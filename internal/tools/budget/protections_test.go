@@ -39,6 +39,10 @@ func TestProtectionsAreRequired(t *testing.T) {
 	}
 }
 
+// docsOnlyGuard is the docs-only skip on each test step (ADR 0018
+// amendment); a push to main never sets it, so it never skips main.
+const docsOnlyGuard = `needs\.changes\.outputs\.docs_only != 'true'`
+
 // TestNonRaceTestJobIsRequired pins the job that runs the redact tests -race
 // skips or samples in full (#76 A2): the test matrix keeps windows-latest,
 // cgo stays off there, every matrix job runs make check, which then runs
@@ -48,9 +52,10 @@ func TestNonRaceTestJobIsRequired(t *testing.T) {
 	ci := strings.ReplaceAll(readRepoFile(t, ".github/workflows/ci.yml"), "\r\n", "\n")
 	for what, re := range map[string]string{
 		"a windows-latest test job": `(?m)^  test:\n(    .*\n|\n)*?        os: \[[^\]\n]*\bwindows-latest\b[^\]\n]*\]$`,
-		"cgo disabled on Windows":   `(?m)^      - name: Disable cgo on Windows\n        if: runner\.os == 'Windows'\n        run: echo "CGO_ENABLED=0" >> "\$GITHUB_ENV"$`,
-		// The step has no "if", so the Windows job runs it too (reviewer on #293).
-		"make check in every test job": `(?m)^      - name: make check\n        run: \|\n(          .*\n)*?          "\$make_bin" check$`,
+		"cgo disabled on Windows":   `(?m)^      - name: Disable cgo on Windows\n        if: ` + docsOnlyGuard + ` && runner\.os == 'Windows'\n        run: echo "CGO_ENABLED=0" >> "\$GITHUB_ENV"$`,
+		// The step's only "if" is the docs-only skip, so the Windows job runs
+		// it too (reviewer on #293; ADR 0018 amendment).
+		"make check in every test job": `(?m)^      - name: make check\n        if: ` + docsOnlyGuard + `\n        run: \|\n(          .*\n)*?          "\$make_bin" check$`,
 	} {
 		if !regexp.MustCompile(re).MatchString(ci) {
 			t.Errorf("ci.yml: no %s", what)

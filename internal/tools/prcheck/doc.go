@@ -24,6 +24,12 @@
 // differs from the base, so the update after each merge needs no ADR. Which
 // ADR, and whether it records the change, stays with review.
 //
+// With -ci-scope it only classifies the changed files for CI (ADR 0018
+// amendment, 2026-11-23): it prints docs_only=true when every path fits the
+// shortcut, sits at the root or under docs/ and is read by no check
+// (checkedDocs), so the heavy CI jobs may skip, and docs_only=false
+// otherwise. The changes workflow runs it from the base commit.
+//
 // It reads only the event payload GitHub writes to disk, the changed-file
 // list and the base AGENTS.md from git, and the checked-out tree, so it
 // makes no network call. Inputs it cannot read, and an event without a pull

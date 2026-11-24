@@ -1,0 +1,51 @@
+name: Changes
+
+# Tells CI and CodeQL whether a pull request changes only prose, so their
+# heavy jobs can skip while every required check still reports success
+# (ADR 0018 amendment, maintainer request of 2026-11-23). paths-ignore
+# would leave required checks pending. The classification is prcheck's
+# -ci-scope, built from the base commit, so a pull request cannot edit the
+# rule that skips its own tests. Anything but a pull request, and any failure
+# here, leaves docs_only empty: the callers then run every job.
+on:
+  workflow_call:
+    outputs:
+      docs_only:
+        description: "true when the pull request changes only prose no check reads"
+        value: ${{ jobs.classify.outputs.docs_only }}
+
+permissions: {}
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      # Depth 2 holds the merge commit and both parents: HEAD^1 is the base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: github.event_name == 'pull_request'
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Changed files, and the base commit checked out
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff --no-renames --name-only -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
+      # A failure here (a base without -ci-scope, say) leaves the output
+      # empty, which runs everything, so it must not fail the job.
+      - name: Classify
+        id: scope
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/base
+        run: go run ./internal/tools/prcheck -ci-scope -files "$RUNNER_TEMP/changed" >> "$GITHUB_OUTPUT"
