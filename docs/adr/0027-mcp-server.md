@@ -3,6 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-23)
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
+- **User guide:** wiki [Using creep from an agent (MCP)](https://github.com/sneakercreepers/creep/wiki/Using-creep-from-an-agent) (#38), linked from CONTRIBUTING.md
 - **Fitness function:** the rows "Only `gateway` reaches the network (invariant 1)", "No dependency without an ADR (invariant 6)" and "MCP tools write only under `.creep/` and start no container" of [architecture.md §9](../architecture.md#9-fitness-functions)
 
 ## Context

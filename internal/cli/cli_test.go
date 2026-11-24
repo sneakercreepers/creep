@@ -20,6 +20,9 @@ func run(args ...string) (code int, stdout, stderr string) {
 }
 
 func TestRun(t *testing.T) {
+	// The "fails closed" cases must not pass or fail on the developer's own
+	// ~/.creep/config.yaml.
+	isolateUserConfig(t)
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "creep.yaml")
 	if err := os.WriteFile(cfg, []byte("{}\n"), 0o600); err != nil {

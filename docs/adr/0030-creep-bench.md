@@ -4,6 +4,7 @@
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
 - **Changes:** one command, `creep bench` (no new flag: it reads the global `--replay`, `--record`, `--format` and `--config`); one new public JSON document, the bench results (`schema_version` 1, published in `docs/bench/results.json`); one new package, `internal/bench` (layer 0, no internal import). No new dependency, network path, config key or exit code.
+- **User guide:** wiki [Sharing model results](https://github.com/sneakercreepers/creep/wiki/Sharing-model-results) (#38), linked from CONTRIBUTING.md and the Show and tell form
 - **Fitness function:** [architecture.md §9](../architecture.md#9-fitness-functions), row "The bench corpus is disjoint from calibration" (`internal/bench/corpus_test.go:TestCorpusDisjointFromCalibration`), and row "Published bench numbers replay" (`internal/cli/bench_test.go:TestBenchPublished`)
 
 ## Context
