@@ -38,7 +38,7 @@ type command struct {
 }
 
 var commands = []command{
-	{"init", "create a creep.yaml for this project (not implemented yet)", stub("init")},
+	{"init", "write ./creep.yaml: the project settings, each commented out at its default (ADR 0031)", runInit},
 	{"doctor", "check the model (a command model must pass the tool canary) and the sandbox runtime", runDoctor},
 	{"scan", "scan the repository in the current directory; reports go to .creep/", runScan},
 	{"estimate", "estimate the calls, tokens, time and cost of a scan here, without calling a model", runEstimate},
@@ -61,15 +61,6 @@ func findCommand(name string) (command, bool) {
 		}
 	}
 	return command{}, false
-}
-
-// stub keeps a contracted command registered but fails closed: a CI gate
-// running an unbuilt "creep scan" must not pass with nothing scanned.
-func stub(name string) func(env, []string) int {
-	return func(e env, _ []string) int {
-		fmt.Fprintf(e.stderr, "creep %s: not implemented yet\n", name)
-		return exitcode.ConfigError
-	}
 }
 
 func runVersion(e env, args []string) int {

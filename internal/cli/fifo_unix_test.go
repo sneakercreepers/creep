@@ -179,3 +179,16 @@ func TestRecipeRefusesFIFO(t *testing.T) {
 		}
 	}
 }
+
+// A FIFO planted at creep.yaml is refused at once: init never opens it, so
+// it neither waits for a reader nor writes into the pipe.
+func TestInitRefusesFIFO(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := syscall.Mkfifo(projectFile, 0o600); err != nil {
+		t.Skipf("mkfifo unsupported here: %v", err)
+	}
+	code, stderr := runWithTimeout(t, "init")
+	if code != exitcode.ConfigError || !strings.Contains(stderr, "special file") {
+		t.Errorf("init on a FIFO: exit %d: %s", code, stderr)
+	}
+}

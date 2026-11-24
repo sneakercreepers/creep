@@ -177,6 +177,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 
 | Command | What it does |
 |---|---|
+| `creep init` | Write `./creep.yaml` with every setting the project file may hold (gates, budget limits, calibration cache, log level), each commented out at its built-in default with a one-line why, so the file changes nothing until edited; prints where the model and the other operator-only settings go. An existing `creep.yaml`, or a link, directory or FIFO at that path, is refused with exit 2 and never overwritten; no model call, no network ([ADR 0031](docs/adr/0031-creep-init.md)) |
 | `creep scan` | Scan the current directory; write `.creep/report.*` |
 | `creep estimate` | Build every request a scan would send and measure it; no model call, no network ([ADR 0011](docs/adr/0011-estimate-and-stats.md)) |
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
@@ -191,7 +192,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep mcp` | Serve the read-only MCP tools `scan` (changed files only), `findings` and `why` over stdio for a coding agent ([MCP server](#mcp-server)) |
 | `creep version` | Print version, commit and Go version |
 
-`creep init` and continuing a run with `creep resume` are not implemented yet and fail closed.
+Continuing a run with `creep resume` is not implemented yet and fails closed.
 
 ### MCP server
 

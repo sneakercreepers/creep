@@ -54,7 +54,7 @@ func TestRun(t *testing.T) {
 		{"config missing", []string{"--config", missing, "version"}, exitcode.ConfigError, nil, []string{"does not exist"}},
 		{"config is dir", []string{"--config", dir, "version"}, exitcode.ConfigError, nil, []string{"is a directory"}},
 		{"unknown command flag", []string{"doctor", "--bogus"}, exitcode.ConfigError, nil, []string{"bogus", "creep doctor"}},
-		{"init stub", []string{"init"}, exitcode.ConfigError, nil, []string{"not implemented yet"}},
+		{"init extra args", []string{"init", "x"}, exitcode.ConfigError, nil, []string{`creep init: unexpected arguments: ["x"]`}},
 		{"doctor without a model fails closed", []string{"doctor"}, exitcode.ConfigError, nil, []string{"creep doctor: ", "model.endpoint"}},
 		{"scan without a model fails closed", []string{"scan", "."}, exitcode.ConfigError, nil, []string{"creep scan: "}},
 		{"config without subcommand", []string{"config"}, exitcode.ConfigError, nil, []string{"missing subcommand"}},
@@ -167,7 +167,7 @@ func TestStubsFailClosed(t *testing.T) {
 		if c.name == "resume" { // checks its run first; TestResumeFailsClosed covers it
 			continue
 		}
-		if c.name == "scan" || c.name == "why" || c.name == "reproduce" || c.name == "estimate" || c.name == "doctor" || c.name == "clean" || c.name == "accept" || c.name == "recipe" || c.name == "mcp" || c.name == "bench" { // built; their own tests cover their failures
+		if c.name == "init" || c.name == "scan" || c.name == "why" || c.name == "reproduce" || c.name == "estimate" || c.name == "doctor" || c.name == "clean" || c.name == "accept" || c.name == "recipe" || c.name == "mcp" || c.name == "bench" { // built; their own tests cover their failures
 			continue
 		}
 		t.Run(c.name, func(t *testing.T) {
@@ -177,14 +177,6 @@ func TestStubsFailClosed(t *testing.T) {
 			}
 			assertContains(t, "stderr", stderr, []string{"not implemented yet"})
 		})
-	}
-}
-
-func TestHelpMarksUnimplementedCommands(t *testing.T) {
-	_, stdout, _ := run("--help")
-	for _, name := range []string{"init"} {
-		c, _ := findCommand(name)
-		assertContains(t, "usage", stdout, []string{c.name + " ", c.summary, "(not implemented yet)"})
 	}
 }
 
@@ -278,7 +270,7 @@ func TestStdoutWriteError(t *testing.T) {
 		{"help for a command", []string{"help", "scan"}, errWriter{}, exitcode.ConfigError, lost},
 		{"command help flag", []string{"scan", "--help"}, errWriter{}, exitcode.ConfigError, lost},
 		{"config explain reports its own error", []string{"config", "explain", "--config", cfg}, errWriter{}, exitcode.ConfigError, "creep config explain: "},
-		{"failed command keeps its error", []string{"init"}, errWriter{}, exitcode.ConfigError, "not implemented yet"},
+		{"failed command keeps its error", []string{"version", "x"}, errWriter{}, exitcode.ConfigError, "unexpected arguments"},
 		{"stdout works", []string{"version"}, &bytes.Buffer{}, exitcode.OK, ""},
 	}
 	for _, tt := range tests {

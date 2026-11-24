@@ -4,7 +4,7 @@ Usage:
   creep [global flags] <command> [flags] [args]
 
 Commands:
-  init     create a creep.yaml for this project (not implemented yet)
+  init     write ./creep.yaml: the project settings, each commented out at its default (ADR 0031)
   doctor   check the model (a command model must pass the tool canary) and the sandbox runtime
   scan     scan the repository in the current directory; reports go to .creep/
   estimate estimate the calls, tokens, time and cost of a scan here, without calling a model
