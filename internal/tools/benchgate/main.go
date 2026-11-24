@@ -96,11 +96,18 @@ func readResults(name string) (bench.Results, error) {
 }
 
 func readBounded(name string) ([]byte, error) {
-	f, err := os.Open(name)
+	f, err := os.OpenFile(name, os.O_RDONLY|nonblockFlag, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", name, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", name)
+	}
 	data, err := io.ReadAll(io.LimitReader(f, maxResultsBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", name, err)

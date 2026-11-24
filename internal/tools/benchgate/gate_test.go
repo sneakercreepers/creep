@@ -144,6 +144,7 @@ func TestRun(t *testing.T) {
 		{"malformed results", gateArgs{base, writeFile(t, dir, "bad.json", "{"), DefaultMaxDrop}, 2, "decode"},
 		{"trailing data", gateArgs{base, writeFile(t, dir, "trail.json", `{"schema_version":1} {}`), DefaultMaxDrop}, 2, "trailing data"},
 		{"oversized results", gateArgs{base, writeFile(t, dir, "big.json", strings.Repeat(" ", maxResultsBytes+1)), DefaultMaxDrop}, 2, "over"},
+		{"directory as results", gateArgs{base, dir, DefaultMaxDrop}, 2, "not a regular file"},
 		{"negative threshold", gateArgs{base, same, -0.1}, 2, "outside 0 to 1"},
 		{"threshold over one", gateArgs{base, same, 1.5}, 2, "outside 0 to 1"},
 	}

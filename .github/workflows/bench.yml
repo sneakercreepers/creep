@@ -50,7 +50,9 @@ jobs:
       BASE_MODEL: qwen2.5-coder:1.5b
       # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai.
       BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
-      BENCH_MODEL: creep-bench-qwen2.5-coder-1.5b
+      # Ends with the digest prefix, so a re-pin is another model to the gate
+      # and its baseline must be set again (ADR 0030 amendment).
+      BENCH_MODEL: creep-bench-qwen2.5-coder-1.5b-d7372fd82851
       BENCH_CONTRACT: openai
       BENCH_ENDPOINT: http://127.0.0.1:11434/v1
     steps:

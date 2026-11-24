@@ -12,6 +12,12 @@ base="${BASE_MODEL:?}"
 want="${BASE_MODEL_DIGEST:?}"
 bench="${BENCH_MODEL:?}"
 
+# The gate matches a baseline by model name, so the name carries the pin.
+case "$bench" in
+  *"-${want:0:12}") ;;
+  *) echo "::error::BENCH_MODEL '$bench' must end with -${want:0:12}, the digest prefix" >&2; exit 2 ;;
+esac
+
 for _ in $(seq 60); do
   curl -fsS "$url/api/version" >/dev/null 2>&1 && break
   sleep 2

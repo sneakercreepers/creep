@@ -58,6 +58,7 @@ var syscallAllowed = map[string]string{
 	"internal/cli/dirlink_windows_test.go":       "creates a junction with FSCTL_SET_REPARSE_POINT (#214)",
 	"internal/calibrate/dirlink_windows_test.go": "creates a junction with FSCTL_SET_REPARSE_POINT for the calibrations/ dir check (#180)",
 	"internal/state/open_unix.go":                "O_NONBLOCK open so a FIFO swapped in for a state file cannot hang creep",
+	"internal/tools/benchgate/open_unix.go":      "O_NONBLOCK open so a FIFO named as bench results cannot hang the gate",
 	"internal/state/fifo_unix_test.go":           "creates a FIFO with syscall.Mkfifo",
 	"internal/state/lock_flock.go":               "non-blocking flock on the state directory's lock file",
 	"internal/state/lock_windows.go":             "opens the state directory's lock file with no sharing (CreateFile), the Windows lock",

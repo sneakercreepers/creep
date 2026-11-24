@@ -17,9 +17,14 @@ set -euo pipefail
 repo="${1:?usage: bench-latest.sh <owner/repo> <dir>}"
 dir="${2:?usage: bench-latest.sh <owner/repo> <dir>}"
 
-runs="$(gh api "repos/$repo/actions/workflows/bench.yml/runs?branch=main&status=completed&per_page=30" \
-  --jq '.workflow_runs[] | "\(.id) \(.event) \(.head_repository.full_name) \(.head_sha) \(.created_at)"')"
-while read -r id event head sha created; do
+# Asked per event, so pull request runs cannot push the nightly ones out of
+# the page; 30 of each covers the 14 days artifacts last. Newest first.
+since="$(date -u -d '15 days ago' +%Y-%m-%d)"
+runs="$(for event in schedule workflow_dispatch; do
+  gh api "repos/$repo/actions/workflows/bench.yml/runs?branch=main&status=completed&event=$event&created=%3E%3D$since&per_page=30" \
+    --jq '.workflow_runs[] | "\(.created_at) \(.id) \(.event) \(.head_repository.full_name) \(.head_sha)"'
+done | sort -r)"
+while read -r created id event head sha; do
   [ -n "$id" ] || continue
   case "$event" in schedule | workflow_dispatch) ;; *) continue ;; esac
   [ "$head" = "$repo" ] || continue
