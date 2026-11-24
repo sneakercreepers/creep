@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"regexp"
 	"time"
 )
@@ -90,9 +91,9 @@ type Header map[string]string
 // maxHeaderFields bounds a header, so its line stays far below MaxLineBytes.
 const maxHeaderFields = 16
 
-// maxStepMs bounds a step's recorded time (about 290 years), so it always
-// fits a time.Duration.
-const maxStepMs = 1 << 53
+// maxStepMs bounds a step's recorded time to what a time.Duration holds in
+// milliseconds (about 292 years), so converting it never wraps.
+const maxStepMs = uint64(math.MaxInt64 / int64(time.Millisecond))
 
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 

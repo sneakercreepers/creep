@@ -35,7 +35,8 @@ func startDeadline(ctx context.Context, cancel context.CancelCauseFunc, left tim
 
 // scanWithin runs the repository scan and the optional scanners under the
 // scan deadline. Calibration reads no repository text, so the deadline
-// starts after it and a hostile repository cannot spend it there. Each stage
+// starts after it and a hostile repository cannot spend it there; what the
+// files digest took before it is already taken off (stepFiles). Each stage
 // lists what the deadline cut; a run it cut stops with reason budget and is
 // never clean.
 func (s *session) scanWithin(ctx context.Context, cancel context.CancelCauseFunc, tier calibrate.Tier, files repoFiles, stderr io.Writer) (scanResult, error) {

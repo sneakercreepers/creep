@@ -35,7 +35,11 @@ func (l *EgressLog) chargeLogged() error {
 	if info.Size() == 0 {
 		return nil
 	}
-	calls, tokens, err := loggedSpend(io.NewSectionReader(l.f, 0, info.Size()), l.budget.opts.MaxTokens)
+	last := make([]byte, 1)
+	if _, err := l.f.ReadAt(last, info.Size()-1); err != nil {
+		return fmt.Errorf("egress log: read back: %w", err)
+	}
+	calls, tokens, err := loggedSpend(io.NewSectionReader(l.f, 0, info.Size()), l.budget.opts.MaxTokens, last[0] != '\n')
 	if err != nil {
 		return err
 	}
@@ -44,19 +48,35 @@ func (l *EgressLog) chargeLogged() error {
 }
 
 // loggedSpend adds up a log's calls and tokens, each call's tokens capped
-// at limit. A line that does not decode is a torn write: its request was
-// never sent (logRequest failed before the send), so it is not charged. A
-// request line with no reservation, written before the field existed,
-// charges limit: an unknown spend never reads as free.
-func loggedSpend(r io.Reader, limit int) (calls, tokens int64, err error) {
+// at limit. Only the final line can be a torn write, when the log does not
+// end in a newline (torn): its request was never sent (logRequest failed
+// before the send), so it is not charged. Any other line that does not
+// decode was edited or merged with a torn line before it, and may hide a
+// request, so it charges a call at limit (v0.4 release pentest P6), as
+// does a request line with no reservation, written before the field
+// existed: an unknown spend never reads as free. Blank lines, which follow
+// a torn write (EgressLog.writeLine), charge nothing.
+//
+// It reads the log once, line by line, with the charged map holding one
+// entry per request whose result is not read yet: linear in the log's
+// size and bounded by its request lines (BenchmarkLoggedSpend: about 20 ms
+// for 10,000 calls on a 2019 laptop). It runs once per resume; a new run's
+// log is empty.
+func loggedSpend(r io.Reader, limit int, torn bool) (calls, tokens int64, err error) {
 	charged := map[string]int{}
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 4096), maxLoggedLineBytes)
+	undecoded := false // the line before this one did not decode
 	for sc.Scan() {
+		if undecoded {
+			calls, tokens = calls+1, tokens+int64(limit)
+		}
 		var line loggedLine
-		if json.Unmarshal(sc.Bytes(), &line) != nil {
+		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
+			undecoded = len(sc.Bytes()) > 0
 			continue
 		}
+		undecoded = false
 		switch line.Type {
 		case "request":
 			c := limit
@@ -72,6 +92,9 @@ func loggedSpend(r io.Reader, limit int) (calls, tokens int64, err error) {
 	}
 	if err := sc.Err(); err != nil {
 		return 0, 0, fmt.Errorf("egress log: read back: %w", err)
+	}
+	if undecoded && !torn {
+		calls, tokens = calls+1, tokens+int64(limit)
 	}
 	return calls, tokens, nil
 }

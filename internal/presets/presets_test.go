@@ -104,6 +104,45 @@ tools_off:
   - [--no-tools]
 `
 
+var verifiedDemo = strings.Replace(valid, "verified: false", "verified: true", 1)
+
+// Regression (v0.4 release pentest P3): a preset whose manual check set an
+// environment variable counts as verified only for a run whose model.env
+// passes it with a value; gemini's check set GEMINI_CLI_HOME.
+func TestVerifiedFor(t *testing.T) {
+	home := func(name string) string {
+		if name == "GEMINI_CLI_HOME" {
+			return "/tmp/gemini-home"
+		}
+		return ""
+	}
+	unset := func(string) string { return "" }
+	tests := []struct {
+		name   string
+		preset string
+		env    []string
+		getenv func(string) string
+		want   bool
+	}{
+		{"gemini with its home passed", "gemini", []string{"GEMINI_API_KEY", "GEMINI_CLI_HOME"}, home, true},
+		{"gemini without the home in model.env", "gemini", []string{"GEMINI_API_KEY"}, home, false},
+		{"gemini with the home declared but unset", "gemini", []string{"GEMINI_CLI_HOME"}, unset, false},
+		{"claude-code needs no variable", "claude-code", nil, unset, true},
+		{"codex is not verified", "codex", []string{"GEMINI_CLI_HOME"}, home, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := Lookup(tt.preset)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := p.VerifiedFor(tt.env, tt.getenv); got != tt.want {
+				t.Fatalf("VerifiedFor = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestSchemaRejects covers the closed schema: every malformed preset fails
 // with an error naming the problem.
 func TestSchemaRejects(t *testing.T) {
@@ -143,6 +182,10 @@ func TestSchemaRejects(t *testing.T) {
 		{"detail with control char", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded\nhost_reads_detail: \"x\\u001b[2J\"", 1), "host_reads_detail"},
 		{"unbounded with detail", "demo.yaml", strings.Replace(valid, "host_reads: none", "host_reads: unbounded\nhost_reads_detail: it can read HOME", 1), ""},
 		{"oversized", "demo.yaml", valid + "# " + strings.Repeat("x", maxFileBytes), "bytes"},
+		{"verified_env on a verified preset", "demo.yaml", verifiedDemo + "verified_env: [DEMO_HOME]\n", ""},
+		{"verified_env on an unverified preset", "demo.yaml", valid + "verified_env: [DEMO_HOME]\n", "only with verified: true"},
+		{"verified_env not a name", "demo.yaml", verifiedDemo + "verified_env: [\"DEMO HOME\"]\n", "not an environment variable name"},
+		{"verified_env too long", "demo.yaml", verifiedDemo + "verified_env: [A, B, C, D, E]\n", "more than 4"},
 	}
 	for _, tt := range tests {
 		_, err := parse(tt.file, []byte(tt.yaml))

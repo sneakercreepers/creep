@@ -1,0 +1,4 @@
+{"v":1,"seq":1,"kind":"start","mode":"live","header":{"config":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","version":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"mac":"0c508137dc494a2aa2445e999a75580a549be8104c6dd9b01e6d2f8b1000e592"}
+{"v":1,"seq":2,"kind":"step","step":"files:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","ms":120,"mac":"fb88f9b14f98469f41af8f21f471de3de3d2f9617ab7c3a53f2fb39379e3e863"}
+{"v":1,"seq":3,"kind":"step","step":"tier:M","ms":1500,"mac":"d1a5e329355a6d22cd86bf09b6be7adc6fb773a535b77f43eb50de60f7902908"}
+{"v":1,"seq":4,"kind":"step","step":"time:16500","ms":16500,"mac":"d0b56fd936dd7a55b2ff0cdaf271be49e37e3d569f185e9002844598f450b6f0"}

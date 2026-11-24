@@ -40,10 +40,11 @@ type Gates struct {
 type Budget struct {
 	MaxTokens int `yaml:"max_tokens" desc:"Maximum model tokens per scan. The project file may only lower it."`
 	MaxCalls  int `yaml:"max_calls" desc:"Maximum model calls per scan. The project file may only lower it."`
-	// MaxSeconds is the scan deadline (#260). It starts after calibration,
-	// which reads no repository text, so a hostile repository cannot spend
-	// it there.
-	MaxSeconds int `yaml:"max_seconds" desc:"Seconds the scan of the repository may run, after calibration: discovery, redaction and model reads. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it."`
+	// MaxSeconds is the scan deadline (#260). It skips calibration, which
+	// reads no repository text, so a hostile repository cannot spend it
+	// there; the files digest a resume compares, which does read the
+	// repository, counts against it (v0.4 release pentest P1).
+	MaxSeconds int `yaml:"max_seconds" desc:"Seconds the scan of the repository may run, calibration excluded: the files digest, discovery, redaction, model reads, scanners and the sandbox. Past it the work left is listed and the run ends incomplete (exit 4). The project file may only lower it."`
 }
 
 type Report struct {

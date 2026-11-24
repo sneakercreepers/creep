@@ -8,6 +8,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/state"
 )
 
 // runScan scans the current directory: walk, calibrate, discovery (the
@@ -40,14 +41,14 @@ func runScan(e env, args []string) int {
 // from its recordings (session.respond), so it reaches the report an
 // uninterrupted run would.
 func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFunc, e env) int {
-	s.cancel = cancel
+	s.resume.cancel = cancel
 	warnPreset(e.stderr, s.cfg.Model)
 	files, scanned, err := s.walk(ctx, e.stderr)
 	if err != nil {
 		return s.fail(e, "creep scan", err, exitcode.ConfigError)
 	}
-	if err := s.stepFiles(files); err != nil {
-		return s.fail(e, refusalPrefix(err), err, exitcode.ConfigError)
+	if err := s.stepFiles(ctx, files, scanned); err != nil {
+		return s.fail(e, refusalPrefix(err), err, filesStepCode(err))
 	}
 	cal, prefix, err := s.toolsAndCalibration(ctx)
 	if err != nil {
@@ -56,26 +57,36 @@ func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFun
 	if err := s.checkRecipes(ctx, cal.Tier, e.stderr); err != nil {
 		return s.failStage(e, "creep scan: recipes", err, recipeFailureCode(err))
 	}
-	s.scanStart = s.deps.sandbox.clock()
-	deadline := s.scanStart.Add(s.timeLeft())
-	res, err := s.scanWithin(ctx, cancel, cal.Tier, scanned, e.stderr)
-	if err != nil || s.refused != nil {
+	res, err := s.deadlinePhase(ctx, cancel, e, cal.Tier, files, scanned)
+	if err != nil || s.resume.refused != nil {
 		return s.failStage(e, "creep scan", err, exitcode.ConfigError)
-	}
-	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: cal.Tier, res: &res})
-	if s.refused != nil {
-		return s.failStage(e, "creep scan", nil, exitcode.ConfigError)
 	}
 	cal = s.feedStability(e.stderr, cal, res.findings)
 	return s.finish(e, cal, res)
+}
+
+// deadlinePhase is the scan under budget.max_seconds: the repository
+// scan, the scanners and the sandbox's verification. Its time is
+// persisted as it goes (keepTime), so a resume cannot get it back.
+func (s *session) deadlinePhase(ctx context.Context, cancel context.CancelCauseFunc, e env, tier calibrate.Tier, files, scanned repoFiles) (scanResult, error) {
+	s.resume.scanStart = s.deps.sandbox.clock()
+	deadline := s.resume.scanStart.Add(s.timeLeft())
+	stop := s.keepTime(timeEvery)
+	defer stop()
+	res, err := s.scanWithin(ctx, cancel, tier, scanned, e.stderr)
+	if err != nil || s.resume.refused != nil {
+		return res, err
+	}
+	res.verify = s.verifyApp(context.WithoutCancel(ctx), e.stderr, files, deadline, pocInput{tier: tier, res: &res})
+	return res, nil
 }
 
 // failStage is fail for a stage that may have met a resume refusal
 // (session.refuse): the refusal wins, exits 2 and leaves no end line, so
 // no report mixes recordings the run did not get.
 func (s *session) failStage(e env, prefix string, err error, code int) int {
-	if s.refused != nil {
-		return s.fail(e, "creep resume", s.refused, exitcode.ConfigError)
+	if s.resume.refused != nil {
+		return s.fail(e, "creep resume", s.resume.refused, exitcode.ConfigError)
 	}
 	return s.fail(e, prefix, err, code)
 }
@@ -85,7 +96,7 @@ func (s *session) failStage(e env, prefix string, err error, code int) int {
 // reads that calibration from the cache only, before the canary, so a
 // changed tier is refused with nothing sent (#335).
 func (s *session) toolsAndCalibration(ctx context.Context) (calibrate.Calibration, string, error) {
-	tier, resumed := s.resumed.step(tierStep)
+	tier, resumed := s.resume.finished.Step(state.StepTier)
 	var cal calibrate.Calibration
 	if resumed {
 		var err error
@@ -103,7 +114,7 @@ func (s *session) toolsAndCalibration(ctx context.Context) (calibrate.Calibratio
 	if err != nil {
 		return cal, "creep scan: calibration", err
 	}
-	if err := s.record(tierStep + string(cal.Tier)); err != nil {
+	if err := s.record(state.StepTier + string(cal.Tier)); err != nil {
 		return cal, "creep scan", err
 	}
 	return cal, "", nil

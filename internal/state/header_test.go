@@ -115,3 +115,43 @@ func manyFields(n int) Header {
 	}
 	return h
 }
+
+// Regression (v0.4 release pentest P5): a step's ms is read back only up to
+// what a time.Duration holds, so no signed value wraps into a negative or
+// small elapsed time; one past the bound is a corrupt line.
+func TestStepMsFitsDuration(t *testing.T) {
+	tests := []struct {
+		name string
+		ms   uint64
+		ok   bool
+	}{
+		{"zero", 0, true},
+		{"at the bound", maxStepMs, true},
+		{"one past the bound", maxStepMs + 1, false},
+		{"2^44, wrapped before the fix", 1 << 44, false},
+		{"2^53, the old bound", 1 << 53, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := openStore(t)
+			r, err := s.NewRunWith(ModeLive, Header{"config": digestA})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := r.append(Event{Kind: KindStep, Step: "time:x", Ms: tt.ms}); err != nil {
+				t.Fatal(err)
+			}
+			_ = r.Close()
+			sum, err := s.Load(r.ID())
+			if !tt.ok {
+				if !errors.Is(err, ErrCorrupt) {
+					t.Fatalf("Load err = %v; want ErrCorrupt", err)
+				}
+				return
+			}
+			if err != nil || sum.Elapsed < 0 || uint64(sum.Elapsed.Milliseconds()) != tt.ms { //nolint:gosec // G115: checked non-negative first
+				t.Fatalf("Load = %v elapsed, %v; want %d ms", sum.Elapsed, err, tt.ms)
+			}
+		})
+	}
+}

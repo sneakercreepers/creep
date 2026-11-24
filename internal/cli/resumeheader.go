@@ -1,11 +1,10 @@
 package cli
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 
@@ -26,7 +25,7 @@ var headerFields = []struct{ key, name string }{
 	{"version", "creep version"},
 	{"prompts", "prompt versions"},
 	{"contract", "model contract (model.contract)"},
-	{"endpoint", "model endpoint or command (model.endpoint, model.run, model.preset, model.env)"},
+	{"endpoint", "model endpoint or command (model.endpoint, model.run, model.preset, model.env names or values)"},
 	{"model", "model name (model.name)"},
 	{"mode", "scan mode (--mode or the CI environment)"},
 	{"options", "scan flags (--stability, --changed, --baseline and its entries, --baseline-write, --recalibrate) or installed recipes"},
@@ -36,28 +35,51 @@ var headerFields = []struct{ key, name string }{
 // errNoHeader refuses a run started before runs recorded their settings.
 var errNoHeader = errors.New("the run records no settings (it was started by a creep without resume), so it cannot be checked; start a new run with creep scan")
 
-// header is the run-state header of this scan's settings: digests only,
-// so the state holds no endpoint, command or flag value in clear.
-func (s *session) header() state.Header {
+// header is the run-state header of this scan's settings: keyed digests
+// only (state.Store.HeaderDigest), so the state holds no endpoint, command,
+// flag or environment value in clear, and none can be guessed back.
+func (s *session) header() (state.Header, error) {
 	m := s.cfg.Model
 	info := buildinfo.Get()
 	prompts := []int{discover.PromptVersion, reader.PromptVersion, calibrate.PromptVersion, verify.PromptVersion}
-	endpoint := append([]string{m.Endpoint, m.Preset, m.Run}, m.Env...)
-	return state.Header{
-		"version":  digest(info.Version, info.Commit),
-		"prompts":  digest(fmt.Sprint(prompts)),
-		"contract": digest(m.Contract),
-		"endpoint": digest(endpoint...),
-		"model":    digest(m.Name),
-		"mode":     digest(string(s.gate.mode.Mode)),
-		"options":  s.optionsDigest(),
-		"config":   configDigest(s.cfg),
+	fields := map[string][]string{
+		"version":  {info.Version, info.Commit},
+		"prompts":  {fmt.Sprint(prompts)},
+		"contract": {m.Contract},
+		"endpoint": endpointParts(m, os.Getenv),
+		"model":    {m.Name},
+		"mode":     {string(s.gate.mode.Mode)},
+		"options":  s.optionsParts(),
+		"config":   {configJSON(s.cfg)},
 	}
+	h := state.Header{}
+	for name, parts := range fields {
+		d, err := s.store.HeaderDigest(parts...)
+		if err != nil {
+			return nil, fmt.Errorf("run header: %w", err)
+		}
+		h[name] = d
+	}
+	return h, nil
 }
 
-// optionsDigest covers the flags and recipes that change what a scan
-// sends or reports. --format and --log-level change neither.
-func (s *session) optionsDigest() string {
+// endpointParts are where the model is reached: the endpoint, preset and
+// command, and each model.env name with its value (v0.4 release pentest
+// P2), since a value can pick the model (GEMINI_MODEL), its settings
+// (GEMINI_CLI_HOME) or its host (OLLAMA_HOST). A key in model.env counts
+// too, so a rotated key refuses a resume; the header keeps only a keyed
+// digest of it.
+func endpointParts(m config.Model, getenv func(string) string) []string {
+	parts := []string{m.Endpoint, m.Preset, m.Run}
+	for _, name := range m.Env {
+		parts = append(parts, name, getenv(name))
+	}
+	return parts
+}
+
+// optionsParts are the flags and recipes that change what a scan sends or
+// reports. --format and --log-level change neither.
+func (s *session) optionsParts() []string {
 	o := s.opts
 	parts := []string{strconv.Itoa(o.stability), strconv.FormatBool(o.recalibrate), o.baseline, strconv.FormatBool(o.baselineWrite)}
 	if s.changed != nil {
@@ -80,27 +102,18 @@ func (s *session) optionsDigest() string {
 	for _, r := range s.installed {
 		parts = append(parts, string(r.Data))
 	}
-	return digest(parts...)
+	return parts
 }
 
-// configDigest hashes the resolved config without the output and log
-// settings, which change no request and no report.
-func configDigest(cfg config.Config) string {
+// configJSON is the resolved config without the output and log settings,
+// which change no request and no report.
+func configJSON(cfg config.Config) string {
 	cfg.Output, cfg.Log = config.Output{}, config.Log{}
 	data, err := json.Marshal(cfg)
 	if err != nil {
-		return digest("unencodable", err.Error())
+		return "unencodable: " + err.Error()
 	}
-	return digest(string(data))
-}
-
-// digest hashes parts with their lengths, so no two lists collide.
-func digest(parts ...string) string {
-	h := sha256.New()
-	for _, p := range parts {
-		fmt.Fprintf(h, "%d:%s,", len(p), p)
-	}
-	return hex.EncodeToString(h.Sum(nil))
+	return string(data)
 }
 
 // compareHeader refuses a resume whose settings differ from the run's,

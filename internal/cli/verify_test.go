@@ -223,11 +223,14 @@ func writeBeside(t *testing.T, path, content string) {
 func TestBuildOnlyWhenEnabled(t *testing.T) {
 	const budget = "budget:\n  max_seconds: 60\n"
 	tests := []struct {
-		name     string
-		user     string
-		project  string
-		checked  []sandbox.Status
-		elapsed  time.Duration // what the clock says after the deadline is set; 0 is the real clock
+		name    string
+		user    string
+		project string
+		checked []sandbox.Status
+		// elapsed is what the clock says after the deadline is set; 0 is the
+		// real clock. The files digest's real time also comes off the
+		// deadline (v0.4 pentest P1), so "during" leaves it a margin.
+		elapsed  time.Duration
 		builds   int
 		wantCode int
 		want     string // in stdout+stderr; "" for no sandbox line
@@ -236,7 +239,7 @@ func TestBuildOnlyWhenEnabled(t *testing.T) {
 		{"project file", "", sandboxOn, []sandbox.Status{rootlessDocker}, 0, 0, exitcode.GateExceeded, ""},
 		{"no runtime", sandboxOn, "", []sandbox.Status{missingDocker, missingPodman}, 0, 0, exitcode.GateExceeded, "verification unavailable (no_runtime)"},
 		{"deadline before the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute, 0, exitcode.GateExceeded, "verification unavailable (budget)"},
-		{"deadline during the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute - time.Millisecond, 1, exitcode.GateExceeded, "verification unavailable (budget)"},
+		{"deadline during the build", sandboxOn + budget, "", []sandbox.Status{rootlessDocker}, time.Minute - 10*time.Second, 1, exitcode.GateExceeded, "verification unavailable (budget)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

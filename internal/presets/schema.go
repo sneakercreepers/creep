@@ -26,6 +26,7 @@ const (
 	maxArgs        = 32
 	maxArgBytes    = 256
 	maxDescription = 200
+	maxVerifiedEnv = 4
 )
 
 // Preset is one model CLI. The YAML keys are the schema; any other key is
@@ -56,10 +57,31 @@ type Preset struct {
 	// Verified says a maintainer ran the manual canary check (CONTRIBUTING.md)
 	// with the real CLI. Required, so a new preset states it explicitly.
 	Verified *bool `yaml:"verified"`
+	// VerifiedEnv names environment variables the manual check set (gemini:
+	// GEMINI_CLI_HOME naming an isolated home). The preset counts as
+	// verified for a run only when model.env passes each of them with a
+	// value (VerifiedFor); optional, and only with verified: true.
+	VerifiedEnv []string `yaml:"verified_env"`
 }
 
 // IsVerified reports whether a maintainer checked the preset with the real CLI.
 func (p Preset) IsVerified() bool { return p.Verified != nil && *p.Verified }
+
+// VerifiedFor reports whether a run with the model.env names env is
+// covered by the manual check: the preset is verified and env passes every
+// VerifiedEnv variable, which getenv says is set. creep does not look at
+// what the variable names (v0.4 release pentest P3).
+func (p Preset) VerifiedFor(env []string, getenv func(string) string) bool {
+	if !p.IsVerified() {
+		return false
+	}
+	for _, name := range p.VerifiedEnv {
+		if !slices.Contains(env, name) || getenv(name) == "" {
+			return false
+		}
+	}
+	return true
+}
 
 // Values of Preset.HostReads.
 const (
@@ -127,7 +149,30 @@ func (p Preset) validate() error {
 	if err := p.checkHostReads(); err != nil {
 		return err
 	}
+	if err := p.checkVerifiedEnv(); err != nil {
+		return err
+	}
 	return p.checkToolsOff()
+}
+
+// envPattern is an environment variable name as model.env takes it.
+var envPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+// checkVerifiedEnv allows a few variable names, and only on a verified
+// preset: an unverified one warns whatever the environment holds.
+func (p Preset) checkVerifiedEnv() error {
+	if len(p.VerifiedEnv) > 0 && !p.IsVerified() {
+		return errors.New("verified_env: only with verified: true")
+	}
+	if len(p.VerifiedEnv) > maxVerifiedEnv {
+		return fmt.Errorf("verified_env: more than %d names", maxVerifiedEnv)
+	}
+	for _, name := range p.VerifiedEnv {
+		if !envPattern.MatchString(name) {
+			return fmt.Errorf("verified_env: %q is not an environment variable name", name)
+		}
+	}
+	return nil
 }
 
 // checkHostReads makes every preset state whether it can read the host,

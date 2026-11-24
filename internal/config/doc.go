@@ -1,4 +1,6 @@
-// Package config resolves creep's effective configuration from layers.
+// Package config resolves creep's effective configuration from layers, and
+// holds the `creep init` project template (ADR 0031), a public data
+// contract.
 //
 // It exists so that every command sees one validated Config and can say where
 // each value came from. Layers apply in this order, later ones overriding

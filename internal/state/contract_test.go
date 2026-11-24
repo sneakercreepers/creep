@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // TestV1FixtureDecodes is the run-state contract fitness function (#8, #138):
@@ -20,6 +22,7 @@ func TestV1FixtureDecodes(t *testing.T) {
 		into func() any
 	}{
 		{"events.jsonl", func() any { return &Event{} }},
+		{"events-resume.jsonl", func() any { return &Event{} }},
 		{"cache-entry.json", func() any { return &entry{} }},
 		{"calibration.json", func() any { return &calibrationEntry{} }},
 	}
@@ -56,6 +59,8 @@ func TestV1FixtureMeaning(t *testing.T) {
 		t.Fatalf("v1 events decode to %+v", sum)
 	}
 
+	checkResumeFixture(t)
+
 	data, err := os.ReadFile(filepath.Join("testdata", "v1", "cache-entry.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +80,25 @@ func TestV1FixtureMeaning(t *testing.T) {
 	c, err := decodeCalibration(data, calKeyA, testMAC)
 	if err != nil || !c.At.Equal(calAt) || string(c.Result) != `{"seed":1,"tier":"M"}` {
 		t.Fatalf("v1 calibration = %+v, %v", c, err)
+	}
+}
+
+// checkResumeFixture pins the fields ADR 0032 added to v1 (v0.4 review A2):
+// the start line's header and a step's ms, which Summary.Elapsed reads.
+func checkResumeFixture(t *testing.T) {
+	t.Helper()
+	f, err := os.Open(filepath.Join("testdata", "v1", "events-resume.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	sum, err := decodeEvents(f, testMAC, fixtureRunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Mode != ModeLive || len(sum.Header) != 2 || sum.Header["version"] != strings.Repeat("a", 64) ||
+		len(sum.Steps) != 3 || sum.Steps[1] != "tier:M" || sum.Elapsed != 16500*time.Millisecond || sum.Ended {
+		t.Fatalf("v1 resume events decode to %+v", sum)
 	}
 }
 

@@ -2,11 +2,8 @@ package cli
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
@@ -14,46 +11,26 @@ import (
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
-// Step IDs a scan records in its run state (#335). Each is an ID or a
-// digest, never repository text.
-const (
-	filesStep = "files:" // the digest of the walked files and what the scan can read of them
-	tierStep  = "tier:"  // the calibrated tier
-	// cacheStep is a recorded model reply or discovery seed:
-	// cache:<key digest>:<reply digest>, so a resume serves only the exact
-	// reply this run got, never one a later scan recorded under the key.
-	cacheStep = "cache:"
-)
-
-// digestHex is the length of each digest in a cache step: 128 bits each,
-// so the step fits the state's 128-character ID.
-const digestHex = 32
-
-// resumedRun is what a resumed run had finished before this session.
-type resumedRun struct {
-	steps   []string          // in order, as the run state lists them
-	replies map[string]string // cache key digest -> digest of the reply the run got
-	spent   time.Duration     // scan time the run had spent (budget.max_seconds)
+// resumeState is a session's resume bookkeeping (#335). For a new scan
+// finished is empty, so nothing is owed or served from a recording.
+type resumeState struct {
+	finished state.Finished
+	// owed are the finished cache steps (by key digest) not served yet:
+	// while any is left, nothing new is sent (session.respond).
+	owed map[string]bool
+	// scanStart is when the deadline phase began; zero before it.
+	scanStart time.Time
+	// hashing is what the files digest took, counted against the deadline.
+	hashing time.Duration
+	// refused is a resume refusal found mid-pipeline (session.refuse), and
+	// cancel the run context's cancel it stops the run with.
+	refused *resumeRefusal
+	cancel  context.CancelCauseFunc
 }
 
-func newResumedRun(sum state.Summary) resumedRun {
-	replies := map[string]string{}
-	for _, step := range sum.Steps {
-		if key, reply, ok := strings.Cut(strings.TrimPrefix(step, cacheStep), ":"); ok && strings.HasPrefix(step, cacheStep) {
-			replies[key] = reply // the cache holds the last reply recorded under key
-		}
-	}
-	return resumedRun{steps: sum.Steps, replies: replies, spent: sum.Elapsed}
-}
-
-// step returns the value of the first finished step with prefix.
-func (r resumedRun) step(prefix string) (string, bool) {
-	for _, step := range r.steps {
-		if v, ok := strings.CutPrefix(step, prefix); ok {
-			return v, true
-		}
-	}
-	return "", false
+func newResumeState(sum state.Summary) resumeState {
+	f := state.NewFinished(sum)
+	return resumeState{finished: f, owed: f.Owed()}
 }
 
 // resumeRefusal is a resume refused because the run and this invocation
@@ -70,12 +47,17 @@ func (r *resumeRefusal) Error() string {
 	return fmt.Sprintf("the %s differs from the original run; nothing was sent; resume with the original settings or start a new run with creep scan", r.field)
 }
 
+func (r *resumeRefusal) ExitCode() int { return exitcode.ConfigError }
+
 // errRecordingGone refuses a resume whose finished step cannot be served
-// with the reply the run got. The pipeline asks for every finished step
-// before any step the run had not reached, so no new call was sent.
+// with the reply the run got.
 var errRecordingGone = &resumeRefusal{why: "the recording of a finished step is missing from .creep/cache or was rewritten by a later scan; no call the run had not sent was sent; start a new run with creep scan"}
 
-func (r *resumeRefusal) ExitCode() int { return exitcode.ConfigError }
+// errOutOfOrder refuses a resume that asks for a step the run had not
+// reached while a finished step is still unserved (v0.4 review A1): the
+// run would mix a new reply into what it had finished, for example after a
+// file changed between the files digest and discovery's read of it.
+var errOutOfOrder = &resumeRefusal{why: "the resumed run asked for a step out of order, before every finished step was served; nothing new was sent; start a new run with creep scan"}
 
 // refusalPrefix names the command an error comes from: resume for a
 // refusal, scan for anything else.
@@ -87,45 +69,36 @@ func refusalPrefix(err error) string {
 	return "creep scan"
 }
 
-// keyDigest names the run-state cache entry k without holding any text.
-func keyDigest(k state.Key) string {
-	h := sha256.New()
-	for _, part := range []string{k.ContentHash, k.Model, k.PromptVersion} {
-		h.Write([]byte(part + "\x00"))
-	}
-	return hex.EncodeToString(h.Sum(nil))[:digestHex]
-}
-
-func replyDigest(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])[:digestHex]
-}
-
 // respond puts the run-state cache in front of every model call and the
 // discovery seed. A step the resumed run already finished is served from
 // its recording only, never sent again, and only when the recording is
-// the reply the run got; otherwise the resume is refused (refuse). Any
-// other step follows the run's mode and, once answered, is recorded with
-// its reply's digest. Only steps finished before this session are
-// replay-only, so a planted cache file cannot stop a new scan
-// (state.Store.Respond).
+// the reply the run got; otherwise the resume is refused. Any other step
+// is refused while a finished step is still owed, since the pipeline asks
+// for them first: calls are sequential, so a send that comes early means
+// the run changed. Once nothing is owed, a step follows the run's mode
+// and, once answered, is recorded with its reply's digest. Only steps
+// finished before this session are replay-only, so a planted cache file
+// cannot stop a new scan (state.Store.Respond).
 func (s *session) respond(k state.Key, call func() ([]byte, error)) ([]byte, error) {
-	if s.refused != nil {
-		return nil, s.refused // the run is refused: nothing more is served or sent
+	if s.resume.refused != nil {
+		return nil, s.resume.refused // the run is refused: nothing more is served or sent
 	}
-	key := keyDigest(k)
-	if want, ok := s.resumed.replies[key]; ok {
+	if s.resume.finished.IsFinished(k) {
 		b, err := s.store.Respond(state.ModeReplay, k, call)
-		if err != nil || replyDigest(b) != want {
+		if err != nil || !s.resume.finished.Matches(k, b) {
 			return nil, s.refuse(errRecordingGone)
 		}
+		delete(s.resume.owed, k.Digest())
 		return b, nil
+	}
+	if len(s.resume.owed) > 0 {
+		return nil, s.refuse(errOutOfOrder)
 	}
 	b, err := s.store.Respond(s.mode(), k, call)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.record(cacheStep + key + ":" + replyDigest(b)); err != nil {
+	if err := s.record(state.CacheStep(k, b)); err != nil {
 		return nil, err
 	}
 	return b, nil
@@ -135,10 +108,10 @@ func (s *session) respond(k state.Key, call func() ([]byte, error)) ([]byte, err
 // run's context, so no stage sends anything more, and runPipeline exits 2
 // without an end line instead of reporting.
 func (s *session) refuse(r *resumeRefusal) error {
-	if s.refused == nil {
-		s.refused = r
-		if s.cancel != nil {
-			s.cancel(r)
+	if s.resume.refused == nil {
+		s.resume.refused = r
+		if s.resume.cancel != nil {
+			s.resume.cancel(r)
 		}
 	}
 	return r
@@ -153,52 +126,22 @@ func (s *session) record(step string) error {
 }
 
 // elapsed is the scan time the run has spent: what a resumed run had
-// spent, plus this session's time since the deadline phase began.
+// spent, plus this session's files digest and its time since the deadline
+// phase began.
 func (s *session) elapsed() time.Duration {
-	if s.scanStart.IsZero() {
-		return s.resumed.spent
+	spent := s.resume.finished.Spent() + s.resume.hashing
+	if s.resume.scanStart.IsZero() {
+		return spent
 	}
-	return s.resumed.spent + s.deps.sandbox.clock().Sub(s.scanStart)
+	return spent + s.deps.sandbox.clock().Sub(s.resume.scanStart)
 }
 
-// timeLeft is budget.max_seconds less what a resumed run already spent:
-// resuming cannot reset the deadline. It may be zero or negative, and the
-// deadline then fires at once.
+// timeLeft is budget.max_seconds less what the run already spent, a
+// resumed run's earlier sessions and this one's files digest: resuming
+// cannot reset the deadline. It may be zero or negative, and the deadline
+// then fires at once.
 func (s *session) timeLeft() time.Duration {
-	return time.Duration(s.cfg.Budget.MaxSeconds)*time.Second - s.resumed.spent
-}
-
-// stepFiles records the digest of the walked files, or refuses a resumed
-// run whose files changed since it recorded theirs.
-func (s *session) stepFiles(files repoFiles) error {
-	digest := filesDigest(readRepoFile(s.repo), files)
-	if recorded, ok := s.resumed.step(filesStep); ok && recorded != digest {
-		return &resumeRefusal{field: "file list or a file's content"}
-	}
-	return s.record(filesStep + digest)
-}
-
-// filesDigest hashes the walked paths, what the scan can read of each
-// (the whole file, or only the head of one over the size cap, exactly as
-// discovery reads it) and the walk's gaps.
-func filesDigest(read func(string) ([]byte, error), files repoFiles) string {
-	h := sha256.New()
-	for _, path := range files.paths {
-		data, err := read(path)
-		status := "ok"
-		switch {
-		case errors.Is(err, errFileTooLarge):
-			status = "too_large"
-		case err != nil:
-			status, data = "unreadable", nil
-		}
-		fmt.Fprintf(h, "%q %s %d\n", path, status, len(data))
-		h.Write(data)
-	}
-	for _, g := range files.gaps {
-		fmt.Fprintf(h, "gap %q %s\n", g.Path, g.Reason)
-	}
-	return hex.EncodeToString(h.Sum(nil))
+	return time.Duration(s.cfg.Budget.MaxSeconds)*time.Second - s.resume.finished.Spent() - s.resume.hashing
 }
 
 // resumedCalibration reads, from the cache only, the calibration of a

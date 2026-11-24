@@ -153,3 +153,38 @@ func TestProjectFileCannotSelectPreset(t *testing.T) {
 		t.Errorf("exit %d, stderr %s", code, stderr)
 	}
 }
+
+// Regression (v0.4 release pentest P3): gemini was verified only with an
+// isolated GEMINI_CLI_HOME, so a run whose model.env does not pass one is
+// warned that the preset is not verified for it; the host-read warning
+// stays either way.
+func TestGeminiVerifiedOnlyWithItsHome(t *testing.T) {
+	tests := []struct {
+		name       string
+		env        []string
+		home       string
+		unverified bool
+	}{
+		{"home passed", []string{"GEMINI_API_KEY", "GEMINI_CLI_HOME"}, "/isolated", false},
+		{"home not in model.env", []string{"GEMINI_API_KEY"}, "/isolated", true},
+		{"home declared but empty", []string{"GEMINI_CLI_HOME"}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var w strings.Builder
+			getenv := func(name string) string {
+				if name == "GEMINI_CLI_HOME" {
+					return tt.home
+				}
+				return ""
+			}
+			warnPresetEnv(&w, config.Model{Preset: "gemini", Env: tt.env}, getenv)
+			if got := strings.Contains(w.String(), "is not verified for this run") && strings.Contains(w.String(), "GEMINI_CLI_HOME"); got != tt.unverified {
+				t.Errorf("unverified warning = %v, want %v: %s", got, tt.unverified, w.String())
+			}
+			if !strings.Contains(w.String(), "can read files outside its empty working directory") || strings.Count(w.String(), "\n") != 1 {
+				t.Errorf("want one warning line with the host-read warning: %s", w.String())
+			}
+		})
+	}
+}
