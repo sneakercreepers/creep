@@ -41,7 +41,7 @@ Supporting commands: `creep why <id>` reads the last JSON report; `creep reprodu
 - **HTTP**: OpenAI-compatible + Anthropic. The key comes only from `CREEP_API_KEY`.
 - **Command**: prompt on stdin, JSON on stdout. The CLI is started only by the gateway (`EgressLog.Exec`): argv split without a shell, program never from the repository, minimal environment, empty temporary working directory, timeout and output cap, and a reply that leaves files is dropped (ADR 0014). Guarded by the tool canary at `creep doctor` and at every scan start.
 
-No provider-specific code in the core. Presets are embedded data in `internal/presets` (ADR 0015), not a `presets/` directory read at run time: `claude-code` (verified by hand), `gemini`, `codex` and `ollama` (unverified). `gemini` and `codex` keep tools that read the host (`host_reads: unbounded`), so they warn at doctor and every scan; for untrusted code use `claude-code` or the HTTP contract.
+No provider-specific code in the core. Presets are embedded data in `internal/presets` (ADR 0015), not a `presets/` directory read at run time: `claude-code` and `gemini` (verified by hand; `gemini` only with an empty `GEMINI_CLI_HOME`, #338), `codex` and `ollama` (unverified). `gemini` and `codex` keep tools that read the host (`host_reads: unbounded`), so they warn at doctor and every scan; for untrusted code use `claude-code` or the HTTP contract.
 
 ## Fixed protections (not configurable)
 
