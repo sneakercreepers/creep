@@ -146,6 +146,15 @@ func (b *Budget) reserve(key string, n int) error {
 	return nil
 }
 
+// charge adds what a reopened log already spent (chargeLogged), capped at
+// the limits so the counters keep the bound maxBudgetLimit documents.
+func (b *Budget) charge(calls, tokens int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.calls = min(b.calls+calls, int64(b.opts.MaxCalls))
+	b.tokens = min(b.tokens+tokens, int64(b.opts.MaxTokens))
+}
+
 // refund returns a reservation for a call that sent nothing.
 func (b *Budget) refund(key string, n int) {
 	b.mu.Lock()

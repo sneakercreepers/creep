@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,14 +47,23 @@ type logFile interface {
 // the directory it fails with ErrLocked (on Windows after about 200 ms of
 // retries).
 func (s *Store) NewRun(mode Mode) (*Run, error) {
+	return s.NewRunWith(mode, nil)
+}
+
+// NewRunWith is NewRun with a header on the start line, which Summary
+// returns as written, so a resumed scan can compare its settings (#335).
+func (s *Store) NewRunWith(mode Mode, header Header) (*Run, error) {
 	if !validMode(mode) {
 		return nil, fmt.Errorf("new run: mode %q: %w", mode, ErrInvalidID)
+	}
+	if !header.valid() {
+		return nil, fmt.Errorf("new run: header: %w", ErrInvalidID)
 	}
 	lock, err := s.lock()
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.createRun(mode, lock)
+	r, err := s.createRun(mode, header, lock)
 	if err != nil {
 		_ = lock.Close()
 		return nil, err
@@ -61,7 +71,7 @@ func (s *Store) NewRun(mode Mode) (*Run, error) {
 	return r, nil
 }
 
-func (s *Store) createRun(mode Mode, lock *os.File) (*Run, error) {
+func (s *Store) createRun(mode Mode, header Header, lock *os.File) (*Run, error) {
 	if err := s.ensureDir(runsDir); err != nil {
 		return nil, err
 	}
@@ -74,8 +84,8 @@ func (s *Store) createRun(mode Mode, lock *os.File) (*Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new run %s: %w", id, err)
 	}
-	r := s.newRun(id, f, lock, Summary{ID: id, Mode: mode, Outcome: OutcomeIncomplete})
-	if err := r.append(Event{Kind: KindStart, Mode: mode}); err != nil {
+	r := s.newRun(id, f, lock, Summary{ID: id, Mode: mode, Header: header, Outcome: OutcomeIncomplete})
+	if err := r.append(Event{Kind: KindStart, Mode: mode, Header: header}); err != nil {
 		_ = f.Close()
 		return nil, err
 	}
@@ -179,19 +189,28 @@ func (r *Run) Done(step string) bool {
 // StepDone records that step finished. step must be an ID, never repository
 // text; recording the same step twice is a no-op.
 func (r *Run) StepDone(step string) error {
+	return r.StepDoneAt(step, 0)
+}
+
+// StepDoneAt is StepDone that also records the scan time spent so far,
+// which Summary.Elapsed returns, so a resumed scan's deadline counts what
+// the run already spent (#335). Negative times are recorded as 0.
+func (r *Run) StepDoneAt(step string, spent time.Duration) error {
 	if !validID(step) {
 		return fmt.Errorf("step %q: %w", step, ErrInvalidID)
 	}
+	ms := min(uint64(max(spent.Milliseconds(), 0)), maxStepMs)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.done[step] {
 		return nil
 	}
-	if err := r.append(Event{Kind: KindStep, Step: step}); err != nil {
+	if err := r.append(Event{Kind: KindStep, Step: step, Ms: ms}); err != nil {
 		return err
 	}
 	r.done[step] = true
 	r.sum.Steps = append(r.sum.Steps, step)
+	r.sum.Elapsed = max(r.sum.Elapsed, time.Duration(ms)*time.Millisecond) //nolint:gosec // G115: from a Duration
 	return nil
 }
 
@@ -219,6 +238,7 @@ func (r *Run) Summary() Summary {
 	defer r.mu.Unlock()
 	sum := r.sum
 	sum.Steps = append([]string(nil), r.sum.Steps...)
+	sum.Header = maps.Clone(r.sum.Header)
 	return sum
 }
 

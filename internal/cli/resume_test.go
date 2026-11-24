@@ -68,7 +68,7 @@ func TestResumeFailsClosed(t *testing.T) {
 		{"unknown run", []string{"resume", "20260101T000000Z-00000000"}, "run 20260101T000000Z-00000000"},
 		{"ended run", []string{"resume", ended}, "run already ended"},
 		{"corrupt run", []string{"resume", corrupt}, "state file corrupt"},
-		{"resumable run", []string{"resume", open}, "has 1 completed steps; continuing a run is not implemented yet"},
+		{"run without settings", []string{"resume", open}, "the run records no settings"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

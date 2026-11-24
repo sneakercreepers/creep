@@ -24,7 +24,7 @@ const maxStability = discover.MaxSamples
 
 // stabilityCommands are the commands --stability changes; any other one
 // refuses it rather than ignore it.
-var stabilityCommands = map[string]bool{"scan": true, "estimate": true}
+var stabilityCommands = map[string]bool{"scan": true, "estimate": true, "resume": true}
 
 func checkStabilityFlag(command string, opts globalOptions) error {
 	switch {
@@ -33,7 +33,7 @@ func checkStabilityFlag(command string, opts globalOptions) error {
 	case opts.stability < 1 || opts.stability > maxStability:
 		return fmt.Errorf("--stability %d: want 1 to %d runs", opts.stability, maxStability)
 	case !stabilityCommands[command]:
-		return fmt.Errorf("--stability changes only scan and estimate, not %s", command)
+		return fmt.Errorf("--stability changes only scan, resume and estimate, not %s", command)
 	}
 	return nil
 }

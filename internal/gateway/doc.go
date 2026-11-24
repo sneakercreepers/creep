@@ -222,4 +222,10 @@
 // exited process (residual, threat model C3). Anything
 // left in the working directory means the CLI used a tool: the reply is
 // dropped with a *ToolUseError.
+//
+// Each request line in egress.log records its token reservation. Reopening
+// an existing log for a resumed run (#335, ADR 0032) reads it back and
+// charges the budget one call per request plus its reported tokens, or its
+// reservation for a call cut mid-flight, so a resume continues the original
+// run's budget instead of starting a new one.
 package gateway

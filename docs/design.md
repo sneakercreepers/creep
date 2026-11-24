@@ -34,7 +34,7 @@ creep scan .
 
 Every model call goes through the **gateway**: `redact.File` → fragment → consent → token budget → `egress.log` write-ahead → send (HTTP) or run (command, ADR 0014).
 
-Supporting commands: `creep why <id>` reads the last JSON report; `creep reproduce <id>` runs a verified finding's PoC again from its bundle, in the sandbox, with no model (ADR 0020); `creep estimate` measures the requests a scan would send without a transport (ADR 0011); `--stats` prints what a scan spent; `--record`/`--replay` repeat a run with no network; `creep doctor` runs the tool canary and reports the sandbox runtime, rootless status and isolation; `creep clean` removes the containers creep left (ADR 0016); `creep init` writes a `./creep.yaml` template whose settings are all commented out at their defaults (ADR 0031). Continuing a run with `creep resume` is not implemented and fails closed.
+Supporting commands: `creep why <id>` reads the last JSON report; `creep reproduce <id>` runs a verified finding's PoC again from its bundle, in the sandbox, with no model (ADR 0020); `creep estimate` measures the requests a scan would send without a transport (ADR 0011); `--stats` prints what a scan spent; `--record`/`--replay` repeat a run with no network; `creep doctor` runs the tool canary and reports the sandbox runtime, rootless status and isolation; `creep clean` removes the containers creep left (ADR 0016). `creep resume <run>` continues an interrupted scan through the same pipeline, serving the steps it finished from their recordings and refusing a run whose settings or files changed (ADR 0032). `creep init` writes a `./creep.yaml` template whose settings are all commented out at their defaults (ADR 0031).
 
 ## Model contracts
 

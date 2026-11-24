@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"time"
 )
 
 // Version is the "v" written on every line. Bump it only for a change that
@@ -56,7 +57,9 @@ type Event struct {
 	Seq     uint64  `json:"seq"`
 	Kind    Kind    `json:"kind"`
 	Mode    Mode    `json:"mode,omitempty"`    // start only
+	Header  Header  `json:"header,omitempty"`  // start only; added for resume (#335)
 	Step    string  `json:"step,omitempty"`    // step only: an ID, never repository text
+	Ms      uint64  `json:"ms,omitempty"`      // step only: scan time spent when it finished (#335)
 	Outcome Outcome `json:"outcome,omitempty"` // end only
 	Reason  string  `json:"reason,omitempty"`  // end only: an ID such as "redact_run_full"
 	MAC     string  `json:"mac,omitempty"`     // HMAC-SHA256 of the line; always the last field
@@ -79,13 +82,41 @@ func validMode(m Mode) bool {
 	return m == ModeLive || m == ModeRecord || m == ModeReplay
 }
 
+// Header is what a run was started with, so resuming it can refuse a run
+// whose settings changed (#335). Names are IDs and values hex SHA-256
+// digests: never repository text, and no setting in clear.
+type Header map[string]string
+
+// maxHeaderFields bounds a header, so its line stays far below MaxLineBytes.
+const maxHeaderFields = 16
+
+// maxStepMs bounds a step's recorded time (about 290 years), so it always
+// fits a time.Duration.
+const maxStepMs = 1 << 53
+
+var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func (h Header) valid() bool {
+	if len(h) > maxHeaderFields {
+		return false
+	}
+	for k, v := range h {
+		if !validID(k) || !digestPattern.MatchString(v) {
+			return false
+		}
+	}
+	return true
+}
+
 // Summary is what a run's log says about it.
 type Summary struct {
 	ID      string
 	Mode    Mode
-	Steps   []string // completed steps, in order
-	Ended   bool     // an end line was written
-	Outcome Outcome  // OutcomeIncomplete unless the end line says complete
+	Header  Header        // nil for a run started without one (before #335)
+	Elapsed time.Duration // the largest scan time a step recorded
+	Steps   []string      // completed steps, in order
+	Ended   bool          // an end line was written
+	Outcome Outcome       // OutcomeIncomplete unless the end line says complete
 	Reason  string
 }
 
@@ -182,7 +213,10 @@ func (s *Summary) applyStart(ev Event) error {
 	if !validMode(ev.Mode) {
 		return fmt.Errorf("invalid mode: %w", ErrCorrupt)
 	}
-	s.Mode = ev.Mode
+	if !ev.Header.valid() {
+		return fmt.Errorf("invalid header: %w", ErrCorrupt)
+	}
+	s.Mode, s.Header = ev.Mode, ev.Header
 	return nil
 }
 
@@ -190,7 +224,11 @@ func (s *Summary) applyStep(ev Event) error {
 	if !validID(ev.Step) {
 		return fmt.Errorf("invalid step id: %w", ErrCorrupt)
 	}
+	if ev.Ms > maxStepMs {
+		return fmt.Errorf("invalid step time: %w", ErrCorrupt)
+	}
 	s.Steps = append(s.Steps, ev.Step)
+	s.Elapsed = max(s.Elapsed, time.Duration(ev.Ms)*time.Millisecond) //nolint:gosec // G115: at most maxStepMs
 	return nil
 }
 

@@ -128,7 +128,7 @@ func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status
 	defer cancel()
 	mirror := buildMirror(s.cfg.Sandbox)
 	fmt.Fprintf(w, "sandbox: building the app %s with %s (isolation %s)\n", buildHow(mirror), best.Runtime, best.Isolation)
-	box, err := s.deps.sandbox.open(best, s.run.ID(), mirror)
+	box, err := s.deps.sandbox.open(best, s.boxID, mirror)
 	if err != nil {
 		printError(w, "sandbox", err)
 		return unavailableVerification(verifySandboxError, "open")

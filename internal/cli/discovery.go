@@ -155,7 +155,7 @@ func (s *session) discover(ctx context.Context, tier calibrate.Tier, files repoF
 	if err != nil {
 		return repoScan{}, err
 	}
-	seed, err := discoverySeed(s.store, s.mode())
+	seed, err := discoverySeed(s.respond, s.mode())
 	if err != nil {
 		return repoScan{}, err
 	}
@@ -180,9 +180,10 @@ var seedKey = func() state.Key {
 // discovery requests can be served from the cache; --record always makes a
 // new one; --replay uses the recorded one, or without a valid one an
 // unstored seed, so every discovery request misses and the run ends
-// send_failed (exit 4) without a model call.
-func discoverySeed(store *state.Store, mode state.Mode) ([32]byte, error) {
-	b, err := store.Respond(mode, seedKey, newSeed)
+// send_failed (exit 4) without a model call. A resumed run gets the seed
+// its finished steps used (session.respond, #335).
+func discoverySeed(respond responder, mode state.Mode) ([32]byte, error) {
+	b, err := respond(seedKey, newSeed)
 	if err != nil && mode == state.ModeReplay {
 		b, err = newSeed()
 	}
