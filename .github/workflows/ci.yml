@@ -20,7 +20,7 @@ concurrency:
 # run everything. secrets, dependency-review and docs-only always run.
 jobs:
   changes:
-    uses: ./.github/workflows/changes.yml
+    uses: ./.github/workflows/changes.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this repository at the same commit
     permissions:
       contents: read
 
