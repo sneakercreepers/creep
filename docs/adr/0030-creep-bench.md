@@ -1,6 +1,6 @@
 # ADR 0030: creep-bench, its results JSON and published replay fixtures
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-23)
 - **Date:** 2026-11-23
 - **Deciders:** @Ludocius
 - **Changes:** one command, `creep bench` (no new flag: it reads the global `--replay`, `--record`, `--format` and `--config`); one new public JSON document, the bench results (`schema_version` 1, published in `docs/bench/results.json`); one new package, `internal/bench` (layer 0, no internal import). No new dependency, network path, config key or exit code.
