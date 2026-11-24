@@ -84,8 +84,13 @@ func tierProblems(base, got bench.Results, maxDrop float64) []string {
 			problems = append(problems, fmt.Sprintf("tier %s: in the baseline, missing from the results", bt.Tier))
 			continue
 		}
-		if mostlyIncomplete(bt) || mostlyIncomplete(gt) {
-			continue // reported by noisyTiers, never a regression
+		if mostlyIncomplete(bt) {
+			continue // reported by noisyTiers: a noisy baseline proves nothing
+		}
+		if mostlyIncomplete(gt) {
+			problems = append(problems, fmt.Sprintf("tier %s: %d of %d case runs incomplete against a baseline with %d of %d: the model stopped answering in the schema; if the runner or model pull failed, re-dispatch the Bench workflow with model: local on main",
+				bt.Tier, gt.IncompleteRuns, gt.Runs, bt.IncompleteRuns, bt.Runs))
+			continue
 		}
 		for _, m := range metrics(bt, gt) {
 			if why := m.check(maxDrop); why != "" {
@@ -120,13 +125,14 @@ func findTier(r bench.Results, tier string) (bench.TierResult, bool) {
 // mostlyIncomplete reports a tier where more than half the case runs did
 // not finish (a reply broke the schema, say): its counts rest on the few
 // runs that did, so one reply swings them past any threshold (v0.3
-// tester T3). Such a tier is not compared, on either side.
+// tester T3). A baseline tier like that is not compared; a results tier
+// like that against a complete baseline is a regression, fail closed (T4).
 func mostlyIncomplete(t bench.TierResult) bool {
 	return t.IncompleteRuns*2 > t.Runs
 }
 
 // noisyTiers names each tier the gate did not compare because the
-// baseline or the results ran it mostly incomplete.
+// baseline ran it mostly incomplete.
 func noisyTiers(base, got bench.Results) []string {
 	if len(base.Tiers) == 0 {
 		return nil
@@ -134,10 +140,10 @@ func noisyTiers(base, got bench.Results) []string {
 	var notes []string
 	for _, bt := range base.Tiers {
 		gt, ok := findTier(got, bt.Tier)
-		if !ok || (!mostlyIncomplete(bt) && !mostlyIncomplete(gt)) {
+		if !ok || !mostlyIncomplete(bt) {
 			continue
 		}
-		notes = append(notes, fmt.Sprintf("tier %s not compared: incomplete runs %d of %d in the baseline, %d of %d in the results (more than half on a side is noise)",
+		notes = append(notes, fmt.Sprintf("tier %s not compared: incomplete runs %d of %d in the baseline, %d of %d in the results (a baseline more than half incomplete is noise; set it again from a mostly complete nightly)",
 			bt.Tier, bt.IncompleteRuns, bt.Runs, gt.IncompleteRuns, gt.Runs))
 	}
 	return notes

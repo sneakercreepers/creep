@@ -190,9 +190,10 @@ func withRuns(t bench.TierResult, runs, incomplete int) bench.TierResult {
 	return t
 }
 
-// A tier run mostly incomplete on either side is noise: it is reported,
-// never compared, so the gate neither fails on it nor passes on it as a
-// measurement (v0.3 tester T3). Half or fewer incomplete is still compared.
+// A baseline tier run mostly incomplete is noise: it is reported, never
+// compared (v0.3 tester T3). A results tier run mostly incomplete against
+// a complete baseline is a collapse and fails closed (T4). Half or fewer
+// incomplete is still compared.
 func TestMostlyIncompleteTierNotCompared(t *testing.T) {
 	worse := tier("S", class("sqli", 6, 1, 6, 6, 5, 4), class("xss", 4, 0, 4, 4, 3, 3))
 	tests := []struct {
@@ -204,7 +205,8 @@ func TestMostlyIncompleteTierNotCompared(t *testing.T) {
 		{"complete on both sides", withRuns(baseTier, 20, 0), withRuns(worse, 20, 0), true, false},
 		{"exactly half incomplete is compared", withRuns(baseTier, 20, 10), withRuns(worse, 20, 10), true, false},
 		{"baseline mostly incomplete", withRuns(baseTier, 24, 23), withRuns(worse, 24, 0), false, true},
-		{"results mostly incomplete", withRuns(baseTier, 24, 0), withRuns(worse, 24, 13), false, true},
+		{"results mostly incomplete fails closed", withRuns(baseTier, 24, 0), withRuns(baseTier, 24, 13), true, false},
+		{"results mostly incomplete, baseline too", withRuns(baseTier, 24, 20), withRuns(baseTier, 24, 13), false, true},
 		{"all incomplete, numbers equal", withRuns(baseTier, 24, 24), withRuns(baseTier, 24, 24), false, true},
 	}
 	for _, tt := range tests {
