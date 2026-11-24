@@ -14,7 +14,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.2.0%20released-green)
+![Status](https://img.shields.io/badge/status-v0.3.0%20released-green)
 
 </div>
 
@@ -76,17 +76,17 @@ Limits:
 
 ### From the GitHub release
 
-Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.2.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.2.0).
+Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.3.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.3.0).
 
-Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.2.0` on linux/amd64:
+Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.3.0` on linux/amd64:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.2.0' \
+  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.3.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
-gh attestation verify creep_0.2.0_linux_amd64.tar.gz \
+gh attestation verify creep_0.3.0_linux_amd64.tar.gz \
   --repo sneakercreepers/creep \
   --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
