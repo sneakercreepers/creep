@@ -31,8 +31,8 @@ func TestEmbeddedPresets(t *testing.T) {
 		if wantNone := name == "claude-code" || name == "ollama"; wantNone != (p.HostReads == HostReadsNone) {
 			t.Errorf("%s: host_reads = %q", name, p.HostReads)
 		}
-		// Only claude-code was checked by hand against the real CLI (#7).
-		if p.IsVerified() != (name == "claude-code") {
+		// Only claude-code (#7) and gemini (#338) were checked by hand against the real CLI.
+		if p.IsVerified() != (name == "claude-code" || name == "gemini") {
 			t.Errorf("%s: verified = %v", name, p.IsVerified())
 		}
 	}

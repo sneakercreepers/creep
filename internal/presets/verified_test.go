@@ -15,6 +15,7 @@ import (
 // TestVerifiedPresetsArePinned until it sets verified: false again (#229).
 var verifiedPins = map[string]string{
 	"claude-code": "448088925e425c2b5a60c20cb1d05cda76a847b43bf4e2d6aca8e948c0405e5d",
+	"gemini":      "b4067602a0f4dfb06646fcdcd85b48472c9c0831000b204cb7fc8cba62c8dd12",
 }
 
 // commandDigest hashes the program and its arguments, each length-prefixed

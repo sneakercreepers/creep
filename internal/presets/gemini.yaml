@@ -41,5 +41,5 @@ tools_off:
   - [--allowed-mcp-server-names, creep-no-mcp-server]
 no_tools: false
 host_reads: unbounded
-host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply
-verified: false
+host_reads_detail: tools, policies and include directories from ~/.gemini/settings.json still apply unless GEMINI_CLI_HOME names an empty directory
+verified: true

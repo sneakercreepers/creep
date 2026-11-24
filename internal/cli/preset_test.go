@@ -86,7 +86,7 @@ func TestPresetsRunTheCanary(t *testing.T) {
 		readsHost, unverified bool
 	}{
 		{"claude", "claude-code", `it already has --tools "" and --strict-mcp-config`, false, false},
-		{"gemini", "gemini", "it already has --approval-mode default", true, true},
+		{"gemini", "gemini", "it already has --approval-mode default", true, false},
 		{"codex", "codex", "it already has --sandbox read-only", true, true},
 		{"ollama", "ollama", "ollama run has no tools", false, true},
 	}
