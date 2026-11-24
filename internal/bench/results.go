@@ -18,7 +18,10 @@ type Results struct {
 	Corpus        CorpusInfo   `json:"corpus"`
 	Model         ModelInfo    `json:"model"`
 	Tiers         []TierResult `json:"tiers"`
-	Smoke         []SmokeRun   `json:"smoke"`
+	// Unmeasured are the coverage classes no corpus case plants: the bench
+	// says nothing about them, so the page names them instead of omitting.
+	Unmeasured []string   `json:"unmeasured_classes"`
+	Smoke      []SmokeRun `json:"smoke"`
 }
 
 // CorpusInfo names the corpus measured.
@@ -75,6 +78,9 @@ func (r Results) Markdown() string {
 	for _, t := range r.Tiers {
 		writeTier(&b, t)
 	}
+	if len(r.Unmeasured) > 0 {
+		fmt.Fprintf(&b, "\nNot measured, no case in the corpus: %s.\n", strings.Join(r.Unmeasured, ", "))
+	}
 	b.WriteString("\n## Smoke runs\n\n")
 	for _, s := range r.Smoke {
 		fmt.Fprintf(&b, "- %s: %s. %s.\n", s.Target, s.Status, s.Reason)
@@ -92,7 +98,7 @@ func writeTier(b *strings.Builder, t TierResult) {
 	}
 }
 
-// fraction prints n/d and its rate, or n/d and "no claim" when unmeasured.
+// fraction prints n/d and its rate, or n/d and "none" when unmeasured.
 func fraction(n, d int, rate *float64) string {
 	if rate == nil {
 		return fmt.Sprintf("%d/%d (none)", n, d)

@@ -31,7 +31,7 @@ Option B, because only the full pipeline makes a coverage claim, and honesty is 
 
 **Run.** For each tier S, M, L, each case and each twin, `creep bench` runs discovery, the planner and the reader on a one-file repository at that tier, with a fresh redactor, the default token budget and a fixed public canary seed (only the bench uses it; a scan's seed stays from `crypto/rand`). No calibration, sandbox, scanner, recipe or baseline takes part. Calls go through one `models.HTTP` in a fixed order.
 
-**Scores**, per tier and class: recall (vulnerable twins with a probable or verified finding of the class within 2 lines of the sink), false-positive rate (safe twins with any probable or verified finding, of any class), and honesty: of the vulnerable twins whose run reported the class `covered`, the share that found the planted vulnerability. A miss the run reported as partial or not evaluated is an honest miss; one it reported covered is a silent miss, counted apart. A rate over nothing is `null`.
+**Scores**, per tier and class: recall (vulnerable twins with a probable or verified finding of the class within 2 lines of the sink), false-positive rate (safe twins with any probable or verified finding, of any class), and honesty: of the vulnerable twins whose run reported the class `covered`, the share that found the planted vulnerability. A miss the run reported as partial or not evaluated is an honest miss; one it reported covered is a silent miss, counted apart. A rate over nothing is `null`. Coverage classes with no corpus case are listed as `unmeasured_classes` and named on the page, so their absence is never read as a score.
 
 **Modes.**
 
@@ -52,6 +52,7 @@ Exit codes: 0, or 4 when any case run would have exited 4 (its numbers are not a
     {"class": "sqli", "vulnerable": 2, "detected": 2, "recall": 1,
      "safe": 2, "false_positives": 0, "false_positive_rate": 0,
      "claimed_covered": 2, "silent_misses": 0, "honesty": 1}]}],
+  "unmeasured_classes": ["missing_auth", "prototype_pollution"],
   "smoke": [{"target": "OWASP Juice Shop", "status": "skipped", "reason": "..."}]
 }
 ```

@@ -9,12 +9,15 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sneakercreepers/creep/internal/bench"
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
+	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
+	"github.com/sneakercreepers/creep/internal/state"
 )
 
 // publishedModel is the client the published fixture was made with.
@@ -161,6 +164,45 @@ func TestBenchRecordReplaysToSameResults(t *testing.T) {
 	if stdout.String() != live {
 		t.Errorf("replay of the recorded fixture differs from the live run:\nlive %s\nreplay %s", live, stdout.String())
 	}
+}
+
+// budget.max_seconds bounds a live bench: a model that never answers ends
+// the bench incomplete (exit 4), and its run state says so.
+func TestBenchLiveHonorsDeadline(t *testing.T) {
+	cfg := scanRepo(t, nil, "budget:\n  max_seconds: 1\n")
+	deps := scanDeps{connect: func(*config.Resolved, string, io.Writer) (modelLink, error) {
+		hang := func(ctx context.Context, _ gateway.Call) (*gateway.Reply, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return modelLink{send: hang, close: func() error { return nil }}, nil
+	}}
+	start := time.Now()
+	code, _, stderr := runScanWith(deps, "bench", "--config", cfg)
+	if code != exitcode.Incomplete || time.Since(start) > 30*time.Second {
+		t.Fatalf("exit %d after %s, stderr %q", code, time.Since(start), stderr)
+	}
+	if sum := lastBenchRun(t); sum.Outcome != state.OutcomeIncomplete {
+		t.Errorf("run state %+v, want incomplete", sum)
+	}
+}
+
+func lastBenchRun(t *testing.T) state.Summary {
+	t.Helper()
+	s, err := state.OpenUser(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	dirs, err := filepath.Glob(filepath.Join(stateDir, "runs", "*"))
+	if err != nil || len(dirs) != 1 {
+		t.Fatalf("runs %v, %v", dirs, err)
+	}
+	sum, err := s.Load(filepath.Base(dirs[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sum
 }
 
 func recordedBenchFixture(t *testing.T) bench.Fixture {

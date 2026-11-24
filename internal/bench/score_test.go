@@ -119,6 +119,29 @@ func TestScoreRates(t *testing.T) {
 	}
 }
 
+// An empty corpus scores every tier with no run and no class, and its
+// page renders with empty tables instead of dividing by zero.
+func TestScoreEmptyCorpus(t *testing.T) {
+	tiers, err := Score(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tiers) != len(Tiers()) {
+		t.Fatalf("tiers %+v", tiers)
+	}
+	for _, tr := range tiers {
+		if tr.Runs != 0 || tr.IncompleteRuns != 0 || len(tr.Classes) != 0 {
+			t.Errorf("tier %+v", tr)
+		}
+	}
+	if md := (Results{Tiers: tiers}).Markdown(); strings.Contains(md, "NaN") || strings.Contains(md, "Inf") {
+		t.Errorf("markdown %q", md)
+	}
+	if _, err := Score(nil, []Outcome{{Tier: "S", Case: "a", Variant: Safe}}); err == nil {
+		t.Error("an outcome for a case not in an empty corpus was scored")
+	}
+}
+
 func TestScoreRefusesBadOutcomes(t *testing.T) {
 	tests := []struct {
 		name     string

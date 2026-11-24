@@ -284,6 +284,10 @@
       ]
     }
   ],
+  "unmeasured_classes": [
+    "missing_auth",
+    "prototype_pollution"
+  ],
   "smoke": [
     {
       "target": "OWASP Juice Shop",

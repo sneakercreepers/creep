@@ -48,6 +48,8 @@ Recall counts vulnerable twins found on their sink line (within 2 lines). False 
 | ssrf | 2/2 (1.000) | 0/2 (0.000) | 2/2 (1.000) | 0 |
 | template_injection | 2/2 (1.000) | 0/2 (0.000) | 2/2 (1.000) | 0 |
 
+Not measured, no case in the corpus: missing_auth, prototype_pollution.
+
 ## Smoke runs
 
 - OWASP Juice Shop: skipped. creep downloads nothing (invariant 5) and these apps have no ground truth to score; run creep scan inside your own local clone.

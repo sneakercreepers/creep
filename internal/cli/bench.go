@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/sneakercreepers/creep/internal/bench"
 	"github.com/sneakercreepers/creep/internal/calibrate"
@@ -149,8 +150,20 @@ func benchResults(clients benchClients, cases []bench.Case, outcomes []bench.Out
 		SchemaVersion: bench.SchemaVersion,
 		Corpus:        bench.CorpusInfo{Cases: len(cases), SHA256: digest},
 		Model:         bench.ModelInfo{Contract: clients.fixture.Contract, Name: clients.fixture.Name, Synthesized: clients.synthesized},
-		Tiers:         tiers, Smoke: bench.SmokeRuns(),
+		Tiers:         tiers, Unmeasured: unmeasuredClasses(cases), Smoke: bench.SmokeRuns(),
 	}, nil
+}
+
+// unmeasuredClasses are the coverage classes no case plants, in report
+// order.
+func unmeasuredClasses(cases []bench.Case) []string {
+	out := []string{}
+	for _, c := range classCoverage(coverageInput{}) {
+		if !slices.ContainsFunc(cases, func(k bench.Case) bool { return k.Class == c.Class }) {
+			out = append(out, c.Class)
+		}
+	}
+	return out
 }
 
 func writeBench(w io.Writer, format string, res bench.Results) error {

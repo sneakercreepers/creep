@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"time"
 
 	"github.com/sneakercreepers/creep/internal/bench"
 	"github.com/sneakercreepers/creep/internal/config"
@@ -57,7 +59,11 @@ func runBenchLive(e env, cases []bench.Case) int {
 		printError(e.stderr, "creep bench", err)
 		return exitcode.ConfigError
 	}
-	return b.measure(e, r.Config.Model, cases)
+	// budget.max_seconds bounds a live bench as it bounds a scan, so a slow
+	// endpoint cannot hold the run open for every call's own timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(r.Config.Budget.MaxSeconds)*time.Second)
+	defer cancel()
+	return b.measure(ctx, e, r.Config.Model, cases)
 }
 
 func checkBenchModel(m config.Model) error {
@@ -85,7 +91,7 @@ func (b *benchLive) open(e env, r *config.Resolved) error {
 
 // measure runs the bench, then ends the run, writes the fixture for
 // --record and prints the results.
-func (b *benchLive) measure(e env, cfg config.Model, cases []bench.Case) int {
+func (b *benchLive) measure(ctx context.Context, e env, cfg config.Model, cases []bench.Case) int {
 	rec := bench.NewRecorder()
 	opts, err := sessionModelOptions(cfg, nil, recordingSend(rec, b.link.send))
 	if err != nil {
@@ -99,23 +105,28 @@ func (b *benchLive) measure(e env, cfg config.Model, cases []bench.Case) int {
 	}
 	fmt.Fprintf(e.stderr, "creep bench: sends %d corpus files, each redacted, to endpoint %s, once per tier\n",
 		len(cases)*len(bench.Variants()), escapeControl(cfg.Endpoint))
-	outcomes, err := benchAll(context.Background(), m, cases)
+	outcomes, err := benchAll(ctx, m, cases)
 	if err != nil {
 		_ = b.run.Finish(state.OutcomeIncomplete, "model_failed")
 		printError(e.stderr, "creep bench", err)
 		return failureCode(err)
 	}
 	clients := benchClients{model: m, fixture: fixtureModel(cfg.Endpoint, m)}
-	if err := b.finish(e, rec.Fixture(clients.fixture, false)); err != nil {
+	if err := b.finish(e, rec.Fixture(clients.fixture, false), outcomes); err != nil {
 		printError(e.stderr, "creep bench", err)
 		return exitcode.ConfigError
 	}
 	return printBench(e, clients, cases, outcomes)
 }
 
-// finish ends the run and, for --record, writes fix into its directory.
-func (b *benchLive) finish(e env, fix bench.Fixture) error {
-	if err := b.run.Finish(state.OutcomeComplete, ""); err != nil {
+// finish ends the run, incomplete when any case run would have exited 4
+// as the bench then does, and, for --record, writes fix into its directory.
+func (b *benchLive) finish(e env, fix bench.Fixture, outcomes []bench.Outcome) error {
+	outcome, reason := state.OutcomeComplete, ""
+	if slices.ContainsFunc(outcomes, func(o bench.Outcome) bool { return o.Incomplete }) {
+		outcome, reason = state.OutcomeIncomplete, "incomplete_runs"
+	}
+	if err := b.run.Finish(outcome, reason); err != nil {
 		return err
 	}
 	if !e.opts.record {
