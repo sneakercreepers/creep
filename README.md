@@ -73,6 +73,16 @@ Limits:
 
 ## Install
 
+### With Go (quickest)
+
+Needs Go 1.25 or later:
+
+```sh
+go install github.com/sneakercreepers/creep/cmd/creep@latest
+```
+
+This builds from source through the Go module proxy and checksum database, so there is no cosign signature or attestation to check; for a verified binary use the release archive below. Or from a clone: `git clone https://github.com/sneakercreepers/creep && cd creep && make build`. Homebrew and Scoop are planned for v0.5 ([#344](https://github.com/sneakercreepers/creep/issues/344)).
+
 ### From the GitHub release
 
 Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.4.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.4.0).
@@ -91,14 +101,6 @@ gh attestation verify creep_0.4.0_linux_amd64.tar.gz \
 ```
 
 A certificate or attestation naming any other workflow, ref or repository means the file was not built by the release workflow: do not run it. Each archive also ships an SPDX SBOM (`<archive>.sbom.json`).
-
-### With Go
-
-```sh
-go install github.com/sneakercreepers/creep/cmd/creep@latest
-```
-
-Or from source: `git clone https://github.com/sneakercreepers/creep && cd creep && make build`.
 
 ## Quick start
 
