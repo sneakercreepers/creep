@@ -18,8 +18,10 @@ on:
 
 permissions: {}
 
+# Every tag shares one group, so two releases never push the tap and the
+# bucket at once; the push script also refuses to move them to an older version.
 concurrency:
-  group: release-${{ github.ref }}
+  group: ${{ github.event_name == 'push' && 'release' || format('release-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
@@ -61,60 +63,18 @@ jobs:
           sha256sum dist/creep_*/creep* > "$RUNNER_TEMP/first.sha256"
           goreleaser release --snapshot --clean --skip=sign,publish,sbom
           sha256sum dist/creep_*/creep* | diff "$RUNNER_TEMP/first.sha256" -
-      # The cask and the manifest must pin the sha256 of archives that
-      # checksums.txt lists; the push script must publish nothing without the
-      # token or for a prerelease, and otherwise update both files on main.
+      # On the real goreleaser output: the cask and the manifest pin exactly
+      # the archives checksums.txt lists, and the cask keeps the macOS
+      # quarantine hook. The push script's refusals (no token, prerelease,
+      # bad pin, downgrade) are Go tests in internal/tools/releasescripts,
+      # run by make check and the required protections job.
       - name: Cask and Scoop manifest pin the release archives
         run: |
-          check_pins() { # file count
-            sums="$(grep -oE '[0-9a-f]{64}' "$1" | sort -u)"
-            test "$(wc -l <<<"$sums")" -eq "$2" || { echo "::error::$1 does not pin $2 archives"; exit 1; }
-            while read -r sum; do
-              grep -q "^$sum " dist/checksums.txt || { echo "::error::$1 pins $sum, which checksums.txt does not list"; exit 1; }
-            done <<<"$sums"
-          }
-          check_pins dist/homebrew/Casks/creep.rb 4 # darwin and linux, amd64 and arm64
-          check_pins dist/scoop/creep.json 2 # windows amd64 and arm64
-      - name: Tap and bucket push is skipped without a token and for a prerelease
-        run: |
-          set -o pipefail
-          fake="$RUNNER_TEMP/fakebin"
-          mkdir -p "$fake"
-          cat > "$fake/gh" <<'EOF'
-          #!/usr/bin/env bash
-          echo "$*" >> "$RUNNER_TEMP/gh-calls"
-          case "$*" in
-            *"-X PUT"*) echo https://github.invalid/commit ;;
-            *Casks*) echo oldsha ;;
-            *) exit 1 ;;
-          esac
-          EOF
-          chmod +x "$fake/gh"
-          export PATH="$fake:$PATH"
-          PACKAGE_REPOS_TOKEN='' bash .github/scripts/package-repos.sh v9.9.9 dist | grep 'were not updated'
-          PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9-rc1 dist | grep 'is a prerelease'
-          if [ -e "$RUNNER_TEMP/gh-calls" ]; then
-            echo "::error::package-repos.sh called gh without a token or for a prerelease"
-            exit 1
-          fi
-          PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9 dist
-          grep -q '^api -X PUT repos/sneakercreepers/homebrew-tap/contents/Casks/creep.rb .*-f sha=oldsha' "$RUNNER_TEMP/gh-calls"
-          grep '^api -X PUT repos/sneakercreepers/scoop-bucket/contents/bucket/creep.json ' "$RUNNER_TEMP/gh-calls" | grep -vq 'sha='
-          # A pin that checksums.txt does not list stops the script before any call.
-          bad="$RUNNER_TEMP/bad-dist"
-          mkdir -p "$bad/homebrew/Casks" "$bad/scoop"
-          cp dist/homebrew/Casks/creep.rb "$bad/homebrew/Casks/"
-          cp dist/scoop/creep.json "$bad/scoop/"
-          grep -v 'darwin_amd64.tar.gz$' dist/checksums.txt > "$bad/checksums.txt"
-          rm "$RUNNER_TEMP/gh-calls"
-          if PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9 "$bad"; then
-            echo "::error::package-repos.sh published with a pin checksums.txt does not list"
-            exit 1
-          fi
-          if [ -e "$RUNNER_TEMP/gh-calls" ]; then
-            echo "::error::package-repos.sh called gh before checking the pins"
-            exit 1
-          fi
+          bash .github/scripts/package-repos.sh --check-pins \
+            "$(jq -r .tag dist/metadata.json)" "$(jq -r .version dist/metadata.json)" dist
+          for want in postflight on_macos 'staged_path}}/creep'; do
+            grep -qF "$want" dist/homebrew/Casks/creep.rb || { echo "::error::the cask lacks $want"; exit 1; }
+          done
 
   ancestry:
     if: github.event_name == 'push'
@@ -204,10 +164,51 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
-      # After the release is public, so the cask and the manifest never name
-      # a draft or unverified asset. The token (contents write on the tap and
-      # the bucket only, ADR 0033) is given to this step alone; while it is
-      # not set the script logs a warning and the release still succeeds.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-manifests
+          path: |
+            dist/homebrew/Casks/creep.rb
+            dist/scoop/creep.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # The tap and bucket token (contents write on those two repositories only,
+  # ADR 0033) is used on a fresh runner that never ran goreleaser, syft or the
+  # Go toolchain, so nothing they wrote to $GITHUB_ENV or $GITHUB_PATH can
+  # reach it. It runs after the release is public, re-checks checksums.txt's
+  # signature from the published release and only then gives the token to
+  # the push script, which checks every pin first. Without the token the
+  # script logs a warning and the release still succeeds. A failed push is
+  # finished by re-running this job.
+  package-repos:
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read # the push script and the published checksums.txt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package-manifests
+          path: dist
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - name: Verify checksums.txt of the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist \
+            --pattern checksums.txt --pattern checksums.txt.sigstore.json
+          cosign verify-blob \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --bundle dist/checksums.txt.sigstore.json dist/checksums.txt
       - name: Update the Homebrew tap and Scoop bucket
         env:
           PACKAGE_REPOS_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}

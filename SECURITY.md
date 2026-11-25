@@ -57,7 +57,7 @@ gh attestation verify creep_X.Y.Z_linux_amd64.tar.gz \
 
 A certificate or attestation naming any other workflow, ref or repository means the file was not built by our release workflow: do not run it, and report it as above.
 
-The Homebrew tap (`sneakercreepers/homebrew-tap`) and the Scoop bucket (`sneakercreepers/scoop-bucket`) are written only by the release workflow, after these checks pass, and pin each archive's SHA-256. brew and scoop check only that SHA-256, not the signature or the attestation, so run the commands above on the archive they downloaded if you need that assurance ([ADR 0033](docs/adr/0033-package-managers.md)). A tap or bucket commit not authored by `creep-release` is worth reporting.
+The Homebrew tap (`sneakercreepers/homebrew-tap`) and the Scoop bucket (`sneakercreepers/scoop-bucket`) are written only by the release workflow, after these checks pass, and pin each archive's SHA-256. brew and scoop check only that SHA-256, not the signature or the attestation, so run the commands above on the archive they downloaded if you need that assurance ([ADR 0033](docs/adr/0033-package-managers.md)). Each tap and bucket commit should match a release workflow run of a published tag, with that tag in its message; one that does not is worth reporting. The committer name `creep-release` can be set by anyone who holds the token, so it is a hint, not proof.
 
 ## Threat model
 
