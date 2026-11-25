@@ -20,6 +20,20 @@ if [[ "$tag" == *-* ]]; then
   echo "::notice::$tag is a prerelease; the Homebrew tap and Scoop bucket keep the last release"
   exit 0
 fi
+# The pins were checked in the PR dry-run; check them again on the real
+# archives, against the checksums.txt the release just verified, before
+# anything leaves the runner.
+check_pins() { # file count
+  local sums
+  sums="$(grep -oE '[0-9a-f]{64}' "$1" | sort -u)"
+  test "$(wc -l <<<"$sums")" -eq "$2" || { echo "::error::$1 does not pin $2 archives"; exit 1; }
+  while read -r sum; do
+    grep -q "^$sum " "$dist/checksums.txt" || { echo "::error::$1 pins $sum, which checksums.txt does not list"; exit 1; }
+  done <<<"$sums"
+}
+check_pins "$dist/homebrew/Casks/creep.rb" 4 # darwin and linux, amd64 and arm64
+check_pins "$dist/scoop/creep.json" 2 # windows amd64 and arm64
+
 export GH_TOKEN="$PACKAGE_REPOS_TOKEN"
 
 publish() { # repo path file

@@ -100,6 +100,21 @@ jobs:
           PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9 dist
           grep -q '^api -X PUT repos/sneakercreepers/homebrew-tap/contents/Casks/creep.rb .*-f sha=oldsha' "$RUNNER_TEMP/gh-calls"
           grep '^api -X PUT repos/sneakercreepers/scoop-bucket/contents/bucket/creep.json ' "$RUNNER_TEMP/gh-calls" | grep -vq 'sha='
+          # A pin that checksums.txt does not list stops the script before any call.
+          bad="$RUNNER_TEMP/bad-dist"
+          mkdir -p "$bad/homebrew/Casks" "$bad/scoop"
+          cp dist/homebrew/Casks/creep.rb "$bad/homebrew/Casks/"
+          cp dist/scoop/creep.json "$bad/scoop/"
+          grep -v 'darwin_amd64.tar.gz$' dist/checksums.txt > "$bad/checksums.txt"
+          rm "$RUNNER_TEMP/gh-calls"
+          if PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9 "$bad"; then
+            echo "::error::package-repos.sh published with a pin checksums.txt does not list"
+            exit 1
+          fi
+          if [ -e "$RUNNER_TEMP/gh-calls" ]; then
+            echo "::error::package-repos.sh called gh before checking the pins"
+            exit 1
+          fi
 
   ancestry:
     if: github.event_name == 'push'
