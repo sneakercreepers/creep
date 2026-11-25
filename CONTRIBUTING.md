@@ -89,7 +89,7 @@ creep --config ../tools-on.yaml --model-run 'claude -p --dangerously-skip-permis
 # gemini: 'gemini --skip-trust --approval-mode yolo' (add the same `env:` line to tools-on.yaml)   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
 ```
 
-For `gemini`, export a Google AI Studio key as `GEMINI_API_KEY` (a Google account login fails headless), point `GEMINI_CLI_HOME` at an empty directory whose `.gemini/settings.json` holds only `{"security":{"auth":{"selectedType":"gemini-api-key"}}}` (otherwise an `oauth-personal` user setting makes Gemini ignore the key, and the user's tools and MCP servers load), and on the free tier set `GEMINI_MODEL` to a model with quota, such as `gemini-3.5-flash-lite`. The preset is verified only for that setup (`verified_env`), so a scan without `GEMINI_CLI_HOME` in `model.env` warns ([ADR 0015](docs/adr/0015-model-presets.md), #338).
+For `gemini`, export a Google AI Studio key as `GEMINI_API_KEY` (a Google account login fails headless), point `GEMINI_CLI_HOME` at a directory that holds nothing but a `.gemini/settings.json` with only `{"security":{"auth":{"selectedType":"gemini-api-key"}}}` (otherwise an `oauth-personal` user setting makes Gemini ignore the key, and the user's tools and MCP servers load), and on the free tier set `GEMINI_MODEL` to a model with quota, such as `gemini-3.5-flash-lite`. The preset is verified only for that setup (`verified_env`), so a scan without `GEMINI_CLI_HOME` in `model.env` warns; creep checks only that the variable is declared, not what the directory holds, and `host_reads` stays `unbounded` ([ADR 0015](docs/adr/0015-model-presets.md), #338).
 
 Delete the temporary directory and the two config files afterwards.
 
