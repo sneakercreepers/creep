@@ -56,18 +56,12 @@ type session struct {
 	// staleReports are the report names the run could not remove when it
 	// opened its state; the scan goes on and fails its exit code (#209).
 	staleReports []error
-	// resumed is what a resumed run had finished (#335): its steps, served
-	// from recordings only, and the scan time it spent. Empty for a scan.
-	resumed resumedRun
-	// scanStart is when the deadline phase began; zero before it.
-	scanStart time.Time
+	// resume is what a resumed run had finished (#335), served from
+	// recordings only, and the run's scan time; empty for a scan.
+	resume resumeState
 	// boxID names the run's sandbox: the run ID, or for a resumed run a
 	// fresh name, so it never meets what the interrupted run built.
 	boxID string
-	// refused is a resume refusal found mid-pipeline (session.refuse), and
-	// cancel the run context's cancel it stops the run with.
-	refused *resumeRefusal
-	cancel  context.CancelCauseFunc
 }
 
 // scanResult is what the pipeline decided, for the report.
@@ -153,7 +147,11 @@ func (s *session) openRun() error {
 	if s.store, err = state.OpenUser(stateDir); err != nil {
 		return err
 	}
-	if s.run, err = s.store.NewRunWith(s.mode(), s.header()); err != nil {
+	header, err := s.header()
+	if err != nil {
+		return err
+	}
+	if s.run, err = s.store.NewRunWith(s.mode(), header); err != nil {
 		return err
 	}
 	s.boxID = s.run.ID()

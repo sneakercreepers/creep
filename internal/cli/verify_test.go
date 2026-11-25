@@ -265,17 +265,22 @@ func TestBuildOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
-// steppedClock reads a fixed time once, when the scan sets its deadline,
-// and that time plus elapsed on every later read.
+// steppedClock reads a fixed time until the scan sets its deadline (the
+// files digest reads it twice before, so it takes no time) and that time
+// plus elapsed on every later read.
 func steppedClock(elapsed time.Duration) func() time.Time {
 	start, reads := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), 0
 	return func() time.Time {
-		if reads++; reads == 1 {
+		if reads++; reads <= clockReadsBeforeDeadline {
 			return start
 		}
 		return start.Add(elapsed)
 	}
 }
+
+// clockReadsBeforeDeadline is how often a scan reads the sandbox clock up to
+// setting its deadline: the files digest's start and end, then the deadline.
+const clockReadsBeforeDeadline = 3
 
 // TestCtrlCClosesTheSandbox (#23 F2): Ctrl+C while the sandbox is open
 // cancels the build instead of killing creep, so the sandbox is closed and

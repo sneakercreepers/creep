@@ -51,6 +51,33 @@ func TestEgressLogKeepsV1Fields(t *testing.T) {
 	}
 }
 
+// TestEgressLogKeepsResumeFields pins the request line's optional
+// `reserve` (ADR 0032) in its own additive v1 fixture, beside the original
+// one (v0.4 review A2): the current writer must still emit it as a number.
+func TestEgressLogKeepsResumeFields(t *testing.T) {
+	fixture := fixtureLines(t, "egress-resume.log")
+	current := currentEgressLines(t)
+	if len(fixture) != 1 || len(current) != 2 {
+		t.Fatalf("got %d fixture and %d current lines, want 1 and 2", len(fixture), len(current))
+	}
+	tests := []struct {
+		name  string
+		edit  func(request map[string]any)
+		match bool
+	}{
+		{"current writer", func(map[string]any) {}, true},
+		{"broken: reserve removed", func(req map[string]any) { delete(req, "reserve") }, false},
+		{"broken: reserve retyped", func(req map[string]any) { req["reserve"] = "1024" }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := cloneLine(t, current[0])
+			tt.edit(req)
+			checkProblems(t, shapeProblems("request", fixture[0], req), tt.match)
+		})
+	}
+}
+
 // TestConsentStoreKeepsV1Format checks the current writer against the v1
 // consent file and that the current reader still loads it.
 func TestConsentStoreKeepsV1Format(t *testing.T) {

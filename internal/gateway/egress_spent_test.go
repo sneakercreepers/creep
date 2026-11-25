@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,12 @@ func TestReopenedLogChargesBudget(t *testing.T) {
 		{"result with no request is ignored", settledLine, 0, 0},
 		{"line without reservation charges the limit", `{"v":1,"type":"request","id":"b"}` + "\n", 1, 1000},
 		{"reservation over the limit is capped", `{"type":"request","id":"b","reserve":5000}` + "\n", 1, 1000},
-		{"torn lines are not charged", `{"v":1,"type":"requ` + "\n" + cutLine + `{"v":1,"type":"request","id":"c"`, 1, 100},
+		{"torn final line is not charged", cutLine + `{"v":1,"type":"request","id":"c"`, 1, 100},
+		{"blank line after a torn write is free", cutLine + "\n" + cutLine, 2, 200},
+		{"undecodable line before others charges a call at the limit", `{"v":1,"type":"requ` + "\n" + cutLine, 2, 1000},
+		{"undecodable final line with a newline is charged", cutLine + `{"v":1,"type":"requ` + "\n", 2, 1000},
+		{"line merged with a torn one is charged", `{"v":1,"type":"requ{"v":1,"type":"request","id":"d","reserve":5}` + "\n", 1, 1000},
+		{"wrongly typed field charges once", `{"v":1,"type":"request","id":"e","reserve":"lots"}` + "\n", 1, 1000},
 		{"totals are capped at the limits", strings.Repeat(`{"type":"request","id":"x","reserve":900}`+"\n", 20), 9, 1000},
 	}
 	for _, tt := range tests {
@@ -60,7 +66,9 @@ func TestReopenedLogOversizedLineRefused(t *testing.T) {
 
 // A call cut mid-flight is sent again in full after the reopen, and the
 // log keeps both attempts; the original run's spend still counts, so the
-// call limit stops the run where an uninterrupted one would stop.
+// call limit stops the run one call earlier than an uninterrupted one
+// would: the cut call counts twice, once for its logged reservation and
+// once when it is sent again (v0.4 review A5).
 func TestReopenedLogKeepsBothAttempts(t *testing.T) {
 	m := newModelServer(t, `{}`)
 	dir := runDir(t)
@@ -97,5 +105,24 @@ func writeLog(t *testing.T, dir, content string) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, egressLogName), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// BenchmarkLoggedSpend backs loggedSpend's documented cost (v0.4 review
+// A10): one linear read of a resumed run's log, here 10,000 calls, each a
+// request line and its result line.
+func BenchmarkLoggedSpend(b *testing.B) {
+	var log strings.Builder
+	for i := range 10000 {
+		id := fmt.Sprintf("req-%d", i)
+		fmt.Fprintf(&log, `{"v":1,"type":"request","id":%q,"reserve":1024}`+"\n", id)
+		fmt.Fprintf(&log, `{"v":1,"type":"result","id":%q,"outcome":"response","status":200,"tokens":{"input":500,"output":200}}`+"\n", id)
+	}
+	data := log.String()
+	b.SetBytes(int64(len(data)))
+	for b.Loop() {
+		if _, _, err := loggedSpend(strings.NewReader(data), 1<<20, false); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

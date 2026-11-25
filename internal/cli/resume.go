@@ -47,7 +47,7 @@ func runResume(e env, args []string) int {
 	}
 	defer s.close()
 	fmt.Fprintf(e.stderr, "creep resume: run %s: %d finished steps are served from .creep; what did not finish is sent again\n",
-		sum.ID, len(s.resumed.steps))
+		sum.ID, s.resume.finished.Len())
 	return s.runPipeline(ctx, cancel, e)
 }
 
@@ -80,13 +80,17 @@ func (s *session) reopenRun(id string) error {
 	if sum.Mode != s.mode() {
 		return &resumeRefusal{field: "state mode (--record or --replay)"}
 	}
-	if err := compareHeader(sum.Header, s.header()); err != nil {
+	header, err := s.header()
+	if err != nil {
+		return err
+	}
+	if err := compareHeader(sum.Header, header); err != nil {
 		return err
 	}
 	if s.boxID, err = resumedBoxID(id); err != nil {
 		return err
 	}
-	s.resumed = newResumedRun(sum)
+	s.resume = newResumeState(sum)
 	s.staleReports = removeReports(s.store.Root())
 	return nil
 }
@@ -106,7 +110,10 @@ func resumedBoxID(id string) (string, error) {
 // writing to it fails the resume (state.ErrLocked) instead of reading a log
 // mid-append, and refuses a run that already ended. It appends nothing and
 // never creates the state directory: resuming in the wrong folder must not
-// leave one behind.
+// leave one behind. reopenRun decodes and checks the log again under the
+// lock it then keeps, so the log is read twice (v0.4 review A12): bounded
+// by state.MaxLineBytes per line, and simpler than carrying this open run
+// through config loading.
 func loadResumable(id string) (state.Summary, error) {
 	if _, err := os.Lstat(stateDir); err != nil {
 		return state.Summary{}, fmt.Errorf("no run state in this directory: %w", err)
