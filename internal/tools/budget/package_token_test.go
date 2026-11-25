@@ -12,6 +12,10 @@ const (
 	packageTokenRef  = "${{ secrets.PACKAGE_REPOS_TOKEN }}" //nolint:gosec // G101: a workflow expression naming the secret, not a credential
 	packagePushStep  = "      - name: Update the Homebrew tap and Scoop bucket\n        env:\n          PACKAGE_REPOS_TOKEN: " + packageTokenRef + "\n        run: bash .github/scripts/package-repos.sh \"$GITHUB_REF_NAME\" dist\n"
 	packageVerifyRun = "--bundle dist/checksums.txt.sigstore.json dist/checksums.txt\n"
+	// The same signer the release job verifies: this workflow at this tag.
+	packageIdentity = "            --certificate-identity \"https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}\" \\\n            --certificate-oidc-issuer https://token.actions.githubusercontent.com \\\n            " + packageVerifyRun
+	packagePerms    = "    permissions:\n      contents: read # the push script and the published checksums.txt\n    steps:\n"
+	packageCheckout = "        with:\n          persist-credentials: false\n      - uses: actions/download-artifact@"
 )
 
 var jobHeader = regexp.MustCompile(`\n  [a-z][a-z0-9-]*:\n`)
@@ -48,9 +52,14 @@ func TestPackageReposTokenOnlyInPushStep(t *testing.T) {
 		{"indexed secret elsewhere", "release.yml", "GITHUB_TOKEN: ${{ github.token }}", "GITHUB_TOKEN: ${{ secrets['PACKAGE_REPOS_TOKEN'] }}", "secrets["},
 		{"push job without the environment", "release.yml", "    needs: release\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest\n    environment: release\n", "    needs: release\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest\n", "release environment"},
 		{"push job before the release", "release.yml", "    needs: release\n", "    needs: ancestry\n", "needs: release"},
-		{"push job runs goreleaser", "release.yml", "      - uses: actions/download-artifact@", "      - run: bash .github/scripts/release-tools.sh\n      - uses: actions/download-artifact@", "goreleaser"},
+		{"push job runs goreleaser", "release.yml", "          path: dist\n", "          path: dist\n      - run: bash .github/scripts/release-tools.sh\n", "goreleaser"},
 		{"push without re-verifying", "release.yml", packageVerifyRun, "--help\n", "verify-blob"},
-		{"push job writes", "release.yml", "      contents: read # the push script", "      contents: write # the push script", "contents: read"},
+		{"push job writes", "release.yml", "      contents: read # the push script", "      contents: write # the push script", "exactly contents: read"},
+		{"push job gains a permission", "release.yml", "      contents: read # the push script and the published checksums.txt\n", "      contents: read # the push script and the published checksums.txt\n      id-token: write\n", "exactly contents: read"},
+		{"push job persists credentials", "release.yml", packageCheckout, "        with:\n          fetch-depth: 1\n      - uses: actions/download-artifact@", "persist-credentials"},
+		{"any signer accepted", "release.yml", packageIdentity, "            --certificate-identity-regexp \".*\" \\\n            --certificate-oidc-issuer https://token.actions.githubusercontent.com \\\n            " + packageVerifyRun, "exact release identity"},
+		{"identity regexp added", "release.yml", packageVerifyRun, "--certificate-identity-regexp x " + packageVerifyRun, "exact release identity"},
+		{"other issuer", "release.yml", packageIdentity, strings.Replace(packageIdentity, "token.actions.githubusercontent.com", "issuer.invalid", 1), "exact release identity"},
 		{"goreleaser uploads the cask", ".goreleaser.yaml", "    skip_upload: true\n", "    skip_upload: false\n", "skip_upload"},
 		{"goreleaser holds a token", ".goreleaser.yaml", "      name: scoop-bucket\n", "      name: scoop-bucket\n      token: x\n", "skip_upload"},
 	}
@@ -108,12 +117,16 @@ func pushJobProblem(release string) string {
 		return "release.yml: the package-repos job must declare needs: release"
 	case !strings.Contains(job, "    environment: release\n"):
 		return "release.yml: the package-repos job does not run in the release environment"
-	case !strings.Contains(job, "    permissions:\n      contents: read #"):
-		return "release.yml: the package-repos job must hold only contents: read"
+	case !strings.Contains(job, packagePerms):
+		return "release.yml: the package-repos job must hold exactly contents: read"
+	case !strings.Contains(job, packageCheckout):
+		return "release.yml: the package-repos checkout must set persist-credentials: false"
 	case strings.Contains(job, "goreleaser") || strings.Contains(job, "release-tools.sh") || strings.Contains(job, "setup-go"):
 		return "release.yml: the package-repos job must not run goreleaser or its tools"
 	case !strings.Contains(job[:at], packageVerifyRun):
 		return "release.yml: the package-repos job must cosign verify-blob checksums.txt before the push step"
+	case !strings.Contains(job[:at], packageIdentity) || strings.Contains(job, "-regexp"):
+		return "release.yml: the package-repos verify-blob must name the exact release identity and OIDC issuer"
 	}
 	return ""
 }
