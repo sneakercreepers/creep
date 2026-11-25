@@ -55,6 +55,39 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--bundle=${signature}", "--yes", "${artifact}"]
 
+# Package managers (#344, ADR 0033). goreleaser only writes the cask and the
+# manifest into dist/; .github/scripts/package-repos.sh pushes them to the tap
+# and the bucket after the release is verified and public, so neither ever
+# names an asset that is a draft or failed verification. Each pins the sha256
+# of its archive, the same bytes checksums.txt lists and cosign signed.
+homebrew_casks:
+  - name: creep
+    binaries: [creep]
+    skip_upload: true
+    repository:
+      owner: sneakercreepers
+      name: homebrew-tap
+    homepage: https://github.com/sneakercreepers/creep
+    description: Model-agnostic CLI that finds vulnerabilities in local source code
+    # The binaries are not notarized by Apple, so Gatekeeper refuses a
+    # quarantined download; brew has already checked the archive's sha256.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/creep"]
+          end
+
+scoops:
+  - name: creep
+    skip_upload: true
+    repository:
+      owner: sneakercreepers
+      name: scoop-bucket
+    homepage: https://github.com/sneakercreepers/creep
+    description: Model-agnostic CLI that finds vulnerabilities in local source code
+    license: Apache-2.0
+
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
