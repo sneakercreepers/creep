@@ -14,18 +14,17 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sneakercreepers/creep.svg)](https://pkg.go.dev/github.com/sneakercreepers/creep)
 [![Go version](https://img.shields.io/github/go-mod/go-version/sneakercreepers/creep)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-![Status](https://img.shields.io/badge/status-v0.4.0%20released-green)
+![Status](https://img.shields.io/badge/status-v0.5.0%20released-green)
 
 </div>
 
 > [!NOTE]
-> **[`v0.4.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.4.0) is the current release** (2026-11-24): every [v0.4 milestone](https://github.com/sneakercreepers/creep/milestone/6) issue is closed and its release pentest and architecture review are fixed (#342). The previous release, [`v0.3.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.3.0), brought `creep mcp`, recipes, `creep bench` and the build mirror.
+> **[`v0.5.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.5.0) is the current release** (2026-11-25): every [v0.5 milestone](https://github.com/sneakercreepers/creep/milestone/7) issue is closed and its release pentest and architecture review are fixed (#349). The previous release, [`v0.4.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.4.0), brought `creep init`, `creep resume` and the verified `gemini` preset.
 >
-> New in v0.4.0:
+> New in v0.5.0:
 >
-> - **`creep init`**: writes a `./creep.yaml` template with every project-settable gate and limit commented out at its default (no `model.*` key), so it changes nothing until you edit it; it never overwrites or follows anything already at that path ([ADR 0031](docs/adr/0031-creep-init.md)).
-> - **`creep resume <run>`**: continues an interrupted scan. Finished steps are replayed from their recordings, checked against the run's signed step digests, and never sent again; a changed setting, `model.env` value, baseline, file or tier is refused with exit 2 before anything is sent; the budget and deadline carry over, with the residuals ADR 0032 lists (an unsigned `egress.log`, a cut call charged twice and its time not counted) ([ADR 0032](docs/adr/0032-resume.md)).
-> - **Presets**: `gemini` is verified with Gemini CLI 0.70.0 and an AI Studio key when `model.env` declares `GEMINI_CLI_HOME` pointing at an isolated home (creep checks only that it is declared, not what the directory holds); without it every scan warns, and `host_reads` stays unbounded either way. A Google account login does not work headless. `codex` works with a ChatGPT login but stays unverified ([ADR 0015](docs/adr/0015-model-presets.md) amendments).
+> - **Homebrew and Scoop**: `brew install sneakercreepers/tap/creep` (macOS and Linux) and `scoop install creep` from the `sneakercreepers` bucket (Windows). The release workflow pins each archive's SHA-256 after verifying the signature and provenance, from a separate job that alone holds the push token and refuses a downgrade ([ADR 0033](docs/adr/0033-package-managers.md)).
+> - **`go install` first** in [Install](#install).
 
 ---
 
@@ -85,17 +84,17 @@ This builds from source through the Go module proxy and checksum database, so th
 
 ### From the GitHub release
 
-Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.4.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.4.0).
+Download your archive (linux, darwin, windows · amd64, arm64), `checksums.txt` and `checksums.txt.sigstore.json` from [Releases](https://github.com/sneakercreepers/creep/releases). The current one is [`v0.5.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.5.0).
 
-Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.4.0` on linux/amd64:
+Verify before running it, with cosign v3+ and the GitHub CLI ([SECURITY.md](SECURITY.md#verifying-a-release)). For `v0.5.0` on linux/amd64:
 
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.4.0' \
+  --certificate-identity 'https://github.com/sneakercreepers/creep/.github/workflows/release.yml@refs/tags/v0.5.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 --check --ignore-missing checksums.txt
-gh attestation verify creep_0.4.0_linux_amd64.tar.gz \
+gh attestation verify creep_0.5.0_linux_amd64.tar.gz \
   --repo sneakercreepers/creep \
   --signer-workflow sneakercreepers/creep/.github/workflows/release.yml
 ```
@@ -104,7 +103,7 @@ A certificate or attestation naming any other workflow, ref or repository means 
 
 ### With Homebrew or Scoop
 
-From v0.5.0 the release workflow also publishes a Homebrew cask (macOS and Linux, amd64 and arm64) and a Scoop manifest (Windows, amd64 and arm64):
+The release workflow also publishes a Homebrew cask (macOS and Linux, amd64 and arm64) and a Scoop manifest (Windows, amd64 and arm64):
 
 ```sh
 brew install sneakercreepers/tap/creep
@@ -415,7 +414,7 @@ Scanner findings are `probable`. A scanner that fails or times out makes the run
 | **v0.2** ✅ | Language-agnostic analysis (#265, [ADR 0017](docs/adr/0017-language-agnostic-analysis.md)), coverage gaps (#213, #214), redaction and config hardening (#70, #71, #62, #63, #106, #190), preset policy (#229) and codex flags checked (#272), sandbox runtime and hardened profile (#21) with minimum engine versions (#311), run network, canary and synthetic database (#22), offline app build (#23), PoC verification and `creep reproduce` (#24, #25), incremental scans with `--changed` (#26), baseline and accepted risks (#27, [ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)), gate per mode and nightly scan (#28, [ADR 0021](docs/adr/0021-gate-per-mode.md)), GitHub Action (#29, [ADR 0023](docs/adr/0023-github-action.md)), guides (#31), discovery stability `--stability N` (#37, [ADR 0024](docs/adr/0024-discovery-stability.md)), gateway hardening (#115, #116), contract goldens (#135), signed commits on `main` (#49, [ADR 0026](docs/adr/0026-signed-commits.md)); release pentest fixed (#307, #308, #311); released as [`v0.2.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.2.0) (2026-11-22) |
 | **v0.3** ✅ | Read-only MCP mode `creep mcp` (#32, [ADR 0027](docs/adr/0027-mcp-server.md)), recipes: format, `creep recipe` and pinned installs with `creep.lock` (#33, #34, [ADR 0025](docs/adr/0025-recipes.md), [ADR 0028](docs/adr/0028-recipe-install-and-lock.md)), public `creep bench` with safe twins and an honesty metric (#35, [ADR 0030](docs/adr/0030-creep-bench.md); published numbers are synthesized until a live run replaces them), nightly bench CI with a release gate (regression check active once a baseline is committed) and docs-only CI fast path (#36), registry mirror for the app build (#277, [ADR 0029](docs/adr/0029-build-mirror.md)), wiki guides Writing recipes, Using creep from an agent (MCP) and Sharing model results (#38); release pentest and architecture review fixed (#330); released as [`v0.3.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.3.0) (2026-11-24) |
 | **v0.4** ✅ | `creep init` project template (#334, [ADR 0031](docs/adr/0031-creep-init.md)), `creep resume` continuation (#335, [ADR 0032](docs/adr/0032-resume.md)), codex checked with a ChatGPT login and `gemini` verified with an AI Studio key and `verified_env` (#333, #338); release pentest and architecture review fixed (#342); released as [`v0.4.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.4.0) (2026-11-24) |
-| v0.5 (in progress) | Homebrew tap and Scoop bucket published by the release workflow (#344, #346, [ADR 0033](docs/adr/0033-package-managers.md)) |
+| **v0.5** ✅ | Homebrew tap and Scoop bucket published by the release workflow (#344, #346, [ADR 0033](docs/adr/0033-package-managers.md)), `go install` first in Install (#345); release pentest and architecture review fixed (#349); released as [`v0.5.0`](https://github.com/sneakercreepers/creep/releases/tag/v0.5.0) (2026-11-25) |
 
 Full list: the [v0.5 milestone](https://github.com/sneakercreepers/creep/milestone/7), the [wiki roadmap](https://github.com/sneakercreepers/creep/wiki#roadmap) and the [Roadmap project](https://github.com/orgs/sneakercreepers/projects/1).
 
