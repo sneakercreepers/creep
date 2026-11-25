@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"slices"
 	"strings"
@@ -55,6 +56,33 @@ func TestDialContextIPLiteral(t *testing.T) {
 	}
 }
 
+// acceptingListener returns the address of a loopback listener that accepts
+// and closes every connection until the test ends.
+func acceptingListener(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+	return ln.Addr().String()
+}
+
+func closeConn(c net.Conn, _ error) {
+	if c != nil {
+		_ = c.Close()
+	}
+}
+
 // blockingResolver holds lookups of slowHost until release is closed.
 type blockingResolver struct {
 	*fakeResolver
@@ -80,15 +108,17 @@ func TestSlowLookupDoesNotBlockOtherHosts(t *testing.T) {
 		started:      make(chan struct{}, 2),
 		release:      make(chan struct{}),
 	}
-	d := &recordingDial{target: "127.0.0.1:1"}
+	// Dials must succeed: a failed dial unpins the host, and a slow-host
+	// goroutine that reaches claim only after that would resolve again.
+	d := &recordingDial{target: acceptingListener(t)}
 	pd := newDialer(t, []string{"fast.example", "slow.example"}, res, d)
 	ctx := context.Background()
-	_, _ = pd.DialContext(ctx, "tcp", "fast.example:443")
+	closeConn(pd.DialContext(ctx, "tcp", "fast.example:443"))
 
 	done := make(chan struct{}, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			_, _ = pd.DialContext(ctx, "tcp", "slow.example:443")
+			closeConn(pd.DialContext(ctx, "tcp", "slow.example:443"))
 			done <- struct{}{}
 		}()
 	}
@@ -96,7 +126,7 @@ func TestSlowLookupDoesNotBlockOtherHosts(t *testing.T) {
 
 	fast := make(chan struct{})
 	go func() {
-		_, _ = pd.DialContext(ctx, "tcp", "fast.example:443")
+		closeConn(pd.DialContext(ctx, "tcp", "fast.example:443"))
 		close(fast)
 	}()
 	select {
