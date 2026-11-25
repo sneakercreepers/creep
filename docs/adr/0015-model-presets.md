@@ -68,3 +68,4 @@ The maintainer verified the `gemini` preset with Gemini CLI 0.70.0 on Windows 11
 - **Model.** `GEMINI_MODEL=gemini-3.5-flash-lite`. On the free tier the default model answered with a quota error or 503, and `gemini-2.5-*` are closed to new keys.
 - **Check.** With the preset, `doctor` printed `tool canary passed`, exit 0. The tools-on control (`gemini --skip-trust --approval-mode yolo`) printed `has tools enabled: the tool canary saw it created a file and ran a shell command`, exit 3. Both conditions in CONTRIBUTING.md hold, so `verified` is `true`, and the command digest is pinned in `verifiedPins`. A change to the preset's program or args fails `TestVerifiedPresetsArePinned` until `verified` goes back to `false`.
 
+**Release note (v0.4, 2026-11-24).** CONTRIBUTING.md now spells out the verified `gemini` setup for the manual check: an AI Studio key, an empty `GEMINI_CLI_HOME` whose settings select `gemini-api-key`, and `GEMINI_MODEL` on the free tier.

@@ -76,7 +76,7 @@ Run it from a new empty directory, with no `creep.yaml`, and the config file out
 
 ```sh
 cd "$(mktemp -d)"
-printf 'model:\n  preset: <name>\n' > ../preset-check.yaml           # ollama: add "  name: <model>"; gemini: add "  env: [GEMINI_API_KEY]"
+printf 'model:\n  preset: <name>\n' > ../preset-check.yaml           # ollama: add "  name: <model>"; gemini: add "  env: [GEMINI_API_KEY, GEMINI_CLI_HOME, GEMINI_MODEL]" (see below)
 creep --config ../preset-check.yaml config explain | grep model.run   # the command line from the preset
 creep --config ../preset-check.yaml doctor
 ```
@@ -86,15 +86,17 @@ Expected: `doctor` asks for consent to the `command://<program>-<hash>` endpoint
 ```sh
 printf 'model:\n  contract: command\n' > ../tools-on.yaml
 creep --config ../tools-on.yaml --model-run 'claude -p --dangerously-skip-permissions --output-format text' doctor
-# gemini: 'gemini --skip-trust --approval-mode yolo' (add "  env: [GEMINI_API_KEY]" to tools-on.yaml)   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
+# gemini: 'gemini --skip-trust --approval-mode yolo' (add the same `env:` line to tools-on.yaml)   codex: 'codex exec --sandbox workspace-write --skip-git-repo-check -'
 ```
+
+For `gemini`, export a Google AI Studio key as `GEMINI_API_KEY` (a Google account login fails headless), point `GEMINI_CLI_HOME` at an empty directory whose `.gemini/settings.json` holds only `{"security":{"auth":{"selectedType":"gemini-api-key"}}}` (otherwise an `oauth-personal` user setting makes Gemini ignore the key, and the user's tools and MCP servers load), and on the free tier set `GEMINI_MODEL` to a model with quota, such as `gemini-3.5-flash-lite`. The preset is verified only for that setup (`verified_env`), so a scan without `GEMINI_CLI_HOME` in `model.env` warns ([ADR 0015](docs/adr/0015-model-presets.md), #338).
 
 Delete the temporary directory and the two config files afterwards.
 
 | Preset | `verified` | Help wanted |
 |---|---|---|
 | `claude-code` | `true` | |
-| `gemini` | `true` | re-run the check after a Gemini CLI upgrade (verified with 0.70.0 and an AI Studio key, #338) |
+| `gemini` | `true` (with `GEMINI_CLI_HOME` in `model.env`) | re-run the check after a Gemini CLI upgrade (verified with 0.70.0, an AI Studio key and an empty `GEMINI_CLI_HOME`, #338) |
 | `codex` | `false` | run the check with Codex CLI on Linux or macOS, where the tools-on control must fail (on Windows it passes, #316, #333) |
 | `ollama` | `false` | run the check with Ollama and a local model |
 
