@@ -13,6 +13,7 @@ on:
       - .github/workflows/release.yml
       - .github/scripts/release-tools.sh
       - .github/scripts/tag-ancestry.sh
+      - .github/scripts/package-repos.sh
   workflow_dispatch:
 
 permissions: {}
@@ -60,6 +61,45 @@ jobs:
           sha256sum dist/creep_*/creep* > "$RUNNER_TEMP/first.sha256"
           goreleaser release --snapshot --clean --skip=sign,publish,sbom
           sha256sum dist/creep_*/creep* | diff "$RUNNER_TEMP/first.sha256" -
+      # The cask and the manifest must pin the sha256 of archives that
+      # checksums.txt lists; the push script must publish nothing without the
+      # token or for a prerelease, and otherwise update both files on main.
+      - name: Cask and Scoop manifest pin the release archives
+        run: |
+          check_pins() { # file count
+            sums="$(grep -oE '[0-9a-f]{64}' "$1" | sort -u)"
+            test "$(wc -l <<<"$sums")" -eq "$2" || { echo "::error::$1 does not pin $2 archives"; exit 1; }
+            while read -r sum; do
+              grep -q "^$sum " dist/checksums.txt || { echo "::error::$1 pins $sum, which checksums.txt does not list"; exit 1; }
+            done <<<"$sums"
+          }
+          check_pins dist/homebrew/Casks/creep.rb 4 # darwin and linux, amd64 and arm64
+          check_pins dist/scoop/creep.json 2 # windows amd64 and arm64
+      - name: Tap and bucket push is skipped without a token and for a prerelease
+        run: |
+          set -o pipefail
+          fake="$RUNNER_TEMP/fakebin"
+          mkdir -p "$fake"
+          cat > "$fake/gh" <<'EOF'
+          #!/usr/bin/env bash
+          echo "$*" >> "$RUNNER_TEMP/gh-calls"
+          case "$*" in
+            *"-X PUT"*) echo https://github.invalid/commit ;;
+            *Casks*) echo oldsha ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod +x "$fake/gh"
+          export PATH="$fake:$PATH"
+          PACKAGE_REPOS_TOKEN='' bash .github/scripts/package-repos.sh v9.9.9 dist | grep 'were not updated'
+          PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9-rc1 dist | grep 'is a prerelease'
+          if [ -e "$RUNNER_TEMP/gh-calls" ]; then
+            echo "::error::package-repos.sh called gh without a token or for a prerelease"
+            exit 1
+          fi
+          PACKAGE_REPOS_TOKEN=fake bash .github/scripts/package-repos.sh v9.9.9 dist
+          grep -q '^api -X PUT repos/sneakercreepers/homebrew-tap/contents/Casks/creep.rb .*-f sha=oldsha' "$RUNNER_TEMP/gh-calls"
+          grep '^api -X PUT repos/sneakercreepers/scoop-bucket/contents/bucket/creep.json ' "$RUNNER_TEMP/gh-calls" | grep -vq 'sha='
 
   ancestry:
     if: github.event_name == 'push'
@@ -149,3 +189,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+      # After the release is public, so the cask and the manifest never name
+      # a draft or unverified asset. The token (contents write on the tap and
+      # the bucket only, ADR 0033) is given to this step alone; while it is
+      # not set the script logs a warning and the release still succeeds.
+      - name: Update the Homebrew tap and Scoop bucket
+        env:
+          PACKAGE_REPOS_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}
+        run: bash .github/scripts/package-repos.sh "$GITHUB_REF_NAME" dist

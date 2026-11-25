@@ -81,7 +81,7 @@ Needs Go 1.25 or later:
 go install github.com/sneakercreepers/creep/cmd/creep@latest
 ```
 
-This builds from source through the Go module proxy and checksum database, so there is no cosign signature or attestation to check; for a verified binary use the release archive below. Or from a clone: `git clone https://github.com/sneakercreepers/creep && cd creep && make build`. Homebrew and Scoop are planned for v0.5 ([#344](https://github.com/sneakercreepers/creep/issues/344)).
+This builds from source through the Go module proxy and checksum database, so there is no cosign signature or attestation to check; for a verified binary use the release archive below. Or from a clone: `git clone https://github.com/sneakercreepers/creep && cd creep && make build`. Homebrew and Scoop: see [With Homebrew or Scoop](#with-homebrew-or-scoop).
 
 ### From the GitHub release
 
@@ -101,6 +101,19 @@ gh attestation verify creep_0.4.0_linux_amd64.tar.gz \
 ```
 
 A certificate or attestation naming any other workflow, ref or repository means the file was not built by the release workflow: do not run it. Each archive also ships an SPDX SBOM (`<archive>.sbom.json`).
+
+### With Homebrew or Scoop
+
+From v0.5.0 the release workflow also publishes a Homebrew cask (macOS and Linux, amd64 and arm64) and a Scoop manifest (Windows, amd64 and arm64):
+
+```sh
+brew install sneakercreepers/tap/creep
+
+scoop bucket add sneakercreepers https://github.com/sneakercreepers/scoop-bucket
+scoop install creep
+```
+
+Both install the release archive above and check only its SHA-256, which the release workflow pinned after verifying the signature and provenance. brew and scoop do not check the cosign signature or the attestation themselves, so for that assurance still run the commands above on the archive they downloaded (`brew --cache --cask sneakercreepers/tap/creep`, or `scoop cache show creep`) ([ADR 0033](docs/adr/0033-package-managers.md)).
 
 ## Quick start
 
