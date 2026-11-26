@@ -21,12 +21,18 @@ const (
 )
 
 // fakeGH logs every call and answers like the GitHub contents API: a file
-// named by FAKE_TAP or FAKE_BUCKET exists, any other path is a 404.
+// named by FAKE_TAP or FAKE_BUCKET exists, any other path is a 404. Like
+// the real gh (v0.5.0 release run), a 404 prints the error body on stdout,
+// even with --jq, and exits 1.
 const fakeGH = `#!/usr/bin/env bash
 echo "$*" >> "$GH_LOG"
 case "$*" in *"-X PUT"*) echo https://github.invalid/commit; exit 0 ;; esac
 case "$*" in *homebrew-tap*) f="${FAKE_TAP:-}" ;; *) f="${FAKE_BUCKET:-}" ;; esac
-if [ -z "$f" ]; then echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi
+if [ -z "$f" ]; then
+  echo '{"message":"Not Found","status":"404"}'
+  echo "gh: Not Found (HTTP 404)" >&2
+  exit 1
+fi
 case "$*" in *"--jq .sha"*) echo "sha-$(basename "$f")" ;; *) cat "$f" ;; esac
 `
 

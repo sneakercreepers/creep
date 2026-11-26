@@ -63,11 +63,15 @@ check_all_pins() { # tag version
 # remote_state prints "new" when repo has no file at path, "same" when it
 # already holds this file, or "update <sha>" when it holds an older version.
 # A read error counts as missing: the PUT without a sha then fails on an
-# existing file, so the guard below cannot be skipped by a failed read.
+# existing file, so the guard below cannot be skipped by a failed read. The
+# exit status decides, not the output: on a 404 gh still prints the error
+# body on stdout.
 remote_state() { # repo path file
   local sha remote old new
-  sha="$(gh api "repos/$1/contents/$2?ref=main" --jq .sha 2>/dev/null || true)"
-  if [ -z "$sha" ]; then echo new; return; fi
+  if ! sha="$(gh api "repos/$1/contents/$2?ref=main" --jq .sha 2>/dev/null)" || [ -z "$sha" ]; then
+    echo new
+    return
+  fi
   remote="$(mktemp)"
   gh api -H 'Accept: application/vnd.github.raw' "repos/$1/contents/$2?ref=main" >"$remote"
   if cmp -s "$remote" "$3"; then echo same; return; fi
