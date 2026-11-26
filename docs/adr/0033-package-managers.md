@@ -1,6 +1,6 @@
 # ADR 0033: Homebrew tap and Scoop bucket as release channels
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-26)
 - **Date:** 2026-11-24
 - **Deciders:** @Ludocius
 - **Changes:** the release contract gains two channels, a Homebrew cask in `sneakercreepers/homebrew-tap` and a Scoop manifest in `sneakercreepers/scoop-bucket`, both written only by the release workflow from the release's own archives; one new secret, `PACKAGE_REPOS_TOKEN`, in the `release` environment; one new script, `.github/scripts/package-repos.sh`. No Go dependency, package, flag or exit code.
