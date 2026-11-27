@@ -28,6 +28,8 @@
 ## Consequences
 
 - doctor now costs two to four calls (a retry each) and up to about 150 KiB of input at tier L; the README nightly example that runs doctor spends them every night.
+  doctor runs in the same step as the scan, the one step that has `CREEP_API_KEY`; without the key it exits 3 before the sandbox report.
 - doctor needs consent for an HTTP endpoint, as a scan does; in CI the policy grants it.
+- The canary file has 7 lines, its entry on line 4 and its sink on line 5, so the window of 2 lines accepts an entry cited on lines 2 to 6 and a sink on lines 3 to 7: most of the file. The line check is therefore weak; what the canary rule rests on is the file index, which must name the canary file, whose place in the batch and token come from the HMAC seed, so a reply that never read the batch cannot name it.
 - `egress.log` of a doctor run lists the probes under their own purposes.
-- Tests: `cli/doctormodel_test.go:TestDoctorProbesTheModel` (reachable, cached tier, canary missed, short context, unreachable, no repository text in any call), `discover/probe_test.go:TestProbe`, `calibrate/contextfits_test.go:TestContextFits`.
+- Tests: `cli/doctormodel_test.go:TestDoctorProbesTheModel` (reachable, cached tier, canary missed, short context, consent refused, unreachable, a planted marker in no call), `cli/doctormodel_test.go:TestDoctorCommandProbes` (a model CLI: probes logged after the canary, a failed canary exits 3 with no probe, the marker in neither the CLI's input nor `egress.log`), `discover/probe_test.go:TestProbe`, `calibrate/contextfits_test.go:TestContextFits`.

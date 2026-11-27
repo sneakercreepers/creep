@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,6 +16,10 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
 )
+
+// doctorMarker is planted as a repository file's name and content; no
+// doctor probe or egress.log may hold it.
+const doctorMarker = "zq7doctormarkerx9"
 
 var probeNeedle = regexp.MustCompile(`let (marker_[a-z_]+) = "([a-z0-9-]+)";`)
 
@@ -53,11 +59,12 @@ func TestDoctorProbesTheModel(t *testing.T) {
 			[]string{"warning: model: the reply to a synthetic tier S discovery batch missed the discovery canary", "exit 4"}},
 		{"short context", &fakeModel{shortContext: true}, calibrate.TierS, errors.New("not cached"), exitcode.OK,
 			[]string{"warning: model: usable context is below", "probe: wrong_answer", "num_ctx 16384"}},
+		{"consent refused", &fakeModel{fail: map[string]error{"discover": &gateway.ConsentError{Endpoint: "https://models.example.invalid", Err: gateway.ErrNoConsent}}}, calibrate.TierS, errors.New("not cached"), exitcode.ConfigError, nil},
 		{"unreachable", &fakeModel{fail: map[string]error{"discover": errors.New("connection refused")}}, calibrate.TierS, errors.New("not cached"), exitcode.ModelOrSandbox, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+			cfg := scanRepo(t, map[string]string{"app.py": "@flask", doctorMarker + ".py": doctorMarker}, "")
 			deps := fakeDeps(tt.model, tt.tier)
 			deps.calibrate = fixedCalibration(tt.tier, tt.cal)
 			var payloads [][]byte
@@ -73,7 +80,7 @@ func TestDoctorProbesTheModel(t *testing.T) {
 			}
 			code, stdout, stderr := runScanWith(deps, "--config", cfg, "doctor")
 			for _, p := range payloads {
-				if bytes.Contains(p, []byte("flask")) || bytes.Contains(p, []byte("app.py")) {
+				if bytes.Contains(p, []byte(doctorMarker)) || bytes.Contains(p, []byte("flask")) || bytes.Contains(p, []byte("app.py")) {
 					t.Fatal("a doctor probe carried repository text")
 				}
 			}
@@ -86,4 +93,54 @@ func TestDoctorProbesTheModel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Protection (#362, ADR 0035): with a model CLI, doctor's probes go
+// through the gateway after the tool canary and egress.log logs them;
+// neither the CLI's input nor egress.log holds repository text, and a CLI
+// that fails the canary exits 3 and gets no probe.
+func TestDoctorCommandProbes(t *testing.T) {
+	tests := []struct {
+		mode   string
+		code   int
+		probed bool
+	}{
+		{"answer", exitcode.OK, true},
+		{"obey", exitcode.ModelOrSandbox, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			cfg, prompts := commandScan(t, tt.mode, "")
+			if err := os.WriteFile(doctorMarker+".py", []byte(doctorMarker+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			code, stdout, stderr := runScanWith(commandDeps(), "--config", cfg, "doctor")
+			if code != tt.code {
+				t.Fatalf("exit %d, want %d\n%s\n%s", code, tt.code, stdout, stderr)
+			}
+			egress := doctorEgress(t)
+			for _, body := range append(savedPrompts(t, prompts), egress) {
+				if strings.Contains(body, doctorMarker) || strings.Contains(body, "app.py") {
+					t.Fatal("a doctor call or egress.log holds repository text")
+				}
+			}
+			if probed := strings.Contains(egress, `"purpose":"doctor.discover"`); probed != tt.probed {
+				t.Errorf("discovery probe logged = %v, want %v:\n%s", probed, tt.probed, egress)
+			}
+		})
+	}
+}
+
+// doctorEgress reads the one egress.log doctor wrote.
+func doctorEgress(t *testing.T) string {
+	t.Helper()
+	logs, _ := filepath.Glob(filepath.Join(".creep", "runs", "*", "egress.log"))
+	if len(logs) != 1 {
+		t.Fatalf("egress logs = %v", logs)
+	}
+	data, err := os.ReadFile(logs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

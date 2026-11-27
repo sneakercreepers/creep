@@ -370,17 +370,15 @@ jobs:
             sandbox: { enabled: true }
           consent: ["https://<host>"]   # the endpoint's origin; a command model takes the key creep doctor prints
           EOF
-      - name: Sandbox images
-        env:
-          CREEP_POLICY: ${{ runner.temp }}/creep/policy.yaml
-        run: |
-          creep doctor
-          docker pull "<each image doctor lists as missing, by digest>"
-      - name: Nightly scan
+      # doctor probes the model, so it runs in the one step that has the key.
+      - name: Doctor, sandbox images and nightly scan
         env:
           CREEP_POLICY: ${{ runner.temp }}/creep/policy.yaml
           CREEP_API_KEY: ${{ secrets.CREEP_API_KEY }}
-        run: creep scan --mode nightly
+        run: |
+          creep doctor
+          docker pull "<each image doctor lists as missing, by digest>"
+          creep scan --mode nightly
 ```
 
 Exit `1` fails the job when a finding reaches `gates.nightly` or `gates.pr`, `4` when the run is incomplete. The reports are in `.creep/`; upload them with `actions/upload-artifact` (pinned by SHA) if you want them after the run. The pull request workflow is the same without `sandbox` and with `creep scan` (pr mode), on `pull_request`, never `pull_request_target` (which would run the pull request's code with the base repository's secrets). A `pull_request` run uses the pull request's own copy of the workflow, so protect `.github/workflows` with CODEOWNERS and make the scan a required check. The [GitHub Action](#github-action) does the same: on a `schedule` event it runs nightly with no `mode` input, and `mode: nightly` sets `--mode` for any other event.
