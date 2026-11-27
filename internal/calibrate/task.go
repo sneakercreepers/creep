@@ -30,6 +30,9 @@ func Classes() []Class {
 // (#363): idor, missing_auth and prototype_pollution are still measured
 // and reported, but no finding of theirs is ever planned, so a weak score
 // there must not hold a model back and a strong one must not lift it.
+// Planned classes calibration has no tasks for (template_injection,
+// code_injection, insecure_deserialization) cannot be measured, so they
+// stay out until the task set covers them (#358).
 func PlannedClasses() []Class {
 	return []Class{ClassSQLi, ClassNoSQLInjection, ClassCommandInjection, ClassPathTraversal, ClassSSRF}
 }

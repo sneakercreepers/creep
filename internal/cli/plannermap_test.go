@@ -72,8 +72,16 @@ func TestPlannedClassesMatchPlannerKinds(t *testing.T) {
 		if _, err := plannerKind(k); err != nil {
 			continue
 		}
-		if class := calibrate.Class(kindClass(k)); slices.Contains(calibrate.Classes(), class) {
+		class := calibrate.Class(kindClass(k))
+		switch {
+		case slices.Contains(calibrate.Classes(), class):
 			planned[string(class)] = true
+		case !slices.Contains(uncalibratedClasses, string(class)):
+			// A planned class must be measured, or be named as one calibration
+			// has no tasks for (template, code injection and deserialization
+			// since #365): those cannot enter the tier or the floor until the
+			// task set (#358) measures them.
+			t.Errorf("discover kind %s plans class %s, which is neither calibrated nor listed uncalibrated", k, class)
 		}
 	}
 	want := map[string]bool{}
