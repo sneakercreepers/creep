@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sneakercreepers/creep/internal/baseline"
 	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/report"
@@ -47,16 +48,32 @@ func TestScanOfCFileSaysMemorySafetyIsNotLookedFor(t *testing.T) {
 	}
 }
 
+// evalLine and pickleLine are the sinks of evalApp, at lines 8 and 12.
+const (
+	evalLine   = "    return str(eval(request.args[\"e\"]))"
+	pickleLine = "    return str(pickle.loads(request.data))"
+	evalApp    = "from flask import Flask, request\nimport pickle\n\napp = Flask(__name__)\n\n" +
+		"@app.route(\"/calc\")\ndef calc():\n" + evalLine + "\n\n" +
+		"@app.route(\"/load\")\ndef load():\n" + pickleLine + "\n"
+)
+
+// evalModel finds both sinks only when the reader is asked their own
+// class; a hypothesis asked as command_injection gets invalid output, so a
+// planner classOf that folds them back into command injection leaves the
+// run incomplete instead of passing (#365 tester finding).
+func evalModel() *fakeModel {
+	return &fakeModel{verdict: map[string]string{
+		"code_injection": "vulnerable", "insecure_deserialization": "vulnerable", "command_injection": "invalid",
+	}}
+}
+
 // Acceptance (#365): code eval and deserialization sinks are their own
-// classes; before #365 the tripwire tagged both shell and the report
+// classes from the tripwire through the planner and the reader to the
+// report; before #365 the tripwire tagged both shell and the report
 // labeled them command_injection.
 func TestEvalAndDeserializationAreNotCommandInjection(t *testing.T) {
-	src := "from flask import Flask, request\nimport pickle\n\napp = Flask(__name__)\n\n" +
-		"@app.route(\"/calc\")\ndef calc():\n    return str(eval(request.args[\"e\"]))\n\n" +
-		"@app.route(\"/load\")\ndef load():\n    return str(pickle.loads(request.data))\n"
-	cfg := scanRepo(t, map[string]string{"app.py": src}, "")
-	m := &fakeModel{verdict: map[string]string{"code_injection": "vulnerable", "insecure_deserialization": "vulnerable", "command_injection": "vulnerable"}}
-	code, out, errOut := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--config", cfg)
+	cfg := scanRepo(t, map[string]string{"app.py": evalApp}, "")
+	code, out, errOut := runScanWith(fakeDeps(evalModel(), calibrate.TierM), "scan", "--config", cfg)
 	if code != exitcode.GateExceeded {
 		t.Fatalf("exit %d, want %d\n%s\n%s", code, exitcode.GateExceeded, out, errOut)
 	}
@@ -75,6 +92,55 @@ func TestEvalAndDeserializationAreNotCommandInjection(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("missing probable findings %v in %+v", want, rep.Findings)
+	}
+}
+
+// #365 changed the class, and the fingerprint covers it (ADR 0022): a
+// baseline entry recorded for an eval or pickle sink as command_injection
+// no longer suppresses its finding, which shows up as new once.
+func TestBaselineFromCommandInjectionDoesNotHideCodeInjection(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": evalApp}, "")
+	deps := baselineDeps(evalModel(), baselineToday)
+	if code, _, errOut := runScanWith(deps, "scan", "--config", cfg, "--baseline", "b.json", "--baseline-write"); code != exitcode.GateExceeded {
+		t.Fatalf("write exit %d: %s", code, errOut)
+	}
+	if code, out, _ := runScanWith(deps, "scan", "--config", cfg, "--baseline", "b.json"); code != exitcode.OK {
+		t.Fatalf("scan with its own baseline exit %d, want %d: %s", code, exitcode.OK, out)
+	}
+	relabelBaseline(t, map[string]string{"code_injection": evalLine, "insecure_deserialization": pickleLine})
+	code, out, errOut := runScanWith(deps, "scan", "--config", cfg, "--baseline", "b.json")
+	if code != exitcode.GateExceeded || strings.Contains(out, "suppressed:") {
+		t.Fatalf("scan with a command_injection baseline exit %d, want %d and nothing suppressed\n%s\n%s", code, exitcode.GateExceeded, out, errOut)
+	}
+}
+
+// relabelBaseline rewrites each entry of b.json as a pre-#365 scan wrote it: class
+// command_injection, fingerprint over that class and the same sink line.
+func relabelBaseline(t *testing.T, lines map[string]string) {
+	t.Helper()
+	data, err := os.ReadFile("b.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := baseline.Parse(data, baselineToday)
+	if err != nil || len(f.Entries) != len(lines) {
+		t.Fatalf("baseline %+v, %v; want %d entries", f, err, len(lines))
+	}
+	for i, e := range f.Entries {
+		anchor := baseline.SinkAnchor(lines[e.Class])
+		if baseline.Fingerprint(e.Class, e.Path, anchor) != e.Fingerprint {
+			t.Fatalf("entry %+v: fingerprint is not over its class and sink line", e)
+		}
+		f.Entries[i].Class = "command_injection"
+		f.Entries[i].Fingerprint = baseline.Fingerprint("command_injection", e.Path, anchor)
+	}
+	out, err := f.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// G703: a fixed name in the test's own t.TempDir() repository.
+	if err := os.WriteFile("b.json", out, 0o600); err != nil { //nolint:gosec
+		t.Fatal(err)
 	}
 }
 
