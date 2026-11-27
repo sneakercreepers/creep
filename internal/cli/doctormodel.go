@@ -19,7 +19,7 @@ import (
 const numCtxHint = "with Ollama, create the model with num_ctx 16384 or more (see the README, Ollama)"
 
 // doctorModel sends the model two synthetic probes, as a scan would send
-// them and holding no repository text (ADR 0034): a discovery batch of
+// them and holding no repository text (ADR 0035): a discovery batch of
 // only the canary, then a context probe the size of the tier's largest
 // discovery call. The tier is the cached calibration's, or S when there is
 // none; doctor never calibrates. A failed call is an error (exit 3); a

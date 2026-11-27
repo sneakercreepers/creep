@@ -72,7 +72,7 @@ const maxHeaderBytes = 8 << 10
 //     MarkerCounts of the prompt.
 //
 // creep doctor's probes (discover.Probe, calibrate.ContextFits) hold only
-// creep's own synthetic text, never repository text (ADR 0034).
+// creep's own synthetic text, never repository text (ADR 0035).
 // A new producer is added here first. The payload is sent and stored byte
 // for byte.
 type Call struct {

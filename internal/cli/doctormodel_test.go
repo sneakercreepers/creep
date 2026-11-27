@@ -31,7 +31,7 @@ func contextAnswer(body []byte, cut bool) (map[string]any, bool) {
 	return map[string]any{"value": m[2]}, true
 }
 
-// Acceptance (#362, ADR 0034): creep doctor contacts the model through
+// Acceptance (#362, ADR 0035): creep doctor contacts the model through
 // the run's link with two synthetic probes and reports reachability,
 // schema and canary, and usable context against the tier; a bad reply or
 // a short context warns with exit 0, an unreachable model exits 3, and no

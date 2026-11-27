@@ -15,7 +15,7 @@ import (
 // model call goes through the gateway of a new run directory (consent,
 // budget, egress.log): for a command model the tool canary first, which
 // exits 3 when the CLI has tools, then, for every contract, the model
-// probes of doctorModel (ADR 0034). The sandbox is optional, so a missing
+// probes of doctorModel (ADR 0035). The sandbox is optional, so a missing
 // runtime is reported, not an error.
 func runDoctor(e env, args []string) int {
 	if len(args) > 0 {

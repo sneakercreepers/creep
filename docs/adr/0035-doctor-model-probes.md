@@ -1,4 +1,4 @@
-# ADR 0034: `creep doctor` probes the model with synthetic calls
+# ADR 0035: `creep doctor` probes the model with synthetic calls
 
 - **Status:** Proposed
 - **Date:** 2026-11-27
