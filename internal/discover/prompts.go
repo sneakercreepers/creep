@@ -53,6 +53,41 @@ var batchBudget = map[Tier]int{
 	TierL: 128 << 10,
 }
 
+// itemsPerFile is how many proposals (entries, sinks and auth spans
+// together) each tier's prompt asks for at most per file, the most
+// dangerous first (#362). A file that gets this many is truncated, since
+// the model may have stopped because it was asked to: never read_full.
+var itemsPerFile = map[Tier]int{
+	TierS: 12,
+	TierM: 24,
+	TierL: 24,
+}
+
+const (
+	// itemTokens bounds the tokens of one proposal as the schema writes it,
+	// {"file":8,"line":999999,"kind":"http_client","entry":2303}, with its
+	// separator; JSON digits and keys take one token per few bytes.
+	itemTokens = 32
+	// replyFrameTokens bounds the reply's frame: braces, array keys, spaces.
+	replyFrameTokens = 64
+	// maxReplyTokens keeps every discovery reply cap at or under the output
+	// limit of the models creep presets name, so no endpoint refuses it.
+	maxReplyTokens = 8192
+)
+
+// ReplyTokens is the max_tokens of a discovery call at tier for a batch of
+// files sections, the canary included: room for the items the prompt asks
+// for in every file. It is larger than a reader reply and bounded by the
+// batch, so a full answer is never cut off (#362).
+func ReplyTokens(tier Tier, files int) (int, error) {
+	items, ok := itemsPerFile[tier]
+	if !ok {
+		return 0, fmt.Errorf("%w %q", ErrTier, string(tier))
+	}
+	files = min(max(files, 1), maxFiles)
+	return min(files*items*itemTokens+replyFrameTokens, maxReplyTokens), nil
+}
+
 // System returns the system prompt for tier.
 func System(tier Tier) (string, error) {
 	switch tier {

@@ -71,7 +71,7 @@ func (anthropic) headers(k Key) map[string][]string {
 
 func (anthropic) body(h *HTTP, req Request, prompt string) ([]byte, error) {
 	r := anthropicRequest{
-		Model: h.model, MaxTokens: h.maxOutput, System: req.System,
+		Model: h.model, MaxTokens: h.replyCap(req), System: req.System,
 		Messages: []chatMessage{{Role: "user", Content: prompt}},
 	}
 	if h.structured == StructuredTools {

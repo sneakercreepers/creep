@@ -73,6 +73,9 @@ func checkOutcome(t *testing.T, got verdict, err error, want verdict, wantReason
 	if inv.Reason != want_ {
 		t.Errorf("reason = %q, want %q", inv.Reason, want_)
 	}
+	if inv.Truncated != (wantReason == reasonTruncated) {
+		t.Errorf("Truncated = %v for reason %q", inv.Truncated, inv.Reason)
+	}
 	if got != (verdict{}) {
 		t.Errorf("invalid output returned a value: %+v", got)
 	}

@@ -145,7 +145,7 @@ Then, from the repository root:
 
 ```sh
 creep config explain   # every effective value and the layer it came from
-creep doctor           # runs the tool canary against the model CLI and reports the sandbox runtime
+creep doctor           # runs the tool canary, probes the model with synthetic calls and reports the sandbox runtime
 creep estimate         # calls, tokens and time of a scan, without calling a model
 creep scan             # scans the current directory; reports in .creep/
 creep why <id>         # the evidence behind one finding of the last scan
@@ -202,6 +202,18 @@ egress:
   allow: [api.example.com]
 ```
 
+**Local models (Ollama).** Point the `openai` contract at `http://127.0.0.1:11434/v1` (or use the `ollama` preset) and give the model a context window large enough for creep's calls. Ollama's default `num_ctx` is far smaller than a discovery call (about 11 KiB at tier S, 36 KiB at M, 133 KiB at L, plus the reply), and Ollama cuts a longer input silently, system prompt first. Create the model with `num_ctx` 16384 or more, as the nightly bench does:
+
+```sh
+printf 'FROM qwen2.5-coder:7b
+PARAMETER num_ctx 16384
+PARAMETER temperature 0
+' > Modelfile
+ollama create creep-qwen -f Modelfile   # then model.name: creep-qwen
+```
+
+`creep doctor` sends the model two synthetic probes that hold no repository text, through the gateway (consent, budget and `egress.log` apply): a discovery batch of only creep's canary, and a context probe the size of the tier's largest discovery call. It warns when the reply breaks the schema or misses the canary, or when the usable context is below what the tier needs; the tier is the cached calibration's, or S before the first scan ([ADR 0034](docs/adr/0034-doctor-model-probes.md)).
+
 Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JSON on stdout), or `--model-run <cmd>`. It runs only through the gateway: no shell, an empty private directory under the user cache directory, a minimal environment, a timeout and an output cap ([ADR 0014](docs/adr/0014-command-model-through-gateway.md)).
 
 ## Commands and flags
@@ -214,7 +226,7 @@ Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JS
 | `creep why <id>` | Show the evidence behind a finding of the last scan |
 | `creep accept <id> --expires 90d --reason "..."` | Record a probable or verified finding of the last scan as an accepted risk in `creep-baseline.json` (or `--baseline <file>`); both flags are required, the expiry is 1d to 365d ([ADR 0022](docs/adr/0022-baseline-and-accepted-risks.md)) |
 | `creep reproduce <id>` | Run a verified finding's PoC again from its bundle in `.creep/bundles/`, against a fresh offline build, as many times as the scan did; no model is read, configured or called. Needs `sandbox.enabled`. Exit 0 when it verified in at least one run, 1 when in none ([ADR 0020](docs/adr/0020-poc-repetitions-and-bundle.md)) |
-| `creep doctor` | Check the model (a command model must pass the tool canary) and the sandbox: runtime, rootless status, isolation level, the pinned images it needs |
+| `creep doctor` | Check the model and the sandbox. A command model must pass the tool canary; every model then gets two synthetic probes through the gateway (a discovery batch of only the canary, a context probe the size of the tier's discovery call), with a warning, exit 0, when the reply breaks the schema, misses the canary or the context is too small (for Ollama, raise `num_ctx`), and exit 3 when the model cannot be reached ([ADR 0034](docs/adr/0034-doctor-model-probes.md)). Sandbox: runtime, rootless status, isolation level, the pinned images it needs |
 | `creep clean` | Remove every container, app image and network creep left on local Docker or Podman, for example after a killed run ([ADR 0016](docs/adr/0016-sandbox-runtime.md)) |
 | `creep resume <run>` | Continue a scan that stopped before writing its report (killed, or a calibration failure), with the same config and flags; the run ID is its folder in `.creep/runs/`. A changed config, model, `model.env` value, contract, endpoint, tier, mode, creep version, prompt, file, baseline, `--changed` list, `--stability`, `--recalibrate` or installed recipe is refused with exit 2 and nothing sent; live, `--record` or `--replay` comes from the run. Finished calls are served from `.creep/cache` and never sent again; the call that was cut is sent again, and `egress.log` lists both attempts. The budget and `budget.max_seconds` keep counting what the run already spent ([ADR 0032](docs/adr/0032-resume.md)) |
 | `creep config explain` | Show each effective config value and its source layer |

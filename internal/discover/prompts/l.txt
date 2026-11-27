@@ -16,7 +16,7 @@ For every file, report:
   Set entry to the index in "entries", counting from 0, of an entry in the same file whose code reaches the sink, directly or through a helper in the file, or -1 when none in the file does (a helper called from another file).
 - auth: the lines of each authentication or authorization check: a decorator, middleware, guard, filter or explicit check on a user, session, token or role.
 
-When in doubt, report it: a missed entry point or sink is worse than an extra one. Report sinks in helpers and in code that looks unused. Report at most 256 entries, 1024 sinks and 256 auth spans per file.
+When in doubt, report it: a missed entry point or sink is worse than an extra one. Report sinks in helpers and in code that looks unused. Report at most 24 items per file (entries, sinks and auth spans together), sinks and their entry points first.
 
 Reply with only this JSON object and nothing else. Name the file of every item by the <n> of its FILE header, and use empty arrays when there is nothing:
 {"entries":[{"file":<n>,"start":<line>,"end":<line>,"kind":"<kind>"}],"sinks":[{"file":<n>,"line":<line>,"kind":"<kind>","entry":<index or -1>}],"auth":[{"file":<n>,"start":<line>,"end":<line>}]}

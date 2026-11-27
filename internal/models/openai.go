@@ -111,7 +111,7 @@ func (openAI) headers(k Key) map[string][]string {
 }
 
 func (openAI) body(h *HTTP, req Request, prompt string) ([]byte, error) {
-	r := openAIRequest{Model: h.model, MaxTokens: h.maxOutput}
+	r := openAIRequest{Model: h.model, MaxTokens: h.replyCap(req)}
 	if req.System != "" {
 		r.Messages = append(r.Messages, chatMessage{Role: "system", Content: req.System})
 	}

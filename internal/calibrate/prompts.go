@@ -21,4 +21,6 @@ var promptBudget = map[string]int{
 	purposeTask:    2000,
 	purposeTool:    800,
 	purposeContext: 132 << 10, // the 128 KiB probe plus 4 KiB for prompt and schema
+	// creep doctor's probe: MaxContextFitsBytes plus 4 KiB (#362).
+	purposeDoctorContext: MaxContextFitsBytes + 4<<10,
 }

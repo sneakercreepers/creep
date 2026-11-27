@@ -224,9 +224,13 @@ func TestMissingCanaryIsIncomplete(t *testing.T) {
 		{"sink only", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
 			return nil, []SinkProposal{sinkAt(c.section, c.sink, "file", -1)}
 		}},
-		{"entry beside its line", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
-			return []EntryProposal{entryAt(c.section, c.entry+1, c.entry+2, "http")},
+		{"entry past the window", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
+			return []EntryProposal{entryAt(c.section, c.entry+canaryWindow+1, c.entry+canaryWindow+1, "http")},
 				[]SinkProposal{sinkAt(c.section, c.sink, "file", -1)}
+		}},
+		{"sink past the window", func(c canary, _ int) ([]EntryProposal, []SinkProposal) {
+			return []EntryProposal{entryAt(c.section, c.entry, c.entry, "http")},
+				[]SinkProposal{sinkAt(c.section, c.sink-canaryWindow-1, "file", -1)}
 		}},
 		{"right lines in the wrong file", func(c canary, app int) ([]EntryProposal, []SinkProposal) {
 			return []EntryProposal{entryAt(app, 4, 4, "http")},
@@ -259,6 +263,55 @@ func TestMissingCanaryIsIncomplete(t *testing.T) {
 	}
 }
 
+// Protection (#362, R19): the canary window is small and fixed. A canary
+// cited up to canaryWindow lines off counts, so a small model that names
+// the line beside the call passes; one line further is a miss, the batch
+// is canary_missed and parse_failed and the run is incomplete (exit 4).
+// The broken fixtures are the replies just outside the window.
+func TestCanaryWindowIsBounded(t *testing.T) {
+	if canaryWindow != 2 {
+		t.Fatalf("canaryWindow = %d: widening it is a threat-model change (R19)", canaryWindow)
+	}
+	tests := []struct {
+		name        string
+		entry, sink int // offsets from the canary's lines
+		found       bool
+	}{
+		{"exact", 0, 0, true},
+		{"sink one line early", 0, -1, true},
+		{"sink at the window edge", 0, -canaryWindow, true},
+		{"sink one line late", 0, 1, true},
+		{"entry at the window edge", canaryWindow, 0, true},
+		{"entry at the window edge before", -canaryWindow, 0, true},
+		{"sink past the window", 0, -canaryWindow - 1, false},
+		{"entry past the window", canaryWindow + 1, 0, false},
+		{"entry past the window before", -canaryWindow - 1, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reply := answering(func(secs []promptSection) any {
+				c, _ := canaryOf(secs)
+				return Answer{
+					Entries: []EntryProposal{entryAt(c.section, c.entry+tt.entry, c.entry+tt.entry, "http")},
+					Sinks:   []SinkProposal{sinkAt(c.section, c.sink+tt.sink, "file", -1)},
+					Auth:    []AuthProposal{},
+				}
+			})
+			res, err := discoverFiles(t, TierM, map[string]string{"app.py": flaskApp}, fakeClient(t, reply, nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := fileOf(t, res, 0)
+			if tt.found && (f.Coverage != CoverageReadFull || !res.Complete()) {
+				t.Errorf("file = %+v, want read_full inside the window", f)
+			}
+			if !tt.found && (f.Coverage != CoverageCanaryMissed || f.Reason != ReasonParseFailed || res.Complete()) {
+				t.Errorf("file = %+v, want canary_missed, parse_failed, incomplete outside the window", f)
+			}
+		})
+	}
+}
+
 func hasRoute(res Result, lines Span) bool {
 	for _, r := range res.Routes {
 		if !r.FileLevel && r.Lines == lines {
@@ -269,8 +322,10 @@ func hasRoute(res Result, lines Span) bool {
 }
 
 // A file at a per-file cap is truncated; one over it fails the schema and
-// the file is parse_failed.
+// the file is parse_failed. A file with as many items as the prompt asks
+// for at most is truncated too: the model may have stopped there (#362).
 func TestCapMarksTruncated(t *testing.T) {
+	asked := itemsPerFile[TierM]
 	entries := func(n int) string {
 		items := make([]string, n)
 		for i := range items {
@@ -283,7 +338,9 @@ func TestCapMarksTruncated(t *testing.T) {
 		cov    Coverage
 		reason Reason
 	}{
-		{MaxEntriesPerFile - 1, CoverageReadFull, ReasonNone},
+		{asked - 1, CoverageReadFull, ReasonNone},
+		{asked, CoverageTruncated, ReasonTruncated},
+		{MaxEntriesPerFile - 1, CoverageTruncated, ReasonTruncated},
 		{MaxEntriesPerFile, CoverageTruncated, ReasonTruncated},
 		{MaxEntriesPerFile + 1, CoverageSendFailed, ReasonParseFailed},
 	}
