@@ -102,7 +102,14 @@ func TestLiveAppVerifies(t *testing.T) {
 // with the sandbox on and returns the report's findings and the output.
 func liveScan(t *testing.T, tt liveCase) ([]report.Finding, string) {
 	t.Helper()
+	// Rootless Podman keeps its images under HOME, so HOME stays; creep's
+	// own config, state key and cache move to a fresh directory.
+	home := os.Getenv("HOME")
 	isolateUserConfig(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	if home != "" {
+		t.Setenv("HOME", home)
+	}
 	repo := t.TempDir()
 	copyTree(t, filepath.Join(liveApp, tt.variant), repo)
 	cfg := filepath.Join(t.TempDir(), "creep.yaml")

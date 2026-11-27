@@ -59,13 +59,6 @@ jobs:
             docker pull --quiet "$ref"
             podman pull --quiet "$ref"
           done
-      - name: Diagnose podman inspect (temporary)
-        run: |
-          podman version --format '{{.Client.Version}}'
-          podman images --digests
-          podman image inspect docker.io/library/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 | head -c 600 || true
-          echo "exit ${PIPESTATUS[0]}"
-          podman image inspect docker.io/library/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 2>&1 >/dev/null | tail -3 || true
       - name: creep scan --mode nightly on the live app and its safe twin
         env:
           CREEP_LIVE_VERIFY: "1"
