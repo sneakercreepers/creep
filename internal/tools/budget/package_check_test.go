@@ -10,7 +10,7 @@ const (
 	checkReadOnly   = "    permissions:\n      contents: read\n"
 	checkTagPattern = `grep -Eqx 'v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}'`
 	checkCaller     = "  package-check:\n    needs: package-repos\n    if: github.event_name == 'push'\n" + checkReadOnly +
-		"    uses: ./.github/workflows/package-check.yml\n    with:\n      tag: ${{ github.ref_name }}\n"
+		"    uses: ./.github/workflows/package-check.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this commit's own workflow\n    with:\n      tag: ${{ github.ref_name }}\n"
 )
 
 // checkExpression is the only shape a ${{ }} may take in package-check.yml:

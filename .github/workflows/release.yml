@@ -222,6 +222,6 @@ jobs:
     if: github.event_name == 'push'
     permissions:
       contents: read
-    uses: ./.github/workflows/package-check.yml
+    uses: ./.github/workflows/package-check.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this commit's own workflow
     with:
       tag: ${{ github.ref_name }}
