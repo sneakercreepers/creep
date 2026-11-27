@@ -70,25 +70,38 @@ type Fixture struct {
 // class. It returns an error that quotes no value.
 type PoCCheck func(class string, poc json.RawMessage) error
 
-// classes maps the class names a recipe may use to the reader's classes.
-// The last two joined v1 with the ADR 0025 amendment (#371), after ADR
-// 0034 split them out of command_injection: added, never renamed, so every
-// earlier recipe still loads.
-var classes = map[string]reader.Class{
-	"sql_injection":            reader.ClassSQLInjection,
-	"command_injection":        reader.ClassCommandInjection,
-	"path_traversal":           reader.ClassPathTraversal,
-	"ssrf":                     reader.ClassSSRF,
-	"template_injection":       reader.ClassTemplateInjection,
-	"nosql_injection":          reader.ClassNoSQLInjection,
-	"code_injection":           reader.ClassCodeInjection,
-	"insecure_deserialization": reader.ClassDeserialization,
+// classList is the reader's classes a recipe may use, in the reader's
+// order, named by reader.Class.String. The last two joined v1 with the ADR
+// 0025 amendment (#371), after ADR 0034 split them out of
+// command_injection: added, never renamed, so every earlier recipe still
+// loads. TestClassesAreReaders fails when the reader gains a class this
+// list lacks.
+var classList = []reader.Class{
+	reader.ClassSQLInjection,
+	reader.ClassCommandInjection,
+	reader.ClassPathTraversal,
+	reader.ClassSSRF,
+	reader.ClassTemplateInjection,
+	reader.ClassNoSQLInjection,
+	reader.ClassCodeInjection,
+	reader.ClassDeserialization,
+}
+
+// classes maps each class name a recipe may use to the reader's class.
+var classes = classMap(classList)
+
+func classMap(list []reader.Class) map[string]reader.Class {
+	m := make(map[string]reader.Class, len(list))
+	for _, c := range list {
+		m[c.String()] = c
+	}
+	return m
 }
 
 // Classes returns the class names a recipe may use, in the reader's order.
 func Classes() []string {
-	out := make([]string, 0, len(classes))
-	for c := reader.ClassSQLInjection; c <= reader.ClassDeserialization; c++ {
+	out := make([]string, 0, len(classList))
+	for _, c := range classList {
 		out = append(out, c.String())
 	}
 	return out

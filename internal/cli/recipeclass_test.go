@@ -23,12 +23,13 @@ func committedRecipe(t *testing.T, name string) string {
 	return string(data)
 }
 
-// TestRecipeLintWarnsOnSplitClass is #371's lint check: a command_injection
-// recipe whose vulnerable fixture's sink the tripwire table reads as an
-// eval or deserialization sink still passes lint (exit 0), with a warning
-// that names the class its findings now carry and quotes no recipe text.
-// A shell sink, a line that also holds one, and every other class get no
-// warning.
+// TestRecipeLintWarnsOnSplitClass is #371's lint check: a recipe of one of
+// the three split classes whose vulnerable fixture's sink the tripwire
+// table reads as another of them (eval or deserialization as
+// command_injection, shell as code_injection, and so on) still passes lint
+// (exit 0), with a warning that names the class its findings carry and
+// quotes no recipe text. A sink of the recipe's own class, a line that
+// also holds one, and every other class get no warning.
 func TestRecipeLintWarnsOnSplitClass(t *testing.T) {
 	evalAsCommand := committedRecipe(t, "v1/python-eval-as-command.json")
 	pickle := committedRecipe(t, "python-pickle-body.json")
@@ -42,6 +43,11 @@ func TestRecipeLintWarnsOnSplitClass(t *testing.T) {
 		{"code_injection", committedRecipe(t, "python-eval-request.json"), ""},
 		{"insecure_deserialization", pickle, ""},
 		{"sql_injection", string(recipe.Template()), ""},
+		{"shell as code_injection", strings.Replace(committedRecipe(t, "v1/python-shell-ping.json"), `"class": "command_injection"`, `"class": "code_injection"`, 1), "set class to command_injection"},
+		{"shell as insecure_deserialization", strings.Replace(committedRecipe(t, "v1/python-shell-ping.json"), `"class": "command_injection"`, `"class": "insecure_deserialization"`, 1), "set class to command_injection"},
+		{"eval as insecure_deserialization", strings.Replace(evalAsCommand, `"class": "command_injection"`, `"class": "insecure_deserialization"`, 1), "set class to code_injection"},
+		{"pickle as code_injection", strings.Replace(pickle, `"class": "insecure_deserialization"`, `"class": "code_injection"`, 1), "set class to insecure_deserialization"},
+		{"code_injection with eval inside a shell call", strings.Replace(committedRecipe(t, "python-eval-request.json"), `return str(eval(expr))`, `return str(os.system(eval(expr)))`, 1), ""},
 		{"eval only in the safe fixture", strings.Replace(committedRecipe(t, "v1/python-shell-ping.json"), `args = [`, `eval(host); args = [`, 1), ""},
 	}
 	for _, tt := range tests {
