@@ -32,10 +32,13 @@ type tierRule struct {
 
 // tierRules go from the highest tier down; the first one met wins.
 //
-// With 14 tasks a class needs 11 right for L (lower 0.524) and 7 for M
-// (0.268); with 8 tasks, 7 (0.529) and 5 (0.306). Over 100 tasks L needs
-// 84 right and M 65. A model that answers "safe" to everything gets 50
-// (and 4 of 8 in the smaller classes, lower 0.215), so it stays S.
+// Both bounds read only the PlannedClasses (#363): the overall one is over
+// their tasks, 64 of the 100 for every seed. With 14 tasks a class needs
+// 11 right for L (lower 0.524) and 7 for M (0.268); with 8 tasks, 7
+// (0.529) and 5 (0.306). Over the 64 planned tasks L needs 55 right and M
+// 44. A model that answers "safe" to everything gets 32 (and 4 of 8 in
+// the smaller classes, lower 0.215), so it stays S, and the fitness floor
+// (fitness.go) refuses it.
 func tierRules() []tierRule {
 	return []tierRule{
 		{tier: TierL, tools: true, contextBytes: 128 << 10, overallLower: big.NewRat(3, 4), classLower: big.NewRat(1, 2)},
@@ -146,13 +149,55 @@ func meets(r Result, rule tierRule) bool {
 	if r.Context.EffectiveBytes < rule.contextBytes {
 		return false
 	}
-	if !lowerAtLeast(r.Overall.Correct, r.Overall.Total, rule.overallLower) {
+	planned, ok := plannedScores(r)
+	if !ok {
 		return false
 	}
-	for _, c := range r.Classes {
+	overall := sumScores(planned)
+	if !lowerAtLeast(overall.Correct, overall.Total, rule.overallLower) {
+		return false
+	}
+	for _, c := range planned {
 		if !lowerAtLeast(c.Correct, c.Total, rule.classLower) {
 			return false
 		}
 	}
-	return len(r.Classes) == len(Classes())
+	return true
+}
+
+// plannedScores returns the scores of the PlannedClasses, in their order,
+// and false unless r scores every calibrated class exactly once: a result
+// that leaves a class out is unmeasured and keeps the model at tier S.
+func plannedScores(r Result) ([]ClassScore, bool) {
+	if len(r.Classes) != len(Classes()) {
+		return nil, false
+	}
+	byClass := make(map[Class]ClassScore, len(r.Classes))
+	for _, c := range r.Classes {
+		byClass[c.Class] = c
+	}
+	out := make([]ClassScore, 0, len(PlannedClasses()))
+	for _, c := range Classes() {
+		s, ok := byClass[c]
+		if !ok {
+			return nil, false
+		}
+		if slices.Contains(PlannedClasses(), c) {
+			out = append(out, s)
+		}
+	}
+	return out, true
+}
+
+// sumScores adds up the counts of scores into one ClassScore.
+func sumScores(scores []ClassScore) ClassScore {
+	var sum ClassScore
+	for _, s := range scores {
+		sum.Correct += s.Correct
+		sum.Total += s.Total
+		sum.SafeTwins += s.SafeTwins
+		sum.SafeFlagged += s.SafeFlagged
+	}
+	sum.Score = newScore(sum.Correct, sum.Total)
+	return sum
 }

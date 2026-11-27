@@ -212,7 +212,7 @@ func TestHeaderContextNote(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := Calibration{Result: Result{Context: tt.c}, At: calibrated}
+			c := Calibration{Result: Result{Context: tt.c, Fitness: Fitness{Fit: true}}, At: calibrated}
 			if h := c.Header(); !strings.HasSuffix(h, "prompts v0)"+tt.want) {
 				t.Errorf("header %q does not end with %q", h, tt.want)
 			}

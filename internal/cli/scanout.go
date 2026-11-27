@@ -74,6 +74,7 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 		return nil, err
 	}
 	fingerprint(res.findings, res.slices)
+	labelUnreliable(cal, res.findings)
 	findings := append(slices.Clip(res.findings), res.scanners.findings...)
 	return report.New(report.Input{
 		Run: s.run.Summary(), ScanIncomplete: res.stop != "", Baseline: s.baseline.apply(findings),
@@ -299,6 +300,9 @@ func printFindings(w io.Writer, findings []report.Finding) {
 			notes += "  " + label
 		}
 		notes += suppressionNote(f)
+		if f.UnreliableModel {
+			notes += "  " + report.LabelUnreliableModel
+		}
 		fmt.Fprintf(w, "  %s  %s  %s  %s%s\n", f.ID, f.Status, f.Class, escapeControl(location(f)), notes)
 	}
 }

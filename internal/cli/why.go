@@ -74,6 +74,9 @@ func printWhy(w io.Writer, f report.Finding) {
 	fmt.Fprintf(w, "  status:     %s\n", f.Status)
 	fmt.Fprintf(w, "  class:      %s\n", f.Class)
 	fmt.Fprintf(w, "  location:   %s\n", escapeControl(location(f)))
+	if f.UnreliableModel {
+		fmt.Fprintf(w, "  model:      %s; it failed the calibration fitness floor (--allow-unfit-model)\n", report.LabelUnreliableModel)
+	}
 	if f.Reason != "" {
 		fmt.Fprintf(w, "  reason:     %s\n", f.Reason)
 	}

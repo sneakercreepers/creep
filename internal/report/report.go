@@ -145,7 +145,15 @@ type Finding struct {
 	// Suppression is the baseline entry that keeps the finding from the
 	// gate, if one does; the finding is still listed everywhere.
 	Suppression *Suppression `json:"suppression,omitempty"`
+	// UnreliableModel means the model that decided the finding failed the
+	// calibration fitness floor and the user scanned anyway with
+	// --allow-unfit-model (#363, ADR 0036). Added to v1 additively.
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
+
+// LabelUnreliableModel is the label of a finding UnreliableModel marks, the
+// same word in text, Markdown, SARIF and JSON v1.
+const LabelUnreliableModel = "unreliable_model"
 
 // LineRange is an inclusive range of 1-based lines in the finding's file.
 type LineRange struct {

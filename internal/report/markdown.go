@@ -164,6 +164,9 @@ func findingNotes(f Finding) string {
 	if f.Suppression != nil {
 		notes = append(notes, codeSpan(fmt.Sprintf("suppressed: %s until %s", f.Suppression.Kind, f.Suppression.Expires)))
 	}
+	if f.UnreliableModel {
+		notes = append(notes, codeSpan(LabelUnreliableModel))
+	}
 	return strings.Join(notes, ", ")
 }
 

@@ -31,7 +31,10 @@ Global flags (before or after the command; "--" ends flags):
                       bench also writes the run's fixture file
   --replay            serve recorded responses only; never use the network;
                       bench serves its published fixture
-  --recalibrate       calibrate the model again even if a calibration is cached
+  --recalibrate       calibrate the model again even if a calibration is cached;
+                      bench: also calibrate and report its calls, tokens and time
+  --allow-unfit-model scan, resume: scan with a model calibration found unfit
+                      (exit 3 otherwise); every finding is labeled unreliable_model
   --stats             scan: print phase times, model calls, cache hits and tokens
   --changed <file>    scan, estimate: only the paths listed in file, one per line or
                       NUL-separated (git diff --name-only -z origin/main > changed.txt);

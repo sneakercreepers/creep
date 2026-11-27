@@ -24,9 +24,15 @@ const (
 	// replyEstimateTokens is a typical reader or calibration answer: a
 	// short closed-schema JSON object, far below max_tokens.
 	replyEstimateTokens = 40
-	// callSeconds is a typical round trip of one call. The scan makes one
-	// call at a time, so time is calls times this.
+	// callSeconds is an assumed round trip of one call to a hosted model,
+	// not a measurement. The scan makes one call at a time, so time is
+	// calls times this.
 	callSeconds = 5
+	// cpuCallSeconds is what one call took on a local CPU model: the
+	// 1.5B qwen2.5-coder on Ollama, 4-core laptop, no GPU, calibrated in
+	// 20 min 18 s over 108 calls (#367). estimate prints it beside the
+	// assumption, because a local model can be twice as slow or more.
+	cpuCallSeconds = 11
 )
 
 // errNoModelCall is what every estimate request returns instead of a reply

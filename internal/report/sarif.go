@@ -99,6 +99,8 @@ type sarifResultProp struct {
 	PoCRuns     int `json:"poc_runs,omitempty"`
 	// The stability run's counts (#37, ADR 0024), only with --stability.
 	Stability *Stability `json:"stability,omitempty"`
+	// Set when the model failed the fitness floor (#363, ADR 0036).
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
 
 type sarifLocation struct {
@@ -189,7 +191,7 @@ func sarifResults(findings []Finding, index map[string]int) []sarifResult {
 // resultProps are a result's creep properties: its ID and status, the
 // PoC's rate and the stability run's counts.
 func resultProps(f Finding) sarifResultProp {
-	return sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs, Stability: f.Stability}
+	return sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs, Stability: f.Stability, UnreliableModel: f.UnreliableModel}
 }
 
 // resultText is a result's message: class, ID and status, the PoC's rate
@@ -201,6 +203,9 @@ func resultText(f Finding) string {
 	}
 	if f.Stability != nil {
 		notes = append(notes, f.Stability.Text())
+	}
+	if f.UnreliableModel {
+		notes = append(notes, LabelUnreliableModel)
 	}
 	return fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, strings.Join(notes, ", "))
 }

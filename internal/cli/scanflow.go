@@ -51,6 +51,12 @@ func (s *session) runPipeline(ctx context.Context, cancel context.CancelCauseFun
 		return s.fail(e, refusalPrefix(err), err, filesStepCode(err))
 	}
 	cal, prefix, err := s.toolsAndCalibration(ctx)
+	if err == nil {
+		// A resumed run passes the floor again: it got past calibration
+		// only fit or with the flag, so the flag needs no place in the
+		// resume header, and resuming without it refuses an unfit model.
+		prefix, err = "creep scan: calibration", s.fitOrAllowed(e.stderr, cal)
+	}
 	if err != nil {
 		return s.failStage(e, prefix, err, failureCode(err))
 	}

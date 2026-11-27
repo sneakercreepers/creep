@@ -2,7 +2,9 @@ package cli
 
 import (
 	"errors"
+	"maps"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/calibrate"
@@ -57,6 +59,29 @@ func TestSinkKindMappingIsExhaustive(t *testing.T) {
 		if probeKind(k) && !mapped[k] {
 			t.Errorf("planner kind %d is accepted but no discover kind maps to it", k)
 		}
+	}
+}
+
+// calibrate.PlannedClasses, the classes that decide the tier and the
+// fitness floor (#363), are exactly the calibrated classes a mapped
+// discover kind reports: a kind the planner learns, or one it drops,
+// fails here until the tier rule follows.
+func TestPlannedClassesMatchPlannerKinds(t *testing.T) {
+	planned := map[string]bool{}
+	for k := discover.SinkKind(1); k != 0; k++ {
+		if _, err := plannerKind(k); err != nil {
+			continue
+		}
+		if class := calibrate.Class(kindClass(k)); slices.Contains(calibrate.Classes(), class) {
+			planned[string(class)] = true
+		}
+	}
+	want := map[string]bool{}
+	for _, c := range calibrate.PlannedClasses() {
+		want[string(c)] = true
+	}
+	if !maps.Equal(planned, want) {
+		t.Errorf("classes of planned kinds %v, calibrate.PlannedClasses %v", planned, want)
 	}
 }
 

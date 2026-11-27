@@ -94,7 +94,8 @@
         },
         "fingerprint": { "description": "A probable or verified finding's identity across runs and line moves: a hash of its class, path and redacted sink line, or of an optional scanner's rule (ADR 0022). Added to v1 additively by #27.", "type": "string", "pattern": "^[0-9a-f]{32}$" },
         "suppression": { "$ref": "#/definitions/suppression" },
-        "stability": { "$ref": "#/definitions/stability" }
+        "stability": { "$ref": "#/definitions/stability" },
+        "unreliable_model": { "description": "The model that decided the finding failed the calibration fitness floor, and the scan ran anyway with --allow-unfit-model (ADR 0036). Absent otherwise. Added to v1 additively by #363.", "const": true }
       }
     },
     "stability": {

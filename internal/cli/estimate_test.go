@@ -63,7 +63,7 @@ func TestEstimateMakesNoModelCalls(t *testing.T) {
 		want   []string
 	}{
 		{"cached calibration", map[string]string{"app.py": "@flask"}, true, []string{"cached, tier M", "M *", "1 calls send 1 whole source files; the reader plans 4 tripwire candidates"}},
-		{"calibration not cached", map[string]string{"app.py": "@flask"}, false, []string{"not cached: the scan calibrates first, at least"}},
+		{"calibration not cached", map[string]string{"app.py": "@flask"}, false, []string{"not cached: the scan calibrates first, at least", "s per call, ~", "on a local CPU model), included", "a local CPU model measured ~11s"}},
 		{"empty repository", nil, true, []string{"walk: 0 files, up to 0 source files go to discovery", "M *         0       0          0          0        0s"}},
 	}
 	for _, tt := range tests {
