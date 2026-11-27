@@ -137,6 +137,18 @@ func authEverywhere(body []byte) []any {
 	return auth
 }
 
+// shiftSinks moves every sink of a discovery answer by lines; the fake
+// model's only sinks are the canary's.
+func shiftSinks(answer map[string]any, lines int) {
+	sinks, _ := answer["sinks"].([]any)
+	for _, s := range sinks {
+		sink, _ := s.(map[string]any)
+		if line, ok := sink["line"].(int); ok {
+			sink["line"] = line + lines
+		}
+	}
+}
+
 // discoveryAnswer answers a discovery request as a model that reports the
 // canary and nothing else (missCanary: not even that), so every real
 // candidate comes from the tripwire. ok is false for any other request.

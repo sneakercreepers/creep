@@ -24,6 +24,7 @@ func TestPromptTokenBudget(t *testing.T) {
 		{purposeTask, taskSystem, taskSchema(), largestTaskTurn(t)},
 		{purposeTool, toolsSystem, toolSchema(), largestToolTurn()},
 		{purposeContext, contextSystem, contextSchema(), largestContextTurn()},
+		{purposeDoctorContext, contextSystem, contextSchema(), largestLeadingTurn()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.kind, func(t *testing.T) {
@@ -58,6 +59,14 @@ func largestToolTurn() int {
 		for _, p := range toolProbes(probeSource(seed)) {
 			largest = max(largest, len(p.prompt))
 		}
+	}
+	return largest
+}
+
+func largestLeadingTurn() int {
+	largest := 0
+	for _, seed := range budgetSeeds {
+		largest = max(largest, len(newLeadingProbe(probeSource(seed), MaxContextFitsBytes).prompt))
 	}
 	return largest
 }

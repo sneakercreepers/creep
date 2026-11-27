@@ -29,6 +29,10 @@ var (
 type InvalidOutputError struct {
 	Attempts int
 	Reason   string
+	// Truncated means the last attempt was cut off at the reply cap
+	// (finish_reason length, stop_reason max_tokens): the caller can tell a
+	// reply too long for its cap from one that broke the schema (#362).
+	Truncated bool
 }
 
 func (e *InvalidOutputError) Error() string {
@@ -70,6 +74,10 @@ type Request struct {
 	// as strict, so it must close every object (additionalProperties false).
 	Schema  json.RawMessage
 	Grammar string // GBNF, required for StructuredGrammar
+	// MaxOutputTokens is this call's max_tokens and reservation, for a step
+	// whose reply is longer or shorter than the client's default (#362);
+	// 0 keeps Options.MaxOutputTokens.
+	MaxOutputTokens int
 }
 
 // Complete asks h's model for a JSON object and decodes it into a T. Output
@@ -91,7 +99,7 @@ func Complete[T any](ctx context.Context, h *HTTP, req Request) (T, error) {
 			return out, nil
 		}
 		if attempt > h.retries {
-			return zero, &InvalidOutputError{Attempts: attempt, Reason: invalid}
+			return zero, &InvalidOutputError{Attempts: attempt, Reason: invalid, Truncated: invalid == reasonTruncated}
 		}
 		reason = invalid
 	}
@@ -108,8 +116,23 @@ func (h *HTTP) checkRequest(req Request) error {
 		return fmt.Errorf("%w: %s needs a JSON schema object", ErrRequest, h.structured)
 	case h.structured == StructuredGrammar && req.Grammar == "":
 		return fmt.Errorf("%w: gbnf needs a grammar", ErrRequest)
+	case req.MaxOutputTokens < 0 || req.MaxOutputTokens > maxOutputTokens:
+		return fmt.Errorf("%w: max output tokens must be 0-%d", ErrRequest, maxOutputTokens)
+	}
+	if len(req.Schema) > 0 {
+		if err := CheckPropertyOrder(req.Schema); err != nil {
+			return fmt.Errorf("%w: %w", ErrRequest, err)
+		}
 	}
 	return nil
+}
+
+// replyCap is the max_tokens req asks for.
+func (h *HTTP) replyCap(req Request) int {
+	if req.MaxOutputTokens > 0 {
+		return req.MaxOutputTokens
+	}
+	return h.maxOutput
 }
 
 func isJSONObject(b []byte) bool {
@@ -147,7 +170,7 @@ func (h *HTTP) call(req Request, payload []byte) gateway.Call {
 		Payload:       payload,
 		Redactions:    req.Redactions,
 		Header:        h.wire.headers(h.key),
-		ReserveTokens: len(payload) + h.maxOutput,
+		ReserveTokens: len(payload) + h.replyCap(req),
 		Usage:         h.wire.usage,
 	}
 }

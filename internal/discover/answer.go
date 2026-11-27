@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -174,22 +175,24 @@ func validRange(start, end int) bool {
 }
 
 // Schema is Answer's JSON schema, closed at every level for strict mode.
+// Properties go out in reasoning order (file, start, end, kind; file,
+// line, kind, entry), the order a constrained decoder makes the model
+// write them: from a Go map json.Marshal would sort them and the model
+// would pick "end" before "start" (#362).
 func Schema() json.RawMessage {
 	line := map[string]any{"type": "integer", "minimum": 1, "maximum": MaxLine}
 	file := map[string]any{"type": "integer", "minimum": 0, "maximum": maxFiles - 1}
-	entry := closedObject(map[string]any{
-		"file": file, "start": line, "end": line, "kind": enum(entryKindNames),
-	}, "file", "start", "end", "kind")
-	sink := closedObject(map[string]any{
-		"file": file, "line": line, "kind": enum(sinkKindNames()),
-		"entry": map[string]any{"type": "integer", "minimum": noEntry, "maximum": maxFiles*MaxEntriesPerFile - 1},
-	}, "file", "line", "kind", "entry")
-	auth := closedObject(map[string]any{"file": file, "start": line, "end": line}, "file", "start", "end")
-	root := closedObject(map[string]any{
-		"entries": array(entry, maxFiles*MaxEntriesPerFile),
-		"sinks":   array(sink, maxFiles*MaxSinksPerFile),
-		"auth":    array(auth, maxFiles*MaxAuthPerFile),
-	}, "entries", "sinks", "auth")
+	entry := closedObject(props{{"file", file}, {"start", line}, {"end", line}, {"kind", enum(entryKindNames)}})
+	sink := closedObject(props{
+		{"file", file}, {"line", line}, {"kind", enum(sinkKindNames())},
+		{"entry", map[string]any{"type": "integer", "minimum": noEntry, "maximum": maxFiles*MaxEntriesPerFile - 1}},
+	})
+	auth := closedObject(props{{"file", file}, {"start", line}, {"end", line}})
+	root := closedObject(props{
+		{"entries", array(entry, maxFiles*MaxEntriesPerFile)},
+		{"sinks", array(sink, maxFiles*MaxSinksPerFile)},
+		{"auth", array(auth, maxFiles*MaxAuthPerFile)},
+	})
 	out, err := json.Marshal(root)
 	if err != nil {
 		panic(err) // maps of strings, numbers and slices always marshal
@@ -197,9 +200,45 @@ func Schema() json.RawMessage {
 	return out
 }
 
-func closedObject(props map[string]any, required ...string) map[string]any {
+// prop is one schema property; props keep their order when marshaled.
+type prop struct {
+	name   string
+	schema any
+}
+
+type props []prop
+
+func (p props) MarshalJSON() ([]byte, error) {
+	var b bytes.Buffer
+	b.WriteByte('{')
+	for i, kv := range p {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		k, err := json.Marshal(kv.name)
+		if err != nil {
+			return nil, err
+		}
+		v, err := json.Marshal(kv.schema)
+		if err != nil {
+			return nil, err
+		}
+		b.Write(k)
+		b.WriteByte(':')
+		b.Write(v)
+	}
+	b.WriteByte('}')
+	return b.Bytes(), nil
+}
+
+// closedObject requires every property, in the order p lists them.
+func closedObject(p props) map[string]any {
+	required := make([]string, len(p))
+	for i, kv := range p {
+		required[i] = kv.name
+	}
 	return map[string]any{
-		"type": "object", "properties": props,
+		"type": "object", "properties": p,
 		"required": required, "additionalProperties": false,
 	}
 }

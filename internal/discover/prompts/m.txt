@@ -7,7 +7,7 @@ For every file, report:
 - sinks: each call that runs a dangerous operation, by its line and kind: "sql" (runs an SQL query or statement), "nosql" (a document-store query such as MongoDB find or findOne), "shell" (runs a shell command or process), "code_eval" (evaluates code built from a string), "deserialize" (decodes objects from bytes or text, such as pickle or unserialize), "file" (opens, reads, writes, deletes or serves a file by path), "http_client" (an outbound HTTP or network request), "template" (renders a template built from a string). Set entry to the index in "entries", counting from 0, of an entry in the same file whose code reaches the sink, or -1 when none in the file does.
 - auth: the lines of each authentication or authorization check.
 
-When in doubt, report it: a missed entry point or sink is worse than an extra one. Report at most 256 entries, 1024 sinks and 256 auth spans per file.
+When in doubt, report it: a missed entry point or sink is worse than an extra one. Report at most 24 items per file (entries, sinks and auth spans together), sinks and their entry points first.
 
 Reply with only this JSON object and nothing else. Name the file of every item by the <n> of its FILE header, and use empty arrays when there is nothing:
 {"entries":[{"file":<n>,"start":<line>,"end":<line>,"kind":"<kind>"}],"sinks":[{"file":<n>,"line":<line>,"kind":"<kind>","entry":<index or -1>}],"auth":[{"file":<n>,"start":<line>,"end":<line>}]}

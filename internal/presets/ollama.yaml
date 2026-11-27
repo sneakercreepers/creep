@@ -9,6 +9,11 @@
 # canary still runs. Uncertain: thinking models may print their reasoning
 # before the JSON; pick a model without it, or add --hidethinking via
 # model.run on Ollama versions that support it.
+# Context: Ollama's default num_ctx is smaller than a discovery call
+# (about 11 KiB at tier S, 36 KiB at M, 133 KiB at L, plus the reply) and
+# a longer input is cut silently, system prompt first. Create the model
+# with "PARAMETER num_ctx 16384" or more in its Modelfile (README, Local
+# models); creep doctor warns when the usable context is too small (#362).
 version: 1
 name: ollama
 description: Ollama local model through ollama run, JSON output, no tools.

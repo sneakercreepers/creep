@@ -36,8 +36,10 @@
 //   - Each batch carries a canary (canary.go): a synthetic Express router
 //     whose token and position come from an HMAC of the batch under the
 //     run's Seed. A reply that does not report its entry point and its
-//     sink makes every file of the batch canary_missed (parse_failed in
-//     the report). Canary proposals never reach the Result.
+//     sink, each within canaryWindow (2) lines in the canary's own file,
+//     makes every file of the batch canary_missed (parse_failed in the
+//     report). Canary proposals never reach the Result. Probe sends a
+//     batch of only the canary, for creep doctor.
 //
 //   - Union (union.go): tripwire hits and model sinks merge by line and
 //     kind; neither removes a candidate. creep assigns every ID, in path,

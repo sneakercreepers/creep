@@ -19,7 +19,7 @@ const maxReasonBytes = 256
 // Rejection reasons the wire parsers report. They are fixed text, so no part
 // of the reply reaches a retry prompt or an error through them.
 const (
-	reasonTruncated = "it was cut off at the output token limit"
+	reasonTruncated = "it was cut off at the output token limit, so it must be shorter"
 	reasonRefused   = "it was a refusal"
 	reasonEmpty     = "it was empty"
 	reasonNoTool    = `it did not call the "output" tool`

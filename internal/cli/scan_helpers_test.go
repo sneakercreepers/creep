@@ -33,6 +33,13 @@ type fakeModel struct {
 	fail       map[string]error  // reader class, or "discover" -> send error
 	missCanary bool              // discovery answers never report the canary
 	claimAuth  bool              // discovery answers mark every repository line as an auth check
+	// canaryShift cites the canary sink this many lines off (#362).
+	canaryShift int
+	// shortContext answers doctor's context probe as an endpoint that cut
+	// the start of the input (#362).
+	shortContext bool
+	// cutOff ends every discovery reply at max_tokens (#362).
+	cutOff     bool
 	calls      int
 	discovered int // discovery calls
 	// poc answers every PoC request (#25); nil answers it like a reader
@@ -62,6 +69,14 @@ func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, err
 		if m.claimAuth {
 			answer["auth"] = authEverywhere(c.Payload)
 		}
+		shiftSinks(answer, m.canaryShift)
+		if m.cutOff {
+			return &gateway.Reply{ID: "fake", Status: 200, Body: cutOffReply}, nil
+		}
+		body, err := chatReply(answer)
+		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
+	}
+	if answer, ok := contextAnswer(c.Payload, m.shortContext); ok {
 		body, err := chatReply(answer)
 		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
 	}

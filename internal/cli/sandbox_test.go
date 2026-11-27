@@ -90,7 +90,7 @@ func TestDoctorReportsSandbox(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := scanRepo(t, nil, tt.config)
-			code, stdout, stderr := runScanWith(withSandbox(noModelDeps, tt.checked, nil, nil), "--config", cfg, "doctor")
+			code, stdout, stderr := runScanWith(withSandbox(fakeDeps(&fakeModel{}, calibrate.TierS), tt.checked, nil, nil), "--config", cfg, "doctor")
 			if code != exitcode.OK {
 				t.Fatalf("exit %d\n%s", code, stderr)
 			}
@@ -106,7 +106,7 @@ func TestDoctorReportsSandbox(t *testing.T) {
 
 func TestDoctorWithoutDetectorSaysNotChecked(t *testing.T) {
 	cfg := scanRepo(t, nil, "")
-	code, stdout, _ := runScanWith(noModelDeps, "--config", cfg, "doctor")
+	code, stdout, _ := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierS), "--config", cfg, "doctor")
 	if code != exitcode.OK || !strings.Contains(stdout, "sandbox: not checked") {
 		t.Fatalf("exit %d\n%s", code, stdout)
 	}
