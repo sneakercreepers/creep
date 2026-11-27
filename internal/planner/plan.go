@@ -21,6 +21,8 @@ const (
 	ClassSSRF
 	ClassTemplateInjection
 	ClassNoSQLInjection
+	ClassCodeInjection
+	ClassDeserialization
 )
 
 // Risk is how likely a hypothesis is to hold and be reachable, from discovered
@@ -159,12 +161,12 @@ func compareRisk(a, b candidate) int {
 	)
 }
 
-// severity ranks what a sink lets an attacker do: run commands, read or
-// change the database (SQL, then a document store through injected query
+// severity ranks what a sink lets an attacker do: run commands or code
+// (a shell, an eval or a decoded object graph), read or change the database (SQL, then a document store through injected query
 // operators), run template code, touch files, then reach other hosts.
 func severity(k SinkKind) int {
 	switch k {
-	case SinkShell:
+	case SinkShell, SinkCodeEval, SinkDeserialize:
 		return 6
 	case SinkSQL:
 		return 5
@@ -230,6 +232,10 @@ func classOf(k SinkKind) Class {
 		return ClassSSRF
 	case SinkNoSQL:
 		return ClassNoSQLInjection
+	case SinkCodeEval:
+		return ClassCodeInjection
+	case SinkDeserialize:
+		return ClassDeserialization
 	}
 	return ClassTemplateInjection
 }

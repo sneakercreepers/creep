@@ -13,18 +13,36 @@
               "id": "command_injection",
               "shortDescription": {
                 "text": "creep vulnerability class command_injection"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-78"
+                ]
               }
             },
             {
               "id": "path_traversal",
               "shortDescription": {
                 "text": "creep vulnerability class path_traversal"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-22"
+                ]
               }
             },
             {
               "id": "sqli",
               "shortDescription": {
                 "text": "creep vulnerability class sqli"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "external/cwe/cwe-89"
+                ]
               }
             }
           ]
@@ -34,6 +52,15 @@
         {
           "executionSuccessful": true,
           "toolExecutionNotifications": [
+            {
+              "descriptor": {
+                "id": "creep/not-looked-for"
+              },
+              "level": "note",
+              "message": {
+                "text": "not looked for in any language: memory-safety bugs in C, C++ and unsafe Rust, such as buffer overflows, use after free and format strings (CWE-119); cross-site scripting (CWE-79); XML external entities (CWE-611); cross-site request forgery (CWE-352); open redirects (CWE-601); insecure direct object references (CWE-639); missing authentication on a route or function (CWE-306); broken authentication, such as weak session, token or password checks (CWE-287); prototype pollution (CWE-1321); weak or misused cryptography (CWE-327); race conditions (CWE-362); regular-expression denial of service (CWE-1333); business-logic flaws (CWE-840)"
+              }
+            },
             {
               "descriptor": {
                 "id": "creep/by-design"
@@ -393,6 +420,60 @@
             {
               "path": "api_pb2.py",
               "reason": "generated"
+            }
+          ],
+          "not_looked_for": [
+            {
+              "class": "memory_safety",
+              "cwe": "CWE-119"
+            },
+            {
+              "class": "xss",
+              "cwe": "CWE-79"
+            },
+            {
+              "class": "xxe",
+              "cwe": "CWE-611"
+            },
+            {
+              "class": "csrf",
+              "cwe": "CWE-352"
+            },
+            {
+              "class": "open_redirect",
+              "cwe": "CWE-601"
+            },
+            {
+              "class": "idor",
+              "cwe": "CWE-639"
+            },
+            {
+              "class": "missing_auth",
+              "cwe": "CWE-306"
+            },
+            {
+              "class": "broken_auth",
+              "cwe": "CWE-287"
+            },
+            {
+              "class": "prototype_pollution",
+              "cwe": "CWE-1321"
+            },
+            {
+              "class": "weak_crypto",
+              "cwe": "CWE-327"
+            },
+            {
+              "class": "race_condition",
+              "cwe": "CWE-362"
+            },
+            {
+              "class": "redos",
+              "cwe": "CWE-1333"
+            },
+            {
+              "class": "business_logic",
+              "cwe": "CWE-840"
             }
           ]
         },

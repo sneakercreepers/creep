@@ -42,6 +42,10 @@ func plannerKind(k discover.SinkKind) (planner.SinkKind, error) {
 		return planner.SinkTemplate, nil
 	case discover.SinkNoSQL:
 		return planner.SinkNoSQL, nil
+	case discover.SinkCodeEval:
+		return planner.SinkCodeEval, nil
+	case discover.SinkDeserialize:
+		return planner.SinkDeserialize, nil
 	}
 	return 0, fmt.Errorf("sink kind %d: %w", k, errUnmapped)
 }
@@ -153,6 +157,10 @@ func readerClass(c planner.Class) (reader.Class, error) {
 		return reader.ClassTemplateInjection, nil
 	case planner.ClassNoSQLInjection:
 		return reader.ClassNoSQLInjection, nil
+	case planner.ClassCodeInjection:
+		return reader.ClassCodeInjection, nil
+	case planner.ClassDeserialization:
+		return reader.ClassDeserialization, nil
 	}
 	return 0, fmt.Errorf("class %d: %w", c, errUnmapped)
 }

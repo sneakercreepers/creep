@@ -23,6 +23,8 @@ const (
 	ClassSSRF
 	ClassTemplateInjection
 	ClassNoSQLInjection
+	ClassCodeInjection
+	ClassDeserialization
 )
 
 var classNames = map[Class]string{
@@ -32,6 +34,8 @@ var classNames = map[Class]string{
 	ClassSSRF:              "ssrf",
 	ClassTemplateInjection: "template_injection",
 	ClassNoSQLInjection:    "nosql_injection",
+	ClassCodeInjection:     "code_injection",
+	ClassDeserialization:   "insecure_deserialization",
 }
 
 // String returns the class name the user turn shows.
