@@ -54,3 +54,35 @@ ADR 0012 (superseded by ADR 0017) planned to share a loader with language kits; 
 - Residual: a hint can still nudge a model toward the wrong verdict on real code (R3's residual, now with a second source of text). The worst case is a missed finding, never execution or egress; the fixture check catches a hint that breaks its own fixtures, not one tuned to hide a different program. Recipe review in #34 (pinning, policy allowlist) is the control for that.
 - Tests: `internal/recipe` (format, hostile cases, fixtures, schema sync, protection), `internal/reader/hint_test.go` (HINT block, limits, note), `internal/cli/recipe_test.go` (commands, paths, links, FIFOs, PoC, project file). Docs: architecture §3, §4, §5, §9 and the ADR index; threat model §3, §4.8, §7.
 - Follow-up in scope elsewhere: #34 installs recipes for `scan` with `creep.lock`.
+
+## Amendment: the code_injection and insecure_deserialization classes (#371)
+
+- **Status:** Proposed (the maintainer accepts)
+- **Date:** 2026-11-27
+- **Changes:** the recipe format v1 (`class` gains `code_injection` and `insecure_deserialization`, in `internal/recipe` and `docs/schemas/recipe-v1.json`); `creep recipe lint` prints a warning on stderr for a `command_injection` recipe whose sink is an eval or deserialization sink; `discover.SinkKindsOn`, which reads the tripwire table for one line. No new field, version, dependency, package, config key or network path. This replaces the last sentence of ADR 0034 decision 1 ("Recipes keep their six classes").
+
+### Context
+
+ADR 0034 (#365, #369) split code evaluated from a string (`code_injection`, CWE-94) and objects decoded from bytes (`insecure_deserialization`, CWE-502) out of `command_injection`. The reader, planner and report gained both classes; recipe v1 kept its six. `HintFor` matches a recipe to a hypothesis by class, so an installed `command_injection` recipe written for an `eval(` or `pickle.loads(` sink still loads and passes its fixtures, but its hint never reaches the findings at those sinks any more, and no recipe can name the new classes (auditor finding 2 on #369).
+
+### Options
+
+| Option | Pros | Cons |
+|---|---|---|
+| A. Add both classes to v1; lint warns on a `command_injection` recipe for an eval or deserialization sink | Additive: every v1 recipe parses and loads byte for byte as before; authors learn which class to move to | A recipe that is not edited keeps a hint that applies to nothing; lint is advisory |
+| B. Recipe format v2 | A clean break | Breaks every installed recipe and `creep.lock` pin for an added enum value; architecture §4 asks a new version only of a change that stops a valid recipe loading |
+| C. Map a `command_injection` recipe onto all three classes | Old recipes keep working on the new findings | Hides the split; a shell hint shown on eval code misleads the reader; class stops meaning one thing |
+
+### Decision
+
+**A.**
+
+1. **Classes.** `class` is the reader's closed set, now eight names: the six above, `code_injection` and `insecure_deserialization`, mapped to `reader.ClassCodeInjection` and `reader.ClassDeserialization`. A recipe of either class loads only through `Checker.Load` with its fixtures, and its hint reaches only hypotheses of its class (`HintFor`), as decision 4 states. Neither class has a PoC template whose oracle proves it (ADR 0034), so a recipe of either class with a `poc` is refused (decision 2).
+2. **Lint warning.** `creep recipe lint` reads the vulnerable fixture's sink line with the tripwire table (`discover.SinkKindsOn`, the same cross-language rows a scan matches; no row is added and creep holds no per-language rule). For a `command_injection` recipe whose sink line has a `code_eval` or `deserialize` hit and no `shell` hit, it prints `warning:` on stderr with the class to set, and still exits 0: the recipe is valid v1 and keeps loading. The warning names only closed class names and the recipe's validated `id`, never recipe text. A sink the table does not know gets no warning.
+3. **Compatibility.** No field, limit or rule changes, so every v1 recipe and `creep.lock` written before #371 loads unchanged (`TestEarlierRecipesLoadUnchanged`, committed recipes in `internal/recipe/testdata/v1/`).
+
+### Consequences
+
+- Easier: a recipe can target eval and deserialization sinks under the class their findings carry; an author of an older recipe is told which class to move to.
+- Harder: an installed `command_injection` recipe for an eval or deserialization sink is not rewritten; until its author changes the class, its hint applies to no finding. `scan` does not warn (the warning is an authoring aid, and `recipe add` installs a source's files as pinned).
+- Tests: `internal/recipe/classes_test.go` (`TestEarlierRecipesLoadUnchanged`, `TestSplitClassRecipesLoad`: a `code_injection` recipe loads, passes its fixtures and its hint is a HINT block in reader calls for an eval sink), `internal/recipe/schema_test.go` (enum in sync), `internal/cli/recipeclass_test.go` (`TestRecipeLintWarnsOnSplitClass`, `TestSplitClassPoCRefused`), `internal/discover/linekinds_test.go`. Docs: README recipe command row, threat model RC3, wiki Writing recipes.

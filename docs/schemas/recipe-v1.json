@@ -17,7 +17,7 @@
     },
     "class": {
       "description": "The vulnerability class the recipe's hypotheses name: the reader's closed set.",
-      "enum": ["sql_injection", "command_injection", "path_traversal", "ssrf", "template_injection", "nosql_injection"]
+      "enum": ["sql_injection", "command_injection", "path_traversal", "ssrf", "template_injection", "nosql_injection", "code_injection", "insecure_deserialization"]
     },
     "applies_to": {
       "type": "array",

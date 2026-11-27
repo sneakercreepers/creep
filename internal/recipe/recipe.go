@@ -71,19 +71,24 @@ type Fixture struct {
 type PoCCheck func(class string, poc json.RawMessage) error
 
 // classes maps the class names a recipe may use to the reader's classes.
+// The last two joined v1 with the ADR 0025 amendment (#371), after ADR
+// 0034 split them out of command_injection: added, never renamed, so every
+// earlier recipe still loads.
 var classes = map[string]reader.Class{
-	"sql_injection":      reader.ClassSQLInjection,
-	"command_injection":  reader.ClassCommandInjection,
-	"path_traversal":     reader.ClassPathTraversal,
-	"ssrf":               reader.ClassSSRF,
-	"template_injection": reader.ClassTemplateInjection,
-	"nosql_injection":    reader.ClassNoSQLInjection,
+	"sql_injection":            reader.ClassSQLInjection,
+	"command_injection":        reader.ClassCommandInjection,
+	"path_traversal":           reader.ClassPathTraversal,
+	"ssrf":                     reader.ClassSSRF,
+	"template_injection":       reader.ClassTemplateInjection,
+	"nosql_injection":          reader.ClassNoSQLInjection,
+	"code_injection":           reader.ClassCodeInjection,
+	"insecure_deserialization": reader.ClassDeserialization,
 }
 
 // Classes returns the class names a recipe may use, in the reader's order.
 func Classes() []string {
 	out := make([]string, 0, len(classes))
-	for c := reader.ClassSQLInjection; c <= reader.ClassNoSQLInjection; c++ {
+	for c := reader.ClassSQLInjection; c <= reader.ClassDeserialization; c++ {
 		out = append(out, c.String())
 	}
 	return out
