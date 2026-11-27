@@ -1,6 +1,6 @@
 # ADR 0035: `creep doctor` probes the model with synthetic calls
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
 - **Changes:** `creep doctor` now sends model calls for every contract (it sent none for HTTP contracts, and only the tool canary for command models): one discovery call on a batch holding only the canary and one context probe. No new flag, config key, dependency or exit code; the new outcomes map to existing codes. Amends [ADR 0014](0014-command-model-through-gateway.md) (doctor ran only the tool canary).
