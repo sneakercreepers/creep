@@ -38,8 +38,10 @@ type fakeModel struct {
 	// shortContext answers doctor's context probe as an endpoint that cut
 	// the start of the input (#362).
 	shortContext bool
-	calls        int
-	discovered   int // discovery calls
+	// cutOff ends every discovery reply at max_tokens (#362).
+	cutOff     bool
+	calls      int
+	discovered int // discovery calls
 	// poc answers every PoC request (#25); nil answers it like a reader
 	// call, which is invalid output for a PoC.
 	poc      any
@@ -68,6 +70,9 @@ func (m *fakeModel) send(_ context.Context, c gateway.Call) (*gateway.Reply, err
 			answer["auth"] = authEverywhere(c.Payload)
 		}
 		shiftSinks(answer, m.canaryShift)
+		if m.cutOff {
+			return &gateway.Reply{ID: "fake", Status: 200, Body: cutOffReply}, nil
+		}
 		body, err := chatReply(answer)
 		return &gateway.Reply{ID: "fake", Status: 200, Body: body}, err
 	}

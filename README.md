@@ -214,6 +214,8 @@ ollama create creep-qwen -f Modelfile   # then model.name: creep-qwen
 
 `creep doctor` sends the model two synthetic probes that hold no repository text, through the gateway (consent, budget and `egress.log` apply): a discovery batch of only creep's canary, and a context probe the size of the tier's largest discovery call. It warns when the reply breaks the schema or misses the canary, or when the usable context is below what the tier needs; the tier is the cached calibration's, or S before the first scan ([ADR 0035](docs/adr/0035-doctor-model-probes.md)).
 
+The replay fixture for small-model discovery (`internal/discover/testdata/replay/small-synthesized`) is **synthesized** in the shape of `qwen2.5-coder:1.5b` replies, not recorded from a live run; a reviewed live recording is owed by [#356](https://github.com/sneakercreepers/creep/issues/356).
+
 Your own CLI also works with `contract: command` and `run:` (prompt on stdin, JSON on stdout), or `--model-run <cmd>`. It runs only through the gateway: no shell, an empty private directory under the user cache directory, a minimal environment, a timeout and an output cap ([ADR 0014](docs/adr/0014-command-model-through-gateway.md)).
 
 ## Commands and flags

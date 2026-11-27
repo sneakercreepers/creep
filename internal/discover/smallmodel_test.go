@@ -18,8 +18,10 @@ import (
 // app at tier S. SYNTHESIZED in the shape of the qwen2.5-coder:1.5b
 // replies audited in #355 and #367 (keys in the schema's order, canary
 // entry and sink cited one line off), because no live recording is
-// committed yet; replace it with one recorded through Discoverer.Run with
-// smallModel, TierS and testSeed. Regenerate the synthesized one:
+// committed yet. A reviewed live recording is owed by #356
+// (https://github.com/sneakercreepers/creep/issues/356): record it through
+// Discoverer.Run with smallModel, TierS and testSeed and replace this one.
+// Regenerate the synthesized one:
 // go test ./internal/discover -run TestSmallModelBatchReplay -update
 const (
 	smallFixture = "testdata/replay/small-synthesized/flask"
