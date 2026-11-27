@@ -11,6 +11,10 @@ name: Live verify
 # endpoint. The job fails unless the SQL injection and the path traversal
 # of the vulnerable variant are verified 5 of 5 and nothing is verified on
 # the safe twin. No secret, read-only token, never pull_request_target.
+# The model answers are synthesized in the test, not recorded from a live
+# model (live recording: #356). The app's wheels are linux/amd64 only. A
+# run that fails, such as a PoC runner killed with exit 137, fails the job:
+# there is no retry, so a flaky host shows as a red run, never as a pass.
 on:
   schedule:
     - cron: "29 4 * * *"

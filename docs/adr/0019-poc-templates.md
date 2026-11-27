@@ -87,4 +87,6 @@ The golden tests ran every template only against Go fakes, so no PoC had been ve
 ### Consequences
 
 - The `marker` technique (a stacked `CREATE TABLE`) does not verify on pg8000, whose extended query protocol refuses several statements in one query; the `delay` technique does. Apps on such drivers are verified by delay only.
-- The live job needs Docker and the three pinned images (BusyBox, PostgreSQL, Python); it skips unless `CREEP_LIVE_VERIFY` is set, so `make check` stays offline.
+- The model answers are synthesized in the test (reader claims by sink line, the PoCs of the committed PoC fixtures), not replies recorded from a live model; recording them from a live run is #356.
+- The committed wheels are linux/amd64 only (`markupsafe` is a CPython 3.13 manylinux x86_64 build), so the app builds only on an amd64 engine.
+- The live job needs Docker or Podman and the three pinned images (BusyBox, PostgreSQL, Python); it skips unless `CREEP_LIVE_VERIFY` is set, so `make check` stays offline.
