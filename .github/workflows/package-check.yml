@@ -3,8 +3,9 @@ name: Package check
 # Installs a published release from the Homebrew tap and the Scoop bucket on
 # the platforms they serve (#357, ADR 0033): the cask's macOS-only quarantine
 # postflight runs nowhere else. The release workflow calls it after
-# package-repos; a maintainer can dispatch it against any published tag. It
-# holds no secret and only reads, so a failure shows on the run and
+# package-repos; a maintainer can dispatch it with the latest release's tag
+# (the tap and bucket hold only the latest, so an older tag fails the version
+# check by design). It holds no secret and only reads, so a failure shows on the run and
 # unpublishes nothing; recovery is in ADR 0033.
 on:
   workflow_call:
@@ -16,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to install, such as v0.5.1
+        description: Latest release tag (the one the tap and bucket hold), such as v0.5.1
         required: true
         type: string
 
@@ -94,18 +95,33 @@ jobs:
       contents: read
     env:
       TAG: ${{ inputs.tag }}
+      # Scoop core v0.6.0, fetched by commit so the code that runs is fixed;
+      # Scoop's web installer is unpinned and would pull Scoop's moving master.
+      SCOOP_COMMIT: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f
     steps:
-      - name: Install Scoop
+      # The hosted runner's only account is an administrator, so Scoop runs as
+      # one; the job holds no secret or write token and nothing outlives it.
+      - name: Install Scoop core at a pinned commit
         shell: pwsh
         run: |
-          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile "$env:RUNNER_TEMP\install-scoop.ps1"
-          & "$env:RUNNER_TEMP\install-scoop.ps1" -RunAsAdmin
+          $core = "$env:USERPROFILE\scoop\apps\scoop\current"
+          git init -q $core
+          git -C $core fetch -q --depth 1 https://github.com/ScoopInstaller/Scoop.git $env:SCOOP_COMMIT
+          git -C $core checkout -q FETCH_HEAD
+          $head = git -C $core rev-parse HEAD
+          if ($head -ne $env:SCOOP_COMMIT) {
+            Write-Output "::error::Scoop core is at $head, want $env:SCOOP_COMMIT"
+            exit 1
+          }
           Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
       - name: Install creep from the bucket
         shell: pwsh
         run: |
-          scoop bucket add sneakercreepers https://github.com/sneakercreepers/scoop-bucket
-          scoop install sneakercreepers/creep
+          $scoop = "$env:USERPROFILE\scoop\apps\scoop\current\bin\scoop.ps1"
+          & $scoop bucket add sneakercreepers https://github.com/sneakercreepers/scoop-bucket
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # -u: never self-update Scoop core away from the pinned commit.
+          & $scoop install -u sneakercreepers/creep
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Check the version
         shell: pwsh

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -12,6 +13,22 @@ const (
 	checkCaller     = "  package-check:\n    needs: package-repos\n    if: github.event_name == 'push'\n" + checkReadOnly +
 		"    uses: ./.github/workflows/package-check.yml # zizmor: ignore[self-repository] actionlint v1.7.12 refuses $/, and ./ is this commit's own workflow\n    with:\n      tag: ${{ github.ref_name }}\n"
 )
+
+// checkFailures are the failing branches of every assertion in
+// package-check.yml: each must end its step with exit 1, or a broken install
+// passes green.
+var checkFailures = []string{
+	"if ! printf '%s' \"$TAG\" | " + checkTagPattern + "; then\n            echo \"::error::tag must look like v1.2.3\"\n            exit 1\n",
+	"if [ \"$got\" != \"creep $TAG\" ]; then\n            echo \"::error::creep version printed '$got', want 'creep $TAG'\"\n            exit 1\n",
+	"if [ ! -f \"$bin\" ]; then\n            echo \"::error::no staged binary at $bin\"\n            exit 1\n",
+	"if xattr -p com.apple.quarantine \"$bin\" >/dev/null 2>&1; then\n            echo \"::error::$bin still has com.apple.quarantine\"\n            exit 1\n",
+	"if ($head -ne $env:SCOOP_COMMIT) {\n            Write-Output \"::error::Scoop core is at $head, want $env:SCOOP_COMMIT\"\n            exit 1\n",
+	"& $scoop install -u sneakercreepers/creep\n          if ($LASTEXITCODE -ne 0) { exit 1 }\n",
+	"if ($got -ne \"creep $env:TAG\") {\n            Write-Output \"::error::creep version printed '$got', want 'creep $env:TAG'\"\n            exit 1\n",
+}
+
+// scoopPin is Scoop core fetched by a full commit SHA, never get.scoop.sh.
+var scoopPin = regexp.MustCompile(`\n      SCOOP_COMMIT: [0-9a-f]{40}\n`)
 
 // checkExpression is the only shape a ${{ }} may take in package-check.yml:
 // a whole env, with or runs-on value, so no input reaches a run: script as text.
@@ -41,9 +58,17 @@ func TestPackageCheckReadOnly(t *testing.T) {
 		{"input in a script", "package-check.yml", `[ "$got" != "creep $TAG" ]`, `[ "$got" != "creep ${{ inputs.tag }}" ]`, "${{"},
 		{"tag not validated", "package-check.yml", checkTagPattern, "true", "validate"},
 		{"install before validation", "package-check.yml", "  scoop:\n    needs: tag\n", "  scoop:\n", "needs: tag"},
-		{"checkout keeps credentials", "package-check.yml", "    steps:\n      - name: Install Scoop\n", "    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Install Scoop\n", "persist-credentials"},
+		{"checkout keeps credentials", "package-check.yml", "      - name: Install Scoop core", "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Install Scoop core", "persist-credentials"},
+		{"scoop from get.scoop.sh", "package-check.yml", "          git init -q $core\n", "          Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression\n", "Scoop core"},
+		{"scoop core by branch", "package-check.yml", "      SCOOP_COMMIT: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f\n", "      SCOOP_COMMIT: master\n", "Scoop core"},
+		{"scoop self-updates", "package-check.yml", "& $scoop install -u sneakercreepers/creep", "& $scoop install sneakercreepers/creep", "exit 1"},
 		{"no Intel mac", "package-check.yml", "[macos-latest, macos-15-intel]", "[macos-latest]", "runners"},
 		{"quarantine not checked", "package-check.yml", "xattr -p com.apple.quarantine", "true", "quarantine"},
+	}
+	for i, failure := range checkFailures {
+		tests = append(tests, struct{ name, file, old, repl, want string }{
+			fmt.Sprintf("assertion %d does not fail", i), "package-check.yml", failure, strings.Replace(failure, "exit 1", "true", 1), "exit 1",
+		})
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -86,6 +111,13 @@ func packageCheckProblem(release, check string) string {
 		return "package-check.yml must run on the arm64 and Intel macOS runners and on Windows"
 	case !strings.Contains(check, "xattr -p com.apple.quarantine"):
 		return "package-check.yml must check the binary for com.apple.quarantine"
+	case !scoopPin.MatchString(check) || !strings.Contains(check, "git -C $core fetch -q --depth 1 https://github.com/ScoopInstaller/Scoop.git $env:SCOOP_COMMIT\n") || strings.Contains(check, "get.scoop.sh"):
+		return "package-check.yml must fetch Scoop core by a pinned commit, never get.scoop.sh"
+	}
+	for _, failure := range checkFailures {
+		if !strings.Contains(check, failure) {
+			return "package-check.yml: an assertion no longer ends its step with exit 1: " + failure
+		}
 	}
 	return ""
 }
