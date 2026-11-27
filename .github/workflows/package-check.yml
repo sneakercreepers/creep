@@ -113,6 +113,8 @@ jobs:
             Write-Output "::error::Scoop core is at $head, want $env:SCOOP_COMMIT"
             exit 1
           }
+          # Scoop lists its commands from the shims directory, so it must exist.
+          New-Item -ItemType Directory -Force "$env:USERPROFILE\scoop\shims" | Out-Null
           Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\scoop\shims"
       - name: Install creep from the bucket
         shell: pwsh
