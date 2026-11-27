@@ -64,8 +64,15 @@ jobs:
           brew --version
       - name: Install the cask from the tap
         run: brew install --cask sneakercreepers/tap/creep
-      - name: Show whether the download was quarantined
-        run: xattr -l "$(brew --cache --cask sneakercreepers/tap/creep)" || true
+      # Without a quarantined download the binary check below proves nothing.
+      - name: Check the download was quarantined
+        run: |
+          archive="$(brew --cache --cask sneakercreepers/tap/creep)"
+          xattr -l "$archive"
+          if ! xattr -p com.apple.quarantine "$archive" >/dev/null 2>&1; then
+            echo "::error::$archive has no com.apple.quarantine, so the postflight goes untested"
+            exit 1
+          fi
       - name: Check the version
         run: |
           got="$(creep version | head -n 1)"

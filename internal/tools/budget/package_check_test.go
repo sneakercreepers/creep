@@ -20,6 +20,7 @@ const (
 var checkFailures = []string{
 	"if ! printf '%s' \"$TAG\" | " + checkTagPattern + "; then\n            echo \"::error::tag must look like v1.2.3\"\n            exit 1\n",
 	"if [ \"$got\" != \"creep $TAG\" ]; then\n            echo \"::error::creep version printed '$got', want 'creep $TAG'\"\n            exit 1\n",
+	"if ! xattr -p com.apple.quarantine \"$archive\" >/dev/null 2>&1; then\n            echo \"::error::$archive has no com.apple.quarantine, so the postflight goes untested\"\n            exit 1\n",
 	"if [ ! -f \"$bin\" ]; then\n            echo \"::error::no staged binary at $bin\"\n            exit 1\n",
 	"if xattr -p com.apple.quarantine \"$bin\" >/dev/null 2>&1; then\n            echo \"::error::$bin still has com.apple.quarantine\"\n            exit 1\n",
 	"if ($head -ne $env:SCOOP_COMMIT) {\n            Write-Output \"::error::Scoop core is at $head, want $env:SCOOP_COMMIT\"\n            exit 1\n",
@@ -59,6 +60,7 @@ func TestPackageCheckReadOnly(t *testing.T) {
 		{"tag not validated", "package-check.yml", checkTagPattern, "true", "validate"},
 		{"install before validation", "package-check.yml", "  scoop:\n    needs: tag\n", "  scoop:\n", "needs: tag"},
 		{"checkout keeps credentials", "package-check.yml", "      - name: Install Scoop core", "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Install Scoop core", "persist-credentials"},
+		{"download quarantine not required", "package-check.yml", "          if ! xattr -p com.apple.quarantine \"$archive\" >/dev/null 2>&1; then\n", "          if false; then\n", "exit 1"},
 		{"scoop from get.scoop.sh", "package-check.yml", "          git init -q $core\n", "          Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression\n", "Scoop core"},
 		{"scoop core by branch", "package-check.yml", "      SCOOP_COMMIT: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f\n", "      SCOOP_COMMIT: master\n", "Scoop core"},
 		{"scoop self-updates", "package-check.yml", "& $scoop install -u sneakercreepers/creep", "& $scoop install sneakercreepers/creep", "exit 1"},
