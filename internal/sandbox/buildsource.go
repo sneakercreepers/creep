@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"io/fs"
 	"path"
 	"regexp"
 	"slices"
@@ -52,6 +53,7 @@ type buildPlan struct {
 	target     string   // stage to build; "" for the last
 	images     []string // images the Dockerfile reads, which must be present
 	checked    []byte   // the Dockerfile as checkDockerfile read it
+	migrate    []string // the compose file's migrate step, nil without one
 }
 
 // Root build files, in the order they are looked for. A compose file
@@ -114,7 +116,7 @@ func planCompose(repo Repo, paths []string, name string) (buildPlan, *refusal) {
 	}
 	for _, df := range dockerfileNames {
 		if slices.Contains(paths, df) {
-			return planDockerfile(repo, buildPlan{context: ".", dockerfile: df})
+			return planDockerfile(repo, buildPlan{context: ".", dockerfile: df, migrate: plan.migrate})
 		}
 	}
 	return buildPlan{}, refuse(BuildNoFile, "compose_without_build")
@@ -142,6 +144,19 @@ func planDockerfile(repo Repo, plan buildPlan) (buildPlan, *refusal) {
 	}
 	plan.images, plan.checked = images, data
 	return plan, nil
+}
+
+// cleanPaths keeps the clean, repository-relative paths, once each: not
+// absolute, with no "." or ".." element, empty element or backslash.
+func cleanPaths(paths []string) []string {
+	var keep []string
+	for _, p := range paths {
+		if fs.ValidPath(p) && p != "." && !strings.Contains(p, `\`) {
+			keep = append(keep, p)
+		}
+	}
+	slices.Sort(keep)
+	return slices.Compact(keep)
 }
 
 func readBuildFile(repo Repo, name string, reason BuildReason) ([]byte, *refusal) {

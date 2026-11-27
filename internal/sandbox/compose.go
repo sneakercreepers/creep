@@ -9,7 +9,8 @@ import (
 // creep never runs `docker compose`: the compose file is hostile input
 // (privileged services, host networks, host volumes, devices, extra hosts,
 // build secrets, remote contexts, includes, variables read from the host).
-// It is read only for where the one buildable service's Dockerfile is.
+// It is read only for where the one buildable service's Dockerfile is,
+// and for the command of its migrate service (composeMigrate).
 // Everything about how a service runs (ports, volumes, privileges,
 // networks, environment) is never passed on: the app runs with creep's
 // hardened profile, so those keys are neutralized by not existing.
@@ -55,12 +56,24 @@ func composeBuild(data []byte) (buildPlan, bool, *refusal) {
 	case services.Kind != yaml.MappingNode:
 		return buildPlan{}, false, refuse(BuildComposeRefused, "services")
 	}
-	return serviceBuild(services)
+	migrate, why := composeMigrate(services)
+	if why != nil {
+		return buildPlan{}, false, why
+	}
+	plan, found, why := serviceBuild(services)
+	plan.migrate = migrate
+	return plan, found, why
 }
 
+// serviceBuild skips the migrate service: it runs in the app's image, so
+// its own build section, which usually repeats the app's, is not a second
+// build.
 func serviceBuild(services *yaml.Node) (buildPlan, bool, *refusal) {
 	var build *yaml.Node
 	for i := 1; i < len(services.Content); i += 2 {
+		if keyText(services.Content[i-1]) == migrateService {
+			continue
+		}
 		svc := resolveAlias(services.Content[i])
 		b, ok := lookup(svc, "build")
 		if !ok {

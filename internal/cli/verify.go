@@ -16,13 +16,14 @@ import (
 )
 
 // appSandbox is what a scan and creep reproduce use of a *sandbox.Sandbox:
-// one offline build of the app, its port, the database and the app on the
-// run network, the PoC runner (verify.Runner), then cleanup.
-// sandboxDeps.open makes one; tests replace it.
+// one offline build of the app, its port, the database, the app's migrate
+// step and the app on the run network, the PoC runner (verify.Runner),
+// then cleanup. sandboxDeps.open makes one; tests replace it.
 type appSandbox interface {
 	Build(ctx context.Context, repo sandbox.Repo) (sandbox.App, error)
 	AppPort(ctx context.Context, app sandbox.App) (int, error)
-	StartDatabase(ctx context.Context, migrations []sandbox.Migration) (sandbox.Database, error)
+	StartDatabase(ctx context.Context) (sandbox.Database, error)
+	Migrate(ctx context.Context, app sandbox.App) error
 	StartApp(ctx context.Context, app sandbox.App) error
 	verify.Runner
 	Close() error
@@ -138,7 +139,7 @@ func (s *session) buildApp(ctx context.Context, w io.Writer, best sandbox.Status
 	if v := appVerification(ctx, app, err); v.Status != report.VerificationAppBuilt {
 		return v
 	}
-	return s.runPoCs(ctx, w, box, app, files.paths, in)
+	return s.runPoCs(ctx, w, box, app, in)
 }
 
 // buildReader is the scan's own reader for the build context (TB1): it

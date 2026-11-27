@@ -184,7 +184,17 @@ func TestEveryTestAppBuilds(t *testing.T) {
 	}
 }
 
-// testAppVariants lists every testdata/apps/<app>/<variant> directory.
+// liveApp is the test app that serves for real (#364): its Dockerfile
+// installs Flask offline from its committed wheels, so it is planned and
+// built by TestLiveTestAppPlans and the live job, not with the BusyBox
+// apps.
+const liveApp = "flaskpg"
+
+// liveBase is the pinned Python image the live app's Dockerfile reads.
+const liveBase = "docker.io/library/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
+
+// testAppVariants lists every testdata/apps/<app>/<variant> directory
+// but the live app's.
 func testAppVariants(t *testing.T) []string {
 	t.Helper()
 	all, err := filepath.Glob(filepath.Join("..", "..", "testdata", "apps", "*", "*"))
@@ -193,8 +203,34 @@ func testAppVariants(t *testing.T) []string {
 	}
 	return slices.DeleteFunc(all, func(dir string) bool {
 		info, err := os.Stat(dir)
-		return err != nil || !info.IsDir()
+		return err != nil || !info.IsDir() || filepath.Base(filepath.Dir(dir)) == liveApp
 	})
+}
+
+// TestLiveTestAppPlans: both variants of the live app plan the same
+// offline build, from its root Dockerfile through its compose file, read
+// only the pinned Python image, keep the compose file's migrate step, and
+// build with the offline command line.
+func TestLiveTestAppPlans(t *testing.T) {
+	for _, variant := range []string{"vulnerable", "safe"} {
+		repo := dirRepo(t, filepath.Join("..", "..", "testdata", "apps", liveApp, variant))
+		plan, why := planBuild(repo)
+		if why != nil || plan.dockerfile != "Dockerfile" || !slices.Equal(plan.images, []string{liveBase}) ||
+			!slices.Equal(plan.migrate, []string{"python", "migrate.py"}) {
+			t.Fatalf("%s: plan %s %q migrate %q, refused %+v", variant, plan.dockerfile, plan.images, plan.migrate, why)
+		}
+		rec := withBuilds(&recorder{}, 0)
+		s := testSandbox(t, rec)
+		app, err := s.Build(context.Background(), repo)
+		if err != nil || !app.Built() || !slices.Equal(app.MigrateCommand(), plan.migrate) {
+			t.Fatalf("%s: Build = %+v, %v", variant, app, err)
+		}
+		for _, argv := range rec.to("build") {
+			if p := buildProblems(argv, Docker, s.work); len(p) > 0 {
+				t.Errorf("%s: build %q: %v", variant, argv, p)
+			}
+		}
+	}
 }
 
 func dirRepo(t *testing.T, dir string) Repo {

@@ -63,7 +63,8 @@ type Sandbox struct {
 	mu         sync.Mutex
 	network    string    // the run's network once created
 	database   bool      // StartDatabase ran
-	ready      *Database // the database StartDatabase seeded, once ready
+	ready      *Database // the database StartDatabase started, once ready
+	migrated   bool      // Migrate ran the app's migrate step
 	app        bool      // StartApp ran
 	fileCanary string    // the content of the app's canary file, once planted
 	images     []string  // image IDs Build made

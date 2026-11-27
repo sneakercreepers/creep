@@ -41,7 +41,11 @@ type App struct {
 	Unavailable BuildReason // "" when built
 	Detail      string      // closed detail of Unavailable: a compose key, a Dockerfile rule, an exit status
 	workdir     string      // the image's checked working directory, set only by checkBuilt
+	migrate     []string    // the app's migrate step (composeMigrate), set only by build
 }
+
+// MigrateCommand is a copy of the app's migrate step, nil without one.
+func (a App) MigrateCommand() []string { return slices.Clone(a.migrate) }
 
 // Built reports an image that StartApp can run.
 func (a App) Built() bool { return a.Unavailable == "" && a.Image != "" }
@@ -113,7 +117,11 @@ func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 		return unavailableOrErr(why, err)
 	}
 	s.recordImage(image)
-	return s.checkBuilt(ctx, image)
+	app, err := s.checkBuilt(ctx, image)
+	if app.Built() {
+		app.migrate = plan.migrate
+	}
+	return app, err
 }
 
 func unavailableOrErr(why *refusal, err error) (App, error) {
@@ -249,12 +257,12 @@ func (s *Sandbox) recordImage(id string) {
 // network as "app", detached, with the hardened profile, until Close. The
 // canary runs first, as before every batch: the run phase has no route
 // out. A file of fresh random content is mounted read-only at
-// AppCanaryFile, for a path_payload PoC to prove a read (AppCanary). One
-// app per run.
+// AppCanaryFile, for a path_payload PoC to prove a read (AppCanary), and
+// the synthetic env (appEnv) reaches the run's database. One app per run.
 func (s *Sandbox) StartApp(ctx context.Context, app App) error {
-	workdir, ok := appWorkdir(app.workdir)
-	if !app.Built() || !s.builtHere(app.Image) || app.workdir == "" || !ok {
-		return fmt.Errorf("start app: not an image this sandbox built: %w", ErrSpec)
+	workdir, err := s.checkApp(app)
+	if err != nil {
+		return fmt.Errorf("start app: %w", err)
 	}
 	if err := s.clearNetwork(ctx); err != nil {
 		return err
@@ -266,7 +274,11 @@ func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}
-	res, err := s.start(ctx, Spec{Image: app.Image, Mounts: []Mount{canary}, networked: true, alias: appAlias, detach: true, workdir: workdir})
+	env, envFile, err := s.appEnv(workdir)
+	if err != nil {
+		return fmt.Errorf("start app: %w", err)
+	}
+	res, err := s.start(ctx, Spec{Image: app.Image, Env: env, Mounts: []Mount{canary, envFile}, networked: true, alias: appAlias, detach: true, workdir: workdir})
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}
@@ -274,6 +286,15 @@ func (s *Sandbox) StartApp(ctx context.Context, app App) error {
 		return fmt.Errorf("start app (exit %d): %w", res.ExitCode, ErrStart)
 	}
 	return nil
+}
+
+// checkApp returns the working directory of an image this sandbox built.
+func (s *Sandbox) checkApp(app App) (string, error) {
+	workdir, ok := appWorkdir(app.workdir)
+	if !app.Built() || !s.builtHere(app.Image) || app.workdir == "" || !ok {
+		return "", fmt.Errorf("not an image this sandbox built: %w", ErrSpec)
+	}
+	return workdir, nil
 }
 
 // builtImages is a copy of the IDs Build made that Close has not removed.

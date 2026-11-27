@@ -69,3 +69,22 @@ Option C with oracle b: it is the only one where nothing the model writes is eve
 - Residual: the reflect oracle proves the probe reached HTML unescaped, not that a browser runs it there; inside a comment, `<textarea>` or `<title>` it would still count. An app written to recognize creep's payloads (echo the probe, sleep on `pg_sleep`, read the canary file, create the table itself) can make itself verified; that reports a flaw in the scanned repository itself, and #25's repetitions do not narrow it.
 - Tests: golden requests and outcomes per template against a vulnerable app and its safe twin (`internal/verify/golden_test.go`); protection tests `TestInvalidPoCRejectedBeforeRun`, `TestModelCannotPickHost`, `FuzzBuiltRequestStaysOnApp`, `TestOraclesCannotBeFaked`, `TestStatusNeverVerifies`, `TestRunsAreIndependent` (`internal/verify`), `TestExchangeRunsOnlyInRunner`, `TestRunnerAnswerCannotBeForged`, `TestAppCanaryPlanted` (`internal/sandbox`); the real-engine test `TestRealRunnerReachesTheApp`.
 - Not wired into `creep scan` yet: #25 runs each PoC N times against the build `creep scan` makes, keeps the bundle and adds `creep reproduce`.
+
+## Amendment: verified against a real framework app (#364)
+
+- **Status:** Proposed
+- **Date:** 2026-11-27
+- **Changes:** none to `verify.Request`, the templates or the oracles; a new live job proves them against a real app.
+
+### Context
+
+The golden tests ran every template only against Go fakes, so no PoC had been verified against a real web framework and a real PostgreSQL driver.
+
+### Decision
+
+`testdata/apps/flaskpg` is a Flask app on a digest-pinned Python image, with pg8000 and its dependencies committed as wheels pinned by sha256 in `requirements.txt`, so the `--network=none` build installs them offline. Its vulnerable variant has an SQL injection (an f-string in `LIKE`) and a path traversal (`send_file(os.path.join(...))`); the safe twin binds the parameter and uses `send_from_directory`. `live-verify.yml` runs `creep scan --mode nightly` with the real sandbox on both variants (`TestLiveAppVerifies`), nightly, on dispatch and on pull requests that touch the sandbox, verification or the app, with the repository's synthesized model, so no key and no endpoint. The model claims both classes on both variants and gives each its PoC (`sql_payload` with the `delay` technique; `path_payload`, encoded, depth 6); the job fails unless both are verified 5 of 5 on the vulnerable variant and nothing is verified on the safe twin.
+
+### Consequences
+
+- The `marker` technique (a stacked `CREATE TABLE`) does not verify on pg8000, whose extended query protocol refuses several statements in one query; the `delay` technique does. Apps on such drivers are verified by delay only.
+- The live job needs Docker and the three pinned images (BusyBox, PostgreSQL, Python); it skips unless `CREEP_LIVE_VERIFY` is set, so `make check` stays offline.

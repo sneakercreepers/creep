@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-
-	"github.com/sneakercreepers/creep/internal/sandbox"
 )
 
 // BundleVersion is the reproduction bundle's format. A change that breaks
@@ -52,8 +50,11 @@ type Images struct {
 	Database string `json:"database"` // sandbox.DatabaseImage, "" without a database
 }
 
-// Seed is what the run's database was seeded from: the migrations, in the
-// order they ran, and the SHA-256 of their contents (SeedDigest).
+// Seed is how the run's database got its schema. Since #364 creep reads
+// no SQL from the repository: the app's own migrate step sets it up
+// (sandbox.Migrate), so Migrations stays empty and SHA256 is the digest
+// of that step's command (SeedDigest), empty without a database. A
+// bundle written before keeps its migration paths and their digest.
 type Seed struct {
 	Migrations []string `json:"migrations"`
 	SHA256     string   `json:"sha256"`
@@ -221,13 +222,13 @@ func verifiedRuns(runs []BundleRun) int {
 	return n
 }
 
-// SeedDigest is the SHA-256 of the migrations a database was seeded
-// from, in order: each path, a NUL, its length and its bytes.
-func SeedDigest(migrations []sandbox.Migration) string {
+// SeedDigest is the SHA-256 of an app's migrate step: each argument's
+// length, a NUL and its bytes, so no two commands collide. No step has
+// the digest of nothing.
+func SeedDigest(migrate []string) string {
 	h := sha256.New()
-	for _, m := range migrations {
-		fmt.Fprintf(h, "%s\x00%d\x00", m.Path, len(m.SQL))
-		h.Write(m.SQL)
+	for _, arg := range migrate {
+		fmt.Fprintf(h, "%d\x00%s", len(arg), arg)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

@@ -74,8 +74,13 @@ func checkVariant(fsys fs.FS, dir, ext string) ([]string, []string) {
 	}
 	var names, problems []string
 	lines, sources := 0, 0
+	live := liveApps[path.Base(path.Dir(dir))]
 	for _, e := range entries {
 		name := path.Join(dir, e.Name())
+		if p, ok := checkLiveEntry(fsys, dir, e, live); ok {
+			names, problems = append(names, e.Name()), append(problems, p...)
+			continue
+		}
 		if e.Name() == buildFile {
 			names, problems = append(names, e.Name()), append(problems, checkBuildFile(fsys, name, e)...)
 			continue

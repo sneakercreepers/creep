@@ -189,3 +189,26 @@ The release pentest at 1d8a78b found three escapes the Dockerfile check accepted
 - Dockerfiles that bind-mount from another stage are refused; `COPY --from` still works.
 - New protection tests: `TestRuntimeMinimums`, `TestEngineEscapesRefused`, `TestAppWorkdirChecked`, `TestStartAppNeedsCheckedWorkdir`; the fuzz oracle also reads the new rules. Threat model X22.
 - Not verified against a live Podman here (none on the development machine); the field names follow `podman info --format json`.
+
+## Amendment: the app's own migrate step and the synthetic env (#364)
+
+- **Status:** Proposed
+- **Date:** 2026-11-27
+- **Changes:** `StartDatabase` takes no migrations and starts an empty database with no mount; `MigrationPaths` and its fixed list of migration folders are removed; new `Sandbox.Migrate` runs the app's own migrate step; `StartApp` gets the synthetic env; `WriteSyntheticEnv` is replaced by the unexported `appEnv`.
+
+### Context
+
+The database was seeded only from raw `.sql` files in a fixed list of folders (`migrations/`, `db/migrations/`, Prisma's `migration.sql`, and a few more). Apps that set up their schema with their own tool (Alembic, Django, Rails, Knex, a script) got an empty database, so a real SQL injection had nothing to query, and the app never learned where the database was: `WriteSyntheticEnv` wrote placeholders that no container received. Every test app was BusyBox plus `COPY . /app`, so no framework ever ran.
+
+### Decision
+
+- **Empty database.** `StartDatabase(ctx)` starts the pinned PostgreSQL as before (canary first, hardened, data and socket on tmpfs, fresh `creep-synthetic-…` password) but with no mount at all; the old seed mount, with the host path it showed in `/proc/self/mountinfo`, is gone.
+- **The app's migrate step, language-neutral.** The root compose file may name a service `migrate` with a `command`: a list of at most 64 plain, non-empty strings with no line break. Only that command is read; an `entrypoint`, `extends`, a merge key or any other command shape refuses the compose file (`compose`, fixed detail `migrate`, `migrate.command`, `migrate.entrypoint`). Its image, volumes, network, privileges and env are never read. `Sandbox.Migrate(ctx, app)` runs the command once, after the canary, as a hardened container of the image `Build` made (not detached, 5-minute timeout, on the run network, with the image's checked working directory). The command follows the image, so a `--privileged` in it is the container's argument, not a runtime option. It needs a ready database (`ErrSpec` otherwise), refuses an image this sandbox did not build, and a non-zero exit is `ErrMigrate`, which the scan reports and goes on. Without a migrate step the app sets up its own schema when it starts.
+- **Synthetic env.** The app and its migrate step get the run database's settings, all creep's own: `DATABASE_URL`, `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, as checked `--env` pairs and as a `.env` file creep writes in its 0700 work directory and mounts read-only at `<workdir>/.env`. Without a database both are empty. No host variable is copied, and the repository's own `.env` stays out of the build context.
+- **Bundles.** `verify.Seed` keeps its shape: `Migrations` is empty and `SHA256` is the digest of the migrate command (`verify.SeedDigest`), so stored bundles still read.
+
+### Consequences
+
+- Any framework whose schema step can run from its own image works, in any language; raw `.sql` folders no longer seed anything unless the app's migrate step applies them.
+- The migrate step is the repository's code, run with the database password inside the sandbox; it gets nothing the app does not get. Threat model X2, X10 and X12.
+- New tests: `TestMigrateRunsInSandbox`, `TestMigrateOutcomes`, `TestAppGetsSyntheticEnv`, `TestWriteEnvFileRefuses`, `TestPlanMigrate`, `TestPlanMigrateRefuses`; `TestDatabaseMountsNoHostPath` now requires no mount. The live job (`live-verify.yml`, `TestLiveAppVerifies`) runs a real Flask app on a digest-pinned Python image, built offline from wheels committed beside it.

@@ -51,8 +51,10 @@ func checkCanaryMount(t *testing.T, s *Sandbox, argv []string) {
 			mounts = append(mounts, a)
 		}
 	}
-	if len(mounts) != 1 || !strings.HasSuffix(mounts[0], ",target="+AppCanaryFile+",readonly") {
-		t.Fatalf("app mounts %q: want only the canary, read-only", mounts)
+	// The synthetic env (TestAppGetsSyntheticEnv) is the only other mount.
+	if len(mounts) != 2 || !strings.HasSuffix(mounts[0], ",target="+AppCanaryFile+",readonly") ||
+		!strings.HasSuffix(mounts[1], ",target=/"+envFileName+",readonly") {
+		t.Fatalf("app mounts %q: want the canary and the synthetic env, read-only", mounts)
 	}
 	src, _, _ := strings.Cut(strings.TrimPrefix(mounts[0], "--mount=type=bind,source="), ",target=")
 	if rel, err := filepath.Rel(s.workReal, src); err != nil || !filepath.IsLocal(rel) {

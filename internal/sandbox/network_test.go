@@ -95,7 +95,7 @@ func assertAborted(t *testing.T, s *Sandbox, rec *recorder, want error) {
 	if _, err := s.Run(context.Background(), Spec{Image: testImage}); !errors.Is(err, want) {
 		t.Errorf("Run after abort: %v", err)
 	}
-	if _, err := s.StartDatabase(context.Background(), nil); !errors.Is(err, want) {
+	if _, err := s.StartDatabase(context.Background()); !errors.Is(err, want) {
 		t.Errorf("StartDatabase after abort: %v", err)
 	}
 	for _, argv := range rec.to("run") {

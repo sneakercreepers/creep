@@ -48,10 +48,12 @@
 //     public IP over TCP and to resolve a public name, through the
 //     network's resolver and directly over UDP, while it reaches itself on
 //     the network; anything else aborts the run for good.
-//   - The database is a pinned PostgreSQL seeded only with the project's
-//     SQL migrations (MigrationPaths picks them): the seed is its only
-//     mount, its data directory is a tmpfs over the image's VOLUME, and its
-//     credentials are random placeholders. creep never pulls an image.
+//   - The database is a pinned PostgreSQL that starts empty, with no
+//     mount: its data directory is a tmpfs over the image's VOLUME and its
+//     credentials are random placeholders. The app's own migrate step
+//     (the compose file's migrate command, Migrate) sets up its schema,
+//     inside the sandbox, in the image Build made. creep never pulls an
+//     image.
 //   - The app is built (Build) only from the repository's own root compose
 //     file or Dockerfile, never a generated one and never through
 //     `docker compose`: creep reads the compose file for one service's

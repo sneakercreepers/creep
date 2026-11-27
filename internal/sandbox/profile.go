@@ -42,8 +42,8 @@ const (
 var ErrSpec = errors.New("sandbox spec refused")
 
 // Mount is a read-only bind mount of one regular file creep wrote in the
-// sandbox's work directory (WriteSyntheticEnv) to an absolute path inside
-// the container.
+// sandbox's work directory (the app's synthetic .env, a PoC request) to
+// an absolute path inside the container.
 type Mount struct {
 	Source string
 	Target string

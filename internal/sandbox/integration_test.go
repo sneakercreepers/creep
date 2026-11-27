@@ -158,7 +158,7 @@ func realContainerIsHardened(t *testing.T, st Status) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	env, err := s.WriteSyntheticEnv([]string{"SECRET_KEY"})
+	env, err := s.writeEnvFile(map[string]string{"SECRET_KEY": "creep-synthetic-test"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "app": "flaskpg",
+  "language": "python",
+  "framework": "flask on postgresql, served for real in the sandbox (#364)",
+  "vulnerable": [
+    {"class": "sqli", "file": "app.py", "line": 33, "route": "/notes/search", "sink": "cur.execute(f\"SELECT id, title FROM notes WHERE title LIKE '%{term}%'\")"},
+    {"class": "path_traversal", "file": "app.py", "line": 39, "route": "/attachments/<path:name>", "sink": "send_file(os.path.join(UPLOAD_DIR, name))"}
+  ],
+  "safe": []
+}

@@ -106,7 +106,7 @@ func TestNoPortPublished(t *testing.T) {
 
 func runWholeFlow(t *testing.T, s *Sandbox) {
 	t.Helper()
-	if _, err := s.StartDatabase(context.Background(), []Migration{{Path: "migrations/1.sql", SQL: []byte("SELECT 1;")}}); err != nil {
+	if _, err := s.StartDatabase(context.Background()); err != nil {
 		t.Fatalf("StartDatabase: %v", err)
 	}
 	if _, err := s.RunBatch(context.Background(), []Spec{{Image: testImage, Env: map[string]string{"PORT": "8080"}}}); err != nil {

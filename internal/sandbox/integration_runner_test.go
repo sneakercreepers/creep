@@ -74,8 +74,18 @@ func checkMarkerLookup(t *testing.T, s *Sandbox) {
 	t.Helper()
 	const made, absent = "creep_0123456789abcdef", "creep_fedcba9876543210"
 	ctx := context.Background()
-	if _, err := s.StartDatabase(ctx, []Migration{{Path: "migrations/1.sql", SQL: []byte("CREATE TABLE " + made + " ();")}}); err != nil {
+	db, err := s.StartDatabase(ctx)
+	if err != nil {
 		t.Fatal(err)
+	}
+	// What a PoC's stacked statement leaves, made here from a client on
+	// the run network.
+	res, err := s.start(ctx, Spec{
+		Image: DatabaseImage, Cmd: []string{"psql", "-X", "-h", db.Host, "-U", db.User, "-d", db.Name, "-c", "CREATE TABLE " + made + " ()"},
+		Env: map[string]string{"PGPASSWORD": db.Password}, Timeout: time.Minute, networked: true, tmpfs: []string{pgData},
+	})
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("create %s: %v exit %d: %s", made, err, res.ExitCode, res.Output)
 	}
 	for table, want := range map[string]bool{made: true, absent: false} {
 		if got, err := s.DatabaseHasTable(ctx, table); err != nil || got != want {

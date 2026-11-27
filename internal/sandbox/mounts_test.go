@@ -80,7 +80,7 @@ func TestMountRefusesHostPaths(t *testing.T) {
 
 func TestMountTargets(t *testing.T) {
 	s := testSandbox(t, &recorder{})
-	env, err := s.WriteSyntheticEnv([]string{"API_KEY"})
+	env, err := s.writeEnvFile(map[string]string{"API_KEY": "creep-synthetic-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,39 +96,5 @@ func TestMountTargets(t *testing.T) {
 	want := ",target=/app/.env,readonly"
 	if !strings.HasSuffix(args[len(args)-2], want) {
 		t.Errorf("mount arg %q", args[len(args)-2])
-	}
-}
-
-// TestSyntheticEnv holds only fresh placeholders for valid names.
-func TestSyntheticEnv(t *testing.T) {
-	s := testSandbox(t, &recorder{})
-	t.Setenv("DATABASE_URL", "postgres://real:secret@db")
-	path, err := s.WriteSyntheticEnv([]string{"DATABASE_URL", "SECRET_KEY", "DATABASE_URL"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 2 || strings.Contains(string(data), "secret@db") {
-		t.Fatalf(".env = %q", data)
-	}
-	for _, l := range lines {
-		name, value, _ := strings.Cut(l, "=")
-		if !envName.MatchString(name) || !strings.HasPrefix(value, "creep-synthetic-") || len(value) != len("creep-synthetic-")+16 {
-			t.Errorf("line %q", l)
-		}
-	}
-	again, _ := s.WriteSyntheticEnv([]string{"SECRET_KEY"})
-	other, _ := os.ReadFile(again)
-	if strings.Contains(string(data), strings.TrimPrefix(strings.TrimSpace(string(other)), "SECRET_KEY=")) {
-		t.Error("placeholders repeat across files")
-	}
-	for _, bad := range [][]string{{"A=B"}, {"-e"}, {"A\nB"}, make([]string, maxEnv+1)} {
-		if _, err := s.WriteSyntheticEnv(bad); !errors.Is(err, ErrSpec) {
-			t.Errorf("names %q: %v", bad, err)
-		}
 	}
 }
