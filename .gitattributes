@@ -2,6 +2,7 @@
 **/testdata/replay/** linguist-generated=true -diff
 docs/map.md linguist-generated=true
 *.wasm binary
+*.whl binary
 testdata/apps/** linguist-vendored=true
 internal/bench/corpus/** linguist-vendored=true
 internal/bench/fixtures/** linguist-generated=true

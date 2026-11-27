@@ -36,12 +36,12 @@ var errStopPoCs = errors.New("poc stage stopped")
 // of a class with a template (#25). A PoC that verified in at least one
 // of its runs makes its finding verified with that rate and leaves a
 // reproduction bundle; any other outcome leaves the finding probable.
-func (s *session) runPoCs(ctx context.Context, w io.Writer, box appSandbox, app sandbox.App, paths []string, in pocInput) report.Verification {
+func (s *session) runPoCs(ctx context.Context, w io.Writer, box appSandbox, app sandbox.App, in pocInput) report.Verification {
 	todo := pocCandidates(in.res)
 	if len(todo) == 0 {
 		return report.Verification{Status: report.VerificationAppBuilt}
 	}
-	t, failed := startTarget(ctx, w, box, app, s.repo, paths)
+	t, failed := startTarget(ctx, w, box, app)
 	if failed != nil {
 		return *failed
 	}

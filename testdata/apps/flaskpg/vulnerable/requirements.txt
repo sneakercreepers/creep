@@ -1,0 +1,29 @@
+# Installed offline from wheels/ (the build has no network).
+# Provenance: each wheel is the PyPI release file named below, downloaded
+# from the project's release page and checked against the sha256 on its
+# pin line, which pip verifies again at build time (--require-hashes).
+# markupsafe is the CPython 3.13 manylinux x86_64 build: linux/amd64 only.
+# asn1crypto-1.5.1-py2.py3-none-any.whl from https://pypi.org/project/asn1crypto/1.5.1/#files
+asn1crypto==1.5.1 --hash=sha256:db4e40728b728508912cbb3d44f19ce188f218e9eba635821bb4b68564f8fd67
+# blinker-1.9.0-py3-none-any.whl from https://pypi.org/project/blinker/1.9.0/#files
+blinker==1.9.0 --hash=sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc
+# click-8.5.1-py3-none-any.whl from https://pypi.org/project/click/8.5.1/#files
+click==8.5.1 --hash=sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37
+# flask-3.1.2-py3-none-any.whl from https://pypi.org/project/flask/3.1.2/#files
+flask==3.1.2 --hash=sha256:ca1d8112ec8a6158cc29ea4858963350011b5c846a414cdb7a954aa9e967d03c
+# itsdangerous-2.2.0-py3-none-any.whl from https://pypi.org/project/itsdangerous/2.2.0/#files
+itsdangerous==2.2.0 --hash=sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef
+# jinja2-3.1.6-py3-none-any.whl from https://pypi.org/project/jinja2/3.1.6/#files
+jinja2==3.1.6 --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+# markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl from https://pypi.org/project/markupsafe/3.0.4/#files
+markupsafe==3.0.4 --hash=sha256:434139499bb20b502ed3baa1f169e618f924a97e7a777fea1a49446d80106cf6
+# pg8000-1.31.5-py3-none-any.whl from https://pypi.org/project/pg8000/1.31.5/#files
+pg8000==1.31.5 --hash=sha256:0af2c1926b153307639868d2ee5cef6cd3a7d07448e12736989b10e1d491e201
+# python_dateutil-2.9.0.post0-py2.py3-none-any.whl from https://pypi.org/project/python-dateutil/2.9.0.post0/#files
+python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+# scramp-1.5.0-py3-none-any.whl from https://pypi.org/project/scramp/1.5.0/#files
+scramp==1.5.0 --hash=sha256:8280608f568e81da9e9c9d69cac1331b836622d9b48bf5c5e400e16129c6d1fa
+# six-1.17.0-py2.py3-none-any.whl from https://pypi.org/project/six/1.17.0/#files
+six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+# werkzeug-3.1.9-py3-none-any.whl from https://pypi.org/project/werkzeug/3.1.9/#files
+werkzeug==3.1.9 --hash=sha256:6392e50c78460ba618e5b21f08a71f59c99ce99cdc6cf6e3dd7e6ccca8754fab

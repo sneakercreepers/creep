@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -143,8 +144,8 @@ func TestPoCRateDecidesStatus(t *testing.T) {
 			if (err == nil) != (tt.status == report.StatusVerified) {
 				t.Errorf("bundle for a %s finding: %v", f.Status, err)
 			}
-			if len(fb.migrations) != 1 || fb.migrations[0].Path != "migrations/1_init.sql" {
-				t.Errorf("database seeded with %+v", fb.migrations)
+			if !slices.Equal(fb.steps, []string{"database", "migrate", "app"}) {
+				t.Errorf("target steps %q, want the database, the app's migrate step, then the app", fb.steps)
 			}
 		})
 	}

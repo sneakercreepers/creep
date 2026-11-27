@@ -17,7 +17,7 @@ func TestDatabaseHasTable(t *testing.T) {
 	for _, name := range []string{"users", "creep_", "creep_0123", "CREEP_0123456789ABCDEF", "creep_0123456789abcdef'; DROP TABLE x; --", "creep_0123456789abcdef x"} {
 		rec := networkRecorder(goodCanary, 0)
 		s := testSandbox(t, rec)
-		if _, err := s.StartDatabase(context.Background(), nil); err != nil {
+		if _, err := s.StartDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		before := len(rec.to("run"))
@@ -63,7 +63,7 @@ func lookupWith(t *testing.T, answer cliResult) (bool, []string, error) {
 		return plain(ctx, args)
 	}
 	s := testSandbox(t, rec)
-	db, err := s.StartDatabase(context.Background(), nil)
+	db, err := s.StartDatabase(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +85,9 @@ func checkLookupArgv(t *testing.T, argv []string) {
 	}
 	img := slices.Index(argv, DatabaseImage)
 	want := []string{"psql", "-X", "-q", "-t", "-A", "-h", "db", "-p", "5432", "-U", "creep", "-d", "app", "-c",
-		"SELECT to_regclass('public." + markerName + "') IS NOT NULL"}
-	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) {
+		"SELECT pg_catalog.to_regclass('public." + markerName + "') IS NOT NULL"}
+	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) ||
+		!slices.Contains(argv, "--env=PGOPTIONS=-c search_path=pg_catalog") {
 		t.Errorf("lookup %q", argv)
 	}
 }

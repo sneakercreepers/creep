@@ -54,21 +54,17 @@ func openRealMirror(t *testing.T, st Status, m Mirror) *Sandbox {
 	return s
 }
 
-const synthRow = "synthetic-row-from-migration"
-
 // TestRealNetworkIsolated runs a real run network end to end: the canary
-// passes, the database is seeded from a migration and nothing else, a PoC
-// that tries the internet fails while it reaches the database, no port is
-// published, nothing on the host's network reaches the database, and Close
-// removes the network.
+// passes, the database starts empty, a PoC that tries the internet fails
+// while it reaches the database, no port is published, nothing on the
+// host's network reaches the database, and Close removes the network.
 func TestRealNetworkIsolated(t *testing.T) {
 	eachRuntime(t, func(t *testing.T, st Status) {
 		pullPinned(t, st)
 		probe := probeImage(t, st)
 		t.Setenv("DATABASE_URL", "postgres://real:"+hostMarker+"@prod.example/app")
 		s := openReal(t, st)
-		db, err := s.StartDatabase(context.Background(), []Migration{{Path: "migrations/1_init.sql",
-			SQL: []byte("CREATE TABLE items (id serial PRIMARY KEY, name text NOT NULL); INSERT INTO items (name) VALUES ('" + synthRow + "');")}})
+		db, err := s.StartDatabase(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,9 +72,9 @@ func TestRealNetworkIsolated(t *testing.T) {
 		if err != nil || res[0].ExitCode != 0 || string(res[0].Output) != "ok" {
 			t.Fatalf("PoC trying the internet: %v %+v: %s", err, res, firstOutput(res))
 		}
-		checkDatabaseHoldsOnlySeed(t, s, db)
+		checkDatabaseEmpty(t, s, db)
 		dbID := waitForContainer(t, st, LabelRun+"="+s.runID)
-		checkNoHostReach(t, st, s, dbID, probe)
+		checkNoHostReach(t, st, dbID, probe)
 		if err := s.Close(); err != nil {
 			left, _ := cliCode(t, st, "ps", "--all", "--filter", "label="+LabelRun+"="+s.runID, "--format", "{{.ID}} {{.Image}} {{.Status}}")
 			t.Fatalf("Close: %v; left: %s", err, left)
@@ -96,10 +92,9 @@ func firstOutput(res []Result) string {
 	return string(res[0].Output)
 }
 
-// checkDatabaseHoldsOnlySeed dumps the database from a client on the
-// network: the migration's table and row are there, nothing else is, and
-// no host data is.
-func checkDatabaseHoldsOnlySeed(t *testing.T, s *Sandbox, db Database) {
+// checkDatabaseEmpty dumps the database from a client on the network: it
+// holds no table and no host data; only the app's migrate step adds any.
+func checkDatabaseEmpty(t *testing.T, s *Sandbox, db Database) {
 	t.Helper()
 	if err := s.clearNetwork(context.Background()); err != nil {
 		t.Fatal(err)
@@ -113,10 +108,8 @@ func checkDatabaseHoldsOnlySeed(t *testing.T, s *Sandbox, db Database) {
 		t.Fatalf("pg_dump: %v exit %d: %s", err, res.ExitCode, dump)
 	}
 	switch {
-	case !strings.Contains(dump, "CREATE TABLE public.items") || !strings.Contains(dump, synthRow):
-		t.Errorf("the migration is missing from the database:\n%s", dump)
-	case strings.Count(dump, "CREATE TABLE") != 1:
-		t.Errorf("tables beyond the migration's:\n%s", dump)
+	case strings.Contains(dump, "CREATE TABLE"):
+		t.Errorf("a table in the empty database:\n%s", dump)
 	case strings.Contains(dump, hostMarker):
 		t.Errorf("host data in the database:\n%s", dump)
 	}
@@ -128,11 +121,10 @@ type mountPoint struct {
 	RW                        bool
 }
 
-// checkNoHostReach: the runtime publishes no port of the database, its
-// only mount is the read-only seed in the work directory (the data is a
-// tmpfs, the image VOLUME got no host volume), and a container on the
-// host's own network cannot connect to it.
-func checkNoHostReach(t *testing.T, st Status, s *Sandbox, id, probe string) {
+// checkNoHostReach: the runtime publishes no port of the database, it has
+// no mount (the data is a tmpfs, the image VOLUME got no host volume),
+// and a container on the host's own network cannot connect to it.
+func checkNoHostReach(t *testing.T, st Status, id, probe string) {
 	t.Helper()
 	// An image's EXPOSE shows up as a port with no host binding (null);
 	// any binding at all is a published port.
@@ -159,9 +151,8 @@ func checkNoHostReach(t *testing.T, st Status, s *Sandbox, id, probe string) {
 	mounts = slices.DeleteFunc(mounts, func(m mountPoint) bool {
 		return m.Type == "tmpfs" && slices.Contains([]string{pgData, pgSocket, "/tmp"}, m.Destination)
 	})
-	if len(mounts) != 1 || mounts[0].Type != "bind" || mounts[0].RW || mounts[0].Destination != seedTarget ||
-		!strings.HasPrefix(mounts[0].Source, s.workReal) {
-		t.Errorf("database mounts %+v, want only the seed from %s", mounts, s.workReal)
+	if len(mounts) != 0 {
+		t.Errorf("database mounts %+v, want none", mounts)
 	}
 	ip := cli(t, st, "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", id)
 	if ip == "" {
@@ -217,7 +208,7 @@ func TestRealHostReachWithoutInhibit(t *testing.T) {
 		s.netArgs = func(st Status, name, runID string) []string {
 			return slices.DeleteFunc(networkArgs(st, name, runID), func(a string) bool { return strings.HasPrefix(a, "--opt=") })
 		}
-		if _, err := s.StartDatabase(context.Background(), nil); err != nil {
+		if _, err := s.StartDatabase(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		id := waitForContainer(t, st, LabelRun+"="+s.runID)

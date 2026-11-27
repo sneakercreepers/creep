@@ -57,14 +57,17 @@ func (s *Sandbox) readyDatabase() (Database, bool) {
 
 // markerSpec is psql on the run network with the synthetic password in
 // its environment, never on its command line, and without reading a
-// psqlrc (-X).
+// psqlrc (-X). The app and its migrate step own the database, so they can
+// set its search_path and define functions in public: the lookup calls
+// pg_catalog's own to_regclass by its full name and pins search_path to
+// pg_catalog for its session, so no function of theirs answers it.
 func markerSpec(db Database, table string) Spec {
-	query := "SELECT to_regclass('public." + table + "') IS NOT NULL"
+	query := "SELECT pg_catalog.to_regclass('public." + table + "') IS NOT NULL"
 	return Spec{
 		Image: DatabaseImage,
 		Cmd: []string{"psql", "-X", "-q", "-t", "-A", "-h", db.Host, "-p", strconv.Itoa(db.Port),
 			"-U", db.User, "-d", db.Name, "-c", query},
-		Env:       map[string]string{"PGPASSWORD": db.Password},
+		Env:       map[string]string{"PGPASSWORD": db.Password, "PGOPTIONS": "-c search_path=pg_catalog"},
 		Timeout:   markerTimeout,
 		networked: true, tmpfs: []string{pgData},
 	}

@@ -104,7 +104,7 @@ func runBundle(ctx context.Context, e env, box appSandbox, repo *os.Root, paths 
 		fmt.Fprintf(e.stderr, "creep reproduce: %s\n", v.Text())
 		return exitcode.ModelOrSandbox
 	}
-	t, failed := startTarget(ctx, e.stderr, box, app, repo, paths)
+	t, failed := startTarget(ctx, e.stderr, box, app)
 	if failed != nil {
 		fmt.Fprintf(e.stderr, "creep reproduce: %s\n", failed.Text())
 		return exitcode.ModelOrSandbox

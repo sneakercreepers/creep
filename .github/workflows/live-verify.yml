@@ -1,0 +1,102 @@
+name: Live verify
+
+# A real framework app verified end to end (#364, ADR 0016 and ADR 0019
+# amendments). Nightly, on demand, and on a pull request that changes the
+# sandbox, verification, the live app or this workflow: `creep scan --mode
+# nightly` (TestLiveAppVerifies, through the CLI's own scan) with the real
+# sandbox on the Flask app flaskpg. The build is offline, from the wheels
+# committed beside the app; the database starts empty and the app's own
+# migrate step sets it up; the model is the repository's synthesized one,
+# with the PoCs the committed fixtures hold, so there is no key and no model
+# endpoint. The job fails unless the SQL injection and the path traversal
+# of the vulnerable variant are verified 5 of 5 and nothing is verified on
+# the safe twin. No secret, read-only token, never pull_request_target.
+# The model answers are synthesized in the test, not recorded from a live
+# model (live recording: #356). The app's wheels are linux/amd64 only. A
+# run that fails, such as a PoC runner killed with exit 137, fails the job:
+# there is no retry, so a flaky host shows as a red run, never as a pass.
+# A failed scheduled run opens, or comments on, one tracking issue (job
+# report): the only job with a write permission, issues only, and it runs
+# no repository code, only the preinstalled gh with the run's own token.
+on:
+  schedule:
+    - cron: "29 4 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/live-verify.yml
+      - internal/sandbox/**
+      - internal/verify/**
+      - internal/report/**
+      - internal/cli/apptarget.go
+      - internal/cli/poc.go
+      - internal/cli/verify.go
+      - internal/cli/reproduce.go
+      - internal/cli/live_test.go
+      - go.mod
+      - go.sum
+      # The live app and its fixtures; the test-app guard keeps the apps'
+      # directory name out of every workflow.
+      - "**/flaskpg/**"
+
+permissions: {}
+
+concurrency:
+  group: live-verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      # creep never pulls: the canary and runner (BusyBox), the database
+      # (PostgreSQL) and the app's base image (Python), each by digest.
+      # Detection prefers rootless Podman, which the runner has, over the
+      # Docker daemon, so both runtimes get them.
+      - name: Pull the pinned images
+        run: |
+          for ref in \
+            docker.io/library/busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec \
+            docker.io/library/postgres@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32 \
+            docker.io/library/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+          do
+            docker pull --quiet "$ref"
+            podman pull --quiet "$ref"
+          done
+      - name: creep scan --mode nightly on the live app and its safe twin
+        env:
+          CREEP_LIVE_VERIFY: "1"
+        run: go test -count=1 -v -timeout 25m -run '^TestLiveAppVerifies$' ./internal/cli
+
+  report:
+    needs: live
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Live verify failed on main
+        run: |
+          number="$(gh issue list --state open --search "in:title $TITLE" --json number,title --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')"
+          body="The scheduled live verification failed: $RUN_URL"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi

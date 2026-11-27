@@ -70,6 +70,12 @@ var appCases = []appCase{
 		{variantSafe, ClassSSRF, "/notes/preview", 61, 70},
 		{variantSafe, ClassPathTraversal, "/attachments/<path:name>", 75, 77},
 	}},
+	{"flaskpg", "app.py", []appHypothesis{
+		{variantVulnerable, ClassSQLInjection, "/notes/search", 30, 33},
+		{variantVulnerable, ClassPathTraversal, "/attachments/<path:name>", 38, 39},
+		{variantSafe, ClassSQLInjection, "/notes/search", 28, 31},
+		{variantSafe, ClassPathTraversal, "/attachments/<path:name>", 36, 37},
+	}},
 }
 
 // Acceptance (#95, #204): every testdata app replays at every tier through

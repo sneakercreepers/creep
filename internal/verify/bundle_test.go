@@ -31,7 +31,7 @@ func testMeta() Meta {
 	return Meta{
 		Finding: "sink-3", Class: "template_injection", Commit: strings.Repeat("a", 40),
 		Images: Images{App: testImage, Runner: sandbox.RunnerImage},
-		Seed:   Seed{Migrations: []string{"migrations/1_init.sql"}, SHA256: SeedDigest([]sandbox.Migration{{Path: "migrations/1_init.sql", SQL: []byte("CREATE TABLE t ();")}})},
+		Seed:   Seed{Migrations: []string{}, SHA256: SeedDigest([]string{"python", "migrate.py"})},
 		Target: Target{Port: testPort},
 	}
 }
@@ -159,17 +159,16 @@ func TestReadBundle(t *testing.T) {
 	}
 }
 
-// TestSeedDigest changes with any path, byte or order of the migrations.
+// TestSeedDigest changes with any argument, split or order of the app's
+// migrate step.
 func TestSeedDigest(t *testing.T) {
-	a := sandbox.Migration{Path: "m/1.sql", SQL: []byte("CREATE TABLE a ();")}
-	b := sandbox.Migration{Path: "m/2.sql", SQL: []byte("CREATE TABLE b ();")}
 	seen := map[string]string{}
-	for name, ms := range map[string][]sandbox.Migration{
-		"none": nil, "a": {a}, "a b": {a, b}, "b a": {b, a},
-		"a renamed": {{Path: "m/3.sql", SQL: a.SQL}}, "a edited": {{Path: a.Path, SQL: []byte("CREATE TABLE c ();")}},
-		"split": {{Path: "m/1.sql", SQL: []byte("CREATE TABLE a ();m/2.sql")}},
+	for name, cmd := range map[string][]string{
+		"none": nil, "one": {"migrate"}, "two": {"python", "migrate.py"}, "swapped": {"migrate.py", "python"},
+		"joined": {"pythonmigrate.py"}, "split": {"python", "migrate", ".py"}, "empty arg": {"python", "migrate.py", ""},
+		"length in arg": {"1\x00a"}, "length split": {"1", "a"},
 	} {
-		d := SeedDigest(ms)
+		d := SeedDigest(cmd)
 		if other, dup := seen[d]; dup || len(d) != 64 {
 			t.Errorf("%s: digest %s, same as %s", name, d, other)
 		}

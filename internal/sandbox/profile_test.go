@@ -182,7 +182,7 @@ func allowedOption(o string) bool {
 func TestEveryContainerIsHardened(t *testing.T) {
 	rec := withBuilds(networkRecorder(goodCanary, 0), 0)
 	s := testSandbox(t, rec)
-	env, err := s.WriteSyntheticEnv([]string{"DATABASE_URL", "SECRET_KEY"})
+	env, err := s.writeEnvFile(map[string]string{"SECRET_KEY": "creep-synthetic-test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestEveryContainerIsHardened(t *testing.T) {
 			t.Fatalf("Run(%+v): %v", spec, err)
 		}
 	}
-	if _, err := s.StartDatabase(context.Background(), []Migration{{Path: "migrations/1.sql", SQL: []byte("CREATE TABLE t (id int);")}}); err != nil {
+	if _, err := s.StartDatabase(context.Background()); err != nil {
 		t.Fatalf("StartDatabase: %v", err)
 	}
 	if _, err := s.RunBatch(context.Background(), specs); err != nil {

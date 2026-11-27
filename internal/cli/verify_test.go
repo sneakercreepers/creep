@@ -40,21 +40,28 @@ type fakeBuilder struct {
 	portErr    error
 	startErr   error
 	dbErr      error
+	migrateErr error
 	exchange   func(port int, requests [][]byte) ([]sandbox.Exchange, error)
 	started    int
-	migrations []sandbox.Migration
+	steps      []string // "database", "migrate" and "app", in the order they ran
 	exchanges  int
 }
 
 func (f *fakeBuilder) AppPort(context.Context, sandbox.App) (int, error) { return f.port, f.portErr }
 
-func (f *fakeBuilder) StartDatabase(_ context.Context, m []sandbox.Migration) (sandbox.Database, error) {
-	f.migrations = m
+func (f *fakeBuilder) StartDatabase(context.Context) (sandbox.Database, error) {
+	f.steps = append(f.steps, "database")
 	return sandbox.Database{}, f.dbErr
+}
+
+func (f *fakeBuilder) Migrate(context.Context, sandbox.App) error {
+	f.steps = append(f.steps, "migrate")
+	return f.migrateErr
 }
 
 func (f *fakeBuilder) StartApp(context.Context, sandbox.App) error {
 	f.started++
+	f.steps = append(f.steps, "app")
 	return f.startErr
 }
 
