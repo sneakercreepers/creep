@@ -47,6 +47,8 @@ jobs:
           cache: false
       # creep never pulls: the canary and runner (BusyBox), the database
       # (PostgreSQL) and the app's base image (Python), each by digest.
+      # Detection prefers rootless Podman, which the runner has, over the
+      # Docker daemon, so both runtimes get them.
       - name: Pull the pinned images
         run: |
           for ref in \
@@ -55,6 +57,7 @@ jobs:
             docker.io/library/python@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
           do
             docker pull --quiet "$ref"
+            podman pull --quiet "$ref"
           done
       - name: creep scan --mode nightly on the live app and its safe twin
         env:
