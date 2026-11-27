@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -16,6 +17,10 @@ var unfitCommands = map[string]bool{"scan": true, "resume": true}
 func checkUnfitFlag(command string, o globalOptions) error {
 	if o.allowUnfit && !unfitCommands[command] {
 		return fmt.Errorf("--allow-unfit-model changes only scan and resume, not %s", command)
+	}
+	if o.allowUnfit && o.baselineWrite {
+		// A baseline would accept an unreliable run's findings for later scans.
+		return errors.New("--allow-unfit-model cannot be combined with --baseline-write")
 	}
 	return nil
 }

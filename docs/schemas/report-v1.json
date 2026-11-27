@@ -25,7 +25,11 @@
       "required": ["incomplete"],
       "properties": {
         "incomplete": { "type": "boolean" },
-        "reason": { "$ref": "#/definitions/id" }
+        "reason": { "$ref": "#/definitions/id" },
+        "unreliable_model": {
+          "description": "Set when the scan ran with --allow-unfit-model past the calibration fitness floor (ADR 0036): no clean result, even with no findings.",
+          "const": true
+        }
       }
     },
     "findings": {

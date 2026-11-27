@@ -32,6 +32,8 @@ type sarifRunProps struct {
 	Incomplete    bool         `json:"incomplete"`
 	Coverage      Coverage     `json:"coverage"`
 	DataHandling  DataHandling `json:"data_handling"`
+	// The run was scanned past the fitness floor (ADR 0036).
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
 
 type sarifTool struct {
@@ -132,7 +134,7 @@ func WriteSARIF(w io.Writer, r *Report) error {
 		Tool:        sarifTool{Driver: sarifDriver{Name: r.Tool.Name, Version: r.Tool.Version, InformationURI: toolURI, Rules: rules}},
 		Invocations: []sarifInvocation{sarifInvocationOf(r)},
 		Results:     sarifResults(r.Findings, index),
-		Properties:  sarifRunProps{SchemaVersion: r.SchemaVersion, Incomplete: r.Run.Incomplete, Coverage: r.Coverage, DataHandling: r.DataHandling},
+		Properties:  sarifRunProps{SchemaVersion: r.SchemaVersion, Incomplete: r.Run.Incomplete, Coverage: r.Coverage, DataHandling: r.DataHandling, UnreliableModel: r.Run.UnreliableModel},
 	}
 	if err := writeInertJSON(w, sarifLog{Schema: sarifSchema, Version: sarifVersion, Runs: []sarifRun{run}}); err != nil {
 		return fmt.Errorf("write SARIF report: %w", err)
@@ -228,6 +230,13 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 			Descriptor: sarifDescriptor{ID: "creep/incomplete"},
 			Level:      "error",
 			Message:    sarifMessage{Text: "incomplete run (" + r.Run.Reason + "): not everything was evaluated; this is not a clean result"},
+		})
+	}
+	if r.Run.UnreliableModel {
+		inv.Notifications = append(inv.Notifications, sarifNotification{
+			Descriptor: sarifDescriptor{ID: "creep/unreliable-model"},
+			Level:      "error",
+			Message:    sarifMessage{Text: UnreliableModelNote},
 		})
 	}
 	inv.Notifications = append(inv.Notifications, incrementalNotifications(r.Incremental.Text(r.Coverage.NotEvaluated))...)

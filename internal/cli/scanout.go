@@ -84,7 +84,8 @@ func (s *session) buildReport(cal calibrate.Calibration, res scanResult) (*repor
 			gapped: res.stop != "" || fileGapped(res.gaps),
 		}),
 		NotEvaluated: res.gaps, Scanners: res.scanners.coverage, DataHandling: data,
-		Discovery: res.disc, Verification: res.verify, Incremental: s.incremental,
+		UnreliableModel: !cal.Fitness.Fit,
+		Discovery:       res.disc, Verification: res.verify, Incremental: s.incremental,
 	})
 }
 
@@ -198,6 +199,9 @@ func printScanText(w io.Writer, cal calibrate.Calibration, rep *report.Report, w
 	printScanners(w, rep.Coverage.Scanners)
 	printVerification(w, rep.Verification)
 	printBaseline(w, rep)
+	if rep.Run.UnreliableModel {
+		fmt.Fprintln(w, report.UnreliableModelNote)
+	}
 	if rep.Run.Incomplete {
 		fmt.Fprintln(w, incompleteMark(rep))
 	}

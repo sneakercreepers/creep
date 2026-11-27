@@ -34,6 +34,9 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 }
 
 func writeRunStatus(w io.Writer, run RunInfo) {
+	if run.UnreliableModel {
+		fmt.Fprint(w, "> **"+UnreliableModelNote+"**\n\n")
+	}
 	if !run.Incomplete {
 		fmt.Fprint(w, "**Run complete.** Every planned step and file was evaluated, except the files listed under Not evaluated.\n\n")
 		return

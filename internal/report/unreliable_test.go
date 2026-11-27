@@ -40,3 +40,29 @@ func TestUnreliableModelInFormats(t *testing.T) {
 		t.Fatalf("ReadJSON = %v, label %v", err, back != nil && back.Findings[0].UnreliableModel)
 	}
 }
+
+// #363 audit: a run scanned past the floor that has no findings still
+// says so at run level in every format and validates against the schema,
+// so an empty finding list never reads as a clean result.
+func TestUnreliableModelRunWithNoFindings(t *testing.T) {
+	in := sampleInput(t, false)
+	in.Findings = nil
+	in.UnreliableModel = true
+	got := render(t, newTestReport(t, in))
+	for ext, want := range map[string][]string{
+		"md":    {"> **" + UnreliableModelNote + "**"},
+		"sarif": {`"creep/unreliable-model"`, `"unreliable_model": true`},
+		"json":  {`"unreliable_model": true`},
+	} {
+		for _, w := range want {
+			if !strings.Contains(string(got[ext]), w) {
+				t.Errorf("%s lacks %q:\n%s", ext, w, got[ext])
+			}
+		}
+	}
+	assertValid(t, loadJSON(t, filepath.Join("..", "..", "docs", "schemas", "report-v1.json")), got["json"])
+	back, err := ReadJSON(bytes.NewReader(got["json"]))
+	if err != nil || len(back.Findings) != 0 || !back.Run.UnreliableModel {
+		t.Fatalf("ReadJSON = %v, run %+v", err, back)
+	}
+}

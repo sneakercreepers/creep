@@ -112,6 +112,10 @@ type Tool struct {
 type RunInfo struct {
 	Incomplete bool   `json:"incomplete"`
 	Reason     string `json:"reason,omitempty"` // an ID; empty when complete
+	// UnreliableModel marks a run scanned with --allow-unfit-model past the
+	// calibration fitness floor (ADR 0036): even with no findings it is no
+	// clean result. Added to v1 additively.
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
 
 // Finding is one hypothesis and its verdict. Path comes from the scanned
@@ -154,6 +158,11 @@ type Finding struct {
 // LabelUnreliableModel is the label of a finding UnreliableModel marks, the
 // same word in text, Markdown, SARIF and JSON v1.
 const LabelUnreliableModel = "unreliable_model"
+
+// UnreliableModelNote is the run-level line every format prints for a run
+// RunInfo.UnreliableModel marks, so a run with no findings never reads
+// clean.
+const UnreliableModelNote = "UNRELIABLE MODEL (unreliable_model): the model failed the calibration fitness floor and the scan ran with --allow-unfit-model; neither its findings nor their absence is evidence"
 
 // LineRange is an inclusive range of 1-based lines in the finding's file.
 type LineRange struct {
@@ -229,12 +238,15 @@ type Input struct {
 	Verification   Verification
 	Incremental    Incremental
 	Baseline       BaselineUse
+	// UnreliableModel is RunInfo.UnreliableModel (--allow-unfit-model).
+	UnreliableModel bool
 }
 
 // New validates in and builds the report. Unknown statuses, reasons or
 // malformed IDs are errors: a report never guesses.
 func New(in Input) (*Report, error) {
 	run := runInfo(in.Run, in.ScanIncomplete)
+	run.UnreliableModel = in.UnreliableModel
 	findings, err := checkFindings(in.Findings)
 	if err != nil {
 		return nil, err
