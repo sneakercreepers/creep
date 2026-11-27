@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"testing"
 )
@@ -230,6 +231,25 @@ func TestLiveTestAppPlans(t *testing.T) {
 				t.Errorf("%s: build %q: %v", variant, argv, p)
 			}
 		}
+	}
+}
+
+// TestLiveWorkflowPullsPinnedImages keeps the image digests in one place
+// (auditor info on #373): the live workflow pulls exactly the images the
+// code pins, CanaryImage, DatabaseImage and the live app's base, which
+// TestLiveTestAppPlans reads from its Dockerfile, so a digest bumped in
+// one place and not the other fails here instead of at base_image_missing.
+func TestLiveWorkflowPullsPinnedImages(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "live-verify.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := regexp.MustCompile(`[a-z0-9./-]+@sha256:[0-9a-f]{64}`).FindAllString(string(data), -1)
+	slices.Sort(refs)
+	want := []string{CanaryImage, DatabaseImage, liveBase}
+	slices.Sort(want)
+	if !slices.Equal(slices.Compact(refs), want) {
+		t.Errorf("live-verify.yml pulls %q, want %q", refs, want)
 	}
 }
 

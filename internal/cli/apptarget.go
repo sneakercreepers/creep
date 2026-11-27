@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/sneakercreepers/creep/internal/report"
@@ -57,6 +58,11 @@ func (t *appTarget) startDatabase(ctx context.Context, w io.Writer, box appSandb
 // migrate runs the app's migrate step and records it as the seed.
 func (t *appTarget) migrate(ctx context.Context, w io.Writer, box appSandbox, app sandbox.App) {
 	t.seed = verify.Seed{Migrations: []string{}, SHA256: verify.SeedDigest(app.MigrateCommand())}
+	if skip := app.MigrateSkipped(); skip != "" {
+		// A closed reason, never repository text.
+		_, _ = fmt.Fprintf(w, "sandbox: the compose file's migrate step was skipped (%s); the app must set up its own schema\n", skip)
+		return
+	}
 	if err := box.Migrate(ctx, app); err != nil {
 		printError(w, "sandbox: the app's migrate step failed; PoCs run against the database it left", err)
 	}

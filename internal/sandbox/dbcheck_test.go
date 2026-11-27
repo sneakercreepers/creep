@@ -85,8 +85,9 @@ func checkLookupArgv(t *testing.T, argv []string) {
 	}
 	img := slices.Index(argv, DatabaseImage)
 	want := []string{"psql", "-X", "-q", "-t", "-A", "-h", "db", "-p", "5432", "-U", "creep", "-d", "app", "-c",
-		"SELECT to_regclass('public." + markerName + "') IS NOT NULL"}
-	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) {
+		"SELECT pg_catalog.to_regclass('public." + markerName + "') IS NOT NULL"}
+	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) ||
+		!slices.Contains(argv, "--env=PGOPTIONS=-c search_path=pg_catalog") {
 		t.Errorf("lookup %q", argv)
 	}
 }

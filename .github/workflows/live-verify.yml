@@ -15,6 +15,9 @@ name: Live verify
 # model (live recording: #356). The app's wheels are linux/amd64 only. A
 # run that fails, such as a PoC runner killed with exit 137, fails the job:
 # there is no retry, so a flaky host shows as a red run, never as a pass.
+# A failed scheduled run opens, or comments on, one tracking issue (job
+# report): the only job with a write permission, issues only, and it runs
+# no repository code, only the preinstalled gh with the run's own token.
 on:
   schedule:
     - cron: "29 4 * * *"
@@ -24,9 +27,16 @@ on:
       - .github/workflows/live-verify.yml
       - internal/sandbox/**
       - internal/verify/**
+      - internal/report/**
       - internal/cli/apptarget.go
       - internal/cli/poc.go
+      - internal/cli/verify.go
+      - internal/cli/reproduce.go
       - internal/cli/live_test.go
+      - go.mod
+      - go.sum
+      # The live app and its fixtures; the test-app guard keeps the apps'
+      # directory name out of every workflow.
       - "**/flaskpg/**"
 
 permissions: {}
@@ -67,3 +77,26 @@ jobs:
         env:
           CREEP_LIVE_VERIFY: "1"
         run: go test -count=1 -v -timeout 25m -run '^TestLiveAppVerifies$' ./internal/cli
+
+  report:
+    needs: live
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Live verify failed on main
+        run: |
+          number="$(gh issue list --state open --search "in:title $TITLE" --json number,title --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')"
+          body="The scheduled live verification failed: $RUN_URL"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi

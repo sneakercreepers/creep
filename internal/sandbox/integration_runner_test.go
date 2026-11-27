@@ -79,13 +79,21 @@ func checkMarkerLookup(t *testing.T, s *Sandbox) {
 		t.Fatal(err)
 	}
 	// What a PoC's stacked statement leaves, made here from a client on
-	// the run network.
-	res, err := s.start(ctx, Spec{
-		Image: DatabaseImage, Cmd: []string{"psql", "-X", "-h", db.Host, "-U", db.User, "-d", db.Name, "-c", "CREATE TABLE " + made + " ()"},
-		Env: map[string]string{"PGPASSWORD": db.Password}, Timeout: time.Minute, networked: true, tmpfs: []string{pgData},
-	})
-	if err != nil || res.ExitCode != 0 {
-		t.Fatalf("create %s: %v exit %d: %s", made, err, res.ExitCode, res.Output)
+	// the run network; then what a hostile migrate step could leave (auditor
+	// L1): a to_regclass in public that says every table exists, first on
+	// the database's search_path.
+	for _, sql := range []string{
+		"CREATE TABLE " + made + " ()",
+		"CREATE FUNCTION public.to_regclass(text) RETURNS regclass LANGUAGE sql AS $$ SELECT 'pg_class'::regclass $$",
+		"ALTER DATABASE " + db.Name + " SET search_path = public, pg_catalog",
+	} {
+		res, err := s.start(ctx, Spec{
+			Image: DatabaseImage, Cmd: []string{"psql", "-X", "-v", "ON_ERROR_STOP=1", "-h", db.Host, "-U", db.User, "-d", db.Name, "-c", sql},
+			Env: map[string]string{"PGPASSWORD": db.Password}, Timeout: time.Minute, networked: true, tmpfs: []string{pgData},
+		})
+		if err != nil || res.ExitCode != 0 {
+			t.Fatalf("%s: %v exit %d: %s", sql, err, res.ExitCode, res.Output)
+		}
 	}
 	for table, want := range map[string]bool{made: true, absent: false} {
 		if got, err := s.DatabaseHasTable(ctx, table); err != nil || got != want {

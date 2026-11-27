@@ -10,35 +10,73 @@ import "go.yaml.in/yaml/v3"
 // app without one sets up its own schema when it starts, or has none.
 const migrateService = "migrate"
 
+// MigrateSkip is why a compose file's migrate service gives no migrate
+// step while the app is still built: a form creep does not run exactly as
+// Compose would. The app then sets up its own schema, or has none.
+type MigrateSkip string
+
+const (
+	// MigrateSkipStringCommand: Compose splits a string command with shell
+	// rules creep would have to copy exactly.
+	MigrateSkipStringCommand MigrateSkip = "string_command"
+	// MigrateSkipEntrypoint: creep would drop the entrypoint and run
+	// something else than the file says.
+	MigrateSkipEntrypoint MigrateSkip = "entrypoint"
+	// MigrateSkipExtends: the service's settings come from another file.
+	MigrateSkipExtends MigrateSkip = "extends"
+	// MigrateSkipNoCommand: the image's own command would start the app.
+	MigrateSkipNoCommand MigrateSkip = "no_command"
+)
+
+// MigrateSkips is the closed set of skip reasons.
+func MigrateSkips() []MigrateSkip {
+	return []MigrateSkip{MigrateSkipStringCommand, MigrateSkipEntrypoint, MigrateSkipExtends, MigrateSkipNoCommand}
+}
+
 // composeMigrate reads the migrate service's command: a list of plain,
-// non-empty strings within the profile's bounds. The string form is
-// refused, since Compose splits it with shell rules creep would have to
-// copy exactly; an entrypoint is refused, since creep would drop it and
-// run something else than the file says.
-func composeMigrate(services *yaml.Node) ([]string, *refusal) {
+// non-empty strings within the profile's bounds. A string command, an
+// entrypoint, extends or no command skip the step with a closed reason;
+// a malformed list or a merge key refuses the compose file, since creep
+// cannot read it exactly.
+func composeMigrate(services *yaml.Node) ([]string, MigrateSkip, *refusal) {
 	svc, ok := lookup(services, migrateService)
 	if !ok {
-		return nil, nil
+		return nil, "", nil
 	}
-	switch _, ext := lookup(svc, "extends"); {
+	switch {
 	case svc.Kind != yaml.MappingNode:
-		return nil, refuse(BuildComposeRefused, "migrate")
-	case ext:
-		return nil, refuse(BuildComposeRefused, "extends")
+		return nil, "", refuse(BuildComposeRefused, "migrate")
 	case hasMergeKey(svc):
-		return nil, refuse(BuildComposeRefused, "merge_key")
+		return nil, "", refuse(BuildComposeRefused, "merge_key")
+	}
+	if skip := migrateSkip(svc); skip != "" {
+		return nil, skip, nil
+	}
+	cmd, _ := lookup(svc, "command")
+	argv, why := migrateCommand(cmd)
+	return argv, "", why
+}
+
+// migrateSkip names a migrate service form creep does not run.
+func migrateSkip(svc *yaml.Node) MigrateSkip {
+	cmd, hasCmd := lookup(svc, "command")
+	if _, ok := lookup(svc, "extends"); ok {
+		return MigrateSkipExtends
 	}
 	if _, ok := lookup(svc, "entrypoint"); ok {
-		return nil, refuse(BuildComposeRefused, "migrate.entrypoint")
+		return MigrateSkipEntrypoint
 	}
-	cmd, ok := lookup(svc, "command")
-	if !ok {
-		return nil, refuse(BuildComposeRefused, "migrate.command")
+	switch {
+	case !hasCmd:
+		return MigrateSkipNoCommand
+	case resolveAlias(cmd).Kind == yaml.ScalarNode:
+		return MigrateSkipStringCommand
 	}
-	return migrateCommand(cmd)
+	return ""
 }
 
 func migrateCommand(n *yaml.Node) ([]string, *refusal) {
+	n = resolveAlias(n)
 	if n.Kind != yaml.SequenceNode || len(n.Content) == 0 || len(n.Content) > maxArgs {
 		return nil, refuse(BuildComposeRefused, "migrate.command")
 	}

@@ -54,6 +54,8 @@ type buildPlan struct {
 	images     []string // images the Dockerfile reads, which must be present
 	checked    []byte   // the Dockerfile as checkDockerfile read it
 	migrate    []string // the compose file's migrate step, nil without one
+	// migrateSkip is why a migrate service gives no step, "" otherwise.
+	migrateSkip MigrateSkip
 }
 
 // Root build files, in the order they are looked for. A compose file
@@ -116,7 +118,7 @@ func planCompose(repo Repo, paths []string, name string) (buildPlan, *refusal) {
 	}
 	for _, df := range dockerfileNames {
 		if slices.Contains(paths, df) {
-			return planDockerfile(repo, buildPlan{context: ".", dockerfile: df, migrate: plan.migrate})
+			return planDockerfile(repo, buildPlan{context: ".", dockerfile: df, migrate: plan.migrate, migrateSkip: plan.migrateSkip})
 		}
 	}
 	return buildPlan{}, refuse(BuildNoFile, "compose_without_build")

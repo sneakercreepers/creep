@@ -42,10 +42,15 @@ type App struct {
 	Detail      string      // closed detail of Unavailable: a compose key, a Dockerfile rule, an exit status
 	workdir     string      // the image's checked working directory, set only by checkBuilt
 	migrate     []string    // the app's migrate step (composeMigrate), set only by build
+	migrateSkip MigrateSkip // why a migrate service gave no step, set only by build
 }
 
 // MigrateCommand is a copy of the app's migrate step, nil without one.
 func (a App) MigrateCommand() []string { return slices.Clone(a.migrate) }
+
+// MigrateSkipped is why the compose file's migrate service gave no step,
+// "" when it gave one or there is none.
+func (a App) MigrateSkipped() MigrateSkip { return a.migrateSkip }
 
 // Built reports an image that StartApp can run.
 func (a App) Built() bool { return a.Unavailable == "" && a.Image != "" }
@@ -119,7 +124,7 @@ func (s *Sandbox) build(ctx context.Context, repo Repo) (App, error) {
 	s.recordImage(image)
 	app, err := s.checkBuilt(ctx, image)
 	if app.Built() {
-		app.migrate = plan.migrate
+		app.migrate, app.migrateSkip = plan.migrate, plan.migrateSkip
 	}
 	return app, err
 }
