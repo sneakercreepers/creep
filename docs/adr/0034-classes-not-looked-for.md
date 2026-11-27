@@ -1,6 +1,6 @@
 # ADR 0034: Classes creep does not look for, and code eval and deserialization as their own classes
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
 - **Changes:** the report contract gains a fixed list of the classes no scan looks for, in every format (JSON v1 `coverage.not_looked_for`, additive); SARIF rules gain a CWE tag; discovery, the planner and the reader gain two sink kinds and two classes (`code_eval` → `code_injection`, `deserialize` → `insecure_deserialization`); discovery's `PromptVersion` goes to 2. No dependency, flag, exit code or config key. Amends ADR 0009 (report classes) and ADR 0017 (the tripwire's kind column).
