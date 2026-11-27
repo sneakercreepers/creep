@@ -165,6 +165,60 @@
           "insecure_deserialization"
         ]
       }
+    ],
+    "not_looked_for": [
+      {
+        "class": "memory_safety",
+        "cwe": "CWE-119"
+      },
+      {
+        "class": "xss",
+        "cwe": "CWE-79"
+      },
+      {
+        "class": "xxe",
+        "cwe": "CWE-611"
+      },
+      {
+        "class": "csrf",
+        "cwe": "CWE-352"
+      },
+      {
+        "class": "open_redirect",
+        "cwe": "CWE-601"
+      },
+      {
+        "class": "idor",
+        "cwe": "CWE-639"
+      },
+      {
+        "class": "missing_auth",
+        "cwe": "CWE-306"
+      },
+      {
+        "class": "broken_auth",
+        "cwe": "CWE-287"
+      },
+      {
+        "class": "prototype_pollution",
+        "cwe": "CWE-1321"
+      },
+      {
+        "class": "weak_crypto",
+        "cwe": "CWE-327"
+      },
+      {
+        "class": "race_condition",
+        "cwe": "CWE-362"
+      },
+      {
+        "class": "redos",
+        "cwe": "CWE-1333"
+      },
+      {
+        "class": "business_logic",
+        "cwe": "CWE-840"
+      }
     ]
   },
   "data_handling": {

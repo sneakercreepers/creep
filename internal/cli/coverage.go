@@ -7,8 +7,17 @@ import (
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
-// classTemplateInjection is a reader class calibration does not measure yet.
-const classTemplateInjection = "template_injection"
+// Reader classes calibration does not measure yet. Code eval and
+// deserialization were folded into command_injection before #365.
+const (
+	classTemplateInjection = "template_injection"
+	classCodeInjection     = "code_injection"
+	classDeserialization   = "insecure_deserialization"
+)
+
+// uncalibratedClasses are the readable classes coverage lists after the
+// calibrated ones, in this order.
+var uncalibratedClasses = []string{classTemplateInjection, classCodeInjection, classDeserialization}
 
 // kindClass names the report class of a discover sink kind, using the
 // calibration's names so findings and coverage rows agree. An unmapped kind
@@ -27,6 +36,10 @@ func kindClass(k discover.SinkKind) string {
 		return classTemplateInjection
 	case discover.SinkNoSQL:
 		return string(calibrate.ClassNoSQLInjection)
+	case discover.SinkCodeEval:
+		return classCodeInjection
+	case discover.SinkDeserialize:
+		return classDeserialization
 	}
 	return k.String()
 }
@@ -36,6 +49,7 @@ var readClasses = map[string]bool{
 	string(calibrate.ClassSQLi): true, string(calibrate.ClassCommandInjection): true,
 	string(calibrate.ClassPathTraversal): true, string(calibrate.ClassSSRF): true,
 	classTemplateInjection: true, string(calibrate.ClassNoSQLInjection): true,
+	classCodeInjection: true, classDeserialization: true,
 }
 
 // classSeverity rates a confirmed finding of each class for the gate
@@ -46,6 +60,8 @@ var classSeverity = map[string]string{
 	string(calibrate.ClassPathTraversal):    "high",
 	string(calibrate.ClassSSRF):             "high",
 	classTemplateInjection:                  "high",
+	classCodeInjection:                      "critical",
+	classDeserialization:                    "critical",
 	string(calibrate.ClassNoSQLInjection):   "critical",
 	// Optional scanner classes (ADR 0013): probable until a person checks.
 	"hardcoded_secret":      "high",
@@ -60,15 +76,16 @@ type coverageInput struct {
 	planned  bool // false when the planner refused the input or there was no route to plan
 }
 
-// classCoverage lists every calibrated class, then template injection.
+// classCoverage lists every calibrated class, then the uncalibrated
+// readable ones.
 // A class the pipeline cannot evaluate is not evaluated; a readable one is
 // partial when anything that could hold it was not evaluated in full.
 func classCoverage(in coverageInput) []report.ClassCoverage {
-	names := make([]string, 0, len(calibrate.Classes())+1)
+	names := make([]string, 0, len(calibrate.Classes())+len(uncalibratedClasses))
 	for _, c := range calibrate.Classes() {
 		names = append(names, string(c))
 	}
-	names = append(names, classTemplateInjection)
+	names = append(names, uncalibratedClasses...)
 	out := make([]report.ClassCoverage, len(names))
 	for i, name := range names {
 		out[i] = report.ClassCoverage{Class: name, Status: classStatus(name, in)}

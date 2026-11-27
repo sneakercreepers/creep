@@ -24,6 +24,24 @@ Run `creep why <id>` for the evidence behind a finding.
 | `path_traversal` | `partial` | 3 / 6 | 0.188 – 0.812 |
 | `ssrf` | `not evaluated` | 0 / 0 | 0.000 – 1.000 |
 
+## Not looked for
+
+creep does not look for these classes in any language, so this report says nothing about them:
+
+- memory-safety bugs in C, C++ and unsafe Rust, such as buffer overflows, use after free and format strings (`memory_safety`, CWE-119)
+- cross-site scripting (`xss`, CWE-79)
+- XML external entities (`xxe`, CWE-611)
+- cross-site request forgery (`csrf`, CWE-352)
+- open redirects (`open_redirect`, CWE-601)
+- insecure direct object references (`idor`, CWE-639)
+- missing authentication on a route or function (`missing_auth`, CWE-306)
+- broken authentication, such as weak session, token or password checks (`broken_auth`, CWE-287)
+- prototype pollution (`prototype_pollution`, CWE-1321)
+- weak or misused cryptography (`weak_crypto`, CWE-327)
+- race conditions (`race_condition`, CWE-362)
+- regular-expression denial of service (`redos`, CWE-1333)
+- business-logic flaws (`business_logic`, CWE-840)
+
 **No class covers the 3 files left out by design (vendor 2, generated 1)**, listed under Not evaluated.
 
 ## Not evaluated

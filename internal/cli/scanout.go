@@ -187,6 +187,8 @@ func printScanText(w io.Writer, cal calibrate.Calibration, rep *report.Report, w
 	printFindings(w, rep.Findings)
 	printGaps(w, rep.Coverage.NotEvaluated)
 	printClasses(w, rep.Coverage.Classes)
+	// Beside coverage, so a covered class line never reads as covering them (#365).
+	fmt.Fprintf(w, "not looked for in any language: %s\n", report.NotLookedForText())
 	if summary := report.ByDesignSummary(rep.Coverage.NotEvaluated); summary != "" {
 		// Beside the class line, so "covered" never reads as covering them (#213).
 		fmt.Fprintf(w, "coverage excludes %s, listed above\n", summary)

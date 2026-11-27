@@ -26,6 +26,8 @@ const (
 	SinkHTTPClient
 	SinkTemplate
 	SinkNoSQL
+	SinkCodeEval
+	SinkDeserialize
 )
 
 // sinkKinds lists every kind with its wire name, in the order the prompts,
@@ -35,6 +37,7 @@ var sinkKinds = []struct {
 	name string
 }{
 	{SinkSQL, "sql"}, {SinkNoSQL, "nosql"}, {SinkShell, "shell"},
+	{SinkCodeEval, "code_eval"}, {SinkDeserialize, "deserialize"},
 	{SinkFile, "file"}, {SinkHTTPClient, "http_client"}, {SinkTemplate, "template"},
 }
 

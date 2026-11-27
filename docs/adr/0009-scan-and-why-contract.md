@@ -4,7 +4,7 @@
 - **Date:** 2026-11-16
 - **Deciders:** @Ludocius
 - **Changes:** the CLI contract (`scan`, `why`), the JSON report schema v1 (architecture §4), report file locations
-- **Amended by:** [ADR 0032](0032-resume.md) (`creep resume` continues an interrupted scan), [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan), [ADR 0024](0024-discovery-stability.md) (`--stability N`; report v1 gains `stability` on a finding)
+- **Amended by:** [ADR 0034](0034-classes-not-looked-for.md) (Accepted: `coverage.not_looked_for` and the classes `code_injection` and `insecure_deserialization`), [ADR 0032](0032-resume.md) (`creep resume` continues an interrupted scan), [ADR 0020](0020-poc-repetitions-and-bundle.md) (a PoC's rate in text, Markdown and SARIF; `creep reproduce`), [ADR 0022](0022-baseline-and-accepted-risks.md) (the gate skips suppressed findings; report v1 gains `fingerprint` and `suppression`; `creep accept`), [ADR 0021](0021-gate-per-mode.md) (a gate per scan mode; the sandbox runs only in a nightly scan), [ADR 0024](0024-discovery-stability.md) (`--stability N`; report v1 gains `stability` on a finding)
 
 ## Context
 

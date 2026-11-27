@@ -1,8 +1,7 @@
 # Tripwire table (ADR 0017): sink signatures for every language.
 # One row per signature: <kind> TAB <signature> TAB <fixture line>.
-# kind is a planner sink kind: sql, nosql, shell, file, http_client or
-# template. Code evaluation and deserialization run code, so their rows use
-# shell until the planner has kinds for them. A signature is a plain byte
+# kind is a planner sink kind: sql, nosql, shell, code_eval, deserialize,
+# file, http_client or template. A signature is a plain byte
 # string of 2 to 64 bytes, matched case-sensitively on each line of the
 # redacted file, comments and strings included. A signature that starts
 # with an identifier byte (A-Z, a-z, 0-9, _) must not follow one, so
@@ -107,44 +106,44 @@ shell	IO.popen(	IO.popen(cmd)
 shell	Open3.	Open3.capture2(cmd)
 shell	Kernel.system(	Kernel.system(cmd)
 shell	System.cmd(	System.cmd("sh", ["-c", c])
-# Code evaluated from a string (planned as shell)
-shell	eval(	eval(req.body.expr)
-shell	new Function(	const f = new Function(src);
-shell	setTimeout("	setTimeout("run(" + x + ")", 10)
-shell	instance_eval(	obj.instance_eval(code)
-shell	class_eval(	klass.class_eval(code)
-shell	module_eval(	mod.module_eval(code)
-shell	create_function(	$f = create_function('$a', $code);
-shell	runInNewContext(	vm.runInNewContext(code, sandbox)
-shell	runInThisContext(	vm.runInThisContext(code)
-shell	runInContext(	vm.runInContext(code, ctx)
-shell	vm.Script(	new vm.Script(code)
-shell	Code.eval_string(	Code.eval_string(code)
-shell	loadstring(	local f = loadstring(code)
-shell	assert($	assert($code);
-# Objects decoded from bytes or text (planned as shell)
-shell	pickle.load	obj = pickle.loads(data)
-shell	cPickle.load	obj = cPickle.loads(data)
-shell	dill.load	obj = dill.loads(data)
-shell	jsonpickle.decode(	obj = jsonpickle.decode(data)
-shell	marshal.load	obj = marshal.loads(data)
-shell	yaml.load(	cfg = yaml.load(body)
-shell	yaml.unsafe_load(	cfg = yaml.unsafe_load(body)
-shell	yaml.full_load(	cfg = yaml.full_load(body)
-shell	YAML.load(	cfg = YAML.load(body)
-shell	Psych.load(	cfg = Psych.load(body)
-shell	Marshal.load(	obj = Marshal.load(data)
-shell	unserialize(	$o = unserialize($_COOKIE['s']);
-shell	ObjectInputStream(	new ObjectInputStream(in).readObject();
-shell	.readObject(	Object o = ois.readObject();
-shell	XMLDecoder(	new XMLDecoder(in).readObject();
-shell	XStream(	new XStream().fromXML(xml);
-shell	BinaryFormatter	var f = new BinaryFormatter();
-shell	NetDataContractSerializer	var s = new NetDataContractSerializer();
-shell	LosFormatter	var f = new LosFormatter();
-shell	TypeNameHandling	TypeNameHandling = TypeNameHandling.All
-shell	torch.load(	model = torch.load(path)
-shell	joblib.load(	model = joblib.load(path)
+# Code evaluated from a string
+code_eval	eval(	eval(req.body.expr)
+code_eval	new Function(	const f = new Function(src);
+code_eval	setTimeout("	setTimeout("run(" + x + ")", 10)
+code_eval	instance_eval(	obj.instance_eval(code)
+code_eval	class_eval(	klass.class_eval(code)
+code_eval	module_eval(	mod.module_eval(code)
+code_eval	create_function(	$f = create_function('$a', $code);
+code_eval	runInNewContext(	vm.runInNewContext(code, sandbox)
+code_eval	runInThisContext(	vm.runInThisContext(code)
+code_eval	runInContext(	vm.runInContext(code, ctx)
+code_eval	vm.Script(	new vm.Script(code)
+code_eval	Code.eval_string(	Code.eval_string(code)
+code_eval	loadstring(	local f = loadstring(code)
+code_eval	assert($	assert($code);
+# Objects decoded from bytes or text
+deserialize	pickle.load	obj = pickle.loads(data)
+deserialize	cPickle.load	obj = cPickle.loads(data)
+deserialize	dill.load	obj = dill.loads(data)
+deserialize	jsonpickle.decode(	obj = jsonpickle.decode(data)
+deserialize	marshal.load	obj = marshal.loads(data)
+deserialize	yaml.load(	cfg = yaml.load(body)
+deserialize	yaml.unsafe_load(	cfg = yaml.unsafe_load(body)
+deserialize	yaml.full_load(	cfg = yaml.full_load(body)
+deserialize	YAML.load(	cfg = YAML.load(body)
+deserialize	Psych.load(	cfg = Psych.load(body)
+deserialize	Marshal.load(	obj = Marshal.load(data)
+deserialize	unserialize(	$o = unserialize($_COOKIE['s']);
+deserialize	ObjectInputStream(	new ObjectInputStream(in).readObject();
+deserialize	.readObject(	Object o = ois.readObject();
+deserialize	XMLDecoder(	new XMLDecoder(in).readObject();
+deserialize	XStream(	new XStream().fromXML(xml);
+deserialize	BinaryFormatter	var f = new BinaryFormatter();
+deserialize	NetDataContractSerializer	var s = new NetDataContractSerializer();
+deserialize	LosFormatter	var f = new LosFormatter();
+deserialize	TypeNameHandling	TypeNameHandling = TypeNameHandling.All
+deserialize	torch.load(	model = torch.load(path)
+deserialize	joblib.load(	model = joblib.load(path)
 #
 # Files opened, read, written or served by path
 file	open(	with open(path) as f:

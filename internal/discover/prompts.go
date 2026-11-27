@@ -9,7 +9,7 @@ import (
 // PromptVersion names the prompts in prompts/, the answer schema, the
 // canary template and the batch layout. A change to any bumps it, so a
 // recorded reply says what produced it.
-const PromptVersion = 1
+const PromptVersion = 2
 
 // Tier selects the prompt variant and the batch budget. It mirrors
 // calibrate.Tier, which discover may not import (both are layer 4).

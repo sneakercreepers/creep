@@ -7,7 +7,9 @@ For every file, report:
 - sinks: each call that runs a dangerous operation, by the line of the call and its kind:
   "sql": runs an SQL query or statement, through a driver, an ORM's raw query or a query builder's raw clause.
   "nosql": a document-store query, such as MongoDB find, findOne, aggregate or a $where clause.
-  "shell": runs a shell command or a process, evaluates code from a string (eval, Function, vm), or decodes objects from bytes or text (pickle, unserialize, unsafe YAML, Java or .NET object streams).
+  "shell": runs a shell command or a process.
+  "code_eval": evaluates code built from a string (eval, Function, vm, instance_eval).
+  "deserialize": decodes objects from bytes or text (pickle, unserialize, unsafe YAML, Java or .NET object streams).
   "file": opens, reads, writes, deletes, includes or serves a file by path.
   "http_client": an outbound HTTP or network request to an address.
   "template": renders a template built from a string rather than a fixed file.

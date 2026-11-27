@@ -1,0 +1,10 @@
+calibration: model "test-model" · tier M · calibrated 2026-11-01 (seed 1, task set 0123456789ab, prompts v1)
+inventory: language c 1
+discovery: 1 whole source files sent, redacted
+findings: 0 verified, 0 probable, 0 discarded, 0 not evaluated
+coverage: sqli covered, nosql_injection covered, command_injection covered, path_traversal covered, ssrf covered, idor not_evaluated, missing_auth not_evaluated, prototype_pollution not_evaluated, template_injection covered, code_injection covered, insecure_deserialization covered
+not looked for in any language: memory-safety bugs in C, C++ and unsafe Rust, such as buffer overflows, use after free and format strings (CWE-119); cross-site scripting (CWE-79); XML external entities (CWE-611); cross-site request forgery (CWE-352); open redirects (CWE-601); insecure direct object references (CWE-639); missing authentication on a route or function (CWE-306); broken authentication, such as weak session, token or password checks (CWE-287); prototype pollution (CWE-1321); weak or misused cryptography (CWE-327); race conditions (CWE-362); regular-expression denial of service (CWE-1333); business-logic flaws (CWE-840)
+scanner gitleaks: not_enabled; not evaluated: hardcoded_secret
+scanner osv-scanner: not_enabled; not evaluated: vulnerable_dependency
+scanner semgrep: not_enabled; not evaluated: xss, insecure_deserialization, weak_crypto
+reports: .creep/report.json .creep/report.md .creep/report.sarif

@@ -49,7 +49,15 @@ const (
 	SinkTemplate
 	// SinkNoSQL is a document-store query, such as MongoDB's findOne.
 	SinkNoSQL
+	// SinkCodeEval evaluates code built from a string (eval, Function, vm).
+	SinkCodeEval
+	// SinkDeserialize decodes objects from bytes or text (pickle,
+	// unserialize, unsafe YAML, Java or .NET object streams).
+	SinkDeserialize
 )
+
+// lastSinkKind is the highest valid kind; validate and tests read it.
+const lastSinkKind = SinkDeserialize
 
 // Tier is the calibration tier (calibrate.Tier S, M or L). The zero value
 // is not a tier: the caller maps an unmeasured model to TierS, as
@@ -153,7 +161,7 @@ func checkSinks(list []Sink, routes map[RouteID]Route) error {
 		if _, ok := routes[s.Route]; !ok {
 			return fmt.Errorf("%w: sink %d names unknown route %d", ErrInput, s.ID, s.Route)
 		}
-		if s.Kind < SinkSQL || s.Kind > SinkNoSQL {
+		if s.Kind < SinkSQL || s.Kind > lastSinkKind {
 			return fmt.Errorf("%w: sink %d has kind %d", ErrInput, s.ID, s.Kind)
 		}
 	}

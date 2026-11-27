@@ -255,8 +255,8 @@ func TestBenchClassesAreCoverageClasses(t *testing.T) {
 			t.Errorf("case %s: class %q is not in %v", c.ID, c.Class, known)
 		}
 	}
-	if len(known) != len(calibrate.Classes())+1 {
-		t.Errorf("coverage classes %v: calibration's and template injection", known)
+	if len(known) != len(calibrate.Classes())+len(uncalibratedClasses) {
+		t.Errorf("coverage classes %v: calibration's and the uncalibrated readable ones", known)
 	}
 }
 
