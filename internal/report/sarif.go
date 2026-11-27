@@ -46,8 +46,15 @@ type sarifDriver struct {
 }
 
 type sarifRule struct {
-	ID               string       `json:"id"`
-	ShortDescription sarifMessage `json:"shortDescription"`
+	ID               string          `json:"id"`
+	ShortDescription sarifMessage    `json:"shortDescription"`
+	Properties       *sarifRuleProps `json:"properties,omitempty"`
+}
+
+// sarifRuleProps carries the class's CWE as a tag in GitHub code scanning's
+// form (external/cwe/cwe-<n>).
+type sarifRuleProps struct {
+	Tags []string `json:"tags"`
 }
 
 type sarifMessage struct {
@@ -146,10 +153,19 @@ func sarifRules(findings []Finding) ([]sarifRule, map[string]int) {
 	rules := make([]sarifRule, len(classes))
 	index := make(map[string]int, len(classes))
 	for i, c := range classes {
-		rules[i] = sarifRule{ID: c, ShortDescription: sarifMessage{Text: "creep vulnerability class " + c}}
+		rules[i] = sarifRule{ID: c, ShortDescription: sarifMessage{Text: "creep vulnerability class " + c}, Properties: cweTags(c)}
 		index[c] = i
 	}
 	return rules, index
+}
+
+// cweTags is the rule's CWE tag, or nil for a class with no known CWE.
+func cweTags(class string) *sarifRuleProps {
+	cwe := ClassCWE(class)
+	if cwe == "" {
+		return nil
+	}
+	return &sarifRuleProps{Tags: []string{"security", "external/cwe/" + strings.ToLower(cwe)}}
 }
 
 func sarifResults(findings []Finding, index map[string]int) []sarifResult {
@@ -210,6 +226,11 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 		})
 	}
 	inv.Notifications = append(inv.Notifications, incrementalNotifications(r.Incremental.Text(r.Coverage.NotEvaluated))...)
+	inv.Notifications = append(inv.Notifications, sarifNotification{
+		Descriptor: sarifDescriptor{ID: "creep/not-looked-for"},
+		Level:      "note",
+		Message:    sarifMessage{Text: "not looked for in any language: " + NotLookedForText()},
+	})
 	if summary := ByDesignSummary(r.Coverage.NotEvaluated); summary != "" {
 		inv.Notifications = append(inv.Notifications, sarifNotification{
 			Descriptor: sarifDescriptor{ID: "creep/by-design"},

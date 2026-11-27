@@ -33,10 +33,12 @@ func Variants() []Variant { return []Variant{Vulnerable, Safe} }
 const maxSourceBytes = 64 << 10
 
 // Classes are the vulnerability classes a case may name: calibration's and
-// template injection, the names creep's reports use.
+// the uncalibrated readable ones (template, code and deserialization, #365),
+// the names creep's reports use.
 var classes = []string{
 	"sqli", "nosql_injection", "command_injection", "path_traversal", "ssrf",
 	"idor", "missing_auth", "prototype_pollution", "template_injection",
+	"code_injection", "insecure_deserialization",
 }
 
 var languages = []string{"go", "java", "javascript", "php", "python", "ruby"}

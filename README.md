@@ -43,6 +43,24 @@
 
 **Limits:**
 
+**Not looked for.** creep looks for these classes: `sqli`, `nosql_injection`, `command_injection`, `code_injection` (CWE-94), `insecure_deserialization` (CWE-502), `path_traversal`, `ssrf` and `template_injection`, plus the optional scanners' classes. No scan looks for any other class in any language, so a clean report says nothing about them; every report (text, Markdown, SARIF and JSON `coverage.not_looked_for`) lists them beside the coverage ([ADR 0034](docs/adr/0034-classes-not-looked-for.md)). On a C or C++ repository that includes its main bug class, memory safety. The list (kept equal to the reports by `TestReadmeListsNotLookedFor`):
+
+<!-- not-looked-for:start -->
+- memory-safety bugs in C, C++ and unsafe Rust, such as buffer overflows, use after free and format strings (`memory_safety`, CWE-119)
+- cross-site scripting (`xss`, CWE-79)
+- XML external entities (`xxe`, CWE-611)
+- cross-site request forgery (`csrf`, CWE-352)
+- open redirects (`open_redirect`, CWE-601)
+- insecure direct object references (`idor`, CWE-639)
+- missing authentication on a route or function (`missing_auth`, CWE-306)
+- broken authentication, such as weak session, token or password checks (`broken_auth`, CWE-287)
+- prototype pollution (`prototype_pollution`, CWE-1321)
+- weak or misused cryptography (`weak_crypto`, CWE-327)
+- race conditions (`race_condition`, CWE-362)
+- regular-expression denial of service (`redos`, CWE-1333)
+- business-logic flaws (`business_logic`, CWE-840)
+<!-- not-looked-for:end -->
+
 - Languages: any whose files carry an extension or a `#!` interpreter from the list in [Languages](#languages); files with other extensions (plain HTML, shell scripts, SQL, configuration) are not read and not listed. Quality is measured only on the Python and JavaScript test apps; on other languages it is not measured on a real model yet: `creep bench` ([#35](https://github.com/sneakercreepers/creep/issues/35)) covers Go, Java, JavaScript, PHP, Python and Ruby, but its published numbers are synthesized, and the model can miss an entry point or sink that the tripwire has no signature for. See [Languages](#languages).
 - Discovery sends **whole redacted source files** to your model endpoint (the scan says how many on stderr before the first call; `creep estimate` shows the volume). A file whose numbered lines do not fit one discovery call (8 KiB at tier S, 32 KiB at M, 128 KiB at L, less a small canary file and the line numbers) is listed `too_large`, never split, and makes the run incomplete.
 - Redaction masks secrets by their shape and context. It does not mask a token built by concatenation (`"ghp_" + "..."`), a value under 8 bytes that shows up again without its key in a later file, a value found only by its context (a URL password, a key's value) that shows up again without it later in the same file, at any length, a digit-free dotted passphrase that starts with a config receiver (`config.is.sparta`), the first argument of a lookup (`getSecret("...")`), a value on a later line than its key, a bare AWS secret key whose key id only appears in a later file, a token disguised with look-alike or invisible characters outside Unicode category Cf (variation selectors, combining marks, Hangul fillers, the braille blank), or a key id that has a format character inside it and is glued to a word by another one. Zero-width and other format characters inside a token are otherwise handled. Full list: [`internal/redact/doc.go`](internal/redact/doc.go) (Detection limits).
@@ -263,7 +281,7 @@ In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA
 
 ## Output and exit codes
 
-`creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason. Schema v1 changes additively only; since #26 a not-evaluated file may also have the reason `unchanged` (left out of an incremental scan).
+`creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason. Every report also lists the classes no scan looks for (see Limits); since #365 that is the JSON `coverage.not_looked_for`, and code eval and deserialization sinks are reported as `code_injection` and `insecure_deserialization`, no longer as `command_injection`. Schema v1 changes additively only; since #26 a not-evaluated file may also have the reason `unchanged` (left out of an incremental scan).
 
 | Code | Meaning |
 |---|---|

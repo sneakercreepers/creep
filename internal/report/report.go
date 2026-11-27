@@ -173,10 +173,13 @@ type NotEvaluated struct {
 
 // Coverage is what was and was not evaluated. Scanners lists the optional
 // external scanners and the classes they would cover (ADR 0010).
+// NotLookedFor is every class no scan looks for (ADR 0034); New always
+// sets it, and a v1 report written before #365 has none.
 type Coverage struct {
 	Classes      []ClassCoverage   `json:"classes"`
 	NotEvaluated []NotEvaluated    `json:"not_evaluated"`
 	Scanners     []ScannerCoverage `json:"scanners,omitempty"`
+	NotLookedFor []NotLookedFor    `json:"not_looked_for,omitempty"`
 }
 
 // Report is the JSON contract (schema_version 1) and the input of every
@@ -269,7 +272,7 @@ func checkCoverage(in Input, incomplete bool) (Coverage, error) {
 	if err != nil {
 		return Coverage{}, err
 	}
-	return Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners}, nil
+	return Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners, NotLookedFor: NotLookedForClasses()}, nil
 }
 
 // runInfo is incomplete unless the run state ended complete and the scan

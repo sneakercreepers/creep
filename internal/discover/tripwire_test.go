@@ -127,7 +127,7 @@ func TestTripwireLinesAndCap(t *testing.T) {
 	}
 	text := "x = 1\r\nos.system(a); subprocess.run(b)\n\nrequests.get(u); open(f)\nlast = eval(x)"
 	hits, cut := tripwire(rows, []byte(text))
-	want := []hit{{2, SinkShell}, {4, SinkFile}, {4, SinkHTTPClient}, {5, SinkShell}}
+	want := []hit{{2, SinkShell}, {4, SinkFile}, {4, SinkHTTPClient}, {5, SinkCodeEval}}
 	if cut || !sameHits(hits, want) {
 		t.Errorf("hits = %+v cut %v, want %+v", hits, cut, want)
 	}

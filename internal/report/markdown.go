@@ -20,6 +20,7 @@ func WriteMarkdown(w io.Writer, r *Report) error {
 	writeFindings(bw, r.Findings)
 	writeSuppressions(bw, r.Baseline, r.Findings)
 	writeClasses(bw, r.Coverage.Classes)
+	writeNotLookedFor(bw)
 	writeByDesign(bw, ByDesignSummary(r.Coverage.NotEvaluated))
 	writeNotEvaluated(bw, r.Coverage.NotEvaluated)
 	writeDiscovery(bw, r.Discovery)
@@ -68,6 +69,17 @@ func writeClasses(w io.Writer, classes []ClassCoverage) {
 	for _, c := range classes {
 		fmt.Fprintf(w, "| %s | %s | %d / %d | %.3f – %.3f |\n",
 			codeSpan(c.Class), statusText(string(c.Status)), c.Detected, c.Tasks, c.CILow, c.CIHigh)
+	}
+	fmt.Fprint(w, "\n")
+}
+
+// writeNotLookedFor lists, under the class table, the classes no scan
+// looks for, so a covered table never reads as covering them (#365). It
+// reads the fixed list, not the report, so a report read back lists them too.
+func writeNotLookedFor(w io.Writer) {
+	fmt.Fprint(w, "## Not looked for\n\ncreep does not look for these classes in any language, so this report says nothing about them:\n\n")
+	for _, c := range notLookedFor {
+		fmt.Fprintf(w, "- %s (%s, %s)\n", c.Label, codeSpan(c.Class), c.CWE)
 	}
 	fmt.Fprint(w, "\n")
 }
