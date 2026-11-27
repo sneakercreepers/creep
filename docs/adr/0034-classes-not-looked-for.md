@@ -3,7 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
-- **Amended by:** [ADR 0025](0025-recipes.md#amendment-the-code_injection-and-insecure_deserialization-classes-371) (#371, Proposed): recipe v1 gains both classes, replacing "Recipes keep their six classes" in decision 1
+- **Amended by:** [ADR 0025](0025-recipes.md#amendment-the-code_injection-and-insecure_deserialization-classes-371) (#371, Accepted): recipe v1 gains both classes, replacing "Recipes keep their six classes" in decision 1
 - **Changes:** the report contract gains a fixed list of the classes no scan looks for, in every format (JSON v1 `coverage.not_looked_for`, additive); SARIF rules gain a CWE tag; discovery, the planner and the reader gain two sink kinds and two classes (`code_eval` → `code_injection`, `deserialize` → `insecure_deserialization`); discovery's `PromptVersion` goes to 2. No dependency, flag, exit code or config key. Amends ADR 0009 (report classes) and ADR 0017 (the tripwire's kind column).
 - **Fitness function:** the row "Coverage never implies a class creep does not look for" of [architecture.md §9](../architecture.md#9-fitness-functions): `internal/cli/notlookedfor_test.go` (`TestScanOfCFileSaysMemorySafetyIsNotLookedFor` against `testdata/scan_c.golden`, `TestEvalAndDeserializationAreNotCommandInjection`, `TestNotLookedForAgreesWithCoverage`) and `internal/report/notlookedfor_test.go` (`TestReadmeListsNotLookedFor`, `TestNewAlwaysListsNotLookedFor`)
 - **Threat model:** no trust boundary changes; the two kinds are closed enums the model may name, at the same planner severity as `shell`

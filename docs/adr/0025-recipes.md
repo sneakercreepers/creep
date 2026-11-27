@@ -57,7 +57,7 @@ ADR 0012 (superseded by ADR 0017) planned to share a loader with language kits; 
 
 ## Amendment: the code_injection and insecure_deserialization classes (#371)
 
-- **Status:** Proposed (the maintainer accepts)
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Changes:** the recipe format v1 (`class` gains `code_injection` and `insecure_deserialization`, in `internal/recipe` and `docs/schemas/recipe-v1.json`); `creep recipe lint` prints a warning on stderr for a `command_injection` recipe whose sink is an eval or deserialization sink; `discover.SinkKindsOn`, which reads the tripwire table for one line. No new field, version, dependency, package, config key or network path. This replaces the last sentence of ADR 0034 decision 1 ("Recipes keep their six classes").
 
