@@ -24,6 +24,19 @@ func Classes() []Class {
 	}
 }
 
+// PlannedClasses are the calibrated classes a scan can plan: the ones a
+// discover sink kind maps to (internal/cli kindClass, whose test keeps the
+// two lists equal). Only these decide the tier and the fitness floor
+// (#363): idor, missing_auth and prototype_pollution are still measured
+// and reported, but no finding of theirs is ever planned, so a weak score
+// there must not hold a model back and a strong one must not lift it.
+// Planned classes calibration has no tasks for (template_injection,
+// code_injection, insecure_deserialization) cannot be measured, so they
+// stay out until the task set covers them (#358).
+func PlannedClasses() []Class {
+	return []Class{ClassSQLi, ClassNoSQLInjection, ClassCommandInjection, ClassPathTraversal, ClassSSRF}
+}
+
 // Language is the source language of a task.
 type Language string
 

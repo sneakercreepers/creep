@@ -96,7 +96,7 @@ func TestScanSummaryFlagsPartialVerdict(t *testing.T) {
 // incomplete mark, then the report files written, if any; the model name
 // never reaches the terminal as raw control characters.
 func TestPrintScanTextOrder(t *testing.T) {
-	cal := calibrate.Calibration{Result: calibrate.Result{Tier: calibrate.TierM}, Model: models.Identity{Model: "m\x1b[2J"}}
+	cal := calibrate.Calibration{Result: calibrate.Result{Tier: calibrate.TierM, Fitness: calibrate.Fitness{Fit: true}}, Model: models.Identity{Model: "m\x1b[2J"}}
 	tests := []struct {
 		name    string
 		written []string

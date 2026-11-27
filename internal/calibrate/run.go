@@ -25,11 +25,15 @@ const PromptVersion = 1
 // the sink rather than at the sink itself.
 const lineTolerance = 2
 
+// PurposePrefix starts the egress.log purpose of every calibration call, so
+// --stats and creep bench can count calibration's own cost (#363).
+const PurposePrefix = "calibrate-"
+
 // Purposes logged in egress.log for each kind of calibration call.
 const (
-	purposeTask    = "calibrate-task"
-	purposeTool    = "calibrate-tool"
-	purposeContext = "calibrate-context"
+	purposeTask    = PurposePrefix + "task"
+	purposeTool    = PurposePrefix + "tool"
+	purposeContext = PurposePrefix + "context"
 )
 
 // ErrOptions means Run got an unusable Options.
@@ -58,6 +62,9 @@ type Result struct {
 	Structured    StructuredCheck `json:"structured_output"`
 	Tools         ToolCheck       `json:"tool_calling"`
 	Context       ContextCheck    `json:"effective_context"`
+	// Fitness is the fitness floor's verdict (#363, ADR 0036), recorded so
+	// a cached unfit model is refused without calibrating it again.
+	Fitness Fitness `json:"fitness"`
 }
 
 // Run generates the tasks for opts.Seed, asks the model about each, runs the
@@ -104,6 +111,7 @@ func run(ctx context.Context, opts Options, tasks []Task) (Result, error) {
 	}
 	r.Classes, r.Overall = scoreClasses(tasks, correct)
 	r.Tier = assignTier(r)
+	r.Fitness = assessFitness(r)
 	return r, nil
 }
 

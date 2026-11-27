@@ -10,7 +10,15 @@ import (
 	"testing"
 )
 
-// perfectResult is a full-marks calibration over 100 tasks.
+// classTasks is how many tasks Generate gives each class, for every seed:
+// 64 of them in the planned classes.
+var classTasks = map[Class]int{
+	ClassSQLi: 14, ClassNoSQLInjection: 8, ClassCommandInjection: 14, ClassPathTraversal: 14,
+	ClassSSRF: 14, ClassIDOR: 14, ClassMissingAuth: 14, ClassPrototypePollution: 8,
+}
+
+// perfectResult is a full-marks calibration over 100 tasks, half of each
+// class's tasks safe twins.
 func perfectResult() Result {
 	r := Result{
 		Structured: newStructuredCheck(100, 0),
@@ -19,9 +27,19 @@ func perfectResult() Result {
 		Overall:    newScore(100, 100),
 	}
 	for _, c := range Classes() {
-		r.Classes = append(r.Classes, ClassScore{Class: c, Score: newScore(12, 12)})
+		n := classTasks[c]
+		r.Classes = append(r.Classes, ClassScore{Class: c, Score: newScore(n, n), SafeTwins: n / 2})
 	}
 	return r
+}
+
+// missVulnerable takes wrong answers off the vulnerable tasks of classes,
+// by index into Classes().
+func missVulnerable(r *Result, wrong map[int]int) {
+	for i, n := range wrong {
+		c := &r.Classes[i]
+		c.Score = newScore(c.Correct-n, c.Total)
+	}
 }
 
 func TestAssignTier(t *testing.T) {
@@ -45,10 +63,17 @@ func TestAssignTier(t *testing.T) {
 		{"class just under M floor", func(r *Result) { r.Classes[0].Score = newScore(6, 14) }, TierS},
 		{"class not measured", func(r *Result) { r.Classes[3].Score = newScore(0, 0) }, TierS},
 		{"class missing", func(r *Result) { r.Classes = r.Classes[1:] }, TierS},
-		{"overall at L floor", func(r *Result) { r.Overall = newScore(84, 100) }, TierL},
-		{"overall under L floor", func(r *Result) { r.Overall = newScore(83, 100) }, TierM},
-		{"overall at M floor", func(r *Result) { r.Overall = newScore(65, 100) }, TierM},
-		{"overall under M floor", func(r *Result) { r.Overall = newScore(64, 100) }, TierS},
+		// The overall bound is over the 64 planned tasks: L needs 55, M 44.
+		{"planned overall at L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 2: 3, 3: 3}) }, TierL},
+		{"planned overall under L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 2: 3, 3: 3, 4: 1}) }, TierM},
+		{"planned overall at M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 6}) }, TierM},
+		{"planned overall under M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 7}) }, TierS},
+		// #363: classes the planner cannot plan neither lower nor lift a tier,
+		// and the all-tasks score is reported, not gated on.
+		{"unplanned classes all wrong", func(r *Result) { missVulnerable(r, map[int]int{5: 7, 6: 7, 7: 4}) }, TierL},
+		{"unplanned class not measured", func(r *Result) { r.Classes[7].Score = newScore(0, 0) }, TierL},
+		{"all-tasks overall is not read", func(r *Result) { r.Overall = newScore(0, 100) }, TierL},
+		{"duplicated class", func(r *Result) { r.Classes[7] = r.Classes[0] }, TierS},
 		{"zero tasks", func(r *Result) { *r = Result{} }, TierS},
 	}
 	for _, tt := range tests {

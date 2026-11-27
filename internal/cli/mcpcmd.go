@@ -99,7 +99,7 @@ func (m *mcpServer) scan(ctx context.Context, changed []string) (mcp.ScanRun, er
 // and one sample, whatever the server was started with.
 func mcpScanOptions(o globalOptions) globalOptions {
 	o.explicit = maps.Clone(o.explicit)
-	o.mode, o.stability, o.record, o.recalibrate, o.baselineWrite = string(config.ModePR), 1, false, false, false
+	o.mode, o.stability, o.record, o.recalibrate, o.baselineWrite, o.allowUnfit = string(config.ModePR), 1, false, false, false, false
 	return o
 }
 

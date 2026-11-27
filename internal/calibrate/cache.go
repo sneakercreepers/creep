@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/sneakercreepers/creep/internal/models"
@@ -170,11 +171,15 @@ func decodeCached(raw json.RawMessage, want cacheKeyFields) (Result, bool) {
 	if r.Seed != want.Seed || r.TaskSet != want.TaskSet || r.PromptVersion != want.PromptVersion {
 		return Result{}, false
 	}
-	if !r.Context.consistent() {
+	if !r.Context.consistent() || slices.ContainsFunc(r.Classes, inconsistent) {
 		return Result{}, false
 	}
-	return r, r.Tier == assignTier(r)
+	// An entry from before the fitness floor (#363) records no fitness, so
+	// it misses here and is measured again rather than served unchecked.
+	return r, r.Tier == assignTier(r) && r.Fitness.sameVerdict(assessFitness(r))
 }
+
+func inconsistent(s ClassScore) bool { return !s.consistent() }
 
 func store(opts CacheOptions, key string, want cacheKeyFields, r Result) (Calibration, error) {
 	raw, err := json.Marshal(r)
@@ -197,9 +202,9 @@ func (c Calibration) Header() string {
 	if len(set) > 12 {
 		set = set[:12]
 	}
-	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)%s%s",
+	return fmt.Sprintf("model %q · tier %s · calibrated %s (seed %d, task set %s, prompts v%d)%s%s%s",
 		c.Model.Model, c.Tier, c.At.UTC().Format(time.DateOnly), c.Seed, set, c.PromptVersion,
-		contextNote(c.Context), stabilityNote(c.Stability))
+		contextNote(c.Context), stabilityNote(c.Stability), fitnessNote(c.Fitness))
 }
 
 // contextNote says which context probe failed and why, so a model held at

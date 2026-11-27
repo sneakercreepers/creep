@@ -126,7 +126,8 @@ func classStability(findings []report.Finding) map[calibrate.Class]calibrate.Cla
 // record that cannot be written is a warning, never a failed scan.
 func (s *session) feedStability(w io.Writer, cal calibrate.Calibration, findings []report.Finding) calibrate.Calibration {
 	seen := classStability(findings)
-	off := s.opts.stability < 2 || s.mode() == state.ModeReplay || s.cfg.Calibration.CacheDays <= 0
+	// An unfit model run past the floor never feeds the record (ADR 0036).
+	off := s.opts.stability < 2 || s.mode() == state.ModeReplay || s.cfg.Calibration.CacheDays <= 0 || !cal.Fitness.Fit
 	if off || len(seen) == 0 || s.deps.recordStability == nil {
 		return cal
 	}

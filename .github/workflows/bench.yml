@@ -36,8 +36,10 @@ jobs:
   local:
     if: github.event_name != 'workflow_dispatch' || inputs.model == 'local'
     runs-on: ubuntu-latest
-    # 72 case runs on CPU; budget.max_seconds (7200) ends the bench first.
-    timeout-minutes: 150
+    # A real calibration (about 20 minutes on a 4-core CPU, #367), then 72
+    # case runs; budget.max_seconds (7200) bounds each, so the bench ends
+    # before the job.
+    timeout-minutes: 180
     permissions:
       contents: read
     services:
@@ -71,6 +73,10 @@ jobs:
         run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
       # Exit 4 means some case runs were incomplete: the results still count
       # them, and the gate judges the numbers. Any other failure stops here.
+      # --recalibrate first runs one real calibration of the pinned model and
+      # adds its calls, tokens and wall time to the results (#363); it never
+      # changes the tier the bench forces, and the fixture keeps corpus
+      # replies only.
       - name: creep bench
         working-directory: ${{ runner.temp }}
         env:
@@ -78,9 +84,14 @@ jobs:
         run: |
           mkdir -p bench-out
           code=0
-          ./creep bench --record --format json >bench-out/results.json || code=$?
+          ./creep bench --record --recalibrate --format json >bench-out/results.json || code=$?
           echo "creep bench exited $code"
           [ "$code" = 0 ] || [ "$code" = 4 ]
+      # Counts and enums only: the results hold no endpoint or reply.
+      - name: Calibration cost
+        working-directory: ${{ runner.temp }}
+        run: |
+          jq -r '.calibration | "Calibration of the pinned model: \(.calls) calls, \(.input_tokens) tokens in, \(.output_tokens) out, \(.seconds) s; tier \(.tier), fit \(.fit)"' bench-out/results.json | tee -a "$GITHUB_STEP_SUMMARY"
       # bench-local holds results only from a bench that finished (exit 0
       # or 4), so the release gate never reads a broken run's output; a run
       # whose gate then fails keeps them, so a regression still blocks.

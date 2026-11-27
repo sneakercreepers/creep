@@ -70,6 +70,27 @@ func TestCloudBenchPublishesNoEndpointOrReplies(t *testing.T) {
 	}
 }
 
+// #363: the nightly local job runs a real calibration of the pinned model
+// and publishes its cost with the results; the cloud job does not, so a
+// dispatch never pays for a calibration nobody asked for.
+func TestNightlyBenchMeasuresCalibration(t *testing.T) {
+	wf := readRepo(t, ".github", "workflows", "bench.yml")
+	start := strings.Index(wf, "\n  cloud:\n")
+	if start < 0 {
+		t.Fatal("bench.yml: no cloud job")
+	}
+	local, cloud := wf[:start], wf[start:]
+	if !strings.Contains(local, "./creep bench --record --recalibrate --format json >bench-out/results.json") {
+		t.Error("the local job does not calibrate the pinned model")
+	}
+	if !strings.Contains(local, "- name: Calibration cost") {
+		t.Error("the local job does not publish the calibration cost")
+	}
+	if strings.Contains(cloud, "--recalibrate") {
+		t.Error("the cloud job calibrates")
+	}
+}
+
 func readRepo(t *testing.T, elem ...string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(append([]string{"..", "..", ".."}, elem...)...))
