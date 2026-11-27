@@ -72,7 +72,7 @@ Option C with oracle b: it is the only one where nothing the model writes is eve
 
 ## Amendment: verified against a real framework app (#364)
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Changes:** none to `verify.Request`, the templates or the oracles; a new live job proves them against a real app.
 

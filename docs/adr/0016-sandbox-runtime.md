@@ -192,7 +192,7 @@ The release pentest at 1d8a78b found three escapes the Dockerfile check accepted
 
 ## Amendment: the app's own migrate step and the synthetic env (#364)
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Changes:** `StartDatabase` takes no migrations and starts an empty database with no mount; `MigrationPaths` and its fixed list of migration folders are removed; new `Sandbox.Migrate` runs the app's own migrate step; `StartApp` gets the synthetic env; `WriteSyntheticEnv` is replaced by the unexported `appEnv`.
 
