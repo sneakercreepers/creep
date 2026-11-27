@@ -213,3 +213,15 @@ jobs:
         env:
           PACKAGE_REPOS_TOKEN: ${{ secrets.PACKAGE_REPOS_TOKEN }}
         run: bash .github/scripts/package-repos.sh "$GITHUB_REF_NAME" dist
+
+  # Installs the release just pushed from the tap and the bucket on macOS
+  # (arm64, Intel) and Windows (#357). Read-only and secret-free: a failure
+  # shows on this run but unpublishes nothing; recovery is in ADR 0033.
+  package-check:
+    needs: package-repos
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/package-check.yml
+    with:
+      tag: ${{ github.ref_name }}
