@@ -31,6 +31,8 @@ func (s *session) checkRecipes(ctx context.Context, tier calibrate.Tier, stderr 
 		if err != nil {
 			return fmt.Errorf("installed recipe %s from %s: %w", in.Pin.File, in.Pin.Source, err)
 		}
+		// Advisory only (#371): the recipe still loads as pinned.
+		warnSplitClass(stderr, "installed recipe "+in.Pin.File+" from "+in.Pin.Source, r)
 		s.recipes = append(s.recipes, r)
 	}
 	return nil

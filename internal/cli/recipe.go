@@ -68,14 +68,7 @@ func runRecipeLint(e env, name string) int {
 		printError(e.stderr, "creep recipe lint", err)
 		return exitcode.ConfigError
 	}
-	warning, err := splitClassWarning(r)
-	if err != nil {
-		printError(e.stderr, "creep recipe lint", err)
-		return exitcode.ConfigError
-	}
-	if warning != "" {
-		fmt.Fprintf(e.stderr, "recipe %s: warning: %s\n", r.ID, warning)
-	}
+	warnSplitClass(e.stderr, "recipe "+r.ID, r)
 	fmt.Fprintf(e.stdout, "recipe %s: valid (%s); its fixtures are not checked yet: run creep recipe test %s\n", r.ID, r.Class, escapeControl(name))
 	return exitcode.OK
 }

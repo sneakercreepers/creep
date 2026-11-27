@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sneakercreepers/creep/internal/calibrate"
+	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/recipe"
 )
@@ -72,5 +75,68 @@ func TestSplitClassPoCRefused(t *testing.T) {
 		if code != exitcode.ConfigError || !strings.Contains(stderr, "does not prove "+class) {
 			t.Errorf("%s: exit %d: %s", class, code, stderr)
 		}
+	}
+}
+
+// The warning is advisory: when the tripwire table fails to load, lint
+// prints no warning and keeps its own verdict and exit code.
+func TestSplitClassWarningSkipsBrokenTable(t *testing.T) {
+	evalAsCommand := committedRecipe(t, "v1/python-eval-as-command.json")
+	saved := sinkKindsOn
+	t.Cleanup(func() { sinkKindsOn = saved })
+	sinkKindsOn = func(string) ([]discover.SinkKind, error) { return nil, errors.New("tripwire.tsv: broken") }
+	tests := []struct {
+		name, data string
+		code       int
+	}{
+		{"valid recipe stays valid", evalAsCommand, exitcode.OK},
+		{"invalid recipe stays refused", strings.Replace(evalAsCommand, `"version": 1`, `"version": 2`, 1), exitcode.ConfigError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scanRepo(t, map[string]string{"r.json": tt.data}, "")
+			code, out, stderr := run("recipe", "lint", "r.json")
+			if code != tt.code || strings.Contains(stderr, "warning") || strings.Contains(stderr, "tripwire") {
+				t.Errorf("exit %d, want %d: %s%s", code, tt.code, out, stderr)
+			}
+		})
+	}
+}
+
+// Scan warns once per installed command_injection recipe whose vulnerable
+// fixture has only an eval or deserialization sink, and still loads it:
+// the warning never changes loading or the exit code. A shell or SQL
+// recipe gets none.
+func TestScanWarnsOnSplitClassRecipe(t *testing.T) {
+	tests := []struct {
+		name, data string
+		verdict    map[string]string
+		warn       bool
+	}{
+		{"eval as command_injection", committedRecipe(t, "v1/python-eval-as-command.json"), map[string]string{"command_injection@7": "vulnerable"}, true},
+		{"shell sink", committedRecipe(t, "v1/python-shell-ping.json"), map[string]string{"command_injection@8": "vulnerable"}, false},
+		{"sql_injection", string(recipe.Template()), map[string]string{"sql_injection@9": "vulnerable"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+			files := cloneFiles()
+			files["recipes/sqli.json"] = tt.data
+			if code, out, stderr := run("recipe", "add", pinned, makeClone(t, files)); code != exitcode.OK {
+				t.Fatalf("recipe add: exit %d: %s%s", code, out, stderr)
+			}
+			m := &fakeModel{verdict: tt.verdict}
+			code, out, stderr := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--config", cfg)
+			if code == exitcode.ConfigError || code == exitcode.ModelOrSandbox {
+				t.Fatalf("scan: exit %d: %s%s", code, out, stderr)
+			}
+			warnings := strings.Count(stderr, "installed recipe sqli.json from "+cloneSource+": warning: ")
+			if tt.warn && (warnings != 1 || !strings.Contains(stderr, "set class to code_injection")) {
+				t.Errorf("%d warnings, want 1: %s", warnings, stderr)
+			}
+			if !tt.warn && warnings != 0 {
+				t.Errorf("unexpected warning: %s", stderr)
+			}
+		})
 	}
 }
