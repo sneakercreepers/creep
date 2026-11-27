@@ -1,6 +1,6 @@
 # ADR 0036: Refuse a model calibration finds unfit, unless the user overrides
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
 - **Fitness function:** the row "An unfit model is refused or every finding is labeled" of [architecture.md §9](../architecture.md#9-fitness-functions)
