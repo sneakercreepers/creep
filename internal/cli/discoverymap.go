@@ -47,8 +47,6 @@ func filesWithCandidates(res discover.Result) map[discover.FileID]bool {
 
 func markReason(why repofile.Ignored) report.SkipReason {
 	switch why {
-	case repofile.IgnoredVendor:
-		return report.SkipVendor
 	case repofile.IgnoredGenerated:
 		return report.SkipGenerated
 	case repofile.IgnoredMinified:
@@ -64,8 +62,10 @@ func fileReason(f discover.File) report.SkipReason {
 	switch {
 	case f.TripwireCut && f.Reason == discover.ReasonNone:
 		return report.SkipTruncated
-	case f.Coverage == discover.CoverageReadFull, f.Coverage == discover.CoverageNotSource:
+	case f.Coverage == discover.CoverageReadFull:
 		return ""
+	case f.Coverage == discover.CoverageNotSource:
+		return notSourceReason(f.Reason)
 	}
 	if r, ok := skipReason(f.Reason); ok {
 		return r
@@ -98,8 +98,25 @@ func skipReason(r discover.Reason) (report.SkipReason, bool) {
 		return report.SkipParseFailed, true
 	case discover.ReasonTruncated:
 		return report.SkipTruncated, true
+	case discover.ReasonNotCode:
+		return report.SkipNotCode, true
+	case discover.ReasonBinary:
+		return report.SkipBinary, true
 	}
 	return "", false
+}
+
+// notSourceReason lists a file discovery left out by design: not_code or
+// binary. Any other reason with that coverage fails closed as send_failed,
+// so a file is never dropped unlisted (#366).
+func notSourceReason(r discover.Reason) report.SkipReason {
+	switch r {
+	case discover.ReasonNotCode:
+		return report.SkipNotCode
+	case discover.ReasonBinary:
+		return report.SkipBinary
+	}
+	return report.SkipSendFailed
 }
 
 // discoverySummary is what Markdown and the text summary say about

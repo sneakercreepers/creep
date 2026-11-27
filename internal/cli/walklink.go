@@ -119,12 +119,13 @@ func resolveLinks(ctx context.Context, root *os.Root, files *repoFiles, links []
 }
 
 // linkGap lists a link or special file the walk does not follow when it
-// could hold source: its name is a source name, or it may be a directory
-// the walk does not reach at its own path (unreached), whatever its name
-// (#214). One in an installed tree is vendor, like the tree's files; any
-// other is not_regular, which makes the run incomplete (ADR 0009).
+// could hold code: discovery would open a file of its name (any name but a
+// text format, #366), or it may be a directory the walk does not reach at
+// its own path (unreached), whatever its name (#214). One in an ignored,
+// untracked tree is vendor, like the tree's files; any other is
+// not_regular, which makes the run incomplete (ADR 0009).
 func linkGap(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree, proofs *vendorProofs) report.SkipReason {
-	if !discover.SourceName(l.rel) && !unreached(ctx, root, l, tree) {
+	if !discover.MaybeSource(l.rel) && !unreached(ctx, root, l, tree) {
 		return ""
 	}
 	if report.ValidPath(l.rel) && proofs.proven(l.rel) {

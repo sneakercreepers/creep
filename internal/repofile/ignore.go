@@ -6,34 +6,29 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 )
 
-// Ignored is why a file was listed but not evaluated. The zero value means
-// the file was evaluated.
+// Ignored is a mark an author put on a file that discovery read: it labels
+// a file read in full with no candidate, never hides one. The zero value
+// means no mark.
 type Ignored uint8
 
-// Reasons a file is not evaluated.
+// Marks.
 const (
-	// IgnoredVendor: a path segment is a dependency directory
-	// (vendorDirs).
-	IgnoredVendor Ignored = iota + 1
-	// IgnoredGenerated: a comment near the top marks the file as generated.
-	IgnoredGenerated
-	// IgnoredMinified: a JavaScript or TypeScript file with nine tenths of
-	// its bytes on lines longer than minifiedLineBytes. A .min.js name
-	// alone does not count: the name is the author's say-so (pentest P4).
+	// IgnoredGenerated: a generator marker in the first lines.
+	IgnoredGenerated Ignored = iota + 1
+	// IgnoredMinified: nine tenths of the bytes on lines longer than
+	// minifiedLineBytes. A .min name alone does not count: the name is the
+	// author's say-so (pentest P4).
 	IgnoredMinified
 )
 
-// String returns the reason name.
+// String returns the mark name.
 func (r Ignored) String() string {
 	switch r {
 	case 0:
 		return "none"
-	case IgnoredVendor:
-		return "vendor"
 	case IgnoredGenerated:
 		return "generated"
 	case IgnoredMinified:
@@ -42,44 +37,32 @@ func (r Ignored) String() string {
 	return "unknown"
 }
 
-// vendorDirs are directory names that hold third-party code, compared
-// without case because the scanned repo may come from a case-insensitive
-// file system.
-var vendorDirs = []string{
-	"vendor", "node_modules", "bower_components", "jspm_packages", "third_party",
-	"site-packages", "dist-packages", "__pypackages__", ".venv", "venv",
-}
-
 const (
-	// generatedHeadBytes bounds the generated-marker search, so the check
-	// costs the same on any file and a marker deep in a file (a string in
-	// code) does not count.
+	// generatedHeadBytes and generatedHeadLines bound the marker search,
+	// so the check costs the same on any file and a marker deep in a file
+	// does not count.
 	generatedHeadBytes = 1024
+	generatedHeadLines = 5
 	// minifiedLineBytes is the line length past which a line counts as
-	// minified; hand-written code stays far below it.
+	// minified; hand-written text stays far below it.
 	minifiedLineBytes = 500
 	minifiedMinBytes  = 1024
 )
 
 // IgnoreReason reports the mark the file with contents src carries, or 0.
-// name must be relative to the repository root (slash- or
-// backslash-separated): directories above the root must not decide what is
-// left out, so an absolute or escaping name is an error. A mark is only the
-// author's say-so: the caller believes a vendor path only with
-// VendorEvidence, and a generated or minified mark only for a file read in
-// full with no candidate (ADR 0017).
+// The rules read bytes only, never a name or comment syntax, so they hold
+// for any language (#366). name must be relative to the repository root
+// (slash- or backslash-separated): an absolute or escaping name is an
+// error. A mark is the author's say-so: the caller believes it only for a
+// file read in full with no candidate (ADR 0017).
 func IgnoreReason(name string, src []byte) (Ignored, error) {
-	rel, err := repoRelative(name)
-	if err != nil {
+	if _, err := repoRelative(name); err != nil {
 		return 0, err
 	}
-	fam := familyOf(rel)
 	switch {
-	case inVendorDir(rel):
-		return IgnoredVendor, nil
-	case hasGeneratedMarker(fam, src):
+	case hasGeneratedMarker(src):
 		return IgnoredGenerated, nil
-	case minified(rel, src):
+	case minified(src):
 		return IgnoredMinified, nil
 	}
 	return 0, nil
@@ -87,9 +70,8 @@ func IgnoreReason(name string, src []byte) (Ignored, error) {
 
 // repoRelative normalizes a repo-relative name to a clean slash path. The
 // separator follows the host, like the walk that produced the name: on
-// Windows '\' separates, and elsewhere it is a byte of a legal file name,
-// so vendor\x.py at the root of a Linux checkout is one file in no
-// directory (#194). A drive-letter name is refused on every host.
+// Windows '\' separates, and elsewhere it is a byte of a legal file name
+// (#194). A drive-letter name is refused on every host.
 func repoRelative(name string) (string, error) {
 	slash := filepath.ToSlash(name)
 	clean := path.Clean(slash)
@@ -104,85 +86,33 @@ func repoRelative(name string) (string, error) {
 	return clean, nil
 }
 
-func inVendorDir(name string) bool {
-	return slices.ContainsFunc(strings.Split(path.Dir(name), "/"), isVendorName)
-}
+// atGenerated is "@generated" as a whole word.
+var atGenerated = regexp.MustCompile(`(^|[^a-z0-9_])@generated([^a-z0-9_]|$)`)
 
-func isVendorName(dir string) bool {
-	return slices.ContainsFunc(vendorDirs, func(v string) bool { return strings.EqualFold(dir, v) })
-}
-
-// goGenerated is Go's convention (go help generate), which many generators
-// for other languages follow too.
-var goGenerated = regexp.MustCompile(`^Code generated .* DO NOT EDIT\.$`)
-
-// hasGeneratedMarker reports whether a comment in the leading comment block
-// of the file carries an established generator marker, matched exactly:
-// "Code generated ... DO NOT EDIT.", "@generated" as the first word, or
-// protoc's header. Strings, docstrings and comments after the first line of
-// code never count, so a loose mention cannot hide a file.
-func hasGeneratedMarker(fam family, src []byte) bool {
-	for _, c := range leadingComments(fam, src) {
-		switch {
-		case goGenerated.MatchString(c),
-			c == "@generated" || strings.HasPrefix(c, "@generated "),
-			strings.HasPrefix(c, "Generated by the protocol buffer compiler.") && strings.Contains(c, "DO NOT EDIT!"):
+// hasGeneratedMarker reports whether one of the first generatedHeadLines
+// lines, in the first generatedHeadBytes, carries a generator marker in
+// any case: "@generated" as a word, or "generated" with "do not edit" or
+// "do not modify". Any comment syntax counts, since none is parsed.
+func hasGeneratedMarker(src []byte) bool {
+	head := bytes.TrimPrefix(src[:min(len(src), generatedHeadBytes)], []byte{0xef, 0xbb, 0xbf}) // UTF-8 BOM
+	lines := strings.SplitN(string(head), "\n", generatedHeadLines+1)
+	for _, line := range lines[:min(len(lines), generatedHeadLines)] {
+		l := strings.ToLower(line)
+		if atGenerated.MatchString(l) {
+			return true
+		}
+		if strings.Contains(l, "generated") && (strings.Contains(l, "do not edit") || strings.Contains(l, "do not modify")) {
 			return true
 		}
 	}
 	return false
 }
 
-// leadingComments returns the text of the comments before the first line of
-// code in the first generatedHeadBytes, without comment syntax. Python
-// comments start with '#'; other files use '//', '/* ... */' and a '#!'
-// first line. A block comment counts only once it closes on a line of its
-// own: "/* @generated */ var x;" shares its line with code, and a block the
-// head cuts off may close on code, so neither is a header (#194).
-func leadingComments(fam family, src []byte) []string {
-	head := bytes.TrimPrefix(src[:min(len(src), generatedHeadBytes)], []byte{0xef, 0xbb, 0xbf}) // UTF-8 BOM
-	var out, block []string
-	inBlock := false
-	for i, raw := range strings.Split(string(head), "\n") {
-		line := strings.TrimSpace(raw)
-		switch {
-		case inBlock:
-		case line == "":
-			continue
-		case fam == familyPython || (i == 0 && strings.HasPrefix(line, "#!")):
-			if !strings.HasPrefix(line, "#") {
-				return out
-			}
-			out = append(out, strings.TrimSpace(line[1:]))
-			continue
-		case strings.HasPrefix(line, "//"):
-			out = append(out, strings.TrimSpace(line[2:]))
-			continue
-		case strings.HasPrefix(line, "/*"):
-			inBlock, line = true, line[2:]
-		default:
-			return out
-		}
-		body, rest, closed := strings.Cut(line, "*/")
-		block = append(block, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(body), "*")))
-		if !closed {
-			continue
-		}
-		if strings.TrimSpace(rest) != "" {
-			return out
-		}
-		out, block, inBlock = append(out, block...), nil, false
-	}
-	return out
-}
-
-// minified applies only to JavaScript and TypeScript: other code is never
-// minified in practice, so a long line elsewhere is read, not believed. The
-// whole file must be dense: nine tenths of its bytes on lines longer than
-// minifiedLineBytes, so one long line padding readable code is not enough
-// (pentest P4).
-func minified(name string, src []byte) bool {
-	if familyOf(name) != familyScript || len(src) < minifiedMinBytes {
+// minified reports a dense file: nine tenths of its bytes on lines longer
+// than minifiedLineBytes, so one long line padding readable text is not
+// enough (pentest P4).
+func minified(src []byte) bool {
+	if len(src) < minifiedMinBytes {
 		return false
 	}
 	long := 0
@@ -193,22 +123,3 @@ func minified(name string, src []byte) bool {
 	}
 	return long*10 >= len(src)*9
 }
-
-// family is a file's comment and minification style, from its extension.
-// It only decides how a mark is read, never whether a file is source:
-// that is the discover inventory's job.
-type family uint8
-
-const (
-	familyOther  family = iota
-	familyPython        // '#' comments; venv marks
-	familyScript        // JavaScript and TypeScript: minified bundles; node_modules marks
-)
-
-var familyExts = map[string]family{
-	".py": familyPython, ".pyi": familyPython, ".pyw": familyPython,
-	".js": familyScript, ".mjs": familyScript, ".cjs": familyScript, ".jsx": familyScript,
-	".ts": familyScript, ".mts": familyScript, ".cts": familyScript, ".tsx": familyScript,
-}
-
-func familyOf(name string) family { return familyExts[strings.ToLower(path.Ext(name))] }

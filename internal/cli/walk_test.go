@@ -44,10 +44,10 @@ func walkDir(t *testing.T, files map[string]string) repoFiles {
 	return got
 }
 
-// The walk hands every regular file to discovery, in lexical order, so the
-// inventory decides what is source in any language (ADR 0017): nothing is
-// unsupported_language any more, and a file that cannot be source is
-// neither sent nor listed.
+// The walk hands every regular file to discovery, in lexical order, so its
+// bytes decide what is read in any language (ADR 0017, #366): nothing is
+// unsupported_language any more, and sources() counts every file but a
+// text format.
 func TestWalkSendsEveryRegularFile(t *testing.T) {
 	got := walkDir(t, map[string]string{
 		"main.go": "package main\n", "app.php": "<?php\n", "App.java": "class A {}\n", "app.rb": "x = 1\n",
@@ -57,16 +57,17 @@ func TestWalkSendsEveryRegularFile(t *testing.T) {
 	if !slices.Equal(got.paths, want) || len(got.gaps) != 0 {
 		t.Fatalf("paths %v gaps %+v, want %v and no gap", got.paths, got.gaps, want)
 	}
-	if n := got.sources(); n != 5 {
-		t.Errorf("sources() = %d, want 5 (go, php, java, ruby, the extensionless script)", n)
+	if n := got.sources(); n != 6 {
+		t.Errorf("sources() = %d, want 6 (all but README.md)", n)
 	}
 }
 
-// A name report.New would refuse on a finding (#177) is listed when it
-// could be source, never sent and never fatal; one that cannot be is
-// dropped. Windows cannot hold these names, so entryGap is called directly.
+// A name report.New would refuse on a finding (#177) is listed, never sent
+// and never fatal: invalid_path, or not_code when discovery would never
+// open it (#366). Windows cannot hold these names, so entryGap is called
+// directly.
 func TestEntryGapRefusedNames(t *testing.T) {
-	proofs := newVendorProofs(context.Background(), nil)
+	proofs := openProofs(t, t.TempDir())
 	tests := []struct {
 		name string
 		want report.SkipReason
@@ -76,7 +77,8 @@ func TestEntryGapRefusedNames(t *testing.T) {
 		{"a:b.py", report.SkipInvalidPath, false},
 		{`web\app.go`, report.SkipInvalidPath, false},
 		{"./app.py", report.SkipInvalidPath, false},
-		{`web\notes.png`, "", false},
+		{`web\notes.png`, report.SkipInvalidPath, false},
+		{`web\notes.md`, report.SkipNotCode, false},
 	}
 	for _, tt := range tests {
 		got, send := entryGap(tt.name, proofs)

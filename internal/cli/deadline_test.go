@@ -82,9 +82,9 @@ func TestScanDeadlineEndsRunIncomplete(t *testing.T) {
 }
 
 // Past the deadline discovery reads no file and calls no model, lists every
-// file that could be source as budget, and still returns a result, so the
-// run reaches its report; a file the name alone says is not source stays
-// unlisted, as in any run.
+// file it would open as budget, and still returns a result, so the run
+// reaches its report; a file named as a text format is not_code, as in any
+// run.
 func TestDiscoveryPastDeadlineListsFilesLeft(t *testing.T) {
 	scanRepo(t, map[string]string{"a.py": "@flask", "web/b.js": "@express", "c.go": "package c\n", "README.md": "# r\n"}, "")
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -92,6 +92,7 @@ func TestDiscoveryPastDeadlineListsFilesLeft(t *testing.T) {
 	m := &fakeModel{}
 	rs := discoverWithin(t, ctx, m, calibrate.TierM)
 	want := []report.NotEvaluated{
+		{Path: "README.md", Reason: report.SkipNotCode},
 		{Path: "a.py", Reason: report.SkipBudget},
 		{Path: "c.go", Reason: report.SkipBudget},
 		{Path: "web/b.js", Reason: report.SkipBudget},

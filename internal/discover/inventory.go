@@ -9,9 +9,10 @@ import (
 	"sync"
 )
 
-// Language is a source language the inventory knows: an ID for reports
-// and a hint in the prompt, never a choice of analysis path. The zero
-// value means the file is not source.
+// Language is a label for reports and a hint in the prompt, never a
+// choice of analysis path or of what is read (#366): a text file no
+// inventory row names is read as "text". The zero value means the file is
+// not source.
 type Language uint8
 
 // languageNames are the language IDs; Language(i+1) is languageNames[i].
@@ -19,8 +20,11 @@ var languageNames = []string{
 	"python", "javascript", "typescript", "go", "php", "java", "kotlin",
 	"scala", "groovy", "clojure", "ruby", "csharp", "vb", "fsharp", "rust",
 	"elixir", "erlang", "swift", "dart", "perl", "lua", "c", "cpp", "vue",
-	"svelte", "coldfusion", "template",
+	"svelte", "coldfusion", "template", "text",
 }
+
+// textLanguage labels a text file no inventory row names.
+var textLanguage = Language(indexOf(languageNames, "text") + 1) //nolint:gosec // G115: a short list
 
 // canaryLanguage labels the canary section, which is JavaScript.
 var canaryLanguage = Language(indexOf(languageNames, "javascript") + 1) //nolint:gosec // G115: a short list
@@ -56,7 +60,9 @@ func nameOf(names []string, v int) string {
 	return names[v-1]
 }
 
-// Entry is what the inventory says a file is. At most one field is set.
+// Entry is the label the inventory gives a file's name or "#!" line. At
+// most one field is set. It never decides whether a file is read: its
+// bytes and the format table do (formats.go).
 type Entry struct {
 	Language  Language
 	Manifest  Manifest
@@ -74,7 +80,7 @@ const (
 
 var matchNames = []string{"name", "glob", "ext", "shebang"}
 
-// binaryProbeBytes is how much of a source file is searched for a NUL.
+// binaryProbeBytes is how much of a file is searched for a NUL.
 const binaryProbeBytes = 8 << 10
 
 // HeadBytes is how much of a file over redact.MaxFileBytes Read returns:
@@ -182,35 +188,17 @@ func (t inventoryTable) classify(name string, content []byte) Entry {
 	return t.byShebang(interpreter(content))
 }
 
-// needsContent reports that only the file's bytes can say what it is: no
-// name rule matches and it has no extension, so a shebang may make it
-// source. Such a file that cannot be read is listed, never skipped.
-func (t inventoryTable) needsContent(name string) bool {
-	base := baseName(name)
-	_, found := t.byName(base)
-	return !found && extensionless(base)
-}
-
-// MaybeSource reports whether Run could treat the file at name as source:
-// its name says so, or only its bytes can tell. A caller that cannot hand
-// such a file to Run (a link, an invalid name) lists it instead of
-// dropping it. A table that fails to load answers true: fail closed.
+// MaybeSource reports whether Run could read the file at name: every
+// name but a text format of formats.txt, which Run lists not_code without
+// opening it (#366). A caller that cannot hand such a file to Run (a link,
+// an invalid name) lists it instead of dropping it. A table that fails to
+// load answers true: fail closed.
 func MaybeSource(name string) bool {
-	t, err := loadInventory()
+	t, err := loadFormats()
 	if err != nil {
 		return true
 	}
-	return t.classify(name, nil).Language != 0 || t.needsContent(name)
-}
-
-// SourceName reports whether the name alone makes the file source. A
-// caller that never reads the file (a link) uses it: only a name can say.
-func SourceName(name string) bool {
-	t, err := loadInventory()
-	if err != nil {
-		return true
-	}
-	return t.classify(name, nil).Language != 0
+	return t.formatOf(name).opened()
 }
 
 // extensionless counts a dotfile with no other dot (".deploy") as having
@@ -236,9 +224,9 @@ func (t inventoryTable) byShebang(prog string) Entry {
 }
 
 // hasNUL reports a NUL byte in the first binaryProbeBytes of content. A
-// source file that holds one is listed not read, never skipped: an author
-// could otherwise hide a file from the tripwire and discovery (ADR 0017
-// inventory, decided fail-closed in #268).
+// file the inventory labels as source that holds one is listed not read,
+// never binary: an author could otherwise hide a file from the tripwire
+// and discovery (ADR 0017 inventory, decided fail-closed in #268).
 func hasNUL(content []byte) bool {
 	return bytes.IndexByte(content[:min(len(content), binaryProbeBytes)], 0) >= 0
 }

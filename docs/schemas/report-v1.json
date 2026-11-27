@@ -171,7 +171,7 @@
       "required": ["path", "reason"],
       "properties": {
         "path": { "type": "string" },
-        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language", "unchanged"] }
+        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language", "unchanged", "not_code", "binary"] }
       }
     },
     "dataHandling": {

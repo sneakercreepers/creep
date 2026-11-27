@@ -17,14 +17,14 @@ import (
 // file system makes no 8.3 names (Linux, macOS, volumes with them off).
 func TestScanShortNameAlias(t *testing.T) {
 	cfg := scanRepo(t, map[string]string{
-		"main.py": helloRoute, "node_modules/.keep": "", "node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express",
+		"main.py": helloRoute, ".gitignore": "node_modules/app/\n", "node_modules/.keep": "", "node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express",
 	}, "")
 	short, ok := shortNameOf("node_modules", "NODE_M")
 	if !ok {
 		t.Skip("this file system makes no 8.3 names")
 	}
 	index := gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{
-		short + "/app/app.js", short + "/app/package.json", "main.py", "node_modules/.keep",
+		".gitignore", short + "/app/app.js", short + "/app/package.json", "main.py", "node_modules/.keep",
 	}})
 	writeTreeFile(t, ".", gitIndexPath, string(index))
 	m := &fakeModel{verdict: map[string]string{"command_injection": "vulnerable"}}

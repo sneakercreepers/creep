@@ -82,7 +82,7 @@ func TestPrintFindingsFlagsPartial(t *testing.T) {
 // the mark counts the vendor file apart from the gaps (the verdict and the
 // file the slicer could not read whole).
 func TestScanSummaryFlagsPartialVerdict(t *testing.T) {
-	cfg := scanRepo(t, map[string]string{"app.py": longHandler(), "node_modules/x/index.js": "x()\n"}, "")
+	cfg := scanRepo(t, map[string]string{"app.py": longHandler(), "README.md": "# x\n"}, "")
 	m := &fakeModel{verdict: map[string]string{"sql_injection": "vulnerable"}}
 	code, out, errOut := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--config", cfg)
 	if code != exitcode.Incomplete {

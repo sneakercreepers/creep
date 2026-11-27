@@ -34,9 +34,9 @@ func runPaths(t *testing.T, tier Tier, paths []string, files map[string]string, 
 
 var honestReply = answering(func(secs []promptSection) any { return honest(secs) })
 
-// A1 (#268 audit): a file the name alone marks as not source is never
-// opened; source files and extensionless files, which only their bytes
-// can classify, are.
+// A1 (#268 audit, #366): only a file named as a text format of
+// formats.txt is never opened; every other file, whatever its language or
+// name, is, so its bytes decide.
 func TestReadsOnlyPossibleSource(t *testing.T) {
 	files := map[string]string{
 		"a.py": "x = 1\n", "bin/serve": "#!/bin/sh\n", "bin/.deploy": "echo hi\n",
@@ -59,7 +59,7 @@ func TestReadsOnlyPossibleSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.Sort(read)
-	if want := []string{"a.py", "bin/.deploy", "bin/serve"}; !slices.Equal(read, want) {
+	if want := []string{"Dockerfile", "a.py", "bin/.deploy", "bin/serve", "logo.png"}; !slices.Equal(read, want) {
 		t.Errorf("read %v, want only %v", read, want)
 	}
 	for _, f := range res.Files {
@@ -92,12 +92,17 @@ func TestFilesNotReadAreListed(t *testing.T) {
 		{"NUL in shebang source", "bin/serve", ptr("#!/usr/bin/env python3\n\x00os.system(x)\n"), CoverageNotRead, ReasonReadFailed, 0},
 		{"extensionless read error", "bin/serve", nil, CoverageNotRead, ReasonReadFailed, 0},
 		{"dotfile read error", "bin/.deploy", nil, CoverageNotRead, ReasonReadFailed, 0},
-		{"manifest read error", "package.json", nil, CoverageNotSource, ReasonNone, 0},
-		{"unknown file read error", "notes.md", nil, CoverageNotSource, ReasonNone, 0},
-		{"NUL in a file no rule names", "notes.md", ptr("\x00os.system(x)\n"), CoverageNotSource, ReasonNone, 0},
+		{"container file read error", "Dockerfile", nil, CoverageNotRead, ReasonReadFailed, 0},
+		{"unknown file read error", "src/main.zig", nil, CoverageNotRead, ReasonReadFailed, 0},
+		{"NUL in a file no rule names", "src/main.zig", ptr("\x00os.system(x)\n"), CoverageNotSource, ReasonBinary, 0},
+		{"UTF-16 text no rule names", "src/main.zig", ptr("\xff\xfeo\x00s\x00"), CoverageNotRead, ReasonReadFailed, 0},
+		{"image bytes", "logo.png", ptr("\x89PNG\r\n\x1a\n\x00\x00"), CoverageNotSource, ReasonBinary, 0},
+		{"document bytes not UTF-8", "a.pdf", ptr("%PDF-1.7\n\xe2\xe3\xcf\xd3\n"), CoverageNotSource, ReasonBinary, 0},
 		{"empty source", "a.py", ptr(""), CoverageReadFull, ReasonNone, 0},
-		{"manifest", "package.json", ptr(`{"scripts":{"x":"exec(rm)"}}`), CoverageNotSource, ReasonNone, 0},
-		{"unknown file", "notes.md", ptr("os.system(x)\n"), CoverageNotSource, ReasonNone, 0},
+		{"manifest in a data format", "package.json", ptr(`{"scripts":{"x":"exec(rm)"}}`), CoverageNotSource, ReasonNotCode, 0},
+		{"prose", "notes.md", ptr("os.system(x)\n"), CoverageNotSource, ReasonNotCode, 0},
+		{"prose read error", "notes.md", nil, CoverageNotSource, ReasonNotCode, 0},
+		{"lockfile", "web/package-lock.json", ptr("{}"), CoverageNotSource, ReasonNotCode, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -327,10 +332,9 @@ func TestRunRejectsConfig(t *testing.T) {
 }
 
 // A file over redact.MaxFileBytes is judged by its head alone (#270
-// review): an extensionless file whose head is not source is not_source,
-// so a large binary or data file never makes the run incomplete, while
-// source of any size is listed too_large. With no head to sniff, an
-// extensionless file fails closed.
+// review, #366): a binary head is binary, by design, while text of any
+// name or language is listed too_large, so exit 0 never hides it. With no
+// head to sniff, a file fails closed.
 func TestOversizedFileIsJudgedByHead(t *testing.T) {
 	tooLarge := fmt.Errorf("read: %w", redact.ErrFileTooLarge)
 	tests := []struct {
@@ -340,14 +344,15 @@ func TestOversizedFileIsJudgedByHead(t *testing.T) {
 		cov    Coverage
 		reason Reason
 	}{
-		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\x00", CoverageNotSource, ReasonNone},
-		{"data with no extension", "data/dump", "id,name\n1,a\n", CoverageNotSource, ReasonNone},
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\x00", CoverageNotSource, ReasonBinary},
+		{"text with no extension", "data/dump", "id,name\n1,a\n", CoverageNotRead, ReasonTooLarge},
+		{"text no rule names", "src/big.nim", "proc main() =\n", CoverageNotRead, ReasonTooLarge},
 		{"script with no extension", "bin/serve", "#!/usr/bin/env python3\nimport os\n", CoverageNotRead, ReasonTooLarge},
 		{"script with a NUL", "bin/serve", "#!/usr/bin/env node\n\x00", CoverageNotRead, ReasonReadFailed},
 		{"named source", "app/big.py", "x = 1\n", CoverageNotRead, ReasonTooLarge},
 		{"named source, no head", "app/big.py", "", CoverageNotRead, ReasonTooLarge},
 		{"no extension, no head", "bin/serve", "", CoverageNotRead, ReasonTooLarge},
-		{"no rule names it", "notes.md", "os.system(x)\n", CoverageNotSource, ReasonNone},
+		{"text format", "notes.md", "os.system(x)\n", CoverageNotSource, ReasonNotCode},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

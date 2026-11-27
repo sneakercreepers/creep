@@ -122,7 +122,7 @@ func TestRecoverStat(t *testing.T) {
 // (#214 tester H1). Whatever the platform resolves, the walk ends.
 func TestWalkSurvivesTrackedLinkUpward(t *testing.T) {
 	files := withGitIndex(map[string]string{
-		"main.py": "x = 1\n", "node_modules/@s/pkg/package.json": "{}", "node_modules/@s/pkg/index.js": "x()\n",
+		"main.py": "x = 1\n", ".gitignore": "node_modules/\n", "node_modules/@s/pkg/package.json": "{}", "node_modules/@s/pkg/index.js": "x()\n",
 	}, []string{"node_modules"}, "node_modules/web")
 	got := walkWithLink(t, files, func(t *testing.T, repo string) {
 		symlinkOrSkip(t, filepath.Join("..", "node_modules"), filepath.Join(repo, "node_modules", "web"))

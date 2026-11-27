@@ -77,7 +77,7 @@ func TestBaselineWriteRefusesIncremental(t *testing.T) {
 	list := changedListFile(t, "app.py\n")
 	code, _, stderr := runScanWith(baselineDeps(vulnerableSQL(), baselineToday),
 		"scan", "--config", cfg, "--changed", list, "--baseline", "b.json", "--baseline-write")
-	if code == exitcode.OK || !strings.Contains(stderr, "nothing written: the run did not evaluate 1 files in full") {
+	if code == exitcode.OK || !strings.Contains(stderr, "nothing written: the run did not evaluate") {
 		t.Errorf("exit %d: %s", code, stderr)
 	}
 	if data, _ := os.ReadFile("b.json"); string(data) != emptyBaseline {

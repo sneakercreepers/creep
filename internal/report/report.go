@@ -56,12 +56,15 @@ const (
 	// SkipLinesShifted is reader.FileLinesShifted: redaction joined lines
 	// (a multi-line key), so no slice of the file could be numbered.
 	SkipLinesShifted SkipReason = "lines_shifted"
-	// The walk and discovery (ADR 0009, ADR 0017 D2). Vendor, generated and
-	// minified files are left out by design; the rest are gaps in the run.
+	// The walk and discovery (ADR 0009, ADR 0017 D2). Vendor, generated,
+	// minified, not_code and binary files are left out by design; the rest
+	// are gaps in the run.
 	SkipVendor      SkipReason = "vendor"
 	SkipGenerated   SkipReason = "generated"
 	SkipMinified    SkipReason = "minified"
-	SkipNotRegular  SkipReason = "not_regular"  // a link or special file named as source, or that may be a directory the walk does not cover (#214)
+	SkipNotCode     SkipReason = "not_code"     // a known non-code text format, never opened (#366)
+	SkipBinary      SkipReason = "binary"       // bytes no text file holds (#366)
+	SkipNotRegular  SkipReason = "not_regular"  // a link or special file discovery would open by name, or that may be a directory the walk does not cover (#214)
 	SkipInvalidPath SkipReason = "invalid_path" // the walk refused the repo-relative name
 	SkipParseFailed SkipReason = "parse_failed" // discovery's reply was invalid or missed the batch's canary
 	SkipTruncated   SkipReason = "truncated"    // partial: a tripwire or reply cap cut the file
@@ -78,7 +81,7 @@ var skipReasons = map[SkipReason]bool{
 	SkipRunFull: true, SkipSendFailed: true, SkipBudget: true, SkipLinesShifted: true,
 	SkipVendor: true, SkipGenerated: true, SkipMinified: true, SkipNotRegular: true,
 	SkipInvalidPath: true, SkipParseFailed: true, SkipSyntaxError: true, SkipTruncated: true,
-	SkipUnsupported: true, SkipUnchanged: true,
+	SkipUnsupported: true, SkipUnchanged: true, SkipNotCode: true, SkipBinary: true,
 }
 
 // Incomplete reasons when the run state gives none.

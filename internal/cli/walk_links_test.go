@@ -159,20 +159,20 @@ func TestWalkListsDirectoryLinks(t *testing.T) {
 	})
 }
 
-// In an installed tree a listed link is vendor, like the tree's files; a
-// relative one the walk covers (a venv's lib64 -> lib) is not listed.
+// In an ignored, untracked tree a listed link is vendor, like the tree's
+// files; a relative one the walk covers (lib64 -> lib) is not listed.
 func TestWalkDirectoryLinksInInstalledTree(t *testing.T) {
-	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
+	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".gitignore": ".venv/\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
 	site := report.NotEvaluated{Path: ".venv/lib/site.py", Reason: report.SkipVendor}
 	runLinkCases(t, []linkCase{
 		{"absolute link or junction", venv,
 			func(t *testing.T, repo string) {
 				linkDir(t, filepath.Join(repo, ".venv", "lib"), filepath.Join(repo, ".venv", "lib64"))
 			},
-			[]string{"main.py"}, []report.NotEvaluated{site, {Path: ".venv/lib64", Reason: report.SkipVendor}}},
+			[]string{".gitignore", "main.py"}, []report.NotEvaluated{site, {Path: ".venv/lib64", Reason: report.SkipVendor}}},
 		{"relative symlink", venv,
 			func(t *testing.T, repo string) { symlinkOrSkip(t, "lib", filepath.Join(repo, ".venv", "lib64")) },
-			[]string{"main.py"}, []report.NotEvaluated{site}},
+			[]string{".gitignore", "main.py"}, []report.NotEvaluated{site}},
 	})
 }
 
@@ -216,8 +216,8 @@ func TestScanDirectoryLinkExitCode(t *testing.T) {
 				}
 				symlinkOrSkip(t, filepath.Join("..", "packages", "app"), filepath.Join("node_modules", "app"))
 			}, exitcode.OK, "", "coverage:"},
-		{"link in an installed venv",
-			withGitIndex(map[string]string{"main.py": helloRoute, ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
+		{"link in an ignored tree",
+			withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": ".venv/\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
 			func(t *testing.T, _ string) {
 				abs, err := filepath.Abs(filepath.Join(".venv", "lib"))
 				if err != nil {

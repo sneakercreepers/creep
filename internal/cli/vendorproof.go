@@ -2,64 +2,147 @@ package cli
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/sneakercreepers/creep/internal/gitindex"
 	"github.com/sneakercreepers/creep/internal/repofile"
 )
 
-// gitIndexPath is the index of the repository at the scan root.
-const gitIndexPath = ".git/index"
+const (
+	// gitIndexPath is the index of the repository at the scan root.
+	gitIndexPath = ".git/index"
+	// gitExcludePath holds the repository's own ignore patterns beside
+	// its .gitignore files.
+	gitExcludePath = ".git/info/exclude"
+	// maxGitIgnoreBytes bounds one ignore file. A larger one is not read,
+	// so it ignores nothing and its files are read (fail closed).
+	maxGitIgnoreBytes = 256 << 10
+)
 
-// vendorProofs answers whether a file under a vendor-named directory belongs
-// to an installed dependency tree, so it may be listed as vendor without
-// being read. Both must hold:
+// vendorProofs answers whether a file belongs to a tree the repository
+// ignores and git does not track, so it may be listed as vendor without
+// being read (#366). Both must hold:
 //
-//   - its package manager's mark (repofile.VendorEvidence) is a regular file
-//     in the repository with exactly that name;
-//   - git tracks nothing in the tree, and nothing above it that could hold
-//     it (a submodule): a package manager's install is never committed, and
-//     anything committed is the author's code, mark included (#213). The
-//     check compares file identity, not names (trackedIndex), so a tracked
-//     name that the file system resolves into the tree counts.
+//   - the repository's own ignore patterns (repofile.GitIgnore: the
+//     .gitignore of each directory above the file, nearest first, then
+//     .git/info/exclude) ignore the file or a directory above it; as in
+//     git, a file under an ignored directory is ignored whatever a deeper
+//     pattern says;
+//   - git tracks nothing in the topmost ignored directory, or the file
+//     itself, and nothing above it that could hold it (a submodule): an
+//     install or a build output is never committed, and anything committed
+//     is the author's code (#213). The check compares file identity, not
+//     names (trackedIndex), so a tracked name that the file system
+//     resolves into the tree counts.
 //
-// With no git index creep can read whole, no tree is proven, so every
-// vendor file is read like first-party code. Answers are kept per mark, so
-// a large node_modules costs one directory read per package, and the index
-// is read once, on the first vendor file.
+// No directory, file or tool name is believed: a tree the repository does
+// not ignore is read, whatever it is called. With no git index creep can
+// read whole, nothing is proven, so every file is read like first-party
+// code. Patterns are read once per directory and answers kept per tree.
 type vendorProofs struct {
 	ctx     context.Context // the scan deadline (#260)
 	root    *os.Root
-	seen    map[string]bool
 	tracked *trackedIndex
 	loaded  bool
 	indexOK bool
+	exclude repofile.GitIgnore
+	rules   map[string]repofile.GitIgnore // by directory, "." is the root
+	dirs    map[string]bool               // directory: ignored by its own patterns
+	trees   map[string]bool               // topmost ignored entry: proven
 }
 
 func newVendorProofs(ctx context.Context, root *os.Root) *vendorProofs {
-	return &vendorProofs{ctx: ctx, root: root, seen: map[string]bool{}}
+	return &vendorProofs{
+		ctx: ctx, root: root,
+		rules: map[string]repofile.GitIgnore{}, dirs: map[string]bool{}, trees: map[string]bool{},
+	}
 }
 
-// proven reports whether rel is in an installed tree. Past the scan
-// deadline nothing is proven: reading the git index and comparing a tree's
-// identity read and stat the repository, which the deadline ends, so a
-// file is then read or listed like first-party code (fail closed).
+// proven reports whether rel is in an ignored, untracked tree. Past the
+// scan deadline nothing is proven: reading the index and the ignore files
+// and comparing a tree's identity read and stat the repository, which the
+// deadline ends, so a file is then read or listed like first-party code
+// (fail closed).
 func (v *vendorProofs) proven(rel string) bool {
 	if v.ctx.Err() != nil {
 		return false
 	}
-	mark, ok := repofile.VendorEvidence(rel)
+	if !v.loaded {
+		v.loaded = true
+		v.tracked, v.indexOK = readTracked(v.root)
+		v.exclude = v.readIgnore(".", gitExcludePath)
+	}
+	if !v.indexOK || v.tracked.folded.touches(rel) {
+		return false
+	}
+	tree, ok := v.ignoredTree(rel)
 	if !ok {
 		return false
 	}
-	if found, done := v.seen[mark]; done {
-		return found
+	found, done := v.trees[tree]
+	if !done {
+		found = v.installed(tree)
+		v.trees[tree] = found
 	}
-	found := v.installed(path.Dir(mark)) && hasRegularEntry(v.root, mark)
-	v.seen[mark] = found
 	return found
+}
+
+// ignoredTree returns the topmost directory above rel that the patterns
+// ignore, or rel itself when only a pattern for the file does.
+func (v *vendorProofs) ignoredTree(rel string) (string, bool) {
+	for i := 0; i < len(rel); i++ {
+		if rel[i] != '/' {
+			continue
+		}
+		dir := rel[:i]
+		ignored, done := v.dirs[dir]
+		if !done {
+			ignored = v.ignores(dir, true)
+			v.dirs[dir] = ignored
+		}
+		if ignored {
+			return dir, true
+		}
+	}
+	return rel, v.ignores(rel, false)
+}
+
+// ignores applies git's precedence to rel, whose directories above are not
+// ignored: the nearest .gitignore with a matching pattern decides, then
+// info/exclude.
+func (v *vendorProofs) ignores(rel string, dir bool) bool {
+	for d := parentDir(rel); ; d = parentDir(d) {
+		if matched, ignored := v.rulesIn(d).Match(rel, dir); matched {
+			return ignored
+		}
+		if d == "." {
+			break
+		}
+	}
+	matched, ignored := v.exclude.Match(rel, dir)
+	return matched && ignored
+}
+
+// rulesIn returns the patterns of dir's .gitignore, read once.
+func (v *vendorProofs) rulesIn(dir string) repofile.GitIgnore {
+	g, done := v.rules[dir]
+	if !done {
+		g = v.readIgnore(dir, path.Join(dir, ".gitignore"))
+		v.rules[dir] = g
+	}
+	return g
+}
+
+// readIgnore parses the ignore file at name for patterns under base; a
+// missing, irregular or oversized file has none.
+func (v *vendorProofs) readIgnore(base, name string) repofile.GitIgnore {
+	data, err := readInRoot(v.root, name, maxGitIgnoreBytes)
+	if err != nil {
+		data = nil
+	}
+	return repofile.ParseGitIgnore(base, data)
 }
 
 // installed reports whether git provably tracks nothing in tree. A tree
@@ -67,14 +150,7 @@ func (v *vendorProofs) proven(rel string) bool {
 // check, as git and the file system may spell such names in different
 // Unicode forms (macOS).
 func (v *vendorProofs) installed(tree string) bool {
-	if !isASCII(tree) {
-		return false
-	}
-	if !v.loaded {
-		v.loaded = true
-		v.tracked, v.indexOK = readTracked(v.root)
-	}
-	return v.indexOK && !v.tracked.tracks(v.root, tree)
+	return isASCII(tree) && !v.tracked.tracks(v.root, tree)
 }
 
 // readTracked reads the paths the repository's git index tracks; ok is
@@ -91,29 +167,6 @@ func readTracked(root *os.Root) (*trackedIndex, bool) {
 	return newTrackedIndex(paths), true
 }
 
-// hasRegularEntry reports whether name's directory lists an entry spelled
-// byte for byte like name that is a regular file. A stat would not do: on a
-// case-insensitive file system (Windows, macOS) it finds PACKAGE.JSON for
-// package.json (#213 tester L1).
-func hasRegularEntry(root *os.Root, name string) bool {
-	entries, err := fs.ReadDir(root.FS(), path.Dir(name))
-	if err != nil {
-		return false
-	}
-	base := path.Base(name)
-	for _, e := range entries {
-		if e.Name() == base {
-			return e.Type().IsRegular()
-		}
-	}
-	return false
-}
-
 func isASCII(s string) bool {
-	for i := range len(s) {
-		if s[i] >= 0x80 {
-			return false
-		}
-	}
-	return true
+	return !strings.ContainsFunc(s, func(r rune) bool { return r >= 0x80 })
 }

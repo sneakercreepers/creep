@@ -41,7 +41,7 @@ func TestByDesignSummary(t *testing.T) {
 // is a gap that makes a run incomplete.
 func TestByDesignReasons(t *testing.T) {
 	for r := range skipReasons {
-		want := r == SkipVendor || r == SkipGenerated || r == SkipMinified || r == SkipUnchanged
+		want := r == SkipVendor || r == SkipGenerated || r == SkipMinified || r == SkipUnchanged || r == SkipNotCode || r == SkipBinary
 		if r.ByDesign() != want {
 			t.Errorf("%s.ByDesign() = %v, want %v", r, r.ByDesign(), want)
 		}

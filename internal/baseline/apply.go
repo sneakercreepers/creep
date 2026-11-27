@@ -58,8 +58,9 @@ func Apply(findings []report.Finding, b *File, today time.Time) report.BaselineU
 }
 
 // Writable refuses a report a baseline must not be taken from: an
-// incomplete run, or one that left any file out but vendor, generated and
-// minified ones (an incremental scan's unchanged files included). Its
+// incomplete run, or one that left any file out but vendor, generated,
+// minified, not_code and binary ones (an incremental scan's unchanged
+// files included). Its
 // missing findings would read as gone, and their entries would be dropped.
 func Writable(rep *report.Report) error {
 	if rep.Run.Incomplete {
@@ -68,7 +69,7 @@ func Writable(rep *report.Report) error {
 	left := 0
 	for _, n := range rep.Coverage.NotEvaluated {
 		switch n.Reason {
-		case report.SkipVendor, report.SkipGenerated, report.SkipMinified:
+		case report.SkipVendor, report.SkipGenerated, report.SkipMinified, report.SkipNotCode, report.SkipBinary:
 		default:
 			left++
 		}

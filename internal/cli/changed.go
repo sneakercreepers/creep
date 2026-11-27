@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/gitindex"
 	"github.com/sneakercreepers/creep/internal/report"
 )
@@ -100,8 +99,7 @@ func checkChangedPath(p string, sep byte) error {
 }
 
 // scope splits the walked files: the files the list names go to the scan,
-// and every other file that could be source is listed unchanged, by
-// design. Names match without regard to case: on a case-insensitive file
+// and every other file is listed unchanged, by design. Names match without regard to case: on a case-insensitive file
 // system git's index can spell a name differently from the disk, and
 // scanning one file more never hides a change. The walk's own gaps stay
 // as they are, so a link, a refused name or a vendor file is listed as in
@@ -120,7 +118,7 @@ func (c *changedList) scope(files repoFiles) (repoFiles, report.Incremental) {
 		case c.paths[key]:
 			out.paths = append(out.paths, p)
 			matched[key] = true
-		case discover.MaybeSource(p):
+		default:
 			out.gaps = append(out.gaps, report.NotEvaluated{Path: p, Reason: report.SkipUnchanged})
 		}
 	}

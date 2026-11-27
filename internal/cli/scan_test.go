@@ -121,12 +121,12 @@ func checkJSONReport(t *testing.T, wantReason string) {
 // terminal; a run with one never reads as clean.
 func TestScanListsFilesEscaped(t *testing.T) {
 	hostile := "bidi\u202egnp.py"
-	cfg := scanRepo(t, map[string]string{"app.py": "@flask", hostile: tooLarge, "node_modules/x/index.js": "x()\n"}, "")
+	cfg := scanRepo(t, withGitIndex(map[string]string{"app.py": "@flask", hostile: tooLarge, ".gitignore": "deps/\n", "deps/x/index.js": "x()\n"}, []string{"deps"}), "")
 	code, out, _ := runScanWith(fakeDeps(&fakeModel{}, calibrate.TierM), "scan", "--config", cfg)
 	if code != exitcode.Incomplete {
 		t.Fatalf("exit %d, want 4\n%s", code, out)
 	}
-	for _, want := range []string{`bidi\u202egnp.py  too_large`, "node_modules/x/index.js  vendor", "files not evaluated in full: 2"} {
+	for _, want := range []string{`bidi\u202egnp.py  too_large`, "deps/x/index.js  vendor", "files not evaluated in full: 2"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

@@ -56,8 +56,8 @@ func TestUnmappedKindMakesRunIncomplete(t *testing.T) {
 }
 
 // Every discovery reason maps to the report reason of the same name (ADR
-// 0017 D3: report JSON v1 gains nothing), and each is a gap, never by
-// design. A reason discover adds fails here until it is mapped.
+// 0017 D3), and each is a gap, never by design, but not_code and binary
+// (#366). A reason discover adds fails here until it is mapped.
 func TestDiscoveryReasonMappingIsExhaustive(t *testing.T) {
 	for r := discover.Reason(1); r != 0; r++ {
 		got, ok := skipReason(r)
@@ -67,7 +67,8 @@ func TestDiscoveryReasonMappingIsExhaustive(t *testing.T) {
 			}
 			continue
 		}
-		if !ok || string(got) != r.String() || got.ByDesign() {
+		byDesign := r == discover.ReasonNotCode || r == discover.ReasonBinary
+		if !ok || string(got) != r.String() || got.ByDesign() != byDesign {
 			t.Errorf("discover reason %s maps to %q, %v", r, got, ok)
 		}
 		if _, err := report.New(report.Input{NotEvaluated: []report.NotEvaluated{{Path: "a.go", Reason: got}}}); err != nil {
@@ -90,7 +91,10 @@ func TestDiscoveryGaps(t *testing.T) {
 		want    report.SkipReason
 	}{
 		{"read in full", full, 0, false, ""},
-		{"not source", discover.File{Coverage: discover.CoverageNotSource}, 0, false, ""},
+		{"not code", discover.File{Coverage: discover.CoverageNotSource, Reason: discover.ReasonNotCode}, 0, false, report.SkipNotCode},
+		{"binary", discover.File{Coverage: discover.CoverageNotSource, Reason: discover.ReasonBinary}, 0, false, report.SkipBinary},
+		{"not source with no reason fails closed", discover.File{Coverage: discover.CoverageNotSource}, 0, false, report.SkipSendFailed},
+		{"not source with a gap reason fails closed", discover.File{Coverage: discover.CoverageNotSource, Reason: discover.ReasonTooLarge}, 0, false, report.SkipSendFailed},
 		{"tripwire cap", discover.File{Coverage: discover.CoverageReadFull, TripwireCut: true}, 0, false, report.SkipTruncated},
 		{"canary missed", discover.File{Coverage: discover.CoverageCanaryMissed, Reason: discover.ReasonParseFailed}, 0, false, report.SkipParseFailed},
 		{"reply cap", discover.File{Coverage: discover.CoverageTruncated, Reason: discover.ReasonTruncated}, 0, false, report.SkipTruncated},
@@ -99,8 +103,6 @@ func TestDiscoveryGaps(t *testing.T) {
 		{"never decided", discover.File{}, 0, false, report.SkipSendFailed},
 		{"generated, nothing found", full, repofile.IgnoredGenerated, false, report.SkipGenerated},
 		{"minified, nothing found", full, repofile.IgnoredMinified, false, report.SkipMinified},
-		{"vendor path, nothing found", full, repofile.IgnoredVendor, false, report.SkipVendor},
-		{"vendor path with a candidate", full, repofile.IgnoredVendor, true, ""},
 		{"generated with a candidate", full, repofile.IgnoredGenerated, true, ""},
 		{"generated, not read in full", discover.File{Coverage: discover.CoverageNotRead, Reason: discover.ReasonTooLarge}, repofile.IgnoredGenerated, false, report.SkipTooLarge},
 	}

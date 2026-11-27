@@ -1,0 +1,118 @@
+# Known non-code formats (#366): the only files discovery does not read as
+# text. Every row names a file format, never a language or a package
+# manager; discovery needs no row to read a language (ADR 0017 amendment).
+# One rule per line: <match> <pattern> <format>
+#   match:   name (lowercased base name), glob (lowercased base name with
+#            one "*") or ext (lowercased extension)
+#   format:  binary formats image, font, media, archive, object, document
+#            and store are opened: a file whose first 8 KiB hold a NUL or
+#            are not UTF-8 is listed binary; any other is text under a
+#            misleading name and is read like any file. Text formats prose,
+#            lockfile, data and vector are never opened and listed not_code.
+# Precedence: name, glob, ext. Every file no row names is opened: no NUL in
+# its first 8 KiB makes it text, read and sent to discovery. The README
+# "Not read" list must match (TestDocsListFormats).
+
+# Images, fonts, audio and video
+ext     .png        image
+ext     .jpg        image
+ext     .jpeg       image
+ext     .gif        image
+ext     .bmp        image
+ext     .ico        image
+ext     .icns       image
+ext     .webp       image
+ext     .avif       image
+ext     .heic       image
+ext     .tif        image
+ext     .tiff       image
+ext     .psd        image
+ext     .svg        vector
+ext     .ttf        font
+ext     .otf        font
+ext     .woff       font
+ext     .woff2      font
+ext     .eot        font
+ext     .mp3        media
+ext     .mp4        media
+ext     .m4a        media
+ext     .wav        media
+ext     .ogg        media
+ext     .flac       media
+ext     .webm       media
+ext     .mov        media
+ext     .avi        media
+ext     .mkv        media
+
+# Archives and compiled objects
+ext     .zip        archive
+ext     .tar        archive
+ext     .gz         archive
+ext     .tgz        archive
+ext     .bz2        archive
+ext     .xz         archive
+ext     .zst        archive
+ext     .7z         archive
+ext     .rar        archive
+ext     .o          object
+ext     .a          object
+ext     .so         object
+ext     .dll        object
+ext     .dylib      object
+ext     .exe        object
+ext     .obj        object
+ext     .lib        object
+ext     .wasm       object
+ext     .bin        object
+
+# Documents and prose
+ext     .pdf        document
+ext     .doc        document
+ext     .docx       document
+ext     .xls        document
+ext     .xlsx       document
+ext     .ppt        document
+ext     .pptx       document
+ext     .odt        document
+ext     .ods        document
+ext     .epub       document
+ext     .md         prose
+ext     .markdown   prose
+ext     .rst        prose
+ext     .adoc       prose
+name    license     prose
+name    licence     prose
+name    copying     prose
+name    notice      prose
+name    license.txt prose
+name    licence.txt prose
+name    copying.txt prose
+name    notice.txt  prose
+
+# Lockfiles: resolved dependency lists, whatever tool wrote them
+ext     .lock       lockfile
+ext     .lockb      lockfile
+ext     .sum        lockfile
+glob    *-lock.json lockfile
+glob    *-lock.yaml lockfile
+glob    *.lock.json lockfile
+
+# Data
+ext     .json       data
+ext     .jsonl      data
+ext     .ndjson     data
+ext     .geojson    data
+ext     .csv        data
+ext     .tsv        data
+ext     .map        data
+ext     .log        data
+ext     .pem        data
+ext     .crt        data
+ext     .cer        data
+ext     .sqlite     store
+ext     .sqlite3    store
+ext     .db         store
+ext     .parquet    store
+ext     .avro       store
+ext     .npy        store
+ext     .npz        store

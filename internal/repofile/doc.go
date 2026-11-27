@@ -6,21 +6,25 @@
 // them parses code. It imports no other creep package, so any layer may
 // use it.
 //
-//   - IgnoreReason reads the marks an author can put on a file: a vendor
-//     directory name, a generator header (Go's "Code generated ... DO NOT
-//     EDIT.", "@generated" as the first word, or protoc's header, in the
-//     leading comments only; a block comment counts only when it closes on
-//     a line of its own, so "/* @generated */ var x;" is code), or a
-//     minified JavaScript or TypeScript shape (nine tenths of the bytes on
-//     lines over 500 bytes; no file name, *.min.js or *-min.js, counts).
-//     Names are split at the host's separator, like the walk that made
-//     them: '\' separates on Windows only, and elsewhere is a byte of a
-//     legal file name (#194). A mark is the author's say-so (pentest P4,
-//     #213): the caller lists a vendor file unread only when VendorEvidence
-//     names a package-manager mark that exists, and believes a generated or
-//     minified mark only for a file discovery read in full with no
-//     candidate, so no opt-back-in is needed: a file with anything in it is
-//     evaluated whatever its mark (ADR 0017).
+//   - IgnoreReason reads the marks an author can put on a file's bytes: a
+//     generator marker in the first five lines ("@generated" as a word, or
+//     "generated" with "do not edit" or "do not modify", in any case and
+//     any comment syntax) or a minified shape (nine tenths of the bytes on
+//     lines over 500 bytes; no file name, such as *.min.*, counts). No rule
+//     names a language, a package manager or a directory (#366,
+//     TestRulesNameNoEcosystem). A mark is the author's say-so (pentest P4,
+//     #213): the caller believes it only for a file discovery read in full
+//     with no candidate, so a file with anything in it is evaluated
+//     whatever its mark (ADR 0017).
+//
+//   - GitIgnore matches the repository's own .gitignore and info/exclude
+//     patterns in git's syntax, so vendor and generated trees are told by
+//     what the repository ignores, not by directory names. The caller
+//     lists a file as vendor only when it is ignored and the git index
+//     tracks nothing in its tree: committed code is always read.
+//
+//     Repo-relative names are split at the host's separator, like the walk
+//     that made them: '\' separates on Windows only (#194).
 //
 //   - EscapeLines makes repository lines inert before a prompt shows them,
 //     so no line can pass for a second line, a header or a terminal
