@@ -92,12 +92,21 @@ func canarySize() int {
 	return section{lang: canaryLanguage, lines: lines}.size()
 }
 
-// found reports whether a holds an entry covering the canary's entry line
-// and a sink on its sink line, both in the canary's file.
+// canaryWindow is how many lines a canary proposal may be off and still
+// count (#362): a small model often cites the line next to the call. It
+// is fixed and small, the file index must still be exact, and the batch
+// still fails closed on anything outside it (threat model R19).
+const canaryWindow = 2
+
+// found reports whether a holds, in the canary's file, an entry whose span
+// comes within canaryWindow lines of the entry line and a sink within
+// canaryWindow lines of the sink line.
 func (c canary) found(a reply) bool {
 	entry := slices.ContainsFunc(a.entries, func(e entryRec) bool {
-		return e.file == c.section && e.start <= c.entry && c.entry <= e.end
+		return e.file == c.section && e.start <= c.entry+canaryWindow && c.entry-canaryWindow <= e.end
 	})
-	sink := slices.ContainsFunc(a.sinks, func(s sinkRec) bool { return s.file == c.section && s.line == c.sink })
+	sink := slices.ContainsFunc(a.sinks, func(s sinkRec) bool {
+		return s.file == c.section && s.line >= c.sink-canaryWindow && s.line <= c.sink+canaryWindow
+	})
 	return entry && sink
 }

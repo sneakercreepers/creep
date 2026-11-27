@@ -60,14 +60,30 @@ func toolProbes(src rand.Source) []toolProbe {
 // assignments with the needle at a seeded line between 10% and 90% of it,
 // so neither end of the input gives it away.
 func newContextProbe(src rand.Source, size int) contextProbe {
-	name := fmt.Sprintf("marker_%s_%s", word(src), word(src))
-	value := fmt.Sprintf("%s-%s-%04d", word(src), word(src), intN(src, 10000))
+	name, value := probeNeedle(src)
 	lines := fillerLines(src, size)
 	at := len(lines)/10 + intN(src, len(lines)*8/10+1)
 	needle := fmt.Sprintf("let %s = %q;", name, value)
 	lines = append(lines[:at], append([]string{needle}, lines[at:]...)...)
 	prompt := strings.Join(lines, "\n") + "\n\nQuestion: what string is assigned to " + name + "?"
 	return contextProbe{prompt: prompt, value: value}
+}
+
+// newLeadingProbe is newContextProbe with the needle on the first line:
+// an endpoint that drops the start of an input too long for its context
+// (Ollama past num_ctx, which drops the system prompt with it) loses it.
+func newLeadingProbe(src rand.Source, size int) contextProbe {
+	name, value := probeNeedle(src)
+	lines := append([]string{fmt.Sprintf("let %s = %q;", name, value)}, fillerLines(src, size)...)
+	prompt := strings.Join(lines, "\n") + "\n\nQuestion: what string is assigned to " + name + "?"
+	return contextProbe{prompt: prompt, value: value}
+}
+
+// probeNeedle is a probe's variable name and its value.
+func probeNeedle(src rand.Source) (name, value string) {
+	name = fmt.Sprintf("marker_%s_%s", word(src), word(src))
+	value = fmt.Sprintf("%s-%s-%04d", word(src), word(src), intN(src, 10000))
+	return name, value
 }
 
 // fillerLines returns distractor assignments totalling at least size bytes.

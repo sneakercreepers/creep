@@ -36,13 +36,15 @@ func (r *run) flush(ctx context.Context) {
 
 // ask sends one sample of a batch and applies its reply.
 func (r *run) ask(ctx context.Context, m *models.HTTP, sample uint8, secs []section, batch []section, c canary, prompt string) {
+	replyCap, _ := ReplyTokens(r.d.Tier, len(batch)) // newRun checked the tier
 	a, err := models.Complete[Answer](ctx, m, models.Request{
-		Purpose:    purpose,
-		System:     r.system,
-		Prompt:     prompt,
-		Redactions: r.d.Redactor.MarkerCounts(prompt),
-		Schema:     Schema(),
-		Grammar:    Grammar(),
+		Purpose:         purpose,
+		System:          r.system,
+		Prompt:          prompt,
+		Redactions:      r.d.Redactor.MarkerCounts(prompt),
+		Schema:          Schema(),
+		Grammar:         Grammar(),
+		MaxOutputTokens: replyCap,
 	})
 	if err != nil {
 		r.callFailed(secs, err)
@@ -57,13 +59,17 @@ func (r *run) ask(ctx context.Context, m *models.HTTP, sample uint8, secs []sect
 }
 
 // callFailed lists a batch with no reply. An invalid reply is the
-// model's problem with this batch, so the run goes on; any other error
-// (budget, consent, transport, status) holds for later calls too and stops
-// the model path.
+// model's problem with this batch, so the run goes on; one cut off at the
+// reply cap on every attempt (retries counted) is truncated, not
+// parse_failed, so the report says why. Any other error (budget, consent,
+// transport, status) holds for later calls too and stops the model path.
 func (r *run) callFailed(secs []section, err error) {
 	var invalid *models.InvalidOutputError
 	reason := ReasonSendFailed
 	switch {
+	case errors.As(err, &invalid) && invalid.Truncated:
+		r.failAll(secs, CoverageTruncated, ReasonTruncated)
+		return
 	case errors.As(err, &invalid):
 		r.failAll(secs, CoverageSendFailed, ReasonParseFailed)
 		return
@@ -126,7 +132,7 @@ func (r *run) apply(a reply, batch []section, c canary, sample uint8) {
 			continue
 		}
 		w := &r.work[s.work]
-		truncated := w.take(a, i, sample)
+		truncated := w.take(a, i, sample, itemsPerFile[r.d.Tier])
 		switch {
 		case w.failed():
 			// An earlier sample's failure stays: union only adds.
@@ -141,8 +147,9 @@ func (r *run) apply(a reply, batch []section, c canary, sample uint8) {
 }
 
 // take records the proposals of one sample for batch file index file and
-// reports whether the file reached a cap.
-func (w *fileWork) take(a reply, file int, sample uint8) bool {
+// reports whether the file reached a cap: a schema cap, or the asked
+// items, the most the prompt let the model report for one file.
+func (w *fileWork) take(a reply, file int, sample uint8, asked int) bool {
 	entries, sinks, auth := 0, 0, 0
 	for _, e := range a.entries {
 		if e.file == file {
@@ -164,7 +171,7 @@ func (w *fileWork) take(a reply, file int, sample uint8) bool {
 			auth++
 		}
 	}
-	return entries == MaxEntriesPerFile || sinks == MaxSinksPerFile || auth == MaxAuthPerFile
+	return entries == MaxEntriesPerFile || sinks == MaxSinksPerFile || auth == MaxAuthPerFile || entries+sinks+auth >= asked
 }
 
 // sinkFrom converts a validated sink proposal, with its entry's lines when

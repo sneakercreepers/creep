@@ -1,10 +1,13 @@
 package discover
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sneakercreepers/creep/internal/models"
 )
 
 var tiers = []Tier{TierS, TierM, TierL}
@@ -87,7 +90,9 @@ func TestPromptsMatchSchema(t *testing.T) {
 	words := []string{
 		`"file"`, `"entries"`, `"sinks"`, `"auth"`, `"start"`, `"end"`,
 		`"kind"`, `"line"`, `"entry"`, "-1", "untrusted data", "nothing else",
-		"at most 256 entries, 1024 sinks and 256 auth spans",
+		// The example reply lists keys in the schema's order (#362).
+		`{"file":<n>,"start":<line>,"end":<line>,"kind":"<kind>"}`,
+		`{"file":<n>,"line":<line>,"kind":"<kind>","entry":<index or -1>}`,
 	}
 	for _, k := range sinkKinds {
 		words = append(words, `"`+k.name+`"`)
@@ -100,14 +105,75 @@ func TestPromptsMatchSchema(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, w := range words {
+		asked := "at most " + strconv.Itoa(itemsPerFile[tier]) + " items per file"
+		for _, w := range append(words, asked) {
 			if !strings.Contains(system, w) {
 				t.Errorf("tier %s prompt does not mention %s", tier, w)
 			}
 		}
 	}
-	if MaxEntriesPerFile != 256 || MaxSinksPerFile != 1024 || MaxAuthPerFile != 256 {
-		t.Error("the prompts state caps the constants no longer have")
+}
+
+// Acceptance (#362): a discovery reply cap holds every item the prompt
+// asks for in every file of the batch, the canary included, grows with the
+// batch, never exceeds maxReplyTokens and is larger than a reader reply
+// (1024), so an honest full answer is not cut off.
+func TestReplyTokens(t *testing.T) {
+	for _, tier := range tiers {
+		prev := 0
+		for files := 1; files <= maxFiles; files++ {
+			got, err := ReplyTokens(tier, files)
+			if err != nil {
+				t.Fatal(err)
+			}
+			need := files*itemsPerFile[tier]*itemTokens + replyFrameTokens
+			if got < need || got > maxReplyTokens || got < prev {
+				t.Errorf("tier %s, %d files: cap %d, need %d, max %d, smaller batch %d", tier, files, got, need, maxReplyTokens, prev)
+			}
+			prev = got
+		}
+		if prev <= 1024 {
+			t.Errorf("tier %s full batch cap %d is not above the reader's 1024", tier, prev)
+		}
+		if over, _ := ReplyTokens(tier, maxFiles+5); over != prev {
+			t.Errorf("tier %s: %d files over the batch get cap %d, want the full batch's %d", tier, maxFiles+5, over, prev)
+		}
+	}
+	if _, err := ReplyTokens("XL", 1); !errors.Is(err, ErrTier) {
+		t.Errorf("ReplyTokens(XL) = %v, want ErrTier", err)
+	}
+	if len(itemsPerFile) != len(tiers) {
+		t.Errorf("itemsPerFile covers %d tiers, want %d", len(itemsPerFile), len(tiers))
+	}
+}
+
+// Acceptance (#362): no schema creep sends lists "end" before "start" or
+// any property out of reasoning order; the check fails on the
+// alphabetical order json.Marshal gives a Go map.
+func TestSchemaPropertyOrder(t *testing.T) {
+	schema := Schema()
+	if err := models.CheckPropertyOrder(schema); err != nil {
+		t.Fatalf("discover schema: %v", err)
+	}
+	// CheckPropertyOrder ties each object's properties to its required
+	// array, so these pin the reasoning order itself.
+	for _, order := range []string{
+		`"required":["entries","sinks","auth"]`, `"required":["file","start","end","kind"]`,
+		`"required":["file","line","kind","entry"]`, `"required":["file","start","end"]`,
+	} {
+		if !strings.Contains(string(schema), order) {
+			t.Errorf("schema lacks %s", order)
+		}
+	}
+	alphabetical, err := json.Marshal(map[string]any{
+		"type": "object", "properties": map[string]any{"file": 0, "start": 0, "end": 0, "kind": 0},
+		"required": []string{"file", "start", "end", "kind"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(models.CheckPropertyOrder(alphabetical), models.ErrPropertyOrder) {
+		t.Error("an alphabetical schema passed the order check")
 	}
 }
 

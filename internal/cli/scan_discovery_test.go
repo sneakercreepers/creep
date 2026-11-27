@@ -61,6 +61,51 @@ func TestMissedCanaryIsIncomplete(t *testing.T) {
 	checkJSONReport(t, string(report.SkipParseFailed))
 }
 
+// Protection (#362, R19): a canary cited within the fixed window passes
+// the scan; the broken fixture, one line past it, still fails the batch
+// and the run exits 4 with parse_failed.
+func TestCanaryWindowExitCodes(t *testing.T) {
+	tests := []struct {
+		shift int
+		code  int
+	}{
+		{0, exitcode.OK},
+		{-2, exitcode.OK},
+		{-3, exitcode.Incomplete},
+	}
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+	for _, tt := range tests {
+		code, out, errOut := runScanWith(fakeDeps(&fakeModel{canaryShift: tt.shift}, calibrate.TierM), "scan", "--record", "--config", cfg)
+		if code != tt.code {
+			t.Fatalf("canary sink %d lines off: exit %d, want %d\n%s\n%s", tt.shift, code, tt.code, out, errOut)
+		}
+		if tt.code == exitcode.Incomplete && !strings.Contains(out, "app.py  parse_failed") {
+			t.Fatalf("canary past the window: app.py not parse_failed\n%s", out)
+		}
+	}
+}
+
+// cutOffReply is a chat completion cut off at max_tokens.
+var cutOffReply = []byte(`{"id":"fake","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"{\"entries\":[{\"file\":0,"},"finish_reason":"length"}]}`)
+
+// Acceptance (#362): a discovery reply cut off at its cap on every attempt
+// (retries counted) lists the batch's files truncated, not parse_failed,
+// and the run exits 4; the tripwire's findings stay.
+func TestCutOffDiscoveryIsTruncated(t *testing.T) {
+	cfg := scanRepo(t, map[string]string{"app.py": "@flask"}, "")
+	m := &fakeModel{cutOff: true}
+	code, out, errOut := runScanWith(fakeDeps(m, calibrate.TierM), "scan", "--record", "--config", cfg)
+	if code != exitcode.Incomplete || !strings.Contains(out, "app.py  truncated") || strings.Contains(out, "parse_failed") {
+		t.Fatalf("cut-off discovery: exit %d\n%s\n%s", code, out, errOut)
+	}
+	if m.discovered != 2 {
+		t.Errorf("%d discovery calls, want the first and its one retry", m.discovered)
+	}
+	if len(findingKeys(t)) == 0 {
+		t.Error("the tripwire's findings were dropped")
+	}
+}
+
 // Protection (ADR 0017 D1/D3, R19): model output only adds. A reply that
 // claims every line is an auth check removes no candidate and changes no
 // verdict, and the planner still gets every sink with the worst-case

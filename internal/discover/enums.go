@@ -109,7 +109,8 @@ const (
 	// CoverageReadFull means the model read the whole redacted file, its
 	// batch's canary was found and no cap was hit.
 	CoverageReadFull
-	// CoverageTruncated means the reply hit a per-file cap.
+	// CoverageTruncated means the reply hit a per-file cap, or was cut off
+	// at the reply cap on every attempt.
 	CoverageTruncated
 	// CoverageSendFailed means the file got no valid reply: the call
 	// failed, the reply was invalid, or the run stopped (see Reason).
@@ -139,7 +140,7 @@ const (
 	ReasonBudget              // budget: the token or call budget stopped the run
 	ReasonSendFailed          // send_failed: a call error stopped the run
 	ReasonParseFailed         // parse_failed: invalid reply or missed canary
-	ReasonTruncated           // truncated: a per-file cap was reached
+	ReasonTruncated           // truncated: a per-file or reply cap was reached
 )
 
 var reasonNames = []string{

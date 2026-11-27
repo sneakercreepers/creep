@@ -128,7 +128,12 @@ func storeSend(store *state.Store, mode state.Mode, model func(prompt string) ([
 // a copy, so the test never writes into the repository.
 func fixtureStore(t *testing.T, app string) (*state.Store, state.Mode) {
 	t.Helper()
-	dir := filepath.Join(*fixtures, app)
+	return fixtureStoreIn(t, filepath.Join(*fixtures, app))
+}
+
+// fixtureStoreIn is fixtureStore for the store in dir.
+func fixtureStoreIn(t *testing.T, dir string) (*state.Store, state.Mode) {
+	t.Helper()
 	mode := state.ModeReplay
 	if *update {
 		if err := os.RemoveAll(filepath.Join(dir, "cache")); err != nil {
