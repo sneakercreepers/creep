@@ -70,9 +70,10 @@ func runBydesignCases(t *testing.T, tests []bydesignCase) {
 	}
 }
 
-// Regression (pentest P4, #213, tester bypasses on #231): code the author
-// only declares vendor, generated or minified is evaluated. A vendor path is
-// listed unread only for an installed tree; any other declared skip is
+// Regression (pentest P4, #213, tester bypasses on #231, #366): code the
+// author only declares vendor, generated or minified is evaluated. No
+// directory name makes a tree vendor: only the repository's ignore
+// patterns over a tree git does not track do; any other declared skip is
 // believed only for a file discovery read in full with no candidate. The
 // by-design cases keep a first-party route (helloRoute), as a real
 // repository would.
@@ -82,72 +83,68 @@ func TestScanDoesNotTrustDeclaredSkips(t *testing.T) {
 	none := []string(nil)
 	runBydesignCases(t, []bydesignCase{
 		{"root third_party", withGitIndex(map[string]string{"third_party/app.py": "@flask"}, []string{"third_party"}), exitcode.GateExceeded, "", []string{"probable  sqli  third_party/app.py:"}},
-		{"root venv without pyvenv.cfg", withGitIndex(map[string]string{"venv/app.py": "@flask"}, []string{"venv"}), exitcode.GateExceeded, "", []string{"probable  sqli  venv/app.py:"}},
-		{"root VENDOR", withGitIndex(map[string]string{"VENDOR/app.py": "@flask"}, []string{"VENDOR"}), exitcode.GateExceeded, "", []string{"probable  sqli  VENDOR/app.py:"}},
-		{"root site-packages", withGitIndex(map[string]string{"site-packages/app.py": "@flask"}, []string{"site-packages"}), exitcode.GateExceeded, "", []string{"probable  sqli  site-packages/app.py:"}},
+		{"root venv", withGitIndex(map[string]string{"venv/app.py": "@flask"}, []string{"venv"}), exitcode.GateExceeded, "", []string{"probable  sqli  venv/app.py:"}},
+		{"root node_modules", withGitIndex(map[string]string{"node_modules/app/app.js": "@express"}, []string{"node_modules"}), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
 		{"nested vendor", withGitIndex(map[string]string{"app/vendor/app.py": "@flask"}, []string{"app/vendor"}), exitcode.GateExceeded, "", []string{"probable  sqli  app/vendor/app.py:"}},
 		{"generated header", withGitIndex(map[string]string{"app.py": generated + "@flask"}, none), exitcode.GateExceeded, "", []string{"probable  sqli  app.py:"}},
 		{"padded with one long line", withGitIndex(map[string]string{"app.js": padding + "@express"}, none), exitcode.GateExceeded, "", []string{"probable  command_injection  app.js:"}},
 		{"min.js name", withGitIndex(map[string]string{"app.min.js": "@express"}, none), exitcode.GateExceeded, "", []string{"probable  command_injection  app.min.js:"}},
-		{"installed venv", withGitIndex(map[string]string{"main.py": helloRoute, "venv/pyvenv.cfg": "home = /usr\n", "venv/lib/app.py": "@flask"}, []string{"venv"}), exitcode.OK, "",
+		{"ignored venv", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "venv/\n", "venv/lib/app.py": "@flask"}, []string{"venv"}), exitcode.OK, "",
 			[]string{"venv/lib/app.py  vendor", "coverage excludes 1 file left out by design (vendor 1), listed above"}},
-		{"installed node_modules package", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}, []string{"node_modules"}), exitcode.OK, "",
-			[]string{"node_modules/app/app.js  vendor"}},
+		{"ignored build output", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "/out\n", "out/app.js": "@express"}, []string{"out"}), exitcode.OK, "",
+			[]string{"out/app.js  vendor"}},
+		{"ignored by a file pattern", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "*.gen.js\n", "web/app.gen.js": "@express"}, []string{"web/app.gen.js"}), exitcode.OK, "",
+			[]string{"web/app.gen.js  vendor"}},
+		{"ignored in info/exclude", withGitIndex(map[string]string{"main.py": helloRoute, gitExcludePath: "local/\n", "local/app.py": "@flask"}, []string{"local", ".git"}), exitcode.OK, "",
+			[]string{"local/app.py  vendor"}},
 		{"generated, no route", withGitIndex(map[string]string{"main.py": helloRoute, "api_pb2.py": generated + "import os\n"}, none), exitcode.OK, "",
 			[]string{"api_pb2.py  generated", "coverage excludes 1 file left out by design (generated 1), listed above"}},
 	})
 }
 
-// TestScanDoesNotTrustForgedMarks (#213): a package manager's mark is a
-// repository file the author can plant, so it proves a tree installed only
-// when git tracks nothing in it. A committed mark, a committed file in an
-// installed tree, a tree inside a submodule, and a scan with no readable
-// index all read the code like first-party code: a route there is
-// evaluated.
+// TestScanDoesNotTrustForgedMarks (#213, #366): an ignore pattern is a
+// repository file the author writes, so it proves a tree vendor only when
+// git tracks nothing in it. A committed tree, a tree with one committed
+// file, a tree inside a submodule, a tracked name the file system resolves
+// into the tree, a negated pattern and a scan with no readable index all
+// read the code like first-party code: a route there is evaluated.
 func TestScanDoesNotTrustForgedMarks(t *testing.T) {
-	express := map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express"}
+	express := map[string]string{".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express"}
 	none := []string(nil)
 	runBydesignCases(t, []bydesignCase{
-		{"committed node_modules package", withGitIndex(express, none), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"committed scoped package", withGitIndex(map[string]string{"web/node_modules/@s/app/package.json": "{}", "web/node_modules/@s/app/app.js": "@express"}, none),
-			exitcode.GateExceeded, "", []string{"probable  command_injection  web/node_modules/@s/app/app.js:"}},
-		{"committed venv", withGitIndex(map[string]string{"venv/pyvenv.cfg": "home = /usr\n", "venv/lib/app.py": "@flask"}, none), exitcode.GateExceeded, "", []string{"probable  sqli  venv/lib/app.py:"}},
-		{"committed nested .venv", withGitIndex(map[string]string{"svc/.venv/pyvenv.cfg": "x\n", "svc/.venv/app.py": "@flask"}, none), exitcode.GateExceeded, "", []string{"probable  sqli  svc/.venv/app.py:"}},
-		{"only the mark installed", withGitIndex(express, []string{"node_modules/app/package.json"}), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"committed file in an installed tree", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/index.js": "x()\n", "node_modules/app/app.js": "@express"},
-			[]string{"node_modules/app/package.json", "node_modules/app/index.js"}), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:", "node_modules/app/index.js  vendor"}},
-		{"tree inside a submodule", withGitIndex(map[string]string{"web/node_modules/app/package.json": "{}", "web/node_modules/app/app.js": "@express"}, []string{"web"}, "web"),
+		{"committed ignored tree", withGitIndex(express, none), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
+		{"committed file in an ignored tree", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/index.js": "x()\n", "deps/app.js": "@express"},
+			[]string{"deps/app.js"}), exitcode.GateExceeded, "", []string{"probable  command_injection  deps/app.js:"}},
+		{"negated file", withGitIndex(map[string]string{".gitignore": "*.js\n!app.js\n", "app.js": "@express"}, []string{"app.js"}), exitcode.GateExceeded, "", []string{"probable  command_injection  app.js:"}},
+		{"tree inside a submodule", withGitIndex(map[string]string{".gitignore": "node_modules/\n", "web/node_modules/app/app.js": "@express"}, []string{"web"}, "web"),
 			exitcode.GateExceeded, "", []string{"probable  command_injection  web/node_modules/app/app.js:"}},
 		{"tracked in another case", withGitIndex(express, []string{"node_modules"}, "NODE_MODULES/App/app.js"), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
 		{"tracked with a trailing dot", withGitIndex(express, []string{"node_modules"}, "node_modules./app/app.js"), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
 		{"tracked with a trailing space", withGitIndex(express, []string{"node_modules"}, "node_modules/app /app.js"), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"tracked with a Kelvin sign", withGitIndex(map[string]string{"node_modules/koa/package.json": "{}", "node_modules/koa/app.js": "@express"}, []string{"node_modules"}, "node_modules/Koa/app.js"),
+		{"tracked with a Kelvin sign", withGitIndex(map[string]string{".gitignore": "node_modules/\n", "node_modules/koa/app.js": "@express"}, []string{"node_modules"}, "node_modules/Koa/app.js"),
 			exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/koa/app.js:"}},
-		{"tracked in NFC, on disk in NFD", withGitIndex(map[string]string{"café/node_modules/app/package.json": "{}", "café/node_modules/app/app.js": "@express"}, []string{"café"}, "café/node_modules/app/app.js"),
+		{"tracked in NFC, on disk in NFD", withGitIndex(map[string]string{".gitignore": "node_modules/\n", "café/node_modules/app/app.js": "@express"}, []string{"café"}, "café/node_modules/app/app.js"),
 			exitcode.GateExceeded, "", []string{"node_modules/app/app.js:"}},
 		{"no git index", express, exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"unreadable git index", map[string]string{"node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express", gitIndexPath: "DIRC not an index"},
+		{"unreadable git index", map[string]string{".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express", gitIndexPath: "DIRC not an index"},
 			exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"go in a committed package", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/main.go": "package main\n"}, none),
+		{"untracked, not ignored", withGitIndex(map[string]string{"main.py": helloRoute, "vendor/x/y.go": "package y\n"}, []string{"vendor"}),
 			exitcode.OK, "", []string{"language go 1, language python 1"}},
-		{"go vendor tree, not committed", withGitIndex(map[string]string{"main.py": helloRoute, "vendor/modules.txt": "# x\n", "vendor/x/y.go": "package y\n"}, []string{"vendor"}),
-			exitcode.OK, "", []string{"language go 1, language python 1"}},
-		{"php vendor tree, not committed", withGitIndex(map[string]string{"main.py": helloRoute, "composer.json": "{}", "vendor/acme/a.php": "<?php echo 1;\n"}, []string{"vendor"}),
-			exitcode.OK, "", []string{"language php 1, language python 1"}},
 	})
 }
 
-// TestScanInstalledTreesStayByDesign (#213 acceptance): an installed tree
-// is listed unread whatever its files' languages, as real installs ship C
-// extensions, addon sources and build helpers in other languages.
+// TestScanInstalledTreesStayByDesign (#213 acceptance, #366): an ignored,
+// untracked tree is listed unread whatever its files' languages and
+// formats, as real installs ship C extensions, addon sources and build
+// helpers in other languages.
 func TestScanInstalledTreesStayByDesign(t *testing.T) {
 	runBydesignCases(t, []bydesignCase{
-		{"venv with a C extension", withGitIndex(map[string]string{"main.py": helloRoute, ".venv/pyvenv.cfg": "x\n", ".venv/lib/markupsafe/_speedups.c": "int x;\n", ".venv/lib/markupsafe/__init__.py": "x = 1\n"}, []string{".venv"}),
-			exitcode.OK, "", []string{".venv/lib/markupsafe/_speedups.c  vendor", "coverage excludes 2 files left out by design (vendor 2), listed above"}},
-		{"node-gyp with C#", withGitIndex(map[string]string{"main.py": helloRoute, "node_modules/node-gyp/package.json": "{}", "node_modules/node-gyp/lib/Find-VisualStudio.cs": "class X {}\n", "node_modules/bcrypt/package.json": "{}", "node_modules/bcrypt/src/bcrypt.cc": "int x;\n"}, []string{"node_modules"}),
-			exitcode.OK, "", []string{"node_modules/node-gyp/lib/Find-VisualStudio.cs  vendor", "node_modules/bcrypt/src/bcrypt.cc  vendor"}},
-		{"sha-256 version 4 index", map[string]string{"main.py": helloRoute, "node_modules/app/package.json": "{}", "node_modules/app/app.js": "@express",
-			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{"main.py"}}))},
+		{"tree with a C extension", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": ".venv/\n", ".venv/lib/m/_speedups.c": "int x;\n", ".venv/lib/m/__init__.py": "x = 1\n"}, []string{".venv"}),
+			exitcode.OK, "", []string{".venv/lib/m/_speedups.c  vendor", "coverage excludes 2 files left out by design (vendor 2), listed above"}},
+		{"tree in many languages", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/gyp/Find.cs": "class X {}\n", "deps/b/src/b.cc": "int x;\n", "deps/z/main.zig": "pub fn main() void {}\n"}, []string{"deps"}),
+			exitcode.OK, "", []string{"deps/gyp/Find.cs  vendor", "deps/b/src/b.cc  vendor", "deps/z/main.zig  vendor"}},
+		{"sha-256 version 4 index", map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express",
+			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{".gitignore", "main.py"}}))},
 			exitcode.OK, "", []string{"node_modules/app/app.js  vendor"}},
 	})
 }

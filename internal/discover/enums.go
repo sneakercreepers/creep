@@ -103,8 +103,8 @@ type Coverage uint8
 
 // Coverage values. The zero value is not a coverage.
 const (
-	// CoverageNotSource is a manifest, container file or unknown file:
-	// discovery does not read it.
+	// CoverageNotSource is a file discovery does not read by design: a
+	// known non-code format (ReasonNotCode) or binary bytes (ReasonBinary).
 	CoverageNotSource Coverage = iota + 1
 	// CoverageReadFull means the model read the whole redacted file, its
 	// batch's canary was found and no cap was hit.
@@ -122,10 +122,10 @@ const (
 	CoverageNotRead
 )
 
-// Reason says why a source file was not read in full. Each value is an
-// existing report v1 not-evaluated reason with the same name, so report
-// JSON gains nothing (ADR 0017 D3). It is a closed set: no error text that
-// could carry repository bytes reaches run output.
+// Reason says why a file was not read in full. Each value is a report v1
+// not-evaluated reason with the same name (ADR 0017 D3; not_code and
+// binary since #366). It is a closed set: no error text that could carry
+// repository bytes reaches run output.
 type Reason uint8
 
 // Reasons. ReasonNone is the zero value.
@@ -141,11 +141,14 @@ const (
 	ReasonSendFailed          // send_failed: a call error stopped the run
 	ReasonParseFailed         // parse_failed: invalid reply or missed canary
 	ReasonTruncated           // truncated: a per-file or reply cap was reached
+	ReasonNotCode             // not_code: a text format of formats.txt, never opened (by design)
+	ReasonBinary              // binary: a NUL or, under a binary format's name, non-UTF-8 bytes (by design)
 )
 
 var reasonNames = []string{
 	"read_failed", "too_large", "line_too_long", "redact_failed", "lines_shifted",
 	"run_full", "budget", "send_failed", "parse_failed", "truncated",
+	"not_code", "binary",
 }
 
 // String returns the report v1 reason name, or "" for ReasonNone.

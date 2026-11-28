@@ -2,6 +2,7 @@ package discover
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -50,6 +51,7 @@ const MaxSamples = 5
 type fileWork struct {
 	path    string
 	file    File
+	config  bool // formatConfig: too large is not_code
 	hits    []hit
 	entries []entryProp
 	sinks   []sinkProp
@@ -74,6 +76,7 @@ type run struct {
 	d       Discoverer
 	system  string
 	inv     inventoryTable
+	formats formatTable
 	trip    []signature
 	budget  int // user turn bytes for real files: the batch budget minus the canary
 	work    []fileWork
@@ -85,8 +88,8 @@ type run struct {
 	err     error
 }
 
-// Run classifies every path, matches the tripwire on every source file and
-// asks the model about every source file it may send, in batches of whole
+// Run labels every path, matches the tripwire on every text file and asks
+// the model about every text file it may send, in batches of whole
 // files each with a canary. A file it cannot read or send in full is
 // listed with its Coverage and Reason and the run goes on; ErrRunFull, an
 // exhausted budget or a failed call stops the model path: later files are
@@ -124,6 +127,10 @@ func (d Discoverer) newRun(paths []string) (*run, error) {
 	if err != nil {
 		return nil, err
 	}
+	formats, err := loadFormats()
+	if err != nil {
+		return nil, err
+	}
 	trip, err := loadTripwire()
 	if err != nil {
 		return nil, err
@@ -133,48 +140,69 @@ func (d Discoverer) newRun(paths []string) (*run, error) {
 		work[i] = fileWork{path: p, file: File{ID: FileID(i)}} //nolint:gosec // G115: checked above
 	}
 	budget := batchBudget[d.Tier] - canarySize()
-	return &run{d: d, system: system, inv: inv, trip: trip, budget: budget, work: work}, nil
+	return &run{d: d, system: system, inv: inv, formats: formats, trip: trip, budget: budget, work: work}, nil
 }
 
-// addFile classifies path i and, for a source file, runs the tripwire and
-// queues it for discovery.
+// addFile labels path i and, for a text file, runs the tripwire and
+// queues it for discovery. Only a text format of formats.txt is left
+// unopened; any other file is read unless its bytes are binary (#366).
 func (r *run) addFile(ctx context.Context, i int) {
 	w := &r.work[i]
-	e := r.inv.classify(w.path, nil)
-	if e.Language == 0 && !r.inv.needsContent(w.path) {
-		// The name alone says it is not source: never open it.
-		w.file.Manifest, w.file.Container = e.Manifest, e.Container
-		w.file.Coverage = CoverageNotSource
+	format := r.formats.formatOf(w.path)
+	if !format.opened() {
+		w.notSource(ReasonNotCode)
 		return
 	}
+	w.config = format == formatConfig
 	content, readErr := r.d.Read(w.path)
 	tooLarge := errors.Is(readErr, redact.ErrFileTooLarge)
 	if readErr != nil && !tooLarge {
 		content = nil
 	}
-	e = r.inv.classify(w.path, content)
-	w.file.Language, w.file.Manifest, w.file.Container = e.Language, e.Manifest, e.Container
+	e := r.inv.classify(w.path, content)
+	w.file.Manifest, w.file.Container = e.Manifest, e.Container
 	switch {
-	case readErr != nil && (!tooLarge || len(content) == 0):
-		// Unreadable, or too large with no head to sniff: fail closed.
-		w.fail(CoverageNotRead, readFailure(tooLarge))
-	case e.Language == 0:
-		w.file.Coverage = CoverageNotSource
+	case readErr != nil && !tooLarge:
+		w.label(e)
+		w.fail(CoverageNotRead, ReasonReadFailed)
+	case tooLarge && len(content) == 0:
+		// Too large with no head to sniff: fail closed.
+		w.label(e)
+		w.tooLarge()
+	case e.Language == 0 && !utf16BOM(content) && looksBinary(format, content):
+		w.notSource(ReasonBinary)
 	case hasNUL(content):
+		// Text with a NUL (labeled, UTF-8 or UTF-16): listed, never binary.
+		w.label(e)
 		w.fail(CoverageNotRead, ReasonReadFailed)
 	case tooLarge:
-		w.fail(CoverageNotRead, ReasonTooLarge)
+		w.label(e)
+		w.tooLarge()
 	default:
+		w.label(e)
 		r.addSource(ctx, i, content)
 	}
 }
 
-// readFailure is the reason for a file Read refused.
-func readFailure(tooLarge bool) Reason {
-	if tooLarge {
-		return ReasonTooLarge
+// label sets the language of a file discovery treats as text: the
+// inventory's, or "text" when no row names it.
+func (w *fileWork) label(e Entry) {
+	w.file.Language = cmp.Or(e.Language, textLanguage)
+}
+
+// notSource lists a file discovery does not read by design.
+func (w *fileWork) notSource(reason Reason) {
+	w.file.Coverage, w.file.Reason = CoverageNotSource, reason
+}
+
+// tooLarge lists a file that fits no discovery call or redaction:
+// too_large, which makes the run incomplete, or not_code for config.
+func (w *fileWork) tooLarge() {
+	if w.config {
+		w.notSource(ReasonNotCode)
+		return
 	}
-	return ReasonReadFailed
+	w.fail(CoverageNotRead, ReasonTooLarge)
 }
 
 // addSource redacts a source file whole, runs the tripwire on the
@@ -207,7 +235,7 @@ func (r *run) addSource(ctx context.Context, i int, content []byte) {
 func (r *run) queue(ctx context.Context, s section) {
 	size := s.size()
 	if size > r.budget {
-		r.work[s.work].fail(CoverageNotRead, ReasonTooLarge)
+		r.work[s.work].tooLarge()
 		return
 	}
 	if len(r.pending) == MaxFilesPerBatch || r.used+size > r.budget {
@@ -229,8 +257,8 @@ func (r *run) redactFailed(w *fileWork, err error) {
 	case errors.Is(err, redact.ErrRunFull):
 		w.fail(CoverageNotRead, ReasonRunFull)
 		r.halt(CoverageNotRead, ReasonRunFull, err)
-	case errors.Is(err, redact.ErrFileTooLarge):
-		w.fail(CoverageNotRead, ReasonTooLarge)
+	case errors.Is(err, redact.ErrFileTooLarge), w.config && errors.Is(err, redact.ErrLineTooLong):
+		w.tooLarge()
 	case errors.Is(err, redact.ErrLineTooLong):
 		w.fail(CoverageNotRead, ReasonLineTooLong)
 	default:

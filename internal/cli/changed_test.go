@@ -190,7 +190,7 @@ func TestChangedScopeFoldsCase(t *testing.T) {
 }
 
 // TestChangedScope: only walked files the list names reach the scan; every
-// other file that could be source is listed unchanged (by design); a
+// other file is listed unchanged (by design, #366); a
 // listed path the walk never handed over (deleted, a directory, a link,
 // under .git or .creep) is only counted, never scanned; the walk's own
 // gaps stay.
@@ -208,6 +208,7 @@ func TestChangedScope(t *testing.T) {
 		t.Errorf("scanned %q, want %q", got.paths, want)
 	}
 	wantGaps := append(slices.Clone(walked.gaps),
+		report.NotEvaluated{Path: "Makefile.bak.txt", Reason: report.SkipUnchanged},
 		report.NotEvaluated{Path: "app.py", Reason: report.SkipUnchanged},
 		report.NotEvaluated{Path: "lib/util.py", Reason: report.SkipUnchanged})
 	if !slices.Equal(got.gaps, wantGaps) {

@@ -41,17 +41,18 @@ func TestScanEvaluatesAnyLanguage(t *testing.T) {
 			}
 			checkJSONReport(t, "")
 			rep, err := readLastReport()
-			if err != nil || len(rep.Coverage.NotEvaluated) != 0 || rep.Findings[0].Status != report.StatusProbable {
+			readme := []report.NotEvaluated{{Path: "README.md", Reason: report.SkipNotCode}}
+			if err != nil || !slices.Equal(rep.Coverage.NotEvaluated, readme) || rep.Findings[0].Status != report.StatusProbable {
 				t.Fatalf("report %+v, %v", rep, err)
 			}
 		})
 	}
 }
 
-// #270 review: a file over redact.MaxFileBytes is opened for its head
-// only. A large extensionless binary or data file is not source, so a run
-// that holds one can still exit 0; large source is listed too_large and
-// the run exits 4.
+// #270 review, #366: a file over redact.MaxFileBytes is opened for its
+// head only. A large binary file is listed binary and a file named as a
+// text format not_code, by design, so a run that holds one can still exit
+// 0; large text of any name is listed too_large and the run exits 4.
 func TestScanJudgesOversizedFilesByHead(t *testing.T) {
 	big := strings.Repeat("a", redact.MaxFileBytes)
 	tests := []struct {
@@ -59,8 +60,10 @@ func TestScanJudgesOversizedFilesByHead(t *testing.T) {
 		code            int
 		reason          report.SkipReason // "" when nothing is listed
 	}{
-		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00" + big, exitcode.OK, ""},
-		{"data with no extension", "data/dump", "id,name\n" + big, exitcode.OK, ""},
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\xb0\xfe" + big, exitcode.OK, report.SkipBinary},
+		{"named as data", "data/dump.csv", "id,name\n" + big, exitcode.OK, report.SkipNotCode},
+		{"text with no extension", "data/dump", "id,name\n" + big, exitcode.Incomplete, report.SkipTooLarge},
+		{"text in a language no row names", "src/big.zig", "const x = 1;\n" + big, exitcode.Incomplete, report.SkipTooLarge},
 		{"script with no extension", "bin/serve", "#!/usr/bin/env python3\n" + big, exitcode.Incomplete, report.SkipTooLarge},
 		{"named source", "app/big.py", "x = 1\n" + big, exitcode.Incomplete, report.SkipTooLarge},
 	}

@@ -1,4 +1,9 @@
-# Inventory table (ADR 0017): what a file is, from its name or bytes only.
+# Inventory table (ADR 0017): a label for a file, from its name or bytes.
+# Labels are a hint in the prompt and counts in the reports; they never
+# decide what is read (#366): every text file is read, and one no rule
+# names is labeled "text". The only read a label changes: a file labeled
+# as a language whose first 8 KiB hold a NUL is listed read_failed (fail
+# closed, #268), never binary. What is not read is formats.txt.
 # One rule per line: <match> <pattern> <class> <id>
 #   match:   name (exact base name), glob (base name with one "*"),
 #            ext (lowercased extension), shebang (interpreter of the "#!"
@@ -6,12 +11,7 @@
 #            as written, without version digits, then by leading letters)
 #   class:   language, manifest or container
 #   id:      a name from the closed lists in inventory.go
-# Precedence: name, glob, ext, shebang. A source file with a NUL byte in
-# its first 8 KiB is listed not read (read_failed), never skipped; so is
-# an extensionless file that cannot be read. A file no rule names is not
-# source. A file over 1 MiB is judged by its first 8 KiB: source is
-# too_large, anything else not source. Adding an extension is a reviewed
-# data change; the README Languages list must match (TestDocsListInventory).
+# Precedence: name, glob, ext, shebang.
 
 # Manifests
 name    package.json         manifest  npm

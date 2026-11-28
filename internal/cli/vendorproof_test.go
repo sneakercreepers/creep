@@ -4,60 +4,51 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
+	"regexp"
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/gitindex/gitindextest"
 )
 
-// TestVendorProofs (#213): a tree is installed only when its mark is a
-// regular file spelled byte for byte (PACKAGE.JSON or PyVenv.CFG prove
-// nothing, even where a stat of package.json would find them) and the git
-// index tracks nothing in it. A committed mark, a committed file in a real
-// tree, a submodule, a non-ASCII tree and a missing or unreadable index
-// prove nothing; Go and PHP marks never do.
+// TestVendorProofs (#366): a file is vendor only when the repository's own
+// ignore patterns cover it and the git index tracks nothing in its tree.
+// No directory name counts by itself, a committed file or tree is always
+// read, a nested .gitignore applies under its directory, a negation takes
+// a file back, a file under an ignored directory stays ignored, and a
+// non-ASCII tree proves nothing.
 func TestVendorProofs(t *testing.T) {
-	marks := []string{
-		"node_modules/upper/PACKAGE.JSON", "node_modules/ok/package.json",
-		"node_modules/@s/ok/package.json", "venv/PyVenv.CFG", ".venv/pyvenv.cfg",
-		"node_modules/forged/package.json", "node_modules/mixed/package.json",
-		"web/node_modules/sub/package.json", "node_modules/é/package.json",
-		"vendor/modules.txt", "composer.json",
-	}
-	tracked := []string{
-		"app.py", "node_modules/forged/package.json", "node_modules/forged/app.js",
-		"node_modules/mixed/extra.js", "web",
-	}
+	repo := t.TempDir()
+	writeTreeFile(t, repo, ".gitignore", "deps/\n/out\n*.gen\n!keep.gen\nmixed/\nsub/\n!sub/back.zig\né/\n")
+	writeTreeFile(t, repo, "web/.gitignore", "cache/\n")
+	writeTreeFile(t, repo, ".git/info/exclude", "local/\n")
+	tracked := []string{".gitignore", "web/.gitignore", "app.zig", "mixed/kept.zig", "forced.gen", "vendor/x/y.go"}
+	writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked})))
 	tests := []struct {
 		file string
 		want bool
 	}{
-		{"node_modules/ok/index.js", true},
-		{"node_modules/ok/src/addon.cc", true},
-		{"node_modules/@s/ok/lib/i.ts", true},
-		{".venv/lib/x.py", true},
-		{".venv/lib/m/_speedups.c", true},
-		{"node_modules/upper/index.js", false},
-		{"venv/lib/x.py", false},
-		{"node_modules/dir/index.js", false}, // the mark is a directory
-		{"node_modules/missing/index.js", false},
-		{"node_modules/forged/app.js", false},
-		{"node_modules/forged/other.js", false},
-		{"node_modules/mixed/index.js", false}, // a committed file in the tree
-		{"web/node_modules/sub/index.js", false},
-		{"node_modules/é/index.js", false},
+		{"deps/lib/a.nim", true},
+		{"deps/a/b/c/d.zig", true},
+		{"out/bundle.x", true},
+		{"src/x.gen", true},
+		{"web/cache/m.zig", true},
+		{"local/tool.nim", true},
+		{"sub/back.zig", true},  // a negation cannot take a file out of an ignored directory
+		{"src/keep.gen", false}, // negated
+		{"forced.gen", false},   // ignored but committed
+		{"mixed/other.zig", false},
+		{"cache/m.zig", false}, // web's pattern applies under web only
+		{"src/out/a.zig", false},
+		{"node_modules/x/index.js", false}, // a well-known name proves nothing
 		{"vendor/x/y.go", false},
-		{"vendor/acme/a.php", false},
-		{"app.py", false},
+		{"vendor/x/z.go", false},
+		{"app.zig", false},
+		{"new.zig", false}, // untracked, not ignored: the author's own work
+		{"é/x.zig", false},
 	}
-	repo := t.TempDir()
-	for _, name := range marks {
-		writeTreeFile(t, repo, name, "{}")
+	for _, tt := range tests {
+		writeTreeFile(t, repo, tt.file, "x\n")
 	}
-	if err := os.MkdirAll(filepath.Join(repo, "node_modules", "dir", "package.json"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked})))
 	proofs := openProofs(t, repo)
 	for _, tt := range tests {
 		for range 2 { // the second answer comes from the cache
@@ -69,8 +60,8 @@ func TestVendorProofs(t *testing.T) {
 }
 
 // TestVendorProofsNeedAGitIndex: with no index, an index that is a
-// directory, or one creep cannot read whole, no tree is installed, so its
-// files are read like first-party code.
+// directory, or one creep cannot read whole, nothing is vendor, so an
+// ignored tree is read like first-party code.
 func TestVendorProofsNeedAGitIndex(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -94,30 +85,77 @@ func TestVendorProofsNeedAGitIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := t.TempDir()
-			writeTreeFile(t, repo, "node_modules/ok/package.json", "{}")
+			writeTreeFile(t, repo, ".gitignore", "deps/\n")
+			writeTreeFile(t, repo, "deps/ok/index.js", "x\n")
 			tt.index(t, repo)
-			if openProofs(t, repo).proven("node_modules/ok/index.js") {
-				t.Error("a tree is proven installed without a readable git index")
+			if openProofs(t, repo).proven("deps/ok/index.js") {
+				t.Error("a tree is proven vendor without a readable git index")
 			}
 		})
 	}
 }
 
-// TestVendorProofsLinkedMark: a mark that is a link proves nothing, even
-// when it points at a regular file inside the repository.
-func TestVendorProofsLinkedMark(t *testing.T) {
-	repo := t.TempDir()
-	writeTreeFile(t, repo, "real.json", "{}")
-	mkdirTree(t, repo, "node_modules/linked")
-	if err := os.Symlink(filepath.Join(repo, "real.json"), filepath.Join(repo, "node_modules", "linked", "package.json")); err != nil {
-		if runtime.GOOS == "windows" {
-			t.Skipf("symlinks need privileges here: %v", err)
-		}
-		t.Fatal(err)
+// TestVendorProofsIgnoreFileBounds: an ignore file creep cannot read whole
+// (over the cap, or a directory) ignores nothing, so its tree is read.
+func TestVendorProofsIgnoreFileBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		ignore func(t *testing.T, repo string)
+	}{
+		{"oversized", func(t *testing.T, repo string) {
+			big := make([]byte, maxGitIgnoreBytes+1)
+			copy(big, "deps/\n")
+			for i := len("deps/\n"); i < len(big); i++ {
+				big[i] = '#'
+			}
+			writeTreeFile(t, repo, ".gitignore", string(big))
+		}},
+		{"a directory", func(t *testing.T, repo string) { mkdirTree(t, repo, ".gitignore") }},
 	}
-	writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"real.json"}})))
-	if openProofs(t, repo).proven("node_modules/linked/index.js") {
-		t.Error("a linked mark proves a tree installed")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := t.TempDir()
+			tt.ignore(t, repo)
+			writeTreeFile(t, repo, "deps/ok/index.js", "x\n")
+			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"app.py"}})))
+			if openProofs(t, repo).proven("deps/ok/index.js") {
+				t.Error("an unreadable ignore file proved a tree vendor")
+			}
+		})
+	}
+}
+
+// ecosystemNames are package managers, their directories and marks, and
+// languages: no vendor or generated rule may name one (#366).
+var ecosystemNames = regexp.MustCompile(`(?i)\b(node_modules|bower_components|jspm_packages|site-packages|dist-packages|__pypackages__|venv|pyvenv|third_party|npm|yarn|pnpm|pip|pipenv|poetry|composer|bundler|gem|gems|cargo|maven|gradle|nuget|cocoapods|pods|golang|python|javascript|typescript|php|ruby|java|kotlin|scala|rust|elixir|erlang|swift|dart|perl|csharp|protoc|protobuf|protocol buffer|package\.json|go\.mod|modules\.txt)\b`)
+
+// TestRulesNameNoEcosystem (#366): the vendor and generated rules name no
+// package manager, dependency directory or language, in code or comments,
+// so creep needs no per-ecosystem data to tell vendor or generated code.
+func TestRulesNameNoEcosystem(t *testing.T) {
+	files := []string{
+		"vendorproof.go", "trackedtree.go",
+		filepath.Join("..", "repofile", "ignore.go"), filepath.Join("..", "repofile", "gitignore.go"),
+		filepath.Join("..", "discover", "formats.txt"), // the non-code list names formats only
+	}
+	for _, name := range files {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := ecosystemNames.Find(data); m != nil {
+			t.Errorf("%s names %q", name, m)
+		}
+	}
+}
+
+// TestEcosystemDenyListCatches: the deny list is not vacuous; the old
+// rules' names are on it.
+func TestEcosystemDenyListCatches(t *testing.T) {
+	for _, s := range []string{`case "node_modules":`, `"venv", ".venv"`, "pyvenv.cfg", "JavaScript or TypeScript", "protoc's header", "package.json"} {
+		if !ecosystemNames.MatchString(s) {
+			t.Errorf("deny list misses %q", s)
+		}
 	}
 }
 

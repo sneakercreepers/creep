@@ -6,10 +6,19 @@
 // model proposes, creep validates, and nothing a model says can lower a
 // candidate's risk or remove one:
 //
-//   - Inventory (inventory.go, inventory.txt) classifies each path by its
-//     name, or the "#!" line of an extensionless file, into a source
-//     language, a manifest or a container file, from one embedded table.
-//     A source file with a NUL in its first 8 KiB is binary, not source.
+//   - What is read (formats.go, formats.txt, #366): every regular text
+//     file, in any language, except a short list of known non-code
+//     formats that names formats only. A text format (prose, data,
+//     lockfiles) is never opened and is not_code; a binary format, or any
+//     file whose first 8 KiB hold a NUL, is binary when its bytes say so.
+//     Both are listed by design; nothing is dropped unlisted.
+//
+//   - Inventory (inventory.go, inventory.txt) labels each path by its
+//     name, or the "#!" line of an extensionless file, as a language, a
+//     manifest or a container file, from one embedded table; a text file
+//     it does not name is "text". The label is a prompt hint and a report
+//     count only; a labeled source file with a NUL is read_failed, never
+//     binary (#268).
 //
 //   - The tripwire (tripwire.go, tripwire.tsv) matches one cross-language
 //     table of plain sink signatures on each line of the redacted file:

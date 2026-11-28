@@ -151,28 +151,32 @@ func TestWalkListsDirectoryLinks(t *testing.T) {
 			func(t *testing.T, repo string) { symlinkOrSkip(t, outside, at(repo, "web")) }, []string{"main.py"}, notRegular("web")},
 		{"dangling link", main,
 			func(t *testing.T, repo string) { symlinkOrSkip(t, "missing", at(repo, "notes.txt")) }, []string{"main.py"}, notRegular("notes.txt")},
-		{"link to a file with a non-source name", map[string]string{"README.md": "# x\n"},
-			func(t *testing.T, repo string) { symlinkOrSkip(t, "README.md", at(repo, "notes.txt")) }, []string{"README.md"}, nil},
+		{"text-format link to a text-format file", map[string]string{"README.md": "# x\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "README.md", at(repo, "guide.md")) }, []string{"README.md"}, nil},
+		{"opened link to a file never opened", map[string]string{"README.md": "# x\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "README.md", at(repo, "notes.txt")) }, []string{"README.md"}, notRegular("notes.txt")},
+		{"link to a file discovery opens", map[string]string{"real.txt": "x\n"},
+			func(t *testing.T, repo string) { symlinkOrSkip(t, "real.txt", at(repo, "notes.txt")) }, []string{"real.txt"}, nil},
 		{"absolute link to a file in the repository", map[string]string{"README.md": "# x\n"},
 			func(t *testing.T, repo string) { symlinkOrSkip(t, at(repo, "README.md"), at(repo, "notes.txt")) },
 			[]string{"README.md"}, notRegular("notes.txt")},
 	})
 }
 
-// In an installed tree a listed link is vendor, like the tree's files; a
-// relative one the walk covers (a venv's lib64 -> lib) is not listed.
+// In an ignored, untracked tree a listed link is vendor, like the tree's
+// files; a relative one the walk covers (lib64 -> lib) is not listed.
 func TestWalkDirectoryLinksInInstalledTree(t *testing.T) {
-	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
+	venv := withGitIndex(map[string]string{"main.py": "x = 1\n", ".gitignore": ".venv/\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"})
 	site := report.NotEvaluated{Path: ".venv/lib/site.py", Reason: report.SkipVendor}
 	runLinkCases(t, []linkCase{
 		{"absolute link or junction", venv,
 			func(t *testing.T, repo string) {
 				linkDir(t, filepath.Join(repo, ".venv", "lib"), filepath.Join(repo, ".venv", "lib64"))
 			},
-			[]string{"main.py"}, []report.NotEvaluated{site, {Path: ".venv/lib64", Reason: report.SkipVendor}}},
+			[]string{".gitignore", "main.py"}, []report.NotEvaluated{site, {Path: ".venv/lib64", Reason: report.SkipVendor}}},
 		{"relative symlink", venv,
 			func(t *testing.T, repo string) { symlinkOrSkip(t, "lib", filepath.Join(repo, ".venv", "lib64")) },
-			[]string{"main.py"}, []report.NotEvaluated{site}},
+			[]string{".gitignore", "main.py"}, []report.NotEvaluated{site}},
 	})
 }
 
@@ -216,8 +220,17 @@ func TestScanDirectoryLinkExitCode(t *testing.T) {
 				}
 				symlinkOrSkip(t, filepath.Join("..", "packages", "app"), filepath.Join("node_modules", "app"))
 			}, exitcode.OK, "", "coverage:"},
-		{"link in an installed venv",
-			withGitIndex(map[string]string{"main.py": helloRoute, ".venv/pyvenv.cfg": "home = /usr\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
+		// #376 auditor M1: a link named as code to a file listed by design
+		// is not covered by its target, so it is listed.
+		{"code-named link to a not_code file", map[string]string{"main.py": helloRoute, "notes.md": "# x\n"},
+			func(t *testing.T, _ string) { symlinkOrSkip(t, "notes.md", "app.py") },
+			exitcode.Incomplete, string(report.SkipNotRegular), "app.py  not_regular"},
+		{"code-named link into an ignored tree",
+			withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": ".venv/\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
+			func(t *testing.T, _ string) { symlinkOrSkip(t, filepath.Join(".venv", "lib", "site.py"), "site.py") },
+			exitcode.Incomplete, string(report.SkipNotRegular), "site.py  not_regular"},
+		{"link in an ignored tree",
+			withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": ".venv/\n", ".venv/lib/site.py": "x = 1\n"}, []string{".venv"}),
 			func(t *testing.T, _ string) {
 				abs, err := filepath.Abs(filepath.Join(".venv", "lib"))
 				if err != nil {

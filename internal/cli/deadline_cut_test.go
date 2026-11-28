@@ -142,7 +142,8 @@ func TestVendorProofsStopAtDeadline(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := t.TempDir()
-			writeTreeFile(t, repo, "node_modules/ok/package.json", "{}")
+			writeTreeFile(t, repo, ".gitignore", "deps/\n")
+			writeTreeFile(t, repo, "deps/ok/addon.c", "int x;\n")
 			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"app.py"}})))
 			root, err := os.OpenRoot(repo)
 			if err != nil {
@@ -155,7 +156,7 @@ func TestVendorProofsStopAtDeadline(t *testing.T) {
 				cancel(errScanDeadline)
 			}
 			proofs := newVendorProofs(ctx, root)
-			if got := proofs.proven("node_modules/ok/addon.c"); got != tt.want || proofs.loaded == tt.cut {
+			if got := proofs.proven("deps/ok/addon.c"); got != tt.want || proofs.loaded == tt.cut {
 				t.Fatalf("proven = %v (index read %v), want %v (index read %v)", got, proofs.loaded, tt.want, !tt.cut)
 			}
 		})
