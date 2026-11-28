@@ -108,24 +108,24 @@
 // safe variants at every tier through Slicer.Build and Evaluate from those
 // recordings, with no network and no key, and checks the verdicts
 // expected.json implies: vulnerable citing the sink line on the vulnerable
-// variant, not_vulnerable on the safe twin. The replies are synthesized from
-// expected.json, not recorded from a live model, so they pin the reader path
-// (slicing, prompt, request, decoding, projection), not a model's judgement.
-// They will be replaced by live-recorded replies once a maintainer with a
-// key runs the reader against a live model (#204). -update only writes
-// synthesized replies. `creep scan --record` exists (#8) but cannot
-// produce these files: it records into the user's run-state store under
-// the user's secret, keyed on the endpoint and request body, the
+// variant, not_vulnerable on the safe twin, for the tiers whose replies are
+// synthesized from expected.json (M and L): those pin the reader path
+// (slicing, prompt, request, decoding, projection), not a model's
+// judgement. Tier S is a live recording of the pinned Ollama model (#356,
+// ADR 0038): its provenance.json names the model, digest, date and run and
+// holds the outcome each reply gave, and the replay must give exactly
+// those, right or wrong. Only .github/workflows/live-record.yml re-records
+// it (gatewaytest.Live, with CREEP_LIVE_ENDPOINT and CREEP_LIVE_MODEL set);
+// -update rewrites only the synthesized tiers. `creep scan --record` (#8)
+// cannot produce these files: it records into the user's run-state store
+// under the user's secret, keyed on the endpoint and request body, the
 // configured model and a reader.rN.cN label, while the fixtures key on
-// the body alone, model replay-model and reader.vN. Re-recording needs a live
-// source behind countingModel in replay_test.go, answering each call
-// through the gateway instead of synthesizedReply, followed by a review
-// of every reply that disagrees with expected.json; until then the
-// synthesized set stays. They are signed with a fixed public test secret,
-// so a real run, which uses the user's own secret, never serves them. A
+// the body and model alone and reader.vN. They are signed with a fixed
+// public test secret, so a real run, which uses the user's own secret,
+// never serves them. A
 // missing, torn, edited, foreign or stale recording fails the test
 // (replay_fail_test.go). After changing a prompt, the schema, slicing or an
-// app, regenerate them:
+// app, regenerate the synthesized tiers and dispatch live-record.yml:
 //
 //	go test ./internal/reader -run TestAppsReplay -update
 package reader

@@ -1,0 +1,21 @@
+{
+  "synthesized": false,
+  "model": "creep-bench-qwen2.5-coder-1.5b-d7372fd82851",
+  "base_model": "qwen2.5-coder:1.5b",
+  "base_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+  "tier": "S",
+  "recorded": "2026-11-28",
+  "run": "https://github.com/sneakercreepers/creep/actions/runs/46103486289",
+  "note": "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction), Discoverer.Run at tier S with testSeed on testdata/apps/flask/vulnerable; reply bodies normalized by gatewaytest.Normalize. Outcomes are what the model's batch gave, not the app's ground truth: the model is unfit (ADR 0036).",
+  "outcomes": {
+    "complete": "false",
+    "error": "false",
+    "file 0": "coverage 3 reason truncated",
+    "routes": "1",
+    "sink 1": "line 44 kind sql origin 1",
+    "sink 2": "line 51 kind sql origin 1",
+    "sink 3": "line 61 kind http_client origin 1",
+    "sink 4": "line 68 kind file origin 1",
+    "sinks": "4"
+  }
+}

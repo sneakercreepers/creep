@@ -8,16 +8,16 @@ Recall counts vulnerable twins found on their sink line (within 2 lines). False 
 
 ## Tier S
 
-24 runs, 15 incomplete.
+24 runs, 16 incomplete.
 
 | Class | Recall | False positives | Honesty | Silent misses |
 |---|---|---|---|---|
-| command_injection | 1/2 (0.500) | 2/2 (1.000) | 1/2 (0.500) | 1 |
+| command_injection | 1/2 (0.500) | 1/2 (0.500) | 1/1 (1.000) | 0 |
 | idor | 0/1 (0.000) | 1/1 (1.000) | 0/0 (none) | 0 |
 | nosql_injection | 1/1 (1.000) | 1/1 (1.000) | 1/1 (1.000) | 0 |
 | path_traversal | 2/2 (1.000) | 2/2 (1.000) | 0/0 (none) | 0 |
 | sqli | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
-| ssrf | 2/2 (1.000) | 1/2 (0.500) | 1/1 (1.000) | 0 |
+| ssrf | 2/2 (1.000) | 2/2 (1.000) | 2/2 (1.000) | 0 |
 | template_injection | 2/2 (1.000) | 2/2 (1.000) | 0/0 (none) | 0 |
 
 ## Tier M
@@ -28,24 +28,24 @@ Recall counts vulnerable twins found on their sink line (within 2 lines). False 
 |---|---|---|---|---|
 | command_injection | 1/2 (0.500) | 1/2 (0.500) | 1/2 (0.500) | 1 |
 | idor | 0/1 (0.000) | 1/1 (1.000) | 0/0 (none) | 0 |
-| nosql_injection | 0/1 (0.000) | 1/1 (1.000) | 0/0 (none) | 0 |
-| path_traversal | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
+| nosql_injection | 1/1 (1.000) | 1/1 (1.000) | 1/1 (1.000) | 0 |
+| path_traversal | 2/2 (1.000) | 2/2 (1.000) | 2/2 (1.000) | 0 |
 | sqli | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
 | ssrf | 2/2 (1.000) | 1/2 (0.500) | 2/2 (1.000) | 0 |
-| template_injection | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
+| template_injection | 2/2 (1.000) | 2/2 (1.000) | 2/2 (1.000) | 0 |
 
 ## Tier L
 
-24 runs, 16 incomplete.
+24 runs, 13 incomplete.
 
 | Class | Recall | False positives | Honesty | Silent misses |
 |---|---|---|---|---|
 | command_injection | 1/2 (0.500) | 1/2 (0.500) | 1/2 (0.500) | 1 |
 | idor | 0/1 (0.000) | 1/1 (1.000) | 0/0 (none) | 0 |
 | nosql_injection | 1/1 (1.000) | 1/1 (1.000) | 1/1 (1.000) | 0 |
-| path_traversal | 2/2 (1.000) | 2/2 (1.000) | 0/0 (none) | 0 |
+| path_traversal | 2/2 (1.000) | 1/2 (0.500) | 1/1 (1.000) | 0 |
 | sqli | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
-| ssrf | 2/2 (1.000) | 1/2 (0.500) | 2/2 (1.000) | 0 |
+| ssrf | 2/2 (1.000) | 2/2 (1.000) | 2/2 (1.000) | 0 |
 | template_injection | 2/2 (1.000) | 2/2 (1.000) | 1/1 (1.000) | 0 |
 
 Not measured, no case in the corpus: code_injection, insecure_deserialization.

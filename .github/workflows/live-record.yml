@@ -94,7 +94,7 @@ jobs:
           CREEP_LIVE_BENCH_FIXTURE: ${{ runner.temp }}/bench-out/bench-fixture.json
         run: |
           go test -count=1 -run '^TestBenchPublished$' ./internal/cli -update
-          CREEP_LIVE_BENCH_FIXTURE= go test -count=1 -run '^TestBenchPublished$' ./internal/cli -update
+          CREEP_LIVE_BENCH_FIXTURE='' go test -count=1 -run '^TestBenchPublished$' ./internal/cli -update
       # Offline, with the live variables unset: every new fixture replays.
       - name: Replay offline
         env:

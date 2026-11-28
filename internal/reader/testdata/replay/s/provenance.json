@@ -1,7 +1,30 @@
 {
-  "synthesized": true,
-  "model": "replay-model",
+  "synthesized": false,
+  "model": "creep-bench-qwen2.5-coder-1.5b-d7372fd82851",
+  "base_model": "qwen2.5-coder:1.5b",
+  "base_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
   "tier": "S",
   "recorded": "2026-11-28",
-  "note": "Synthesized from expected.json by synthesizedReply, not a model's judgement: no model that calibrates at this tier has been recorded (#356)."
+  "run": "https://github.com/sneakercreepers/creep/actions/runs/46103486289",
+  "note": "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction); reply bodies normalized by gatewaytest.Normalize (message content byte for byte, no response ID). Outcomes are what the model answered, not expected.json: the model is unfit (ADR 0036).",
+  "outcomes": {
+    "express/safe/command_injection /diagnostics/ping": "refused: evidence outside the slice",
+    "express/safe/nosql_injection /login": "refused: evidence outside the slice",
+    "express/vulnerable/command_injection /diagnostics/ping": "vulnerable lines [50-52] confidence 100",
+    "express/vulnerable/nosql_injection /login": "vulnerable lines [22-23 41-43] confidence 100",
+    "fastapi/safe/sql_injection /items": "vulnerable lines [46-50] confidence 100",
+    "fastapi/safe/ssrf /webhooks/test": "vulnerable lines [69-76] confidence 100",
+    "fastapi/vulnerable/sql_injection /items": "vulnerable lines [43-43] confidence 100",
+    "fastapi/vulnerable/ssrf /webhooks/test": "vulnerable lines [63-64] confidence 100",
+    "flask/safe/path_traversal /attachments/\u003cpath:name\u003e": "vulnerable lines [75-75] confidence 100",
+    "flask/safe/sql_injection /notes/search": "vulnerable lines [41-45] confidence 100",
+    "flask/safe/ssrf /notes/preview": "vulnerable lines [63-70] confidence 100",
+    "flask/vulnerable/path_traversal /attachments/\u003cpath:name\u003e": "vulnerable lines [66-66] confidence 100",
+    "flask/vulnerable/sql_injection /notes/search": "vulnerable lines [40-44] confidence 100",
+    "flask/vulnerable/ssrf /notes/preview": "refused: evidence outside the slice",
+    "flaskpg/safe/path_traversal /attachments/\u003cpath:name\u003e": "vulnerable lines [36-36] confidence 100",
+    "flaskpg/safe/sql_injection /notes/search": "vulnerable lines [28-31] confidence 100",
+    "flaskpg/vulnerable/path_traversal /attachments/\u003cpath:name\u003e": "vulnerable lines [38-38] confidence 100",
+    "flaskpg/vulnerable/sql_injection /notes/search": "vulnerable lines [30-33] confidence 100"
+  }
 }

@@ -1,0 +1,7 @@
+{
+  "synthesized": true,
+  "model": "replay-model",
+  "tier": "M",
+  "recorded": "2026-11-28",
+  "note": "Synthesized by fixture_test.go (an oracle with planned mistakes), not a model's judgement. Kept beside the live recording (live_seed1.json) because it pins the tier-M rule for a fit model, which the unfit pinned model cannot exercise (#356)."
+}

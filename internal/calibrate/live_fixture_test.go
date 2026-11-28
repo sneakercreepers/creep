@@ -120,6 +120,13 @@ func TestCalibrationFixturesHoldNoProviderData(t *testing.T) {
 		if strings.HasSuffix(name, ".provenance.json") {
 			continue
 		}
+		p, err := gatewaytest.ReadProvenance(strings.TrimSuffix(name, ".json") + ".provenance.json")
+		if err != nil {
+			t.Fatalf("%s has no header: %v", name, err)
+		}
+		if p.Synthesized == (filepath.Base(name) == liveFixture+".json") {
+			t.Errorf("%s: header says synthesized %v", name, p.Synthesized)
+		}
 		data, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

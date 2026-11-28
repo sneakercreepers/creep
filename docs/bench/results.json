@@ -13,7 +13,7 @@
     {
       "tier": "S",
       "runs": 24,
-      "incomplete_runs": 15,
+      "incomplete_runs": 16,
       "classes": [
         {
           "class": "command_injection",
@@ -21,11 +21,11 @@
           "detected": 1,
           "recall": 0.5,
           "safe": 2,
-          "false_positives": 2,
-          "false_positive_rate": 1,
-          "claimed_covered": 2,
-          "silent_misses": 1,
-          "honesty": 0.5
+          "false_positives": 1,
+          "false_positive_rate": 0.5,
+          "claimed_covered": 1,
+          "silent_misses": 0,
+          "honesty": 1
         },
         {
           "class": "idor",
@@ -81,9 +81,9 @@
           "detected": 2,
           "recall": 1,
           "safe": 2,
-          "false_positives": 1,
-          "false_positive_rate": 0.5,
-          "claimed_covered": 1,
+          "false_positives": 2,
+          "false_positive_rate": 1,
+          "claimed_covered": 2,
           "silent_misses": 0,
           "honesty": 1
         },
@@ -133,14 +133,14 @@
         {
           "class": "nosql_injection",
           "vulnerable": 1,
-          "detected": 0,
-          "recall": 0,
+          "detected": 1,
+          "recall": 1,
           "safe": 1,
           "false_positives": 1,
           "false_positive_rate": 1,
-          "claimed_covered": 0,
+          "claimed_covered": 1,
           "silent_misses": 0,
-          "honesty": null
+          "honesty": 1
         },
         {
           "class": "path_traversal",
@@ -150,7 +150,7 @@
           "safe": 2,
           "false_positives": 2,
           "false_positive_rate": 1,
-          "claimed_covered": 1,
+          "claimed_covered": 2,
           "silent_misses": 0,
           "honesty": 1
         },
@@ -186,7 +186,7 @@
           "safe": 2,
           "false_positives": 2,
           "false_positive_rate": 1,
-          "claimed_covered": 1,
+          "claimed_covered": 2,
           "silent_misses": 0,
           "honesty": 1
         }
@@ -195,7 +195,7 @@
     {
       "tier": "L",
       "runs": 24,
-      "incomplete_runs": 16,
+      "incomplete_runs": 13,
       "classes": [
         {
           "class": "command_injection",
@@ -239,11 +239,11 @@
           "detected": 2,
           "recall": 1,
           "safe": 2,
-          "false_positives": 2,
-          "false_positive_rate": 1,
-          "claimed_covered": 0,
+          "false_positives": 1,
+          "false_positive_rate": 0.5,
+          "claimed_covered": 1,
           "silent_misses": 0,
-          "honesty": null
+          "honesty": 1
         },
         {
           "class": "sqli",
@@ -263,8 +263,8 @@
           "detected": 2,
           "recall": 1,
           "safe": 2,
-          "false_positives": 1,
-          "false_positive_rate": 0.5,
+          "false_positives": 2,
+          "false_positive_rate": 1,
           "claimed_covered": 2,
           "silent_misses": 0,
           "honesty": 1

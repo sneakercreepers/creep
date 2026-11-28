@@ -29,9 +29,9 @@
 //   - Fixtures (fixtures/published.json) map the SHA-256 of each request
 //     body to the reply the published run got, with the client settings the
 //     bodies were built with. creep bench --replay serves only them, with no
-//     network and no key. The published set is synthesized (Fixture.
-//     Synthesized): an oracle answered from the corpus, so the numbers
-//     measure creep's pipeline (inventory, tripwire, planner, slicing,
-//     coverage) with a model that is always right, not a model's
-//     judgement, until a live run (#36) replaces them.
+//     network and no key. The published set is a live recording
+//     (Fixture.Synthesized false, #356, ADR 0038) of the nightly bench's
+//     digest-pinned qwen2.5-coder:1.5b, an unfit model (ADR 0036), with
+//     its endpoint replaced by a placeholder and each reply reduced to the
+//     model's message and token counts.
 package bench
