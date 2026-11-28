@@ -14,14 +14,21 @@ import (
 type Format uint8
 
 // formatNames are the format IDs; Format(i+1) is formatNames[i]. The
-// first binaryFormats are binary formats, the rest text formats.
+// first binaryFormats are binary formats, then the text formats never
+// opened, then config.
 var formatNames = []string{
 	"image", "font", "media", "archive", "object", "document", "store",
-	"prose", "lockfile", "data", "vector",
+	"prose", "lockfile", "data", "vector", "config",
 }
 
 // binaryFormats counts the leading binary formats in formatNames.
 const binaryFormats = 7
+
+// formatConfig is structured text that may be security-relevant (a policy,
+// app settings, rules code loads): read like any text file, but listed
+// not_code instead of too_large when it does not fit one discovery call,
+// since a file that size is data, not settings (#366 tester).
+var formatConfig = Format(indexOf(formatNames, "config") + 1) //nolint:gosec // G115: a short list
 
 // String returns the format ID, or "unknown".
 func (f Format) String() string { return nameOf(formatNames, int(f)) }
@@ -29,7 +36,11 @@ func (f Format) String() string { return nameOf(formatNames, int(f)) }
 // opened reports whether discovery opens a file of this format: a binary
 // format is believed only when the bytes look binary, so a text file named
 // like an image is still read.
-func (f Format) opened() bool { return f == 0 || int(f) <= binaryFormats }
+func (f Format) opened() bool { return f.text() || int(f) <= binaryFormats }
+
+// text reports a file discovery reads as text unless its bytes are binary:
+// one no row names, or config.
+func (f Format) text() bool { return f == 0 || f == formatConfig }
 
 // formatTable holds the exact name, glob and extension rules, all
 // lowercased.
@@ -113,21 +124,22 @@ func (t formatTable) formatOf(name string) Format {
 	return t.exts[path.Ext(base)]
 }
 
-// looksBinary reports bytes no text file holds: a NUL in the first
-// binaryProbeBytes or, for a file named as a binary format, a head that is
-// not UTF-8. A head cut inside a character still counts as UTF-8.
+// looksBinary reports bytes no text file holds. A file named as a binary
+// format is binary when its first binaryProbeBytes hold a NUL or are not
+// UTF-8. A text file (no row names it, or config) is binary only when its head holds a NUL and
+// is not UTF-8: one that is UTF-8 apart from a NUL is text that hides a
+// byte, which addFile lists read_failed so the run is incomplete, as for
+// labeled source (#268, #366 tester). A head cut inside a character still
+// counts as UTF-8.
 func looksBinary(f Format, content []byte) bool {
-	if hasNUL(content) {
-		return true
-	}
-	if f == 0 {
-		return false
-	}
 	head := content[:min(len(content), binaryProbeBytes)]
 	if len(content) > binaryProbeBytes {
 		head = dropCutRune(head)
 	}
-	return !utf8.Valid(head)
+	if f.text() {
+		return hasNUL(content) && !utf8.Valid(head)
+	}
+	return hasNUL(content) || !utf8.Valid(head)
 }
 
 // dropCutRune drops a last character the probe cut in two.

@@ -51,6 +51,7 @@ const MaxSamples = 5
 type fileWork struct {
 	path    string
 	file    File
+	config  bool // formatConfig: too large is not_code
 	hits    []hit
 	entries []entryProp
 	sinks   []sinkProp
@@ -152,6 +153,7 @@ func (r *run) addFile(ctx context.Context, i int) {
 		w.notSource(ReasonNotCode)
 		return
 	}
+	w.config = format == formatConfig
 	content, readErr := r.d.Read(w.path)
 	tooLarge := errors.Is(readErr, redact.ErrFileTooLarge)
 	if readErr != nil && !tooLarge {
@@ -160,19 +162,22 @@ func (r *run) addFile(ctx context.Context, i int) {
 	e := r.inv.classify(w.path, content)
 	w.file.Manifest, w.file.Container = e.Manifest, e.Container
 	switch {
-	case readErr != nil && (!tooLarge || len(content) == 0):
-		// Unreadable, or too large with no head to sniff: fail closed.
+	case readErr != nil && !tooLarge:
 		w.label(e)
-		w.fail(CoverageNotRead, readFailure(tooLarge))
+		w.fail(CoverageNotRead, ReasonReadFailed)
+	case tooLarge && len(content) == 0:
+		// Too large with no head to sniff: fail closed.
+		w.label(e)
+		w.tooLarge()
 	case e.Language == 0 && !utf16BOM(content) && looksBinary(format, content):
 		w.notSource(ReasonBinary)
 	case hasNUL(content):
-		// Labeled source or UTF-16 text with a NUL: listed, never binary.
+		// Text with a NUL (labeled, UTF-8 or UTF-16): listed, never binary.
 		w.label(e)
 		w.fail(CoverageNotRead, ReasonReadFailed)
 	case tooLarge:
 		w.label(e)
-		w.fail(CoverageNotRead, ReasonTooLarge)
+		w.tooLarge()
 	default:
 		w.label(e)
 		r.addSource(ctx, i, content)
@@ -190,12 +195,14 @@ func (w *fileWork) notSource(reason Reason) {
 	w.file.Coverage, w.file.Reason = CoverageNotSource, reason
 }
 
-// readFailure is the reason for a file Read refused.
-func readFailure(tooLarge bool) Reason {
-	if tooLarge {
-		return ReasonTooLarge
+// tooLarge lists a file that fits no discovery call or redaction:
+// too_large, which makes the run incomplete, or not_code for config.
+func (w *fileWork) tooLarge() {
+	if w.config {
+		w.notSource(ReasonNotCode)
+		return
 	}
-	return ReasonReadFailed
+	w.fail(CoverageNotRead, ReasonTooLarge)
 }
 
 // addSource redacts a source file whole, runs the tripwire on the
@@ -228,7 +235,7 @@ func (r *run) addSource(ctx context.Context, i int, content []byte) {
 func (r *run) queue(ctx context.Context, s section) {
 	size := s.size()
 	if size > r.budget {
-		r.work[s.work].fail(CoverageNotRead, ReasonTooLarge)
+		r.work[s.work].tooLarge()
 		return
 	}
 	if len(r.pending) == MaxFilesPerBatch || r.used+size > r.budget {
@@ -250,8 +257,8 @@ func (r *run) redactFailed(w *fileWork, err error) {
 	case errors.Is(err, redact.ErrRunFull):
 		w.fail(CoverageNotRead, ReasonRunFull)
 		r.halt(CoverageNotRead, ReasonRunFull, err)
-	case errors.Is(err, redact.ErrFileTooLarge):
-		w.fail(CoverageNotRead, ReasonTooLarge)
+	case errors.Is(err, redact.ErrFileTooLarge), w.config && errors.Is(err, redact.ErrLineTooLong):
+		w.tooLarge()
 	case errors.Is(err, redact.ErrLineTooLong):
 		w.fail(CoverageNotRead, ReasonLineTooLong)
 	default:

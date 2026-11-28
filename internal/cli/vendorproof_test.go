@@ -136,6 +136,7 @@ func TestRulesNameNoEcosystem(t *testing.T) {
 	files := []string{
 		"vendorproof.go", "trackedtree.go",
 		filepath.Join("..", "repofile", "ignore.go"), filepath.Join("..", "repofile", "gitignore.go"),
+		filepath.Join("..", "discover", "formats.txt"), // the non-code list names formats only
 	}
 	for _, name := range files {
 		data, err := os.ReadFile(name)

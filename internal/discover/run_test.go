@@ -41,6 +41,7 @@ func TestReadsOnlyPossibleSource(t *testing.T) {
 	files := map[string]string{
 		"a.py": "x = 1\n", "bin/serve": "#!/bin/sh\n", "bin/.deploy": "echo hi\n",
 		"package.json": "{}", "Dockerfile": "FROM scratch\n", "notes.md": "os.system(x)\n", "logo.png": "\x00",
+		"package-lock.json": "{}",
 	}
 	var read []string
 	d := Discoverer{
@@ -59,7 +60,7 @@ func TestReadsOnlyPossibleSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.Sort(read)
-	if want := []string{"Dockerfile", "a.py", "bin/.deploy", "bin/serve", "logo.png"}; !slices.Equal(read, want) {
+	if want := []string{"Dockerfile", "a.py", "bin/.deploy", "bin/serve", "logo.png", "package.json"}; !slices.Equal(read, want) {
 		t.Errorf("read %v, want only %v", read, want)
 	}
 	for _, f := range res.Files {
@@ -94,12 +95,12 @@ func TestFilesNotReadAreListed(t *testing.T) {
 		{"dotfile read error", "bin/.deploy", nil, CoverageNotRead, ReasonReadFailed, 0},
 		{"container file read error", "Dockerfile", nil, CoverageNotRead, ReasonReadFailed, 0},
 		{"unknown file read error", "src/main.zig", nil, CoverageNotRead, ReasonReadFailed, 0},
-		{"NUL in a file no rule names", "src/main.zig", ptr("\x00os.system(x)\n"), CoverageNotSource, ReasonBinary, 0},
+		{"NUL in UTF-8 text no rule names", "src/main.zig", ptr("\x00os.system(x)\n"), CoverageNotRead, ReasonReadFailed, 0},
+		{"NUL in bytes not UTF-8 no rule names", "assets/blob", ptr("\x7fELF\x02\x01\x00\xff\xfe"), CoverageNotSource, ReasonBinary, 0},
 		{"UTF-16 text no rule names", "src/main.zig", ptr("\xff\xfeo\x00s\x00"), CoverageNotRead, ReasonReadFailed, 0},
 		{"image bytes", "logo.png", ptr("\x89PNG\r\n\x1a\n\x00\x00"), CoverageNotSource, ReasonBinary, 0},
 		{"document bytes not UTF-8", "a.pdf", ptr("%PDF-1.7\n\xe2\xe3\xcf\xd3\n"), CoverageNotSource, ReasonBinary, 0},
 		{"empty source", "a.py", ptr(""), CoverageReadFull, ReasonNone, 0},
-		{"manifest in a data format", "package.json", ptr(`{"scripts":{"x":"exec(rm)"}}`), CoverageNotSource, ReasonNotCode, 0},
 		{"prose", "notes.md", ptr("os.system(x)\n"), CoverageNotSource, ReasonNotCode, 0},
 		{"prose read error", "notes.md", nil, CoverageNotSource, ReasonNotCode, 0},
 		{"lockfile", "web/package-lock.json", ptr("{}"), CoverageNotSource, ReasonNotCode, 0},
@@ -344,7 +345,7 @@ func TestOversizedFileIsJudgedByHead(t *testing.T) {
 		cov    Coverage
 		reason Reason
 	}{
-		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\x00", CoverageNotSource, ReasonBinary},
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\x00\xb0\xfe", CoverageNotSource, ReasonBinary},
 		{"text with no extension", "data/dump", "id,name\n1,a\n", CoverageNotRead, ReasonTooLarge},
 		{"text no rule names", "src/big.nim", "proc main() =\n", CoverageNotRead, ReasonTooLarge},
 		{"script with no extension", "bin/serve", "#!/usr/bin/env python3\nimport os\n", CoverageNotRead, ReasonTooLarge},

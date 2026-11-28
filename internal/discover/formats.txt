@@ -9,6 +9,8 @@
 #            are not UTF-8 is listed binary; any other is text under a
 #            misleading name and is read like any file. Text formats prose,
 #            lockfile, data and vector are never opened and listed not_code.
+#            config is read like a file no row names, but listed not_code
+#            when it does not fit one discovery call (data, not settings).
 # Precedence: name, glob, ext. Every file no row names is opened: no NUL in
 # its first 8 KiB makes it text, read and sent to discovery. The README
 # "Not read" list must match (TestDocsListFormats).
@@ -98,7 +100,7 @@ glob    *-lock.yaml lockfile
 glob    *.lock.json lockfile
 
 # Data
-ext     .json       data
+ext     .json       config
 ext     .jsonl      data
 ext     .ndjson     data
 ext     .geojson    data
