@@ -102,9 +102,9 @@ func TestScanListsRefusedName(t *testing.T) {
 	}
 }
 
-// Links and special files named as source are listed, not followed: a
-// link could point outside the repository. A link the root resolves to a
-// file with any other name is not (TestWalkListsDirectoryLinks).
+// Links are listed, not followed: a link could point outside the
+// repository. A relative link to a walked file is covered whatever its
+// name, since the file is read at its own path (TestWalkListsDirectoryLinks).
 func TestWalkListsLinks(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "real.go"), []byte("package x\n"), 0o600); err != nil {

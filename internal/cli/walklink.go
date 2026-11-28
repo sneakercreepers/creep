@@ -119,19 +119,33 @@ func resolveLinks(ctx context.Context, root *os.Root, files *repoFiles, links []
 }
 
 // linkGap lists a link or special file the walk does not follow when it
-// could hold code: discovery would open a file of its name (any name but a
-// text format, #366), or it may be a directory the walk does not reach at
-// its own path (unreached), whatever its name (#214). One in an ignored,
-// untracked tree is vendor, like the tree's files; any other is
-// not_regular, which makes the run incomplete (ADR 0009).
+// could hold code. A symbolic link whose target the walk reached at its
+// own path is covered, whatever its name: discovery reads the target there
+// (#366, where almost any name may be code). Any other entry is listed
+// when discovery would open a file of its name (any name but a text
+// format) or it may be a directory the walk does not reach (unreached,
+// #214). One in an ignored, untracked tree is vendor, like the tree's
+// files; any other is not_regular, which makes the run incomplete (ADR
+// 0009).
 func linkGap(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree, proofs *vendorProofs) report.SkipReason {
-	if !discover.MaybeSource(l.rel) && !unreached(ctx, root, l, tree) {
+	if coveredLink(ctx, root, l, tree) || (!discover.MaybeSource(l.rel) && !unreached(ctx, root, l, tree)) {
 		return ""
 	}
 	if report.ValidPath(l.rel) && proofs.proven(l.rel) {
 		return report.SkipVendor
 	}
 	return report.SkipNotRegular
+}
+
+// coveredLink reports whether l is a symbolic link whose target, read
+// before the scan deadline with one readlink, names an entry the walk
+// reached (walkedTree.reaches).
+func coveredLink(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree) bool {
+	if l.mode&fs.ModeSymlink == 0 || ctx.Err() != nil {
+		return false
+	}
+	target, err := readlinkInRoot(root, l.rel)
+	return err == nil && tree.reaches(l.rel, target)
 }
 
 // unreached reports whether the entry may be a directory the walk does not
