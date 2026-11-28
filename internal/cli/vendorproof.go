@@ -47,10 +47,23 @@ type vendorProofs struct {
 	tracked *trackedIndex
 	loaded  bool
 	indexOK bool
+	off     bool // nothing is proven: a catch-all pattern or a fail-closed rewalk
 	exclude repofile.GitIgnore
 	rules   map[string]repofile.GitIgnore // by directory, "." is the root
 	dirs    map[string]bool               // directory: ignored by its own patterns
 	trees   map[string]bool               // topmost ignored entry: proven
+}
+
+// catchAllProbe is a name no real ignore pattern targets: patterns at the
+// root that ignore it (such as *, /* or **) ignore the whole repository,
+// so they prove nothing (#376 auditor M2).
+const catchAllProbe = "creep-catch-all-probe-7f3a"
+
+// noVendorProofs proves nothing, so every file is read.
+func noVendorProofs(ctx context.Context, root *os.Root) *vendorProofs {
+	v := newVendorProofs(ctx, root)
+	v.loaded, v.off = true, true
+	return v
 }
 
 func newVendorProofs(ctx context.Context, root *os.Root) *vendorProofs {
@@ -73,8 +86,9 @@ func (v *vendorProofs) proven(rel string) bool {
 		v.loaded = true
 		v.tracked, v.indexOK = readTracked(v.root)
 		v.exclude = v.readIgnore(".", gitExcludePath)
+		v.off = v.ignores(catchAllProbe, true) || v.ignores(catchAllProbe, false)
 	}
-	if !v.indexOK || v.tracked.folded.touches(rel) {
+	if v.off || !v.indexOK || v.tracked.folded.touches(rel) {
 		return false
 	}
 	tree, ok := v.ignoredTree(rel)

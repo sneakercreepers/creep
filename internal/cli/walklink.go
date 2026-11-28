@@ -27,6 +27,7 @@ type walkedTree struct {
 	ids      map[string]int
 	parents  []int
 	dirs     []bool
+	read     []bool // a file discovery opens, sent to it at its own path
 	children map[childKey]int
 }
 
@@ -36,7 +37,7 @@ type childKey struct {
 }
 
 func newWalkedTree() *walkedTree {
-	return &walkedTree{ids: map[string]int{".": 0}, parents: []int{-1}, dirs: []bool{true}, children: map[childKey]int{}}
+	return &walkedTree{ids: map[string]int{".": 0}, parents: []int{-1}, dirs: []bool{true}, read: []bool{false}, children: map[childKey]int{}}
 }
 
 // add records rel, which the walk reached through directories it reached.
@@ -49,7 +50,15 @@ func (w *walkedTree) add(rel string, dir bool) {
 	w.ids[rel] = id
 	w.parents = append(w.parents, parent)
 	w.dirs = append(w.dirs, dir)
+	w.read = append(w.read, false)
 	w.children[childKey{parent, path.Base(rel)}] = id
+}
+
+// markRead records that the file at rel goes to discovery, which opens it.
+func (w *walkedTree) markRead(rel string) {
+	if id, ok := w.ids[rel]; ok {
+		w.read[id] = true
+	}
 }
 
 // reaches reports whether target, read from the link at rel, names an
@@ -60,21 +69,37 @@ func (w *walkedTree) add(rel string, dir bool) {
 // leaves the root, names a link, the root's .git or .creep (never walked)
 // or anything else the walk did not reach, is not reached.
 func (w *walkedTree) reaches(rel, target string) bool {
+	_, ok := w.resolve(rel, target)
+	return ok
+}
+
+// covers reports whether target, read from the link at rel, names a
+// walked directory or a walked file discovery reads: what the link holds
+// is then read at the target's own path. A target listed by design
+// (not_code, vendor, invalid_path) is not covered, since the link's own
+// name may be code (#376 auditor M1).
+func (w *walkedTree) covers(rel, target string) bool {
+	id, ok := w.resolve(rel, target)
+	return ok && (w.dirs[id] || w.read[id])
+}
+
+// resolve follows target from the link at rel over walked entries only.
+func (w *walkedTree) resolve(rel, target string) (int, bool) {
 	slashed := filepath.ToSlash(target)
 	if target == "" || filepath.IsAbs(target) || filepath.VolumeName(target) != "" || strings.HasPrefix(slashed, "/") {
-		return false
+		return 0, false
 	}
 	names := strings.Split(slashed, "/")
 	cur, ok := w.ids[path.Dir(rel)]
 	if !ok || len(names) > maxLinkSteps {
-		return false
+		return 0, false
 	}
 	for _, name := range names {
 		if cur, ok = w.step(cur, name); !ok {
-			return false
+			return 0, false
 		}
 	}
-	return true
+	return cur, true
 }
 
 // step moves from the walked directory cur by one name of a link target.
@@ -119,9 +144,9 @@ func resolveLinks(ctx context.Context, root *os.Root, files *repoFiles, links []
 }
 
 // linkGap lists a link or special file the walk does not follow when it
-// could hold code. A symbolic link whose target the walk reached at its
-// own path is covered, whatever its name: discovery reads the target there
-// (#366, where almost any name may be code). Any other entry is listed
+// could hold code. A symbolic link whose target is a walked directory or
+// a walked file discovery reads is covered, whatever its name: the target
+// is read at its own path (#366, where almost any name may be code). Any other entry is listed
 // when discovery would open a file of its name (any name but a text
 // format) or it may be a directory the walk does not reach (unreached,
 // #214). One in an ignored, untracked tree is vendor, like the tree's
@@ -138,14 +163,14 @@ func linkGap(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree
 }
 
 // coveredLink reports whether l is a symbolic link whose target, read
-// before the scan deadline with one readlink, names an entry the walk
-// reached (walkedTree.reaches).
+// before the scan deadline with one readlink, the walk covers
+// (walkedTree.covers).
 func coveredLink(ctx context.Context, root *os.Root, l pendingLink, tree *walkedTree) bool {
 	if l.mode&fs.ModeSymlink == 0 || ctx.Err() != nil {
 		return false
 	}
 	target, err := readlinkInRoot(root, l.rel)
-	return err == nil && tree.reaches(l.rel, target)
+	return err == nil && tree.covers(l.rel, target)
 }
 
 // unreached reports whether the entry may be a directory the walk does not

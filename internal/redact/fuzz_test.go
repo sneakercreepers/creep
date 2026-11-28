@@ -119,6 +119,22 @@ func fakeLine(rng *rand.Rand, kind int) (string, string) {
 	return credentialMakers[kind-len(secretMakers)](rng)
 }
 
+// secretDenseFormats are the text around a secret in files #366 now
+// sends whole (#376 auditor M3): .env, Terraform state and variables,
+// kubeconfig, JSON settings, .npmrc, .netrc, .pgpass and htpasswd. They
+// seed both fuzzers, so redaction recall on them is a protection.
+var secretDenseFormats = [][2]string{
+	{"DB_HOST=localhost\nAPI_KEY=", "\nDEBUG=false\n"},
+	{`{"version":4,"resources":[{"instances":[{"attributes":{"password":"`, `"}}]}]}`},
+	{"db_password = \"", "\"\nregion = \"us-east-1\"\n"},
+	{"apiVersion: v1\nkind: Config\nusers:\n- name: ci\n  user:\n    token: ", "\ncurrent-context: prod\n"},
+	{"{\n  \"ConnectionStrings\": {\n    \"Default\": \"Server=db;Password=", ";\"\n  }\n}\n"},
+	{"//registry.npmjs.org/:_authToken=", "\nalways-auth=true\n"},
+	{"machine api.example.com\n  login ci\n  password ", "\n"},
+	{"db.internal:5432:app:app:", "\n"},
+	{"admin:$apr1$", "\n"},
+}
+
 // FuzzRedactSecrets embeds a random secret in a line of code between
 // arbitrary text and checks it never reaches the output (the gateway
 // payload), neither in the fragment that holds it nor in a later fragment
@@ -136,6 +152,9 @@ func FuzzRedactSecrets(f *testing.F) {
 	f.Add("\xff\xfe", "\x00", uint64(7), uint8(4))
 	f.Add("x = 1", "", uint64(8), uint8(7))
 	f.Add("[db]", "url: x", uint64(9), uint8(8))
+	for i, s := range secretDenseFormats {
+		f.Add(s[0], s[1], uint64(20+i), uint8(i))
+	}
 	f.Fuzz(func(t *testing.T, before, after string, seed uint64, kind uint8) {
 		rng := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 		line, secret := fakeLine(rng, int(kind)%(len(secretMakers)+len(credentialMakers)))
@@ -186,6 +205,9 @@ func FuzzFile(f *testing.F) {
 	f.Add("x := `", "`", uint64(2), uint8(6), uint16(3000))
 	f.Add("-----BEGIN PRIV"+"ATE KEY-----", "", uint64(3), uint8(8), uint16(4095))
 	f.Add("// ", "\n", uint64(4), uint8(10), uint16(6000))
+	for i, s := range secretDenseFormats {
+		f.Add(s[0], s[1], uint64(20+i), uint8(i), uint16(1000*i))
+	}
 	f.Fuzz(func(t *testing.T, before, after string, seed uint64, kind uint8, offset uint16) {
 		rng := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 		line, secret := fakeLine(rng, int(kind)%(len(secretMakers)+len(credentialMakers)))

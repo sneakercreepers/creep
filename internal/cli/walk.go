@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 
 	"github.com/sneakercreepers/creep/internal/discover"
 	"github.com/sneakercreepers/creep/internal/report"
@@ -44,13 +45,47 @@ func (f repoFiles) sources() int {
 // error stops it; past a deadline on ctx no vendor tree is proven
 // (vendorProofs) and no link is read, so the files go to discovery, which
 // lists them unread, and the links are listed.
+//
+// Vendor that leaves discovery no file it opens is not believed: an
+// archive can carry its own .git/index and an ignore file that would list
+// the whole repository vendor (#376 auditor M2), so the walk runs again
+// with no vendor proven and every file is read like first-party code.
 func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
-	w := repoWalk{proofs: newVendorProofs(ctx, root), tree: newWalkedTree()}
+	files, err := walkOnce(ctx, root, newVendorProofs(ctx, root))
+	if err != nil || readsCode(files.paths) || !hasVendor(files.gaps) {
+		return files, err
+	}
+	return walkOnce(ctx, root, noVendorProofs(ctx, root))
+}
+
+// readsCode reports whether discovery opens any of paths other than an
+// ignore file, which only decides what else is vendor.
+func readsCode(paths []string) bool {
+	for _, p := range paths {
+		if discover.MaybeSource(p) && path.Base(p) != ".gitignore" {
+			return true
+		}
+	}
+	return false
+}
+
+func walkOnce(ctx context.Context, root *os.Root, proofs *vendorProofs) (repoFiles, error) {
+	w := repoWalk{proofs: proofs, tree: newWalkedTree()}
 	if err := fs.WalkDir(root.FS(), ".", w.visit); err != nil {
 		return repoFiles{}, fmt.Errorf("walk repository: %w", err)
 	}
 	resolveLinks(ctx, root, &w.files, w.links, w.tree, w.proofs)
 	return w.files, nil
+}
+
+// hasVendor reports whether any gap is vendor.
+func hasVendor(gaps []report.NotEvaluated) bool {
+	for _, g := range gaps {
+		if g.Reason == report.SkipVendor {
+			return true
+		}
+	}
+	return false
 }
 
 // repoWalk is the state of one walkRepo.
@@ -85,6 +120,9 @@ func (w *repoWalk) visit(rel string, d fs.DirEntry, err error) error {
 		return nil
 	}
 	w.files.paths = append(w.files.paths, rel)
+	if discover.MaybeSource(rel) {
+		w.tree.markRead(rel)
+	}
 	return nil
 }
 
