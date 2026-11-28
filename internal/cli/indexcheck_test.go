@@ -37,6 +37,11 @@ func TestIndexMatchesTree(t *testing.T) {
 		{"only edited files", []gitindex.Entry{file("a.py", 3, past)}, false, false},
 		{"size the disk does not hold", []gitindex.Entry{a, file("dir/b.py", 7, math.MaxUint32)}, false, false},
 		{"zero mtime", []gitindex.Entry{file("a.py", 9, 0)}, false, false},
+		{"mtime before 2000", []gitindex.Entry{file("a.py", 9, 1)}, false, false},
+		{"missing file with a made-up mtime", []gitindex.Entry{a, file("gone.py", 1, 1)}, false, false},
+		{"most tracked files missing", []gitindex.Entry{a, file("gone1.py", 1, past), file("gone2.py", 1, past)}, false, false},
+		{"one in twenty missing", append(repeat(a, 38), file("gone1.py", 1, past), file("gone2.py", 1, past)), false, true},
+		{"more than one in twenty missing", append(repeat(a, 38), file("gone1.py", 1, past), file("gone2.py", 1, past), file("gone3.py", 1, past)), false, false},
 		{"executable bit git did not record", []gitindex.Entry{{Path: "a.py", Mode: gitModeExec, Size: 9, MtimeSec: past}}, false, runtime.GOOS == "windows"},
 		{"deleted beside a present file", []gitindex.Entry{a, file("gone.py", 1, past)}, false, true},
 		{"no tracked file on disk", []gitindex.Entry{file("gone.py", 1, past)}, false, false},
@@ -67,4 +72,12 @@ func TestIndexMatchesTree(t *testing.T) {
 			}
 		})
 	}
+}
+
+func repeat(e gitindex.Entry, n int) []gitindex.Entry {
+	out := make([]gitindex.Entry, n)
+	for i := range out {
+		out[i] = e
+	}
+	return out
 }

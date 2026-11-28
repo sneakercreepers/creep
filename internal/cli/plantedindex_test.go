@@ -42,7 +42,14 @@ func TestPlantedIndexNeverExitsZero(t *testing.T) {
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), []string{"lib/a.js  vendor_exceeds_read", "api/b.py  vendor_exceeds_read"}},
 		{"index size the disk does not hold", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": far, ".gitignore": {Size: 5, MtimeSec: recordedAt}}),
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
-		{"index mode git never writes", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": {Mode: 0o100600, Size: uint32(len(helloRoute)), MtimeSec: recordedAt}}),
+		{"index mode git never writes", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{
+			"main.py": {Mode: 0o100600, Size: uint32(len(helloRoute)), MtimeSec: recordedAt}, ".gitignore": {Size: uint32(len("src/\n")), MtimeSec: recordedAt}}),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"absent entries beside an exact decoy with a made-up mtime", plantedIndex(decoy, []string{"a.py", "b.py", "c.py", "main.py"}, map[string]gitindextest.Stat{
+			"main.py": {Size: uint32(len(helloRoute)), MtimeSec: 1}, "a.py": {MtimeSec: 1}, "b.py": {MtimeSec: 1}, "c.py": {MtimeSec: 1}}),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"absent entries beside an exact decoy", plantedIndex(decoy, []string{"a.py", "b.py", "c.py", "main.py"}, map[string]gitindextest.Stat{
+			"main.py": {Size: uint32(len(helloRoute)), MtimeSec: recordedAt}, "a.py": {MtimeSec: recordedAt}, "b.py": {MtimeSec: recordedAt}, "c.py": {MtimeSec: recordedAt}}),
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"index tracking only missing files", plantedIndex(decoy, []string{"gone.py"}, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"decoy only a .gitignore beside", plantedIndex(map[string]string{".gitignore": "src/\n", "README.md": "# x\n", "src/app.py": "@flask"}, []string{".gitignore", "README.md"}, nil),
