@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "python-shell-ping",
+  "class": "command_injection",
+  "applies_to": [".py"],
+  "sources": ["request.args"],
+  "sinks": ["os.system(", "subprocess.run("],
+  "hint": "A request value joined into a shell command string reaches os.system().\nOnly an argument list with no shell stops this class.",
+  "fixtures": {
+    "vulnerable": {
+      "code": "import os\nfrom flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/ping\")\ndef ping():\n    host = request.args[\"host\"]\n    os.system(\"ping -c 1 \" + host)\n    return \"ok\"\n",
+      "source_line": 7,
+      "sink_line": 8
+    },
+    "safe": {
+      "code": "import subprocess\nfrom flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/ping\")\ndef ping():\n    host = request.args[\"host\"]\n    args = [\"ping\", \"-c\", \"1\", \"--\", host]\n    subprocess.run(args, check=False)\n    return \"ok\"\n",
+      "source_line": 7,
+      "sink_line": 9
+    }
+  }
+}

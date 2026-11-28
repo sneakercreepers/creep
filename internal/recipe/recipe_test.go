@@ -154,4 +154,14 @@ func TestClassesAreReaders(t *testing.T) {
 	if slices.Contains(got, "unknown") {
 		t.Error("Classes() holds the reader's unknown name")
 	}
+	// Every reader class constant, from the first up to the first value
+	// the reader does not name, is a recipe class, so a class the reader
+	// gains fails here until classList lists it.
+	var want []string
+	for c := reader.ClassSQLInjection; c.String() != "unknown"; c++ {
+		want = append(want, c.String())
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Classes() = %v, want every reader class in order %v", got, want)
+	}
 }

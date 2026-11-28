@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "python-pickle-body",
+  "class": "insecure_deserialization",
+  "applies_to": [".py"],
+  "sources": ["request.get_data("],
+  "sinks": ["pickle.loads(", "json.loads("],
+  "hint": "A request body decoded with pickle.loads() builds any object: QX7PICKLEHINT.\nOnly a data-only format such as json.loads() stops this class.",
+  "fixtures": {
+    "vulnerable": {
+      "code": "import pickle\nfrom flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/load\", methods=[\"POST\"])\ndef load():\n    data = request.get_data()\n    obj = pickle.loads(data)\n    return str(obj)\n",
+      "source_line": 7,
+      "sink_line": 8
+    },
+    "safe": {
+      "code": "import json\nfrom flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/load\", methods=[\"POST\"])\ndef load():\n    data = request.get_data()\n    text = data.decode(\"utf-8\")\n    obj = json.loads(text)\n    return str(obj)\n",
+      "source_line": 7,
+      "sink_line": 9
+    }
+  }
+}
