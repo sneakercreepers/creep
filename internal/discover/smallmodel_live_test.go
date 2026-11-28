@@ -26,7 +26,7 @@ const liveSmallFixture = "testdata/replay/live-s/flask"
 
 const liveSmallNote = "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction), " +
 	"Discoverer.Run at tier S with testSeed on testdata/apps/flask/vulnerable; reply bodies normalized by gatewaytest.Normalize. " +
-	"Outcomes are what the model's batch gave, not the app's ground truth: the model is unfit (ADR 0036)."
+	"Outcomes are what the model's batch gave, not the app's ground truth: the model is unfit (ADR 0036). Live replies vary between runs of the same pinned model: the committed run is the reviewed one."
 
 // Acceptance (#356): the live small-model batch replays offline, with no
 // model call, to exactly what the recording gave. -update re-records it

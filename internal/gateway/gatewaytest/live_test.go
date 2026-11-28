@@ -113,8 +113,18 @@ func TestCheckReplyHygiene(t *testing.T) {
 		{"provider", `{"provider":"x"}`, false},
 		{"loopback endpoint", `{"c":"http://127.0.0.1:11434/v1"}`, false},
 		{"cloud endpoint", `{"c":"see https://api.example.com/v1"}`, false},
-		{"key", `{"c":"sk-abcdefghijklmnop"}`, false},
-		{"bearer", `{"c":"Bearer abcdefghijkl"}`, false},
+		{"key", fakeSecret("sk-", "abcdefghijklmnop"), false},
+		{"bearer", fakeSecret("Bearer ", "abcdefghijkl"), false},
+		{"stripe-style key", fakeSecret("sk_"+"live_", strings.Repeat("a", 24)), false},
+		{"github token", fakeSecret("ghp"+"_", strings.Repeat("a", 36)), false},
+		{"github fine-grained token", fakeSecret("github"+"_pat_", strings.Repeat("a", 22)+"_"+strings.Repeat("b", 59)), false},
+		{"aws access key", fakeSecret("AKI"+"A", strings.Repeat("Q", 16)), false},
+		{"bare loopback host and port", `{"c":"127.0.0.1:11434"}`, false},
+		{"bare localhost and port", `{"c":"see localhost:8080"}`, false},
+		{"bare cloud host and port", `{"c":"api.example.com:443"}`, false},
+		{"placeholder host and port", `{"c":"models.replay.invalid:443"}`, true},
+		{"source file and line", `{"c":"app.py:44 and server.js:120"}`, true},
+		{"json numbers", `{"start":44,"end":120,"confidence":90}`, true},
 		{"not json", `nope`, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -168,4 +178,10 @@ func TestReadProvenanceRefusesUnknownField(t *testing.T) {
 	if _, err := ReadProvenance(path); err == nil || !strings.Contains(err.Error(), "extra") {
 		t.Fatalf("err %v", err)
 	}
+}
+
+// fakeSecret is a reply holding prefix+rest, built at run time so no
+// committed line looks like a real credential to a secret scanner.
+func fakeSecret(prefix, rest string) string {
+	return `{"c":"` + prefix + rest + `"}`
 }

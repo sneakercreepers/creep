@@ -6,7 +6,7 @@
   "tier": "S",
   "recorded": "2026-11-28",
   "run": "https://github.com/sneakercreepers/creep/actions/runs/46103486289",
-  "note": "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction), Discoverer.Run at tier S with testSeed on testdata/apps/flask/vulnerable; reply bodies normalized by gatewaytest.Normalize. Outcomes are what the model's batch gave, not the app's ground truth: the model is unfit (ADR 0036).",
+  "note": "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction), Discoverer.Run at tier S with testSeed on testdata/apps/flask/vulnerable; reply bodies normalized by gatewaytest.Normalize. Outcomes are what the model's batch gave, not the app's ground truth: the model is unfit (ADR 0036). Live replies vary between runs of the same pinned model: the committed run is the reviewed one.",
   "outcomes": {
     "complete": "false",
     "error": "false",

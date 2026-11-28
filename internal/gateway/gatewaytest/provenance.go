@@ -104,18 +104,22 @@ var allowedIDs = map[string]bool{NormalizedID: true, "chatcmpl-fake": true}
 
 var (
 	urlPattern = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s"\\/]+`)
-	keyPattern = regexp.MustCompile(`\b(sk-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{8,}|AIza[0-9A-Za-z_-]{20,})`)
+	keyPattern = regexp.MustCompile(`\b(sk-[A-Za-z0-9_-]{8,}|sk_(live|test)_[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,}|` +
+		`AIza[0-9A-Za-z_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|(AKIA|ASIA)[0-9A-Z]{16})`)
+	// hostPortPattern finds an endpoint written without a scheme: an IPv4
+	// address, localhost or a dotted name, then a port.
+	hostPortPattern = regexp.MustCompile(`(?i)\b(localhost|\d{1,3}(\.\d{1,3}){3}|[a-z0-9-]+(\.[a-z0-9-]+)+):\d{2,5}\b`)
+	// sourceFile is the one dotted name:number a reply may hold: a file and
+	// a line, such as app.py:44.
+	sourceFile = regexp.MustCompile(`(?i)\.(py|js|mjs|ts|go|rb|php|java|kt|cs|rs|c|h|cpp|sh|txt|json|ya?ml|html?)$`)
 )
 
 // CheckReplyHygiene returns an error when a recorded reply body holds an
-// endpoint (any URL whose host is not under .invalid), something shaped
-// like a key, a provider response ID or a routing field.
+// endpoint (a URL whose host is not under .invalid, or a bare host:port),
+// something shaped like a key, a provider response ID or a routing field.
 func CheckReplyHygiene(body []byte) error {
-	for _, u := range urlPattern.FindAllString(string(body), -1) {
-		host := u[strings.Index(u, "://")+3:]
-		if !strings.HasSuffix(strings.ToLower(host), ".invalid") {
-			return fmt.Errorf("reply holds an endpoint: %q", u)
-		}
+	if err := checkEndpoints(string(body)); err != nil {
+		return err
 	}
 	if k := keyPattern.FindString(string(body)); k != "" {
 		return errors.New("reply holds something shaped like a key")
@@ -130,6 +134,23 @@ func CheckReplyHygiene(body []byte) error {
 		}
 	}
 	return checkID(top["id"])
+}
+
+// checkEndpoints refuses every URL outside .invalid and every host:port
+// that is not a source file and line or under .invalid.
+func checkEndpoints(body string) error {
+	for _, u := range urlPattern.FindAllString(body, -1) {
+		host := u[strings.Index(u, "://")+3:]
+		if !strings.HasSuffix(strings.ToLower(host), ".invalid") {
+			return fmt.Errorf("reply holds an endpoint: %q", u)
+		}
+	}
+	for _, m := range hostPortPattern.FindAllStringSubmatch(body, -1) {
+		if !sourceFile.MatchString(m[1]) && !strings.HasSuffix(strings.ToLower(m[1]), ".invalid") {
+			return fmt.Errorf("reply holds an endpoint: %q", m[0])
+		}
+	}
+	return nil
 }
 
 func checkID(raw json.RawMessage) error {

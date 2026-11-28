@@ -22,7 +22,7 @@ const liveFixture = "live_seed1"
 
 const liveCalibrationNote = "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction): " +
 	"calibrate.Run with seed 1 and the test client settings; reply bodies normalized by gatewaytest.Normalize. " +
-	"Outcomes are the Result the model earned, unfit included (ADR 0036)."
+	"Outcomes are the Result the model earned, unfit included (ADR 0036). Live replies vary between runs of the same pinned model: the committed run is the reviewed one."
 
 func liveProvenancePath() string {
 	return filepath.Join("testdata", "replay", liveFixture+".provenance.json")
