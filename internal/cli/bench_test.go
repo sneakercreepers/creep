@@ -34,13 +34,15 @@ var (
 
 // Acceptance (#35): creep bench --replay reproduces the published numbers,
 // in JSON and Markdown, with no network, no key, no config and no state.
-// Regenerate the fixture and the numbers from the oracle after changing
-// the corpus, a prompt, the pipeline or the scoring:
+// The published fixture is a live recording (#356): -update imports one
+// named by CREEP_LIVE_BENCH_FIXTURE (importLiveBench), or, with none named,
+// rewrites docs/bench from the committed live fixture and never replaces
+// it with the oracle's replies:
 //
-//	go test ./internal/cli -run TestBenchPublished -update
+//	CREEP_LIVE_BENCH_FIXTURE=bench-fixture.json go test ./internal/cli -run TestBenchPublished -update
 func TestBenchPublished(t *testing.T) {
 	if *updateGolden {
-		writePublishedBench(t)
+		updatePublishedBench(t)
 		t.Skip("rewrote the published fixture and results; rerun without -update to check them")
 	}
 	dir, _ := os.Getwd()
@@ -48,7 +50,7 @@ func TestBenchPublished(t *testing.T) {
 	t.Chdir(t.TempDir())
 	for _, tc := range []struct{ format, file string }{{"json", "results.json"}, {"text", "results.md"}, {"markdown", "results.md"}} {
 		code, stdout, stderr := runScanWith(noModelDeps, "bench", "--replay", "--format", tc.format)
-		if code != exitcode.OK {
+		if !benchFinished(code) {
 			t.Fatalf("%s: exit %d, stderr %q", tc.format, code, stderr)
 		}
 		want, err := os.ReadFile(filepath.Join(dir, publishedResultsDir, tc.file))

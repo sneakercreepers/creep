@@ -14,58 +14,40 @@ import (
 	"github.com/sneakercreepers/creep/internal/models"
 )
 
-// smallFixture is a discovery batch of a small local model on the flask
-// app at tier S. SYNTHESIZED in the shape of the qwen2.5-coder:1.5b
-// replies audited in #355 and #367 (keys in the schema's order, canary
-// entry and sink cited one line off), because no live recording is
-// committed yet. A reviewed live recording is owed by #356
-// (https://github.com/sneakercreepers/creep/issues/356): record it through
-// Discoverer.Run with smallModel, TierS and testSeed and replace this one.
-// Regenerate the synthesized one:
-// go test ./internal/discover -run TestSmallModelBatchReplay -update
-const (
-	smallFixture = "testdata/replay/small-synthesized/flask"
-	smallModel   = "qwen2.5-coder:1.5b"
-)
+// smallModel is the base model of the pinned Ollama model (#355, #367).
+const smallModel = "qwen2.5-coder:1.5b"
 
 // Acceptance (#362): the small-model batch that failed before (its canary
 // is off the exact lines, so the v1 check missed it and every file was
-// parse_failed) replays to a complete Result now, with no model call.
+// parse_failed) gives a complete Result now. The reply is built in memory
+// in the shape of the qwen2.5-coder:1.5b replies audited in #355 and #367
+// (canary entry and sink cited one line off); the live recording of the
+// pinned model is TestLiveSmallModelReplay's (#356).
 func TestSmallModelBatchReplay(t *testing.T) {
 	app := loadApp(t, "flask")
-	store, mode := fixtureStoreIn(t, smallFixture)
 	var replies []reply
 	var canaries []canary
-	send := storeSend(store, mode, func(prompt string) ([]byte, error) {
-		if !*update {
-			return nil, errors.New("replay must not call the model")
+	send := func(_ context.Context, c gateway.Call) (*gateway.Reply, error) {
+		prompt, err := userTurn(c.Payload)
+		if err != nil {
+			return nil, err
 		}
-		return smallModelReply(app, parseSections(prompt))
-	})
-	seen := func(ctx context.Context, c gateway.Call) (*gateway.Reply, error) {
-		r, err := send(ctx, c)
-		if err == nil {
-			rep, cn, ok := recordedBatch(c.Payload, r.Body)
-			if !ok {
-				return nil, errors.New("recorded reply does not decode")
-			}
-			replies, canaries = append(replies, rep), append(canaries, cn)
+		content, err := smallModelReply(app, parseSections(prompt))
+		if err != nil {
+			return nil, err
 		}
-		return r, err
+		body, err := chatCompletion(content)
+		if err != nil {
+			return nil, err
+		}
+		rep, cn, ok := recordedBatch(c.Payload, body)
+		if !ok {
+			return nil, errors.New("reply does not decode")
+		}
+		replies, canaries = append(replies, rep), append(canaries, cn)
+		return &gateway.Reply{ID: "synthesized", Status: 200, Body: body}, nil
 	}
-	h, err := models.NewHTTP(models.Options{
-		Contract: "openai", Endpoint: "http://127.0.0.1:11434/v1", Model: smallModel,
-		Structured: models.StructuredSchema, MaxOutputTokens: 1024, Retries: 1, Send: seen,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	files := os.DirFS(filepath.Join(appsDir, app.name, variantVulnerable))
-	d := Discoverer{
-		Redactor: newRedactor(t), Model: h, Tier: TierS, Seed: testSeed,
-		Read: func(p string) ([]byte, error) { return fs.ReadFile(files, p) },
-	}
-	res, err := d.Run(context.Background(), []string{app.file})
+	res, err := smallDiscoverer(t, app, "http://127.0.0.1:11434/v1", smallModel, send).Run(context.Background(), []string{app.file})
 	if err != nil || !res.Complete() {
 		t.Fatalf("small-model batch: %v, files %+v; want complete", err, res.Files)
 	}
@@ -73,7 +55,25 @@ func TestSmallModelBatchReplay(t *testing.T) {
 		t.Fatalf("%d discovery calls, want one batch", len(replies))
 	}
 	if exactCanary(replies[0], canaries[0]) || !canaries[0].found(replies[0]) {
-		t.Error("the fixture must cite the canary off its exact lines and inside the window")
+		t.Error("the reply must cite the canary off its exact lines and inside the window")
+	}
+}
+
+// smallDiscoverer runs discovery at tier S on the app's vulnerable variant
+// with the small model's client settings.
+func smallDiscoverer(t *testing.T, app testApp, endpoint, name string, send models.SendFunc) Discoverer {
+	t.Helper()
+	h, err := models.NewHTTP(models.Options{
+		Contract: "openai", Endpoint: endpoint, Model: name,
+		Structured: models.StructuredSchema, MaxOutputTokens: 1024, Retries: 1, Send: send,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := os.DirFS(filepath.Join(appsDir, app.name, variantVulnerable))
+	return Discoverer{
+		Redactor: newRedactor(t), Model: h, Tier: TierS, Seed: testSeed,
+		Read: func(p string) ([]byte, error) { return fs.ReadFile(files, p) },
 	}
 }
 

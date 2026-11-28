@@ -1,0 +1,7 @@
+{
+  "synthesized": true,
+  "model": "replay-model",
+  "tier": "S",
+  "recorded": "2026-11-28",
+  "note": "Synthesized from expected.json by synthesizedReply, not a model's judgement: no model that calibrates at this tier has been recorded (#356)."
+}

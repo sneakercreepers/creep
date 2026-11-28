@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sneakercreepers/creep/internal/gateway/gatewaytest"
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
@@ -81,14 +82,44 @@ var appCases = []appCase{
 // Acceptance (#95, #204): every testdata app replays at every tier through
 // Slicer.Build and Evaluate from its committed fixture, with no network, no
 // key and no model call, to the verdicts its expected.json implies.
-// Regenerate the fixtures with: go test ./internal/reader -run TestAppsReplay -update
+// A live tier (#356) replays to the outcomes its provenance.json recorded
+// instead. Regenerate the synthesized tiers with:
+// go test ./internal/reader -run TestAppsReplay -update
+// -update never rewrites a live tier; only the live-record workflow does,
+// with CREEP_LIVE_ENDPOINT and CREEP_LIVE_MODEL set.
 func TestAppsReplay(t *testing.T) {
+	live, recording, err := gatewaytest.LiveFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tier := range replayTiers {
-		for _, c := range appCases {
-			t.Run(string(tier)+"/"+c.app, func(t *testing.T) {
-				replayApp(t, tier, c)
-			})
+		t.Run(string(tier), func(t *testing.T) {
+			if *update && recording {
+				if tier == liveTier {
+					recordLiveTier(t, tier, live)
+				}
+				return
+			}
+			replayTierFixtures(t, tier)
+		})
+	}
+}
+
+// replayTierFixtures replays a live tier against its header, or every app
+// of a synthesized tier against expected.json, rewriting it with -update.
+func replayTierFixtures(t *testing.T, tier Tier) {
+	_, err := os.Stat(provenancePath(tier))
+	if !*update || err == nil {
+		if p := tierProvenance(t, tier); !p.Synthesized {
+			replayLiveTier(t, tier, p)
+			return
 		}
+	}
+	for _, c := range appCases {
+		t.Run(c.app, func(t *testing.T) { replayApp(t, tier, c) })
+	}
+	if *update {
+		writeSynthesizedProvenance(t, tier)
 	}
 }
 

@@ -53,13 +53,13 @@ A package may import only packages in **lower** layers and only those listed in 
 1        internal/gitindex       gitindex/gitindextest
 1        internal/repofile       -
 2        internal/gateway        config redact exitcode
-2        internal/gateway/gatewaytest -
 3        internal/models         gateway config
 3        internal/state          config
-4        internal/calibrate      models gateway redact state config
+3        internal/gateway/gatewaytest gateway
+4        internal/calibrate      models gateway redact state config gateway/gatewaytest
 4        internal/planner        -
-4        internal/reader         models gateway redact state config repofile
-4        internal/discover       models gateway redact state config repofile
+4        internal/reader         models gateway redact state config repofile gateway/gatewaytest
+4        internal/discover       models gateway redact state config repofile gateway/gatewaytest
 5        internal/report         state config buildinfo
 5        internal/scanrun        repofile
 5        internal/sandbox        repofile
@@ -346,3 +346,4 @@ Not adopted, one line each:
 | [0035](adr/0035-doctor-model-probes.md) | Accepted: `creep doctor` sends two synthetic probes through the gateway (a discovery batch of only the canary, a context probe the size of the tier's discovery call); failed calls exit as a scan would, a bad reply or short context warns with exit 0; amends ADR 0014 |
 | [0036](adr/0036-model-fitness-floor.md) | Accepted: after calibration a model whose planned-class score is not above chance (Wilson lower bound under 1/2) or that flags most safe twins is refused with exit 3; `--allow-unfit-model` (flag only, `scan` and `resume`) scans anyway and labels every model finding `unreliable_model` in every format; the verdict is cached; the tier rule reads only planned classes; `--stats` and `creep bench --recalibrate` measure calibration cost |
 | [0037](adr/0037-language-neutral-calibration.md) | Accepted: calibration is one language-neutral pseudocode task set (two templates and 8 tasks for each of the eight read classes, 64 in all), with no language type, field or path; the tier measures data-flow reasoning, not language knowledge, and every report says so (JSON v1 `coverage.calibration_scope`, additive); `PromptVersion` 2 and the new task-set hash miss every v0.5 cache entry; supersedes ADR 0017 D5, amends ADR 0036 and 0009 |
+| [0038](adr/0038-live-replay-fixtures.md) | Proposed: live replay fixtures come from the nightly bench's digest-pinned Ollama model on the runner (`live-record.yml`, no key): reader tier S, the small-model discovery batch, one calibration and the published bench fixture are live, normalized (no endpoint, response ID or provider field) and pinned by a `provenance.json` header with the outcomes they replay to; reader M and L stay synthesized and say so; `gatewaytest` moves to layer 3 and is listed by `calibrate`, `reader` and `discover` (tests only) |

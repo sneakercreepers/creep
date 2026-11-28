@@ -100,6 +100,8 @@ func (r Results) Markdown() string {
 	fmt.Fprintf(&b, "Corpus: %d cases, SHA-256 `%s`. Model: `%s` (%s).\n\n", r.Corpus.Cases, r.Corpus.SHA256, plain(r.Model.Name), plain(r.Model.Contract))
 	if r.Model.Synthesized {
 		b.WriteString("These replies are synthesized: an oracle answered every call from the corpus, so the numbers measure creep's pipeline (inventory, tripwire, planner, slicing, coverage), not a model's judgement.\n\n")
+	} else {
+		b.WriteString("These replies were recorded live from this model. The bench forces each tier, so the model answers every tier's prompts whatever tier its calibration would give it.\n\n")
 	}
 	b.WriteString("Recall counts vulnerable twins found on their sink line (within 2 lines). False positives count safe twins with any probable or verified finding. Honesty counts the runs that claimed the class covered and found the planted vulnerability; a silent miss claimed covered and missed it.\n")
 	writeCalibration(&b, r.Calibration)
