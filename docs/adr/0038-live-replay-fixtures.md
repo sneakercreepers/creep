@@ -1,8 +1,9 @@
 # ADR 0038: Live replay fixtures from the pinned local model
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-28)
 - **Date:** 2026-11-28
 - **Deciders:** @Ludocius
+- **Fitness function:** the rows "Layer table holds" and "Reader replays every testdata app to its expected verdicts" of [architecture.md §9](../architecture.md#9-fitness-functions)
 - **Amends:** [ADR 0030](0030-creep-bench.md) (the published fixture is a live recording)
 - **Changes:** the layer table (§3 of [architecture.md](../architecture.md)): `internal/gateway/gatewaytest` moves from layer 2 to layer 3 and may import `gateway`; the rows of `calibrate`, `reader` and `discover` add `gateway/gatewaytest`, which `make budget` still allows only in `_test.go` files. A new workflow, `.github/workflows/live-record.yml`. No product code path, exit code, flag, dependency or network path changes.
 
