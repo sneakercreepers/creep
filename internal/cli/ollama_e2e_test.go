@@ -131,7 +131,7 @@ func e2eScanOnce(t *testing.T, tw e2eTwin, pass string, extra ...string) e2eScan
 	repo := e2eRepo(t, tw)
 	start := time.Now()
 	code, stdout, stderr := e2eExec(append([]string{"scan", "--mode", "pr", "--stats"}, extra...)...)
-	s := e2eScan{App: tw.app, Variant: tw.variant, Pass: pass, Exit: code, Seconds: time.Since(start).Round(time.Second).Seconds(), repo: repo}
+	s := e2eScan{App: tw.app, Variant: tw.variant, Pass: pass, Exit: code, Seconds: time.Since(start).Round(time.Second).Seconds(), repo: repo, Expected: len(tw.expected)}
 	all := stdout + "\n" + stderr
 	if m := statsCalibration.FindStringSubmatch(all); m != nil {
 		s.Calibration = m[1]
@@ -139,7 +139,7 @@ func e2eScanOnce(t *testing.T, tw e2eTwin, pass string, extra ...string) e2eScan
 	if m := headerTier.FindStringSubmatch(all); m != nil {
 		s.Tier = m[1]
 	}
-	s.Reason = firstErrorLine(stderr)
+	s.Reason = lastScanLine(stderr)
 	if rep := readE2EReport(t, repo); rep != nil {
 		s.score(tw.expected, rep)
 		if rep.Run.Reason != "" {
@@ -160,7 +160,7 @@ func e2eWhy(t *testing.T, runs []e2eScan) e2eStep {
 		t.Chdir(r.repo)
 		return e2eRun(nil, "why", r.firstID)
 	}
-	return e2eStep{Exit: -1, Lines: []string{"no finding to explain"}}
+	return e2eStep{Command: "creep why", Exit: -1, Lines: []string{"not run: no scan reported a finding on a vulnerable twin"}}
 }
 
 // e2eRepo copies tw into a fresh directory and makes it the working one.
@@ -199,13 +199,16 @@ func isTierRow(line string) bool {
 	return slices.ContainsFunc([]string{"tier", "S ", "M ", "L "}, func(p string) bool { return strings.HasPrefix(line, p) })
 }
 
-func firstErrorLine(stderr string) string {
+// lastScanLine is the last line scan printed under its own prefix: the
+// error that ended the run comes after the notices (consent, volume).
+func lastScanLine(stderr string) string {
+	last := ""
 	for line := range strings.Lines(stderr) {
 		if strings.HasPrefix(line, "creep scan") {
-			return strings.TrimSpace(line)
+			last = strings.TrimSpace(line)
 		}
 	}
-	return ""
+	return last
 }
 
 // readE2EReport reads the run's report.json, or nil when the run wrote none.
