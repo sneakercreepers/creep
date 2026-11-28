@@ -60,7 +60,7 @@ func TestScanJudgesOversizedFilesByHead(t *testing.T) {
 		code            int
 		reason          report.SkipReason // "" when nothing is listed
 	}{
-		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00" + big, exitcode.OK, report.SkipBinary},
+		{"binary with no extension", "assets/blob", "\x7fELF\x02\x01\x01\x00\xb0\xfe" + big, exitcode.OK, report.SkipBinary},
 		{"named as data", "data/dump.csv", "id,name\n" + big, exitcode.OK, report.SkipNotCode},
 		{"text with no extension", "data/dump", "id,name\n" + big, exitcode.Incomplete, report.SkipTooLarge},
 		{"text in a language no row names", "src/big.zig", "const x = 1;\n" + big, exitcode.Incomplete, report.SkipTooLarge},
