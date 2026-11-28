@@ -116,8 +116,15 @@ func userTurn(payload []byte) string {
 
 func newModel(t *testing.T, send models.SendFunc) *models.HTTP {
 	t.Helper()
+	return newModelFor(t, "https://models.invalid/v1", "replay-model", send)
+}
+
+// newModelFor is newModel for another endpoint and model name, as a live
+// recording uses; the request body names the model but not the endpoint.
+func newModelFor(t *testing.T, endpoint, name string, send models.SendFunc) *models.HTTP {
+	t.Helper()
 	h, err := models.NewHTTP(models.Options{
-		Contract: "openai", Endpoint: "https://models.invalid/v1", Model: "replay-model",
+		Contract: "openai", Endpoint: endpoint, Model: name,
 		Structured: models.StructuredSchema, MaxOutputTokens: 64, Retries: 1, Send: send,
 	})
 	if err != nil {

@@ -1,0 +1,121 @@
+name: Live record
+
+# Live replay fixtures from the pinned local model (#356). On demand, and on
+# a pull request that changes this workflow: the same pinned Ollama model as
+# the nightly bench (bench.yml) answers, on the GitHub-hosted runner, so no
+# cloud model, key or secret is involved. It records, through the gateway
+# (egress.log, redaction):
+#   - the reader replies at tier S, the tier this unfit 1.5B model lands at
+#     (ADR 0036); M and L stay synthesized and say so in their headers;
+#   - the small-model discovery batch at tier S;
+#   - one calibration of seed 1;
+#   - a creep bench --record --recalibrate run, imported as the published
+#     bench fixture.
+# Each recording is normalized (no endpoint, response ID or provider
+# metadata), replayed offline by the same tests, and uploaded as the
+# live-recordings artifact for a maintainer to review and commit. Nothing is
+# pushed. Read-only token, never pull_request_target.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/live-record.yml
+
+permissions: {}
+
+concurrency:
+  group: live-record-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    # A calibration (about 7 minutes), the tier-S reader and discovery calls,
+    # then the bench: a calibration and 72 case runs (about 40 minutes).
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    services:
+      ollama:
+        image: ollama/ollama@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754 # 0.40.17
+        ports:
+          - 127.0.0.1:11434:11434
+    env:
+      OLLAMA_URL: http://127.0.0.1:11434
+      # The same pin as bench.yml: a re-pin there is a re-pin here.
+      BASE_MODEL: qwen2.5-coder:1.5b
+      BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
+      BENCH_MODEL: creep-bench-qwen2.5-coder-1.5b-d7372fd82851
+      BENCH_CONTRACT: openai
+      BENCH_ENDPOINT: http://127.0.0.1:11434/v1
+      CREEP_LIVE_ENDPOINT: http://127.0.0.1:11434/v1
+      CREEP_LIVE_MODEL: creep-bench-qwen2.5-coder-1.5b-d7372fd82851
+      CREEP_LIVE_BASE_MODEL: qwen2.5-coder:1.5b
+      CREEP_LIVE_BASE_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
+      CREEP_LIVE_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build creep
+        run: go build -trimpath -o "$RUNNER_TEMP/creep" ./cmd/creep
+      - name: Pinned local model
+        run: bash .github/scripts/bench-ollama.sh
+      - name: Policy, outside the repository
+        run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
+      - name: Record the reader at tier S
+        run: go test -count=1 -v -timeout 60m -run '^TestAppsReplay$' ./internal/reader -update
+      - name: Record the small-model discovery batch
+        run: go test -count=1 -v -timeout 30m -run '^TestLiveSmallModelReplay$' ./internal/discover -update
+      - name: Record a calibration
+        run: go test -count=1 -v -timeout 60m -run '^TestLiveCalibrationReplay$' ./internal/calibrate -update
+      # Exit 4 means some case runs were incomplete: they are part of the
+      # recording, and their replay must give the same outcome.
+      - name: creep bench --record
+        working-directory: ${{ runner.temp }}
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/policy.yaml
+        run: |
+          mkdir -p bench-out
+          code=0
+          ./creep bench --record --recalibrate --format json >bench-out/results.json || code=$?
+          echo "creep bench exited $code"
+          [ "$code" = 0 ] || [ "$code" = 4 ]
+          find .creep/runs -name bench-fixture.json -exec cp {} bench-out/ \;
+          test -s bench-out/bench-fixture.json
+      # The fixture is embedded, so the import and the rewrite of docs/bench
+      # are two test runs.
+      - name: Import the bench fixture and rewrite docs/bench
+        env:
+          CREEP_LIVE_BENCH_FIXTURE: ${{ runner.temp }}/bench-out/bench-fixture.json
+        run: |
+          go test -count=1 -run '^TestBenchPublished$' ./internal/cli -update
+          CREEP_LIVE_BENCH_FIXTURE='' go test -count=1 -run '^TestBenchPublished$' ./internal/cli -update
+      # Offline, with the live variables unset: every new fixture replays.
+      - name: Replay offline
+        env:
+          CREEP_LIVE_ENDPOINT: ""
+          CREEP_LIVE_MODEL: ""
+        run: |
+          go test -count=1 ./internal/reader ./internal/discover ./internal/calibrate ./internal/bench
+          go test -count=1 -run 'Bench' ./internal/cli
+      # A state store keeps a .gitignore of its own, so the recordings are
+      # collected by directory, not from git status.
+      - name: Collect the recordings
+        run: |
+          mkdir -p "$RUNNER_TEMP/live-recordings"
+          git status --porcelain --ignored | tee "$RUNNER_TEMP/live-recordings/changes.txt"
+          tar -czf "$RUNNER_TEMP/live-recordings/fixtures.tar.gz" \
+            internal/reader/testdata/replay internal/discover/testdata/replay \
+            internal/calibrate/testdata/replay internal/bench/fixtures docs/bench
+          cp "$RUNNER_TEMP/bench-out/results.json" "$RUNNER_TEMP/live-recordings/bench-results.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-recordings
+          path: ${{ runner.temp }}/live-recordings/
+          retention-days: 14
+          if-no-files-found: error

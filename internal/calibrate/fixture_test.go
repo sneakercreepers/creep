@@ -143,6 +143,13 @@ func recordFixture(t *testing.T, fm fixtureModel) {
 	if _, err := Run(context.Background(), testOptions(t, 1, record)); err != nil {
 		t.Fatal(err)
 	}
+	writeReplayFile(t, fm.name, recs)
+}
+
+// writeReplayFile writes recs, one reply per line, to
+// testdata/replay/<name>.json.
+func writeReplayFile(t *testing.T, name string, recs []recordedReply) {
+	t.Helper()
 	var b bytes.Buffer
 	b.WriteString("[\n")
 	for i, rec := range recs {
@@ -157,7 +164,7 @@ func recordFixture(t *testing.T, fm fixtureModel) {
 		b.WriteString("\n")
 	}
 	b.WriteString("]\n")
-	if err := os.WriteFile(filepath.Join("testdata", "replay", fm.name+".json"), b.Bytes(), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join("testdata", "replay", name+".json"), b.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -1,0 +1,22 @@
+{
+  "synthesized": false,
+  "model": "creep-bench-qwen2.5-coder-1.5b-d7372fd82851",
+  "base_model": "qwen2.5-coder:1.5b",
+  "base_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+  "tier": "S",
+  "recorded": "2026-11-28",
+  "run": "https://github.com/sneakercreepers/creep/actions/runs/46103486289",
+  "note": "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction): calibrate.Run with seed 1 and the test client settings; reply bodies normalized by gatewaytest.Normalize. Outcomes are the Result the model earned, unfit included (ADR 0036). Live replies vary between runs of the same pinned model: the committed run is the reviewed one.",
+  "outcomes": {
+    "classes": "[{\"class\":\"sqli\",\"correct\":1,\"total\":8,\"lower\":0.02241690886329617,\"upper\":0.4708948057698615,\"safe_twins\":4,\"safe_flagged\":3},{\"class\":\"nosql_injection\",\"correct\":4,\"total\":8,\"lower\":0.21521252682444186,\"upper\":0.7847874731755582,\"safe_twins\":4,\"safe_flagged\":0},{\"class\":\"command_injection\",\"correct\":2,\"total\":8,\"lower\":0.07147768885802763,\"upper\":0.5907301208974108,\"safe_twins\":4,\"safe_flagged\":4},{\"class\":\"path_traversal\",\"correct\":1,\"total\":8,\"lower\":0.02241690886329617,\"upper\":0.4708948057698615,\"safe_twins\":4,\"safe_flagged\":4},{\"class\":\"ssrf\",\"correct\":0,\"total\":8,\"lower\":0,\"upper\":0.3244156195108769,\"safe_twins\":4,\"safe_flagged\":4},{\"class\":\"template_injection\",\"correct\":1,\"total\":8,\"lower\":0.02241690886329617,\"upper\":0.4708948057698615,\"safe_twins\":4,\"safe_flagged\":3},{\"class\":\"code_injection\",\"correct\":3,\"total\":8,\"lower\":0.13684175946152105,\"upper\":0.6942621454161981,\"safe_twins\":4,\"safe_flagged\":4},{\"class\":\"insecure_deserialization\",\"correct\":1,\"total\":8,\"lower\":0.02241690886329617,\"upper\":0.4708948057698615,\"safe_twins\":4,\"safe_flagged\":3}]",
+    "effective_context": "{\"effective_bytes\":32768,\"stopped_at\":131072,\"stop\":\"wrong_answer\"}",
+    "fitness": "{\"fit\":false,\"reason\":\"below_chance\",\"planned\":{\"class\":\"\",\"correct\":13,\"total\":64,\"lower\":0.12273302562695812,\"upper\":0.3171386755121659,\"safe_twins\":32,\"safe_flagged\":25}}",
+    "overall": "{\"correct\":13,\"total\":64,\"lower\":0.12273302562695812,\"upper\":0.3171386755121659}",
+    "prompt_version": "2",
+    "seed": "1",
+    "structured_output": "{\"total\":64,\"invalid\":0,\"passed\":true}",
+    "task_set": "\"924ab0b4c35312254eb1c4b220c5a2778f3256240fa68ad56c956a20172f9115\"",
+    "tier": "\"S\"",
+    "tool_calling": "{\"probes\":3,\"correct\":3,\"passed\":true}"
+  }
+}

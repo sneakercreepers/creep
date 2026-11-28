@@ -11,7 +11,8 @@ func TestPublishedFixtureParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !f.Synthesized || len(f.Replies) == 0 {
+	// The published replies are a live recording (#356).
+	if f.Synthesized || len(f.Replies) == 0 {
 		t.Fatalf("published fixture: synthesized %v, %d replies", f.Synthesized, len(f.Replies))
 	}
 }

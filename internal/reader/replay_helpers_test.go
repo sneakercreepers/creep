@@ -47,16 +47,12 @@ func (c appCase) targets(variant string) ([]Target, map[HypothesisID]appHypothes
 // reader path: Slicer.Build on the app's file, then Evaluate per slice,
 // each call answered by store in mode (and by m when recording).
 func runVariant(store *state.Store, mode state.Mode, tier Tier, c appCase, variant string, m model) (map[HypothesisID]Signal, error) {
-	targets, byID := c.targets(variant)
-	rep, err := variantSlicer(tier, filepath.Join(appsDir, c.app, variant)).Build(targets)
+	cut, byID, err := sliceVariant(tier, c, variant)
 	if err != nil {
 		return nil, err
 	}
-	if len(rep.Slices) != len(targets) {
-		return nil, fmt.Errorf("%d of %d hypotheses sliced: %+v %+v", len(rep.Slices), len(targets), rep.NotScanned, rep.NotEvaluated)
-	}
 	got := map[HypothesisID]Signal{}
-	for _, s := range rep.Slices {
+	for _, s := range cut {
 		h := byID[s.Hypothesis]
 		client, err := replayClient(storeSend(store, mode, func() ([]byte, error) { return m(h) }))
 		if err != nil {
@@ -69,6 +65,20 @@ func runVariant(store *state.Store, mode state.Mode, tier Tier, c appCase, varia
 		got[s.Hypothesis] = sig
 	}
 	return got, nil
+}
+
+// sliceVariant cuts one slice per hypothesis of the variant, and returns
+// each hypothesis by its ID.
+func sliceVariant(tier Tier, c appCase, variant string) ([]Slice, map[HypothesisID]appHypothesis, error) {
+	targets, byID := c.targets(variant)
+	rep, err := variantSlicer(tier, filepath.Join(appsDir, c.app, variant)).Build(targets)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(rep.Slices) != len(targets) {
+		return nil, nil, fmt.Errorf("%d of %d hypotheses sliced: %+v %+v", len(rep.Slices), len(targets), rep.NotScanned, rep.NotEvaluated)
+	}
+	return rep.Slices, byID, nil
 }
 
 func variantSlicer(tier Tier, dir string) Slicer {
@@ -84,8 +94,18 @@ func variantSlicer(tier Tier, dir string) Slicer {
 // output, the most common shape. Retries is 0: a retry would be another
 // recording, and a fixture holds one answer per hypothesis.
 func replayClient(send models.SendFunc) (*models.HTTP, error) {
+	return clientFor(replayEndpoint, replayModelName, send)
+}
+
+// replayEndpoint is where no replay ever sends: every call is answered by
+// the store.
+const replayEndpoint = "https://models.replay.invalid/v1"
+
+// clientFor is replayClient for another endpoint and model, as a live
+// recording uses; the request body names the model but not the endpoint.
+func clientFor(endpoint, name string, send models.SendFunc) (*models.HTTP, error) {
 	return models.NewHTTP(models.Options{
-		Contract: "openai", Endpoint: "https://models.replay.invalid/v1", Model: replayModelName,
+		Contract: "openai", Endpoint: endpoint, Model: name,
 		Structured: models.StructuredSchema, MaxOutputTokens: 512, Send: send,
 	})
 }

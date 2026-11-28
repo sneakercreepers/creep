@@ -5,6 +5,14 @@
 // such as the holistic protection test in internal/cli (#17), gets its
 // endpoint here. The endpoint counts the connections it accepts and keeps
 // every request body, so a test can check what reached the network.
+//
+// It also holds what the live replay fixtures share (#356, ADR 0038): Live
+// sends a recording run's calls to the runner's own pinned model through
+// the real gateway (consent for that origin only, egress.log), Normalize
+// strips a reply to what a replay reads, Provenance is the header beside
+// each fixture, and CheckReplyHygiene is the test that no committed reply
+// holds an endpoint, key, response ID or routing field.
+//
 // `make budget` lets only _test.go files import this package, so it never
 // ships in the binary.
 package gatewaytest
