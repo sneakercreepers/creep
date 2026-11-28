@@ -1,0 +1,84 @@
+name: Ollama e2e
+
+# The documented user path on a live local model, nothing forced (#367):
+# `creep init`, `doctor`, `estimate`, then `creep scan --mode pr --stats`
+# on every test app's vulnerable and safe twin, the first scan running a
+# real calibration (no --tier, fresh cache). A twin refused as unfit (exit
+# 3, ADR 0036) is scanned again with --allow-unfit-model, so the results
+# still show recall and false positives. The model is the nightly bench's
+# digest-pinned one in an Ollama service container on the runner: no key,
+# no secret, read-only token, never pull_request_target. The results
+# (counts, exit codes, reasons and creep's own output lines) are uploaded
+# for 14 days and shown in the run summary; the job fails only when the
+# path itself breaks (exit 2, or no calibration measured), and no release
+# reads it. The test (internal/cli/ollama_e2e_test.go) names the apps, so
+# this file does not.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/ollama-e2e.yml
+      - .github/scripts/bench-ollama.sh
+      - .github/scripts/bench-policy.sh
+      - internal/cli/ollama_e2e*_test.go
+
+permissions: {}
+
+concurrency:
+  group: ollama-e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # Calibration takes about 8 to 20 minutes on the runner's CPU, then up
+    # to two scans per twin; budget.max_seconds bounds each scan.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    services:
+      ollama:
+        image: ollama/ollama@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754 # 0.40.17
+        ports:
+          - 127.0.0.1:11434:11434
+    env:
+      OLLAMA_URL: http://127.0.0.1:11434
+      BASE_MODEL: qwen2.5-coder:1.5b
+      # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai, the
+      # nightly bench's pin.
+      BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
+      BENCH_MODEL: creep-e2e-qwen2.5-coder-1.5b-d7372fd82851
+      BENCH_CONTRACT: openai
+      BENCH_ENDPOINT: http://127.0.0.1:11434/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Pinned local model
+        run: bash .github/scripts/bench-ollama.sh
+      - name: Policy, outside the repository
+        run: bash .github/scripts/bench-policy.sh "$RUNNER_TEMP/policy.yaml"
+      - name: creep init, doctor, estimate and scan on the test apps
+        env:
+          CREEP_POLICY: ${{ runner.temp }}/policy.yaml
+          CREEP_OLLAMA_E2E: ${{ runner.temp }}/e2e-out
+          CREEP_E2E_MODEL: ${{ env.BENCH_MODEL }}
+        run: |
+          mkdir -p "$CREEP_OLLAMA_E2E"
+          go test -count=1 -v -timeout 110m -run '^TestOllamaEndToEnd$' ./internal/cli
+      - name: Results
+        if: always()
+        run: cat "$RUNNER_TEMP/e2e-out/results.md" >>"$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ollama-e2e
+          path: ${{ runner.temp }}/e2e-out/
+          retention-days: 14
+          if-no-files-found: warn

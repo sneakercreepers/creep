@@ -74,6 +74,9 @@ const (
 	// SkipUnchanged is a file an incremental scan left out because its
 	// --changed list does not name it (#26): by design, like vendor.
 	SkipUnchanged SkipReason = "unchanged"
+	// SkipVendorExceedsRead is a vendor file of a walk where vendor would
+	// hide more code bytes than discovery reads (#380): a gap, not by design.
+	SkipVendorExceedsRead SkipReason = "vendor_exceeds_read"
 )
 
 var skipReasons = map[SkipReason]bool{
@@ -82,6 +85,7 @@ var skipReasons = map[SkipReason]bool{
 	SkipVendor: true, SkipGenerated: true, SkipMinified: true, SkipNotRegular: true,
 	SkipInvalidPath: true, SkipParseFailed: true, SkipSyntaxError: true, SkipTruncated: true,
 	SkipUnsupported: true, SkipUnchanged: true, SkipNotCode: true, SkipBinary: true,
+	SkipVendorExceedsRead: true,
 }
 
 // Incomplete reasons when the run state gives none.

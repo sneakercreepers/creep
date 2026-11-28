@@ -153,3 +153,25 @@ func TestVarint(t *testing.T) {
 		}
 	}
 }
+
+// TestEntriesReadStats (#380): Entries returns the mode, size and mtime
+// recorded for each path, in every version, so a caller can check the
+// index against the working tree; the stats do not shift the paths.
+func TestEntriesReadStats(t *testing.T) {
+	stats := map[string]gitindextest.Stat{
+		"a.py":   {Mode: 0o100755, Size: 9, MtimeSec: 1795834412},
+		"b/link": {Mode: 0o120000, Size: math.MaxUint32, MtimeSec: math.MaxUint32},
+	}
+	paths := []string{"a.py", "b/c.py", "b/link"}
+	want := []Entry{
+		{Path: "a.py", Mode: 0o100755, Size: 9, MtimeSec: 1795834412},
+		{Path: "b/c.py", Mode: 0o100644},
+		{Path: "b/link", Mode: 0o120000, Size: math.MaxUint32, MtimeSec: math.MaxUint32},
+	}
+	for _, version := range []uint32{2, 3, 4} {
+		got, err := Entries(gitindextest.Build(gitindextest.Spec{Version: version, Paths: paths, Stats: stats, Extended: version >= 3}))
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("version %d: Entries = %+v, %v; want %+v", version, got, err, want)
+		}
+	}
+}

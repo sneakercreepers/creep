@@ -142,6 +142,21 @@ func looksBinary(f Format, content []byte) bool {
 	return hasNUL(content) || !utf8.Valid(head)
 }
 
+// ReadsAsText reports whether discovery reads the file at name, whose
+// first HeadBytes are head, whole as text when it fits: not a text format
+// it never opens, not binary, no NUL, and not config, which is listed
+// not_code when it does not fit one call. The CLI's vendor bound weighs
+// only such files (#380), so a large binary or data file cannot pad what
+// is read. A table that fails to load answers false (fail closed there).
+func ReadsAsText(name string, head []byte) bool {
+	t, err := loadFormats()
+	if err != nil {
+		return false
+	}
+	f := t.formatOf(name)
+	return f.opened() && f != formatConfig && !hasNUL(head) && !looksBinary(f, head)
+}
+
 // dropCutRune drops a last character the probe cut in two.
 func dropCutRune(head []byte) []byte {
 	for i := len(head) - 1; i >= max(0, len(head)-utf8.UTFMax); i-- {
