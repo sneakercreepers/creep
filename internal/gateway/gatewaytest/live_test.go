@@ -115,6 +115,16 @@ func TestCheckReplyHygiene(t *testing.T) {
 		{"cloud endpoint", `{"c":"see https://api.example.com/v1"}`, false},
 		{"key", `{"c":"sk-abcdefghijklmnop"}`, false},
 		{"bearer", `{"c":"Bearer abcdefghijkl"}`, false},
+		{"stripe-style key", `{"c":"sk_live_abcdefghijkl"}`, false},
+		{"github token", `{"c":"ghp_abcdefghijklmnopqrstuvwxyz0123"}`, false},
+		{"github fine-grained token", `{"c":"github_pat_11ABCDEFG0123456789_abcdef"}`, false},
+		{"aws access key", `{"c":"AKIAIOSFODNN7EXAMPLE"}`, false},
+		{"bare loopback host and port", `{"c":"127.0.0.1:11434"}`, false},
+		{"bare localhost and port", `{"c":"see localhost:8080"}`, false},
+		{"bare cloud host and port", `{"c":"api.example.com:443"}`, false},
+		{"placeholder host and port", `{"c":"models.replay.invalid:443"}`, true},
+		{"source file and line", `{"c":"app.py:44 and server.js:120"}`, true},
+		{"json numbers", `{"start":44,"end":120,"confidence":90}`, true},
 		{"not json", `nope`, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

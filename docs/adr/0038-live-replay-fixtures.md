@@ -38,5 +38,6 @@ Option B.
 
 - Reader S, the small-model discovery batch, one calibration and the published bench numbers are live recordings of the pinned 1.5B model; reader M and L and the seed-1 calibration set stay synthesized, and their headers, the README and ADR 0030 say so.
 - A change to a prompt, the schema or the corpus misses the live recordings, as it does the synthesized ones; the fix is a dispatch of `live-record.yml`, not `-update`.
+- Live replies vary between runs of the same pinned model at temperature 0 (the committed reader run agreed with expected.json on 7 of 18, a rerun on 9 of 18); the committed run is the reviewed one, and its header pins it.
 - Re-pinning the bench model re-pins the recordings: both workflows name the same digest.
-- The published bench numbers are now a weak model's: low recall and high false-positive rates. That is the honest measurement; ADR 0036 already refuses this model in a scan without `--allow-unfit-model`.
+- The published bench numbers are now a weak model's: recall 10 of 12 at every forced tier, but false positives on 10 or 11 of 12 safe twins, so the weakness is that it flags nearly everything. That is the honest measurement; ADR 0036 already refuses this model in a scan without `--allow-unfit-model`.
