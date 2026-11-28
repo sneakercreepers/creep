@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -182,6 +183,52 @@ func TestCommittedBaseline(t *testing.T) {
 	if base.Corpus.SHA256 != digest {
 		t.Fatalf("baseline.json measured corpus %s, the embedded corpus is %s: set the baseline again", base.Corpus.SHA256, digest)
 	}
+}
+
+// #355: a set baseline gates. It compares at least one tier, each tier it
+// compares fails when made deliberately worse (every planted sink missed,
+// every safe twin flagged, every coverage claim a silent miss), and the
+// baseline against itself passes.
+func TestCommittedBaselineFailsWorseResults(t *testing.T) {
+	base, err := readResults("baseline.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(base.Tiers) == 0 {
+		t.Skip("baseline.json holds no tiers yet")
+	}
+	if problems, err := compare(base, base, DefaultMaxDrop); err != nil || len(problems) != 0 {
+		t.Fatalf("the baseline against itself: problems %q, err %v", problems, err)
+	}
+	compared := 0
+	for i, bt := range base.Tiers {
+		if mostlyIncomplete(bt) {
+			continue
+		}
+		compared++
+		worse := base
+		worse.Tiers = slices.Clone(base.Tiers)
+		worse.Tiers[i] = worsened(bt)
+		problems, err := compare(base, worse, DefaultMaxDrop)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(problems, func(p string) bool { return strings.HasPrefix(p, "tier "+bt.Tier+":") }) {
+			t.Errorf("tier %s made worse passed the gate: problems %q", bt.Tier, problems)
+		}
+	}
+	if compared == 0 {
+		t.Error("baseline.json: every tier is more than half incomplete, so the gate compares nothing")
+	}
+}
+
+func worsened(t bench.TierResult) bench.TierResult {
+	t.Classes = slices.Clone(t.Classes)
+	for i, c := range t.Classes {
+		c.Detected, c.FalsePositives, c.SilentMisses = 0, c.Safe, c.ClaimedCovered
+		t.Classes[i] = c
+	}
+	return t
 }
 
 // withRuns sets a tier's run counts.

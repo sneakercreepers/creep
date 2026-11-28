@@ -36,10 +36,10 @@ jobs:
   local:
     if: github.event_name != 'workflow_dispatch' || inputs.model == 'local'
     runs-on: ubuntu-latest
-    # A real calibration, then 72 case runs, on the runner's CPU (#355
-    # measures both); GitHub ends a hosted job at 360 minutes, so this
-    # stays under it and the bench itself never bounds its own wall time.
-    timeout-minutes: 350
+    # A real calibration (16 minutes for the 7B on the 4-core runner), then
+    # 72 case runs (47 minutes; #355). budget.max_seconds (7200) bounds
+    # each case run, and this leaves the job about three times that slack.
+    timeout-minutes: 180
     permissions:
       contents: read
     services:
@@ -51,8 +51,11 @@ jobs:
       OLLAMA_URL: http://127.0.0.1:11434
       BASE_MODEL: qwen2.5-coder:7b
       # Manifest digest of qwen2.5-coder:7b in registry.ollama.ai (Apache
-      # 2.0, 4.7 GB Q4_K_M): creep rated the 1.5B below chance (#355,
-      # ADR 0036).
+      # 2.0, 4.7 GB Q4_K_M). The 1.5B left most case runs incomplete; the
+      # 7B finishes every tier mostly complete, while the 14B and the 3B
+      # stop at calibration's context probe (no reply headers within the
+      # gateway's 5 minutes on this CPU) and deepseek-coder-v2:16b stays
+      # mostly incomplete (#355, ADR 0030 amendment).
       BASE_MODEL_DIGEST: dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364
       # Ends with the digest prefix, so a re-pin is another model to the gate
       # and its baseline must be set again (ADR 0030 amendment).

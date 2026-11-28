@@ -5,8 +5,10 @@ name: Ollama e2e
 # on every test app's vulnerable and safe twin, the first scan running a
 # real calibration (no --tier, fresh cache). A twin refused as unfit (exit
 # 3, ADR 0036) is scanned again with --allow-unfit-model, so the results
-# still show recall and false positives. The model is the nightly bench's
-# digest-pinned one in an Ollama service container on the runner: no key,
+# still show recall and false positives. The model is qwen2.5-coder:1.5b,
+# pinned by digest, in an Ollama service container on the runner: a cheap
+# check that the path works, not of how well it finds (the nightly bench
+# moved to the 7B for that, #355). No key,
 # no secret, read-only token, never pull_request_target. The results
 # (counts, exit codes, reasons and creep's own output lines) are uploaded
 # for 14 days and shown in the run summary; the job fails only when the
@@ -46,8 +48,8 @@ jobs:
     env:
       OLLAMA_URL: http://127.0.0.1:11434
       BASE_MODEL: qwen2.5-coder:1.5b
-      # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai, the
-      # nightly bench's pin.
+      # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai; the
+      # nightly bench pins its own, bigger model (#355).
       BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
       BENCH_MODEL: creep-e2e-qwen2.5-coder-1.5b-d7372fd82851
       BENCH_CONTRACT: openai
