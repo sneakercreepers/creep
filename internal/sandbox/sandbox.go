@@ -167,6 +167,8 @@ func (s *Sandbox) start(ctx context.Context, spec Spec) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// The CLI has read the env file once it returns, detached or not.
+	defer s.removeRunEnv(name)
 	if err := s.checkImage(ctx, spec); err != nil {
 		return Result{}, err
 	}

@@ -71,9 +71,12 @@ func lookupWith(t *testing.T, answer cliResult) (bool, []string, error) {
 	runs := rec.to("run")
 	argv := runs[len(runs)-1]
 	for _, a := range argv {
-		if strings.Contains(a, db.Password) && a != "--env=PGPASSWORD="+db.Password {
+		if strings.Contains(a, db.Password) {
 			t.Errorf("the password is on the command line: %q", a)
 		}
+	}
+	if env := rec.envOf(argv); !slices.Equal(env, []string{"PGOPTIONS=-c search_path=pg_catalog", "PGPASSWORD=" + db.Password}) {
+		t.Errorf("lookup env file %q", env)
 	}
 	return got, argv, err
 }
@@ -86,8 +89,7 @@ func checkLookupArgv(t *testing.T, argv []string) {
 	img := slices.Index(argv, DatabaseImage)
 	want := []string{"psql", "-X", "-q", "-t", "-A", "-h", "db", "-p", "5432", "-U", "creep", "-d", "app", "-c",
 		"SELECT pg_catalog.to_regclass('public." + markerName + "') IS NOT NULL"}
-	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) ||
-		!slices.Contains(argv, "--env=PGOPTIONS=-c search_path=pg_catalog") {
+	if img < 0 || !slices.Equal(argv[img+1:], want) || !slices.Contains(argv, "--network=creep-"+testRunID) {
 		t.Errorf("lookup %q", argv)
 	}
 }
