@@ -78,7 +78,7 @@ func benchPlanAndRead(ctx context.Context, m *models.HTTP, red *redact.Redactor,
 func benchOutcome(tier calibrate.Tier, c bench.Case, v bench.Variant, res scanResult) bench.Outcome {
 	o := bench.Outcome{
 		Tier: string(tier), Case: c.ID, Variant: v,
-		Incomplete: incompleteReason(res.stop, res.findings, res.gaps) != "",
+		IncompleteReason: incompleteReason(res.stop, res.findings, res.gaps),
 	}
 	for _, f := range res.findings {
 		flagged := f.Status == report.StatusProbable || f.Status == report.StatusVerified

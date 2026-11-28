@@ -133,7 +133,7 @@ func (b *benchLive) measure(ctx context.Context, e env, cfg config.Model, cases 
 // as the bench then does, and, for --record, writes fix into its directory.
 func (b *benchLive) finish(e env, fix bench.Fixture, outcomes []bench.Outcome) error {
 	outcome, reason := state.OutcomeComplete, ""
-	if slices.ContainsFunc(outcomes, func(o bench.Outcome) bool { return o.Incomplete }) {
+	if slices.ContainsFunc(outcomes, func(o bench.Outcome) bool { return o.IncompleteReason != "" }) {
 		outcome, reason = state.OutcomeIncomplete, "incomplete_runs"
 	}
 	if err := b.run.Finish(outcome, reason); err != nil {

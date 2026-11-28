@@ -32,8 +32,9 @@ type Outcome struct {
 	// Covered is true when the run reported the case's class covered: a
 	// claim that nothing of that class was left unchecked.
 	Covered bool
-	// Incomplete is true when the run would have exited 4.
-	Incomplete bool
+	// IncompleteReason is why the run would have exited 4 (a creep reason
+	// enum such as parse_failed or budget), empty when it would not.
+	IncompleteReason string
 }
 
 // ClassResult is one class at one tier.
@@ -57,10 +58,14 @@ type ClassResult struct {
 
 // TierResult is every class at one tier.
 type TierResult struct {
-	Tier           string        `json:"tier"`
-	Runs           int           `json:"runs"`
-	IncompleteRuns int           `json:"incomplete_runs"`
-	Classes        []ClassResult `json:"classes"`
+	Tier           string `json:"tier"`
+	Runs           int    `json:"runs"`
+	IncompleteRuns int    `json:"incomplete_runs"`
+	// IncompleteReasons counts the incomplete runs by reason (#355), so a
+	// nightly shows why runs stopped without its run directory. Added
+	// additively; the gate reads only IncompleteRuns.
+	IncompleteReasons map[string]int `json:"incomplete_reasons,omitempty"`
+	Classes           []ClassResult  `json:"classes"`
 }
 
 // Score turns outcomes into per-tier, per-class results. Every case must
@@ -114,8 +119,9 @@ func scoreTier(tier string, byID map[string]Case, outcomes []Outcome) TierResult
 			rows[c.Class] = row
 		}
 		t.Runs++
-		if o.Incomplete {
+		if o.IncompleteReason != "" {
 			t.IncompleteRuns++
+			t.countReason(o.IncompleteReason)
 		}
 		row.add(c, o)
 	}
@@ -123,6 +129,13 @@ func scoreTier(tier string, byID map[string]Case, outcomes []Outcome) TierResult
 		t.Classes = append(t.Classes, rows[name].withRates())
 	}
 	return t
+}
+
+func (t *TierResult) countReason(reason string) {
+	if t.IncompleteReasons == nil {
+		t.IncompleteReasons = map[string]int{}
+	}
+	t.IncompleteReasons[reason]++
 }
 
 func (r *ClassResult) add(c Case, o Outcome) {

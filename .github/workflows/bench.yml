@@ -36,10 +36,10 @@ jobs:
   local:
     if: github.event_name != 'workflow_dispatch' || inputs.model == 'local'
     runs-on: ubuntu-latest
-    # A real calibration (about 20 minutes on a 4-core CPU, #367), then 72
-    # case runs; budget.max_seconds (7200) bounds each, so the bench ends
-    # before the job.
-    timeout-minutes: 180
+    # A real calibration, then 72 case runs, on the runner's CPU (#355
+    # measures both); GitHub ends a hosted job at 360 minutes, so this
+    # stays under it and the bench itself never bounds its own wall time.
+    timeout-minutes: 350
     permissions:
       contents: read
     services:
@@ -49,12 +49,14 @@ jobs:
           - 127.0.0.1:11434:11434
     env:
       OLLAMA_URL: http://127.0.0.1:11434
-      BASE_MODEL: qwen2.5-coder:1.5b
-      # Manifest digest of qwen2.5-coder:1.5b in registry.ollama.ai.
-      BASE_MODEL_DIGEST: d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668
+      BASE_MODEL: qwen2.5-coder:7b
+      # Manifest digest of qwen2.5-coder:7b in registry.ollama.ai (Apache
+      # 2.0, 4.7 GB Q4_K_M): creep rated the 1.5B below chance (#355,
+      # ADR 0036).
+      BASE_MODEL_DIGEST: dae161e27b0e90dd1856c8bb3209201fd6736d8eb66298e75ed87571486f4364
       # Ends with the digest prefix, so a re-pin is another model to the gate
       # and its baseline must be set again (ADR 0030 amendment).
-      BENCH_MODEL: creep-bench-qwen2.5-coder-1.5b-d7372fd82851
+      BENCH_MODEL: creep-bench-qwen2.5-coder-7b-dae161e27b0e
       BENCH_CONTRACT: openai
       BENCH_ENDPOINT: http://127.0.0.1:11434/v1
     steps:

@@ -1,6 +1,8 @@
 package bench
 
 import (
+	"encoding/json"
+	"maps"
 	"strings"
 	"testing"
 )
@@ -105,7 +107,9 @@ func TestScoreRates(t *testing.T) {
 		if o.Case == "a" && o.Variant == Vulnerable {
 			o.Findings = flagged("sqli", 10)
 		}
-		o.Incomplete = o.Case == "b"
+		if o.Case == "b" {
+			o.IncompleteReason = map[Variant]string{Vulnerable: "parse_failed", Safe: "budget"}[o.Variant]
+		}
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -113,6 +117,10 @@ func TestScoreRates(t *testing.T) {
 	r := tiers[1].Classes[0]
 	if *r.Recall != 0.5 || *r.FalsePositiveRate != 0 || *r.Honesty != 0.5 || tiers[1].IncompleteRuns != 2 || tiers[1].Runs != 4 {
 		t.Fatalf("got %+v, tier %+v", r, tiers[1])
+	}
+	// #355: a nightly tells why its runs stopped, counted per reason.
+	if want := map[string]int{"parse_failed": 1, "budget": 1}; !maps.Equal(tiers[1].IncompleteReasons, want) {
+		t.Fatalf("incomplete reasons %v, want %v", tiers[1].IncompleteReasons, want)
 	}
 	if v := ratio(2, 3); *v != 0.667 {
 		t.Fatalf("ratio(2, 3) = %v, want 0.667", *v)
@@ -201,4 +209,20 @@ func deref(p *float64) any {
 		return nil
 	}
 	return *p
+}
+
+// A tier whose runs all finished carries no incomplete_reasons key, so a
+// complete baseline stays byte-identical to one written before #355.
+func TestCompleteTierOmitsReasons(t *testing.T) {
+	tiers, err := Score(scoreCases(), allRuns(func(*Outcome) {}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(tiers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "incomplete_reasons") {
+		t.Fatalf("complete tiers carry incomplete_reasons: %s", data)
+	}
 }
