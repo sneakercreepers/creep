@@ -213,7 +213,7 @@ Implementation notes for steps C–F:
 
 ## Amendment (#366): language-neutral file rules
 
-- **Status:** Proposed (awaiting maintainer approval on #366)
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 
 The maintainer's rule (#358): creep must need no per-language or per-ecosystem data or code to work on a language. Three rules above broke it: the inventory decided what is read (an unlisted extension was not read, and the run could still exit 0), vendor trees were known only by `node_modules` and `venv` marks, and the generated and minified marks knew only some languages' comment syntax and bundles. Decided:
