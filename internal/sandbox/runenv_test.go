@@ -172,3 +172,40 @@ func TestRunEnvFile(t *testing.T) {
 		t.Error("a refused env wrote a file")
 	}
 }
+
+// TestRunEnvRemovedOnFailure: the env file is gone after a run that did
+// not succeed too (a non-zero exit, a runtime refusal, a canceled
+// context), so removing it only on success fails this test.
+func TestRunEnvRemovedOnFailure(t *testing.T) {
+	tests := map[string]func(cancel context.CancelFunc) (cliResult, error){
+		"non-zero exit":   func(context.CancelFunc) (cliResult, error) { return cliResult{exit: 3}, nil },
+		"runtime refused": func(context.CancelFunc) (cliResult, error) { return cliResult{exit: 125}, nil },
+		"canceled": func(cancel context.CancelFunc) (cliResult, error) {
+			cancel()
+			return cliResult{}, context.Canceled
+		},
+	}
+	for name, reply := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			seen := false
+			rec := &recorder{}
+			rec.reply = func(_ context.Context, args []string) (cliResult, error) {
+				if subcommand(args) != "run" {
+					return cliResult{}, nil
+				}
+				seen = len(rec.envs[containerName(args)]) > 0
+				return reply(cancel)
+			}
+			s := testSandbox(t, rec)
+			_, _ = s.Run(ctx, Spec{Image: testImage, Env: map[string]string{"SECRET_KEY": "creep-synthetic-x"}})
+			if !seen {
+				t.Fatal("the run never read its env file")
+			}
+			if left, _ := filepath.Glob(filepath.Join(s.workReal, runEnvPrefix+"*")); len(left) > 0 {
+				t.Errorf("env file left after a failed run: %q", left)
+			}
+		})
+	}
+}
