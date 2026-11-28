@@ -47,6 +47,7 @@ type vendorProofs struct {
 	tracked *trackedIndex
 	loaded  bool
 	indexOK bool
+	trusted bool // the index agrees with the working tree (indexMatchesTree), so vendor is not bounded
 	off     bool // nothing is proven: a catch-all pattern or a fail-closed rewalk
 	exclude repofile.GitIgnore
 	rules   map[string]repofile.GitIgnore // by directory, "." is the root
@@ -84,7 +85,7 @@ func (v *vendorProofs) proven(rel string) bool {
 	}
 	if !v.loaded {
 		v.loaded = true
-		v.tracked, v.indexOK = readTracked(v.ctx, v.root)
+		v.tracked, v.indexOK, v.trusted = readTracked(v.ctx, v.root)
 		v.exclude = v.readIgnore(".", gitExcludePath)
 		v.off = v.ignores(catchAllProbe, true) || v.ignores(catchAllProbe, false)
 	}
@@ -168,22 +169,24 @@ func (v *vendorProofs) installed(tree string) bool {
 }
 
 // readTracked reads the paths the repository's git index tracks; ok is
-// false when there is no index, it cannot be read whole or it disagrees
-// with the working tree (indexMatchesTree, #380).
-func readTracked(ctx context.Context, root *os.Root) (*trackedIndex, bool) {
+// false when there is no index or it cannot be read whole. trusted says
+// the index agrees with the working tree (indexMatchesTree, #380): an
+// index that does not still names tracked paths, which only keeps more
+// files read, but the vendor it proves is bounded (boundVendor).
+func readTracked(ctx context.Context, root *os.Root) (tracked *trackedIndex, ok, trusted bool) {
 	data, err := readInRoot(root, gitIndexPath, gitindex.MaxBytes)
 	if err != nil {
-		return nil, false
+		return nil, false, false
 	}
 	entries, err := gitindex.Entries(data)
-	if err != nil || !indexMatchesTree(ctx, root, entries) {
-		return nil, false
+	if err != nil {
+		return nil, false, false
 	}
 	paths := make([]string, len(entries))
 	for i, e := range entries {
 		paths[i] = e.Path
 	}
-	return newTrackedIndex(paths), true
+	return newTrackedIndex(paths), true, indexMatchesTree(ctx, root, entries)
 }
 
 func isASCII(s string) bool {

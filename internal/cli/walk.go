@@ -50,18 +50,29 @@ func (f repoFiles) sources() int {
 // archive can carry its own .git/index and an ignore file that would list
 // the whole repository vendor (#376 auditor M2), so the walk runs again
 // with no vendor proven and every file is read like first-party code.
-// Vendor that hides more code bytes than discovery reads stays unread but
-// is listed vendor_exceeds_read, so the run is incomplete (boundVendor,
-// #380): one decoy file cannot make a planted index pass.
+// When the index disagrees with the working tree (a planted one), vendor
+// that hides more code bytes than discovery reads stays unread but is
+// listed vendor_exceeds_read, so the run is incomplete (boundVendor,
+// #380): one decoy file cannot make a planted index pass. An index that
+// agrees with the tree, as git writes it, is not bounded.
 func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
-	files, weight, err := walkOnce(ctx, root, newVendorProofs(ctx, root))
+	proofs := newVendorProofs(ctx, root)
+	files, weight, err := walkOnce(ctx, root, proofs)
 	if err != nil {
 		return repoFiles{}, err
 	}
 	if !readsCode(files.paths) && hasVendor(files.gaps) {
-		files, weight, err = walkOnce(ctx, root, noVendorProofs(ctx, root))
+		return withoutWeight(walkOnce(ctx, root, noVendorProofs(ctx, root)))
 	}
-	return boundVendor(files, weight), err
+	if proofs.trusted {
+		return files, nil
+	}
+	return boundVendor(files, weight), nil
+}
+
+// withoutWeight drops the weight of a walk that proves no vendor.
+func withoutWeight(files repoFiles, _ codeBytes, err error) (repoFiles, error) {
+	return files, err
 }
 
 // readsCode reports whether discovery opens any of paths other than an

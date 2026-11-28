@@ -24,35 +24,41 @@ func plantedIndex(files map[string]string, tracked []string, stats map[string]gi
 }
 
 // TestPlantedIndexNeverExitsZero (#380, #376 auditor M2): an archive that
-// keeps one decoy file beside a planted index and ignore file marking the
-// rest of its code vendor never exits 0. Vendor that hides more code bytes
-// than discovery reads stays unread but is listed vendor_exceeds_read, so
-// the run is incomplete; an index that disagrees with the working tree is
-// not trusted, so the code is read and its route evaluated.
+// keeps one decoy file beside an index that disagrees with its tree and an
+// ignore file marking the rest of its code vendor never exits 0: vendor
+// proven by such an index that hides more code bytes than discovery reads
+// stays unread but is listed vendor_exceeds_read, so the run is
+// incomplete. An index that agrees with the tree, as git writes it, keeps
+// a large install vendor with exit 0.
 func TestPlantedIndexNeverExitsZero(t *testing.T) {
 	decoy := map[string]string{"main.py": helloRoute, ".gitignore": "src/\n", "src/app.py": "@flask"}
 	tracked := []string{".gitignore", "main.py"}
 	far := gitindextest.Stat{Size: 1, MtimeSec: math.MaxUint32} // a size the disk does not hold, recorded after any edit
+	exceeds := []string{"src/app.py  vendor_exceeds_read", "INCOMPLETE RUN (reason vendor_exceeds_read)"}
+	install := map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/lib/big.js": strings.Repeat("module.exports = 1\n", 400)}
 	runBydesignCases(t, []bydesignCase{
-		{"one decoy file", plantedIndex(decoy, tracked, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead),
-			[]string{"src/app.py  vendor_exceeds_read", "INCOMPLETE RUN (reason vendor_exceeds_read)"}},
+		{"one decoy file", plantedIndex(decoy, tracked, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"decoy beside several trees", plantedIndex(map[string]string{"main.py": helloRoute, ".gitignore": "/lib\napi/\n", "lib/a.js": "@express", "api/b.py": "@flask"}, tracked, nil),
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), []string{"lib/a.js  vendor_exceeds_read", "api/b.py  vendor_exceeds_read"}},
+		{"index size the disk does not hold", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": far, ".gitignore": {Size: 5, MtimeSec: recordedAt}}),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"index mode git never writes", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": {Mode: 0o100600, Size: uint32(len(helloRoute)), MtimeSec: recordedAt}}),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"index tracking only missing files", plantedIndex(decoy, []string{"gone.py"}, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"decoy only a .gitignore beside", plantedIndex(map[string]string{".gitignore": "src/\n", "README.md": "# x\n", "src/app.py": "@flask"}, []string{".gitignore", "README.md"}, nil),
 			exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
-		{"index size the disk does not hold", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": far}),
-			exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
-		{"index mode git never writes", plantedIndex(decoy, tracked, map[string]gitindextest.Stat{"main.py": {Mode: 0o100600}}),
-			exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
-		{"index tracking only missing files", plantedIndex(decoy, []string{"gone.py"}, nil),
-			exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
-		{"index tracking a directory as a file", plantedIndex(decoy, []string{"src"}, nil),
-			exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
+		{"index tracking a directory as a file", plantedIndex(decoy, []string{"src"}, nil), exitcode.GateExceeded, "", []string{"probable  sqli  src/app.py:"}},
+		{"inconsistent index, large install", plantedIndex(install, tracked, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead),
+			[]string{"node_modules/lib/big.js  vendor_exceeds_read"}},
+		{"consistent index, large install", withGitIndex(install, []string{"node_modules"}), exitcode.OK, "",
+			[]string{"node_modules/lib/big.js  vendor", "coverage excludes 1 file left out by design (vendor 1), listed above"}},
+		{"inconsistent index, small install", plantedIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/x.py": "x = 1\n"}, tracked, nil), exitcode.OK, "",
+			[]string{"deps/x.py  vendor"}},
 	})
 }
 
 // TestRealIndexKeepsInstallVendor (#380 acceptance): an index git wrote
-// keeps an installed tree vendor. testdata/gitindex/install.index was
+// keeps an installed tree far larger than the code vendor, unbounded. testdata/gitindex/install.index was
 // written by git 2.49 (git add -A, core.autocrlf=false) over exactly the
 // tracked files below, beside an ignored, untracked node_modules.
 func TestRealIndexKeepsInstallVendor(t *testing.T) {
@@ -61,7 +67,7 @@ func TestRealIndexKeepsInstallVendor(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := t.TempDir()
-	files := map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/lib/index.js": "module.exports = 1\n", gitIndexPath: string(index)}
+	files := map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/lib/index.js": strings.Repeat("module.exports = 1\n", 400), gitIndexPath: string(index)}
 	for name, content := range files {
 		writeTreeFile(t, repo, name, content)
 	}

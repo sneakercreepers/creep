@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"runtime"
 
 	"github.com/sneakercreepers/creep/internal/gitindex"
 )
@@ -22,33 +23,35 @@ const (
 const indexCheckEvery = 256
 
 // indexMatchesTree reports whether a git index agrees with the working
-// tree it came with (#380): every entry has a mode git writes, every
-// tracked regular file still on disk is a regular file whose size is the
-// one git recorded or that changed after git recorded it (a newer mtime,
-// as an edit leaves it), and at least one tracked regular file is on disk.
-// An index that fails is not trusted, so nothing is vendor. A crafted
-// index can still pass, since the archive sets both sides; the vendor
-// bound (vendorbound.go) is what keeps such an index from hiding code
-// behind exit 0. Past the scan deadline the index is not trusted.
+// tree it came with, as one git wrote over that tree does (#380): every
+// entry has a mode git writes; every tracked regular file still on disk
+// is a regular file with the executable bit git recorded (not compared on
+// Windows, which has none), a recorded mtime, and the recorded size or a
+// later mtime (an edit since git recorded it); and at least one tracked
+// file on disk has the recorded size. Only an agreeing index proves vendor
+// without bound; any other is bounded (boundVendor). An archive can still
+// ship an index that agrees with its own tree, since it sets both sides.
+// Past the scan deadline the index does not agree.
 func indexMatchesTree(ctx context.Context, root *os.Root, entries []gitindex.Entry) bool {
-	present := false
+	sameSize := false
 	for i, e := range entries {
 		if i%indexCheckEvery == 0 && ctx.Err() != nil {
 			return false
 		}
-		ok, onDisk := entryMatches(root, e)
+		ok, same := entryMatches(root, e)
 		if !ok {
 			return false
 		}
-		present = present || onDisk
+		sameSize = sameSize || same
 	}
-	return present
+	return sameSize
 }
 
-// entryMatches compares one entry with the tree. A tracked path missing
-// from disk (deleted, or outside a sparse checkout) holds no file and
-// agrees; any other stat error disagrees (fail closed).
-func entryMatches(root *os.Root, e gitindex.Entry) (ok, onDisk bool) {
+// entryMatches compares one entry with the tree; same says the file is on
+// disk with the recorded size. A tracked path missing from disk (deleted,
+// or outside a sparse checkout) agrees; any other stat error does not
+// (fail closed).
+func entryMatches(root *os.Root, e gitindex.Entry) (ok, same bool) {
 	switch e.Mode {
 	case gitModeLink, gitModeGitlink:
 		// Windows checks links out as plain files (core.symlinks) and an
@@ -62,9 +65,17 @@ func entryMatches(root *os.Root, e gitindex.Entry) (ok, onDisk bool) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return true, false
-	case err != nil || !info.Mode().IsRegular():
+	case err != nil || !info.Mode().IsRegular() || e.MtimeSec == 0 || !sameExecBit(e, info):
 		return false, false
 	}
-	sameSize := uint32(info.Size()) == e.Size //nolint:gosec // G115: git stores the size truncated to 32 bits
-	return sameSize || info.ModTime().Unix() > int64(e.MtimeSec), true
+	same = uint32(info.Size()) == e.Size //nolint:gosec // G115: git stores the size truncated to 32 bits
+	return same || info.ModTime().Unix() > int64(e.MtimeSec), same
+}
+
+// sameExecBit compares the owner executable bit with the recorded mode.
+func sameExecBit(e gitindex.Entry, info fs.FileInfo) bool {
+	if runtime.GOOS == "windows" {
+		return true
+	}
+	return (info.Mode().Perm()&0o100 != 0) == (e.Mode == gitModeExec)
 }
