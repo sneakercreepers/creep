@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    job = deserialize_object(request.body())
+    jobs.push("@@queue@@", job)
+    return response(202, none)

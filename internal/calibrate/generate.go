@@ -8,7 +8,11 @@ import (
 )
 
 // TaskCount is how many tasks Generate returns: half vulnerable, half safe.
-const TaskCount = 100
+// 64 is 8 per class (4 vulnerable, 4 safe twins), so every class keeps
+// the per-class bounds the smallest classes had (7 of 8 for L, 5 of 8 for
+// M, tier.go) and the fitness floor keeps its 64 planned tasks (ADR 0036,
+// #358).
+const TaskCount = 64
 
 const (
 	// maxFillers caps the neutral lines a mutation inserts before the sink.
@@ -46,7 +50,7 @@ func generate(cat catalog, seed uint64) ([]Task, error) {
 	tasks := make([]Task, 0, TaskCount)
 	for i := range TaskCount {
 		tpl := cat.templates[(i/2)%len(cat.templates)]
-		task, err := drawUnique(src, tpl, cat.fillers[tpl.language], i%2 == 0, seen)
+		task, err := drawUnique(src, tpl, cat.fillers, i%2 == 0, seen)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +109,6 @@ func render(tpl template, vulnerable bool, m mutation) Task {
 	return Task{
 		Template:   tpl.id,
 		Class:      tpl.class,
-		Language:   tpl.language,
 		Vulnerable: vulnerable,
 		Line:       v.sinkLine + len(m.fillers),
 		Code:       strings.NewReplacer(pairs...).Replace(strings.Join(lines, "\n") + "\n"),

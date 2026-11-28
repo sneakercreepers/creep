@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    term = request.query("@@field@@")
+    sql = "SELECT id, title FROM @@table@@ WHERE title = '" + term + "'"
+    rows = db.query(sql)
+    return response(200, rows)

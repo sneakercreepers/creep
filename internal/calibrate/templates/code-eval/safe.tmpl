@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    expression = request.query("@@field@@")
+    total = to_number(expression) * 2
+    return response(200, total)

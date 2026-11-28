@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    host = request.json("@@field@@")
+    endpoint = url_of("https", host, "/notify")
+    reply = http_post(endpoint, "ping")
+    return response(200, reply.status)

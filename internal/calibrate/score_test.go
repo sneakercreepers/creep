@@ -75,20 +75,29 @@ func TestLowerAtLeastMatchesWilson(t *testing.T) {
 	}
 }
 
-// The counts tierRules' comment states: what a class of 14 or 8 tasks
-// needs for L (1/2) and M (1/4), and that half right over 100 tasks, or
-// over a class of 8, is not enough for M.
+// The counts tierRules' comment states: what a class of 8 tasks
+// needs for L (1/2) and M (1/4), what the 64 tasks need overall (3/4,
+// 11/20), and that half right, overall or in a class, is not enough for M.
 func TestTierThresholdCounts(t *testing.T) {
 	tests := []struct {
 		total, l, m int
-	}{{14, 11, 7}, {8, 7, 5}}
+	}{{8, 7, 5}}
 	for _, tt := range tests {
 		if minCorrect(tt.total, big.NewRat(1, 2)) != tt.l || minCorrect(tt.total, big.NewRat(1, 4)) != tt.m {
 			t.Errorf("n=%d needs %d for L and %d for M, want %d and %d", tt.total,
 				minCorrect(tt.total, big.NewRat(1, 2)), minCorrect(tt.total, big.NewRat(1, 4)), tt.l, tt.m)
 		}
 	}
-	if lowerAtLeast(4, 8, big.NewRat(1, 4)) || lowerAtLeast(50, 100, big.NewRat(11, 20)) {
+	overall := []struct {
+		th   *big.Rat
+		want int
+	}{{big.NewRat(3, 4), 55}, {big.NewRat(11, 20), 44}, {chance(), 40}}
+	for _, o := range overall {
+		if got := minCorrect(TaskCount, o.th); got != o.want {
+			t.Errorf("%d tasks need %d at %s, want %d", TaskCount, got, o.th, o.want)
+		}
+	}
+	if lowerAtLeast(4, 8, big.NewRat(1, 4)) || lowerAtLeast(32, 64, big.NewRat(11, 20)) {
 		t.Error("half right reaches an M floor")
 	}
 }
@@ -131,7 +140,7 @@ func TestJudge(t *testing.T) {
 		{"two below", vuln, taskAnswer{Vulnerable: true, Class: "ssrf", Line: 12}, true},
 		{"three above", vuln, taskAnswer{Vulnerable: true, Class: "ssrf", Line: 7}, false},
 		{"three below", vuln, taskAnswer{Vulnerable: true, Class: "ssrf", Line: 13}, false},
-		{"wrong class", vuln, taskAnswer{Vulnerable: true, Class: "idor", Line: 10}, false},
+		{"wrong class", vuln, taskAnswer{Vulnerable: true, Class: "code_injection", Line: 10}, false},
 		{"missed", vuln, taskAnswer{Class: classNone}, false},
 	}
 	for _, tt := range tests {

@@ -1,0 +1,7 @@
+handler @@func@@(request):
+    requested = request.json("@@field@@")
+    if requested not in ["hooks.example.invalid", "alerts.example.invalid"]:
+        return response(400, none)
+    endpoint = url_of("https", requested, "/notify")
+    reply = http_post(endpoint, "ping")
+    return response(200, reply.status)

@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    expression = request.query("@@field@@")
+    total = eval(expression)
+    return response(200, total)

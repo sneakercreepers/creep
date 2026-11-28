@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "code-compile",
+  "class": "code_injection",
+  "pad_after": 0,
+  "slots": {
+    "func": ["score_item", "apply_formula", "rate_entry", "weight_value", "grade", "compute_score"],
+    "field": ["formula_src", "rule", "scoring", "method", "recipe", "strategy"]
+  },
+  "vulnerable": {"sink_line": 3, "marker": "make_function("},
+  "safe": {"sink_line": 7, "marker": "scorers.get(formula)"}
+}

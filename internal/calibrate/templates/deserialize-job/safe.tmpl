@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    job = parse_json(request.body())
+    jobs.push("@@queue@@", {"name": to_string(job["name"])})
+    return response(202, none)

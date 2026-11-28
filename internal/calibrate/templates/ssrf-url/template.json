@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "ssrf-url",
+  "class": "ssrf",
+  "pad_after": 0,
+  "slots": {
+    "func": ["preview", "fetch_image", "proxy", "thumbnail", "get_avatar", "load_picture"],
+    "field": ["url", "image_url", "source", "link", "src", "location"]
+  },
+  "vulnerable": {"sink_line": 3, "marker": "http_get(address)"},
+  "safe": {"sink_line": 5, "marker": "http_get(url_of("}
+}

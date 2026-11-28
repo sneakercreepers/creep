@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "deserialize-cookie",
+  "class": "insecure_deserialization",
+  "pad_after": 0,
+  "slots": {
+    "func": ["load_prefs", "read_settings", "restore_session", "get_theme", "user_prefs", "apply_settings"],
+    "field": ["prefs_cookie", "settings", "session", "state", "profile_cookie", "saved"]
+  },
+  "vulnerable": {"sink_line": 3, "marker": "deserialize_object(raw)"},
+  "safe": {"sink_line": 3, "marker": "parse_json(raw)"}
+}

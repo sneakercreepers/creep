@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    criteria = parse_json(request.query("@@field@@"))
+    rows = mongo.find("@@coll@@", criteria)
+    return response(200, rows)

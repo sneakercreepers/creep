@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    name = request.query("@@field@@")
+    source = "Dear " + name + ", your order has shipped."
+    text = templates.render(source, {})
+    return response(200, text)

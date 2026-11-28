@@ -73,7 +73,8 @@ func writeClasses(w io.Writer, classes []ClassCoverage) {
 		fmt.Fprintf(w, "| %s | %s | %d / %d | %.3f – %.3f |\n",
 			codeSpan(c.Class), statusText(string(c.Status)), c.Detected, c.Tasks, c.CILow, c.CIHigh)
 	}
-	fmt.Fprint(w, "\n")
+	// A fixed sentence, not the report's field, so a report read back says it too.
+	fmt.Fprintf(w, "\nThe %s.\n\n", CalibrationScopeNote)
 }
 
 // writeNotLookedFor lists, under the class table, the classes no scan

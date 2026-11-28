@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "ssrf-webhook",
+  "class": "ssrf",
+  "pad_after": 0,
+  "slots": {
+    "func": ["send_hook", "ping_webhook", "raise_alert", "deliver", "call_back", "signal_peer"],
+    "field": ["hook_host", "callback_host", "server_name", "target_host", "receiver", "destination"]
+  },
+  "vulnerable": {"sink_line": 4, "marker": "url_of(\"https\", host,"},
+  "safe": {"sink_line": 6, "marker": "url_of(\"https\", requested,"}
+}

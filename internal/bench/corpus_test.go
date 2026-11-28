@@ -113,9 +113,9 @@ func matchesAny(res []*regexp.Regexp, s string) bool {
 // The check itself catches a copied line, with slots filled.
 func TestDisjointnessCatchesCopiedLine(t *testing.T) {
 	templates := templateLines(t)
-	copied := `  const doc = await accounts.findOne({ email: req.body.email });`
+	copied := `    found = mongo.find_one("accounts", {"email": name})`
 	if !matchesAny(templates, normalize(copied)) {
-		t.Fatal("a line copied from js-nosql-operator with its slots filled was not caught")
+		t.Fatal("a line copied from nosql-find-one with its slots filled was not caught")
 	}
 }
 

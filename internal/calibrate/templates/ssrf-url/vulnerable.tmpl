@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    address = request.query("@@field@@")
+    reply = http_get(address)
+    return response(200, reply.body)

@@ -45,10 +45,10 @@ func invariantSeeds() []uint64 {
 // carries the affects-results label.
 func TestGenerateGolden(t *testing.T) {
 	golden := map[uint64]string{
-		0:              "87f0abd538581692579605419d438ca7209d5f8676eb49c479b5792d85b9fb45",
-		1:              "0320e1388fbfc57ee8d26dd165659c348f3fc361651cb86e2c0aa07143a98983",
-		42:             "0760aea2a9fe42d2e5c56d9fb804adb287100db14fdda8c50cef117fbfb68d4c",
-		math.MaxUint64: "73d1e7af709dfa96f6885bc457c65ba241c54f631d63c36dbfe29f8abae5eb8a",
+		0:              "7733813c7a0be1cd4a1f8bbae3ae3df166e0b4034fea81982f181943d881d3cb",
+		1:              "aa1d2aaa06861657aefe271aa62b14a4e965810b078854acec9db3ee8b04f2ae",
+		42:             "3dbab08d75120a91c794d233cd042e449aff26be192fcdb12e843e2b2d67277f",
+		math.MaxUint64: "fe62bc36eff7f9cd3f00bcc36d86a3d07d5822509360f11e21349c1d587b5a8b",
 	}
 	for seed, want := range golden {
 		if got := hashTasks(t, mustGenerate(t, seed)); got != want {
@@ -160,8 +160,8 @@ func checkBalance(t *testing.T, tasks []Task, templates int) {
 // task.Line is the template's sink line with only identifiers substituted.
 func checkGroundTruth(t *testing.T, task Task, tpl template) {
 	t.Helper()
-	if task.Class != tpl.class || task.Language != tpl.language {
-		t.Errorf("%s: class/language %s/%s, template says %s/%s", task.ID, task.Class, task.Language, tpl.class, tpl.language)
+	if task.Class != tpl.class {
+		t.Errorf("%s: class %s, template says %s", task.ID, task.Class, tpl.class)
 	}
 	own, twin := tpl.variant(task.Vulnerable), tpl.variant(!task.Vulnerable)
 	if !strings.Contains(task.Code, own.marker) || strings.Contains(task.Code, twin.marker) {
@@ -221,9 +221,9 @@ func TestGenerateFailsWhenMutationsRunOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	// One template with two names and one filler has far fewer distinct
-	// tasks than the 50 per label a run needs.
+	// tasks than the 32 per label a run needs.
 	_, err = generate(cat, 0)
-	if err == nil || !strings.Contains(err.Error(), "py-test") {
+	if err == nil || !strings.Contains(err.Error(), "test-sqli") {
 		t.Fatalf("err = %v, want exhaustion error naming the template", err)
 	}
 }

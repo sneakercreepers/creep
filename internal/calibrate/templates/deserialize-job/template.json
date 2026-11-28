@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "deserialize-job",
+  "class": "insecure_deserialization",
+  "pad_after": 0,
+  "slots": {
+    "func": ["enqueue", "import_job", "submit_task", "schedule", "queue_work", "accept_job"],
+    "queue": ["imports", "batch", "nightly", "exports_q", "workers", "backlog"]
+  },
+  "vulnerable": {"sink_line": 2, "marker": "deserialize_object(request.body())"},
+  "safe": {"sink_line": 2, "marker": "parse_json(request.body())"}
+}

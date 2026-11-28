@@ -1,0 +1,6 @@
+handler @@func@@(request):
+    domain = request.query("@@field@@")
+    if domain not in ["docs.example.invalid", "status.example.invalid"]:
+        return response(404, none)
+    output = run_process(["nslookup", domain])
+    return response(200, output)

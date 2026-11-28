@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "id": "nosql-find-one",
+  "class": "nosql_injection",
+  "pad_after": 0,
+  "slots": {
+    "func": ["check_email", "has_account", "member_exists", "find_handle", "lookup_alias", "known_user"],
+    "field": ["email", "username", "handle", "nickname", "alias", "login_name"],
+    "coll": ["accounts", "members", "customers", "profiles", "subscribers", "people"]
+  },
+  "vulnerable": {"sink_line": 3, "marker": "name = request.json("},
+  "safe": {"sink_line": 3, "marker": "name = to_string(request.json("}
+}

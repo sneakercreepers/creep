@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    criteria = {"status": to_string(request.query("@@field@@"))}
+    rows = mongo.find("@@coll@@", criteria)
+    return response(200, rows)
