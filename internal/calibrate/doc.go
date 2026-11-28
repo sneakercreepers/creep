@@ -64,8 +64,16 @@
 //     size that missed and why (wrong answer, invalid output, the status,
 //     the budget), and Header shows it: a 400 for another reason, such as
 //     a bad parameter, holds the model at tier S, and the report says so.
+//   - The tier rules and the fitness floor (fitness.go, ADR 0036) read only
+//     PlannedClasses, the classes a scan can plan. The floor refuses a
+//     model whose score there has a Wilson lower bound under 1/2 (chance:
+//     the tasks are half safe twins) or that does not call at least half
+//     the planned safe twins safe; CheckFit returns an *UnfitError
+//     (ErrUnfit) with the numbers, and the CLI exits 3 unless the user
+//     passes --allow-unfit-model.
 //   - The Result records the seed, a hash of the task set and
-//     PromptVersion, so a cached result is tied to what it measured.
+//     PromptVersion, so a cached result is tied to what it measured, and
+//     its Fitness, so a cached unfit model is refused without a new run.
 //
 // RunCached (cache.go) keeps one result per model for MaxAge (30 days by
 // default, calibration.cache_days) in a state.Store, normally the user's
@@ -81,8 +89,10 @@
 //     entries under older keys are never looked up again.
 //   - A cached result is used only when its age is in [0, MaxAge), its line
 //     is authenticated by internal/state, it decodes strictly, it matches
-//     the key, its context check is one a run can produce, and the current
-//     rules give it the tier it records. A torn, planted, linked or
+//     the key, its context check and class counts are ones a run can
+//     produce, and the current rules give it the tier and fitness it
+//     records (an entry from before the floor has none, so it is measured
+//     again). A torn, planted, linked or
 //     inconsistent file is recalibrated over, never read. This holds for
 //     files: a calibrations/ directory that is a link, junction or file
 //     fails closed before any model call, with or without --recalibrate,

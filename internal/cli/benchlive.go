@@ -60,10 +60,20 @@ func runBenchLive(e env, cases []bench.Case) int {
 		return exitcode.ConfigError
 	}
 	// budget.max_seconds bounds a live bench as it bounds a scan, so a slow
-	// endpoint cannot hold the run open for every call's own timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(r.Config.Budget.MaxSeconds)*time.Second)
+	// endpoint cannot hold the run open for every call's own timeout. A
+	// --recalibrate calibration gets its own limit first, as a scan's
+	// deadline starts after calibration (#260), so it never eats the
+	// corpus's time.
+	limit := time.Duration(r.Config.Budget.MaxSeconds) * time.Second
+	cost, err := b.optionalCalibration(e, r.Config.Model, limit)
+	if err != nil {
+		_ = b.run.Finish(state.OutcomeIncomplete, "model_failed")
+		printError(e.stderr, "creep bench", err)
+		return failureCode(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
-	return b.measure(ctx, e, r.Config.Model, cases)
+	return b.measure(ctx, e, r.Config.Model, cases, cost)
 }
 
 func checkBenchModel(m config.Model) error {
@@ -90,8 +100,8 @@ func (b *benchLive) open(e env, r *config.Resolved) error {
 }
 
 // measure runs the bench, then ends the run, writes the fixture for
-// --record and prints the results.
-func (b *benchLive) measure(ctx context.Context, e env, cfg config.Model, cases []bench.Case) int {
+// --record and prints the results with cost, the calibration's if any.
+func (b *benchLive) measure(ctx context.Context, e env, cfg config.Model, cases []bench.Case, cost *bench.CalibrationCost) int {
 	rec := bench.NewRecorder()
 	opts, err := sessionModelOptions(cfg, nil, recordingSend(rec, b.link.send))
 	if err != nil {
@@ -111,7 +121,7 @@ func (b *benchLive) measure(ctx context.Context, e env, cfg config.Model, cases 
 		printError(e.stderr, "creep bench", err)
 		return failureCode(err)
 	}
-	clients := benchClients{model: m, fixture: fixtureModel(cfg.Endpoint, m)}
+	clients := benchClients{model: m, fixture: fixtureModel(cfg.Endpoint, m), calibration: cost}
 	if err := b.finish(e, rec.Fixture(clients.fixture, false), outcomes); err != nil {
 		printError(e.stderr, "creep bench", err)
 		return exitcode.ConfigError

@@ -201,6 +201,27 @@ func TestUntrustedCacheRecalibrates(t *testing.T) {
 				return regexpReplace(s, `"effective_bytes":131072`, `"effective_bytes":131072,"status":400`)
 			}))
 		}},
+		// #363: a verdict the counts do not give, counts that do not fit,
+		// and an entry from before the fitness floor are all misses.
+		{"fitness forged", func(t *testing.T, _ *cacheEnv, path string) {
+			b, _ := os.ReadFile(path)
+			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {
+				return strings.Replace(s, `"fitness":{"fit":true`, `"fitness":{"fit":false,"reason":"below_chance"`, 1)
+			}))
+		}},
+		{"safe twins forged", func(t *testing.T, _ *cacheEnv, path string) {
+			b, _ := os.ReadFile(path)
+			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {
+				return strings.Replace(s, `"safe_flagged":0`, `"safe_flagged":99`, 1)
+			}))
+		}},
+		{"entry from before the fitness floor", func(t *testing.T, _ *cacheEnv, path string) {
+			b, _ := os.ReadFile(path)
+			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {
+				s = regexpReplace(s, `,"fitness":\{"fit":true,"planned":\{[^}]*\}\}`, "")
+				return regexpReplace(s, `,"safe_twins":\d+,"safe_flagged":\d+`, "")
+			}))
+		}},
 		{"unknown result field", func(t *testing.T, _ *cacheEnv, path string) {
 			b, _ := os.ReadFile(path)
 			writeCache(t, path, resign(t, b, cacheSecret, func(s string) string {

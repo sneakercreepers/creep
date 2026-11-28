@@ -30,7 +30,7 @@
 
 ## What it does
 
-`creep scan` runs, in order: **calibration** (measures your model per vulnerability class and picks a tier), **discovery** (an inventory by file name and bytes, a lexical tripwire of known sink calls, and the model reading whole redacted source files for entry points and sinks; see [Languages](#languages)), the **planner** (deterministic ranking, no model call), the **reader** (the model reads redacted code slices and answers in a closed schema), in a nightly scan with the sandbox enabled **verification** (the app built offline and a PoC run 5 times against it; see [Sandbox and verification](#sandbox-and-verification)), and the **report**.
+`creep scan` runs, in order: **calibration** (measures your model per vulnerability class, picks a tier and refuses a model that is unfit; see [Unfit models](#unfit-models)), **discovery** (an inventory by file name and bytes, a lexical tripwire of known sink calls, and the model reading whole redacted source files for entry points and sinks; see [Languages](#languages)), the **planner** (deterministic ranking, no model call), the **reader** (the model reads redacted code slices and answers in a closed schema), in a nightly scan with the sandbox enabled **verification** (the app built offline and a PoC run 5 times against it; see [Sandbox and verification](#sandbox-and-verification)), and the **report**.
 
 **Guarantees** (fixed; no config key can turn them off — except that the `codex` and `gemini` presets can read host files outside redaction, `egress.log` and `egress.allow`; see Limits):
 
@@ -87,6 +87,7 @@ Limits:
 - **More incomplete runs at low tiers.** Every candidate ranks at full risk, so runs hit the tier's step cap more often, above all at tier S.
 - **Live runs can differ.** Two live runs can propose different candidates; `--record`/`--replay` and the run-state cache keep repeated runs stable.
 - Calibration still uses Python and JavaScript tasks, so the tier is measured on those languages.
+- **Calibration costs time before the first finding.** Measured on `qwen2.5-coder:1.5b` with Ollama on a 4-core laptop CPU, no GPU ([#367](https://github.com/sneakercreepers/creep/issues/367)): 20 min 18 s, 108 calls, about 50k tokens in, about 11 s per call; the bench job on a GitHub-hosted runner measured 107 calls, 51,007 tokens in, 2,151 out and 497 s for the same model, which the fitness floor finds unfit. A hosted model takes seconds per call. The result is cached for 30 days; `--stats` prints what calibration spent and the nightly bench publishes it for the pinned model (`calibration` in its results).
 
 ## Install
 
@@ -272,8 +273,9 @@ The sandbox is optional, and only a nightly scan uses it ([ADR 0021](docs/adr/00
 | `--model-run <cmd>` | Model CLI for the command contract |
 | `--mode pr\|nightly` | `scan`: the gate that judges the run; only `nightly` builds the app and runs PoCs (default `pr`, `nightly` on a GitHub Actions `schedule` event; [CI](#ci-pull-request-and-nightly-scans)) |
 | `--record` / `--replay` | Record every model response / serve only recorded responses, never the network; `bench` writes its run's fixture / serves its published fixture |
-| `--recalibrate` | Calibrate again even if a calibration is cached (30 days) |
-| `--stats` | `scan`: print phase times, model calls, cache hits and tokens |
+| `--recalibrate` | Calibrate again even if a calibration is cached (30 days); `bench` (live only): also run one calibration first and add its calls, tokens and time to the results |
+| `--allow-unfit-model` | `scan` and `resume`: scan with a model calibration found unfit instead of exiting `3`; every model finding is labeled `unreliable_model` (see [Unfit models](#unfit-models)) |
+| `--stats` | `scan`: print phase times, model calls, cache hits and tokens, and calibration's own calls, tokens and time |
 | `--changed <file>` | `scan`, `estimate` and `resume`: evaluate only the paths listed in the file (see Incremental scans) |
 | `--stability <n>` | `scan`, `estimate` and `resume`: send every discovery batch and hypothesis to the model n times (1 to 5); a probable finding seen in fewer runs is labeled `unstable discovery: seen in 2 of 3 runs` in every report (JSON `stability`), apart from an intermittent PoC; it never lowers a finding or changes the gate, costs about n times the calls (`creep estimate --stability n` shows it), and feeds per-class counts into the calibration line ([ADR 0024](docs/adr/0024-discovery-stability.md)) |
 | `--price-in <n>` / `--price-out <n>` | `estimate` and `--stats`: price per 1M input/output tokens, for a cost |
@@ -294,6 +296,10 @@ In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA
 
 **Calibration cache.** A calibration is kept in your user cache directory for `calibration.cache_days` (default 30) and reused only for the same contract, endpoint, model name, structured-output mode, max output tokens and retries, and the same creep task set and prompts; changing any of them calibrates again. creep cannot see which snapshot a model name points to: a dated name (`model-2025-06-01`) gets its own entry, but an alias such as `-latest` that the provider moves to a new snapshot keeps its cached tier until the entry expires. Pin a dated model name, or pass `--recalibrate` after the provider updates the alias. The `calibration:` line of `creep scan` shows the tier and, when the context probe stopped early, the size and reason (for example `8 KiB probe: HTTP 400`, which holds the model at tier S). A `calibrations/` cache directory that is a link or junction is refused before any model call, also with `--recalibrate`; the error names the directory to remove.
 
+### Unfit models
+
+After calibration creep checks a fitness floor over the calibrated classes the planner can plan (`sqli`, `nosql_injection`, `command_injection`, `path_traversal`, `ssrf`: 64 of the 100 tasks, half of them safe twins; `template_injection`, `code_injection` and `insecure_deserialization` are planned but have no calibration tasks yet, [#358](https://github.com/sneakercreepers/creep/issues/358)). A model is unfit when its score there is not above chance at 95% confidence (Wilson lower bound under 1/2; 40 of 64 right is the least that passes) or when it does not call at least half the safe twins safe. The scan then stops with exit `3`, sends no repository file and writes no report, and the message gives the numbers, for example `model unfit (below_chance): 32 of 64 tasks in the planned classes right (95% lower bound 0.381, ...); 32 of 32 safe twins not called safe`. The verdict is cached with the calibration, so the next scan refuses again without calibrating. `--allow-unfit-model` (a flag only, on `scan` and `resume`; no config file can set it, and `creep mcp` refuses it) scans anyway: the calibration line says `UNFIT`, and every finding from the model is labeled `unreliable_model` in the text summary, `creep why`, Markdown, SARIF and JSON v1 (`"unreliable_model": true`); findings from gitleaks and osv-scanner are not. The run is marked as well, so a run with no findings never reads clean: an `UNRELIABLE MODEL` line in the text summary and Markdown, `run.unreliable_model` in JSON v1, and a SARIF run property and error notification. Such a run writes no baseline (`--allow-unfit-model` with `--baseline-write` exits `2`) and no `--stability` record. The label never changes a status or the gate. The tier rule reads the same planned classes only ([ADR 0036](docs/adr/0036-model-fitness-floor.md)).
+
 ## Output and exit codes
 
 `creep scan` writes `.creep/report.json` ([schema v1](docs/schemas/report-v1.json)), `.creep/report.sarif` and `.creep/report.md`, per `report.formats`. Reports from earlier runs are removed before each run. Each class is `covered`, `partial` or `not_evaluated`, with the reason. Every report also lists the classes no scan looks for (see Limits); since #365 that is the JSON `coverage.not_looked_for`, and code eval and deserialization sinks are reported as `code_injection` and `insecure_deserialization`, no longer as `command_injection`. Schema v1 changes additively only; since #26 a not-evaluated file may also have the reason `unchanged` (left out of an incremental scan).
@@ -303,7 +309,7 @@ In CI, diff against the event's base commit (`git diff --name-only -z "$BASE_SHA
 | `0` | Nothing blocking |
 | `1` | Gate exceeded: the gate of the scan's mode, `gates.pr` (default `probable:critical`), or for a nightly scan `gates.nightly` (default `verified:high`, read as `probable:high` when the nightly scan could not verify) and `gates.pr` |
 | `2` | Usage, configuration or consent error |
-| `3` | Model, tool canary, calibration or sandbox error |
+| `3` | Model, tool canary, calibration or sandbox error, including a model calibration finds unfit (without `--allow-unfit-model`) |
 | `4` | Incomplete run: report written, not everything evaluated ([ADR 0007](docs/adr/0007-exit-code-incomplete.md), [ADR 0009](docs/adr/0009-scan-and-why-contract.md)) |
 
 An incomplete run never exits `0`, even when the gate also trips.

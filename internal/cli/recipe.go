@@ -130,6 +130,11 @@ func (s *session) loadRecipe(ctx context.Context, stderr io.Writer, data []byte)
 		return nil, "", fmt.Errorf("tool canary: %w", err)
 	}
 	cal, err := s.calibrate(ctx)
+	if err == nil {
+		// An unfit model cannot vouch for a recipe's fixtures; recipe test
+		// takes no --allow-unfit-model.
+		err = s.fitOrAllowed(stderr, cal)
+	}
 	if err != nil {
 		return nil, "", fmt.Errorf("calibration: %w", err)
 	}

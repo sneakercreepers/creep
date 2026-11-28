@@ -22,10 +22,25 @@ type Score struct {
 	Upper   float64 `json:"upper"`
 }
 
-// ClassScore is the Score over one class's tasks, vulnerable and safe.
+// ClassScore is the Score over one class's tasks, vulnerable and safe,
+// with how many of them were safe twins and how many of those the model
+// did not call safe (a finding of any class, or no valid answer), which
+// the fitness floor reads (#363).
 type ClassScore struct {
 	Class Class `json:"class"`
 	Score
+	SafeTwins   int `json:"safe_twins"`
+	SafeFlagged int `json:"safe_flagged"`
+}
+
+// consistent reports whether s could have come from scoreClasses: its
+// counts fit inside each other. A cached result that is not is never
+// trusted: its fitness could not be recomputed from it.
+func (s ClassScore) consistent() bool {
+	safeRight := s.SafeTwins - s.SafeFlagged
+	return s.Correct >= 0 && s.Correct <= s.Total &&
+		s.SafeFlagged >= 0 && s.SafeFlagged <= s.SafeTwins && s.SafeTwins <= s.Total &&
+		safeRight <= s.Correct && s.Correct-safeRight <= s.Total-s.SafeTwins
 }
 
 func newScore(correct, total int) Score {
@@ -85,11 +100,16 @@ func half(r *big.Rat) *big.Rat {
 // scoreClasses returns one ClassScore per calibrated class, in Classes
 // order, and the overall Score. A class with no tasks gets Total 0.
 func scoreClasses(tasks []Task, correct []bool) ([]ClassScore, Score) {
-	right := map[Class]int{}
-	total := map[Class]int{}
+	right, total, safe, flagged := map[Class]int{}, map[Class]int{}, map[Class]int{}, map[Class]int{}
 	all := 0
 	for i, task := range tasks {
 		total[task.Class]++
+		if !task.Vulnerable {
+			safe[task.Class]++
+		}
+		if !task.Vulnerable && !correct[i] {
+			flagged[task.Class]++
+		}
 		if correct[i] {
 			right[task.Class]++
 			all++
@@ -97,7 +117,7 @@ func scoreClasses(tasks []Task, correct []bool) ([]ClassScore, Score) {
 	}
 	scores := make([]ClassScore, 0, len(Classes()))
 	for _, c := range Classes() {
-		scores = append(scores, ClassScore{Class: c, Score: newScore(right[c], total[c])})
+		scores = append(scores, ClassScore{Class: c, Score: newScore(right[c], total[c]), SafeTwins: safe[c], SafeFlagged: flagged[c]})
 	}
 	return scores, newScore(all, len(tasks))
 }

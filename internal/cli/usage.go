@@ -40,7 +40,10 @@ func globalFlagsHelp() string {
 		"                      bench also writes the run's fixture file\n"+
 		"  --replay            serve recorded responses only; never use the network;\n"+
 		"                      bench serves its published fixture\n"+
-		"  --recalibrate       calibrate the model again even if a calibration is cached\n"+
+		"  --recalibrate       calibrate the model again even if a calibration is cached;\n"+
+		"                      bench: also calibrate and report its calls, tokens and time\n"+
+		"  --allow-unfit-model scan, resume: scan with a model calibration found unfit\n"+
+		"                      (exit 3 otherwise); every finding is labeled unreliable_model\n"+
 		"  --stats             scan: print phase times, model calls, cache hits and tokens\n"+
 		"  --changed <file>    scan, estimate: only the paths listed in file, one per line or\n"+
 		"                      NUL-separated (git diff --name-only -z origin/main > changed.txt);\n"+

@@ -22,6 +22,33 @@ type Results struct {
 	// says nothing about them, so the page names them instead of omitting.
 	Unmeasured []string   `json:"unmeasured_classes"`
 	Smoke      []SmokeRun `json:"smoke"`
+	// Calibration is what one real calibration of the model cost, only
+	// when creep bench --recalibrate ran one (#363). Added additively.
+	Calibration *CalibrationCost `json:"calibration,omitempty"`
+}
+
+// CalibrationCost is one calibration's calls, tokens and wall time, and the
+// tier and fitness it measured: counts and enums only.
+type CalibrationCost struct {
+	Calls        int     `json:"calls"`
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	Seconds      float64 `json:"seconds"`
+	Tier         string  `json:"tier"`
+	Fit          bool    `json:"fit"`
+	Unfit        string  `json:"unfit_reason,omitempty"`
+}
+
+func writeCalibration(b *strings.Builder, c *CalibrationCost) {
+	if c == nil {
+		return
+	}
+	verdict := "fit"
+	if !c.Fit {
+		verdict = "unfit (" + plain(c.Unfit) + ")"
+	}
+	fmt.Fprintf(b, "\nCalibration: %d calls, %d tokens in, %d out, %.0f s; tier %s, %s.\n",
+		c.Calls, c.InputTokens, c.OutputTokens, c.Seconds, plain(c.Tier), verdict)
 }
 
 // CorpusInfo names the corpus measured.
@@ -75,6 +102,7 @@ func (r Results) Markdown() string {
 		b.WriteString("These replies are synthesized: an oracle answered every call from the corpus, so the numbers measure creep's pipeline (inventory, tripwire, planner, slicing, coverage), not a model's judgement.\n\n")
 	}
 	b.WriteString("Recall counts vulnerable twins found on their sink line (within 2 lines). False positives count safe twins with any probable or verified finding. Honesty counts the runs that claimed the class covered and found the planted vulnerability; a silent miss claimed covered and missed it.\n")
+	writeCalibration(&b, r.Calibration)
 	for _, t := range r.Tiers {
 		writeTier(&b, t)
 	}

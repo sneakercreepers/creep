@@ -25,6 +25,9 @@ type benchClients struct {
 	fixture     bench.FixtureModel
 	synthesized bool
 	misses      *int // --replay requests with no published reply
+	// calibration is the cost of the live calibration bench --recalibrate
+	// ran first (#363); nil without one.
+	calibration *bench.CalibrationCost
 }
 
 // runBench runs creep-bench (ADR 0030): every corpus case, both twins, at
@@ -38,6 +41,10 @@ func runBench(e env, args []string) int {
 	}
 	if e.opts.format == "sarif" {
 		printError(e.stderr, "creep bench", errors.New("prints text, markdown or json, not sarif"))
+		return exitcode.ConfigError
+	}
+	if e.opts.replay && e.opts.recalibrate {
+		printError(e.stderr, "creep bench", errBenchReplayCalibration)
 		return exitcode.ConfigError
 	}
 	cases, err := bench.Corpus()
@@ -150,7 +157,7 @@ func benchResults(clients benchClients, cases []bench.Case, outcomes []bench.Out
 		SchemaVersion: bench.SchemaVersion,
 		Corpus:        bench.CorpusInfo{Cases: len(cases), SHA256: digest},
 		Model:         bench.ModelInfo{Contract: clients.fixture.Contract, Name: clients.fixture.Name, Synthesized: clients.synthesized},
-		Tiers:         tiers, Unmeasured: unmeasuredClasses(cases), Smoke: bench.SmokeRuns(),
+		Tiers:         tiers, Unmeasured: unmeasuredClasses(cases), Smoke: bench.SmokeRuns(), Calibration: clients.calibration,
 	}, nil
 }
 

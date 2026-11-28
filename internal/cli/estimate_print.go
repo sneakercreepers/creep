@@ -5,6 +5,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"time"
 )
 
 // printEstimate writes the estimate. It prints counts, tiers and reason
@@ -27,8 +28,8 @@ func printEstimate(w io.Writer, est *estimateRun) {
 	for _, t := range est.tiers {
 		est.printTierNotes(w, t, price)
 	}
-	fmt.Fprintf(w, "assumes ~%.1f bytes per token, ~%d output tokens per reply and ~%ds per call, one call at a time; cached calls are served from .creep/cache and cost nothing\n",
-		float64(bytesPerTenTokens)/10, replyEstimateTokens, callSeconds)
+	fmt.Fprintf(w, "assumes ~%.1f bytes per token, ~%d output tokens per reply and ~%ds per call (a hosted model; a local CPU model measured ~%ds), one call at a time; cached calls are served from .creep/cache and cost nothing\n",
+		float64(bytesPerTenTokens)/10, replyEstimateTokens, callSeconds, cpuCallSeconds)
 }
 
 // rowMeasure is a tier's requests plus calibration when the scan must run it.
@@ -44,7 +45,9 @@ func (est *estimateRun) calibrationLine() string {
 		return fmt.Sprintf("cached, tier %s (marked *)", est.cal.tier)
 	}
 	r := est.cal.requests
-	return fmt.Sprintf("not cached: the scan calibrates first, at least %d calls (~%d tokens in), included in every tier; the tier it measures is not known yet", r.calls, r.inputTokens())
+	cpu := time.Duration(r.live()) * cpuCallSeconds * time.Second
+	return fmt.Sprintf("not cached: the scan calibrates first, at least %d calls (~%d tokens in, ~%s at %ds per call, ~%s on a local CPU model), included in every tier; the tier it measures is not known yet",
+		r.calls, r.inputTokens(), r.duration(), callSeconds, cpu)
 }
 
 func tierLabel(t tierEstimate) string {

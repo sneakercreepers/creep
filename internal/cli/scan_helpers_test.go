@@ -130,6 +130,7 @@ func fixedCalibration(tier calibrate.Tier, err error) func(context.Context, cali
 			Result: calibrate.Result{
 				Seed: calibrationSeed, TaskSet: "0123456789abcdef", PromptVersion: calibrate.PromptVersion, Tier: tier,
 				Classes: []calibrate.ClassScore{{Class: calibrate.ClassSQLi, Score: calibrate.Score{Correct: 9, Total: 10}}},
+				Fitness: calibrate.Fitness{Fit: true},
 			},
 			Model: models.Identity{Model: "test-model"},
 			At:    time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC),

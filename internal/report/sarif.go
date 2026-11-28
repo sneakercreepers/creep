@@ -32,6 +32,8 @@ type sarifRunProps struct {
 	Incomplete    bool         `json:"incomplete"`
 	Coverage      Coverage     `json:"coverage"`
 	DataHandling  DataHandling `json:"data_handling"`
+	// The run was scanned past the fitness floor (ADR 0036).
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
 
 type sarifTool struct {
@@ -99,6 +101,8 @@ type sarifResultProp struct {
 	PoCRuns     int `json:"poc_runs,omitempty"`
 	// The stability run's counts (#37, ADR 0024), only with --stability.
 	Stability *Stability `json:"stability,omitempty"`
+	// Set when the model failed the fitness floor (#363, ADR 0036).
+	UnreliableModel bool `json:"unreliable_model,omitempty"`
 }
 
 type sarifLocation struct {
@@ -130,7 +134,7 @@ func WriteSARIF(w io.Writer, r *Report) error {
 		Tool:        sarifTool{Driver: sarifDriver{Name: r.Tool.Name, Version: r.Tool.Version, InformationURI: toolURI, Rules: rules}},
 		Invocations: []sarifInvocation{sarifInvocationOf(r)},
 		Results:     sarifResults(r.Findings, index),
-		Properties:  sarifRunProps{SchemaVersion: r.SchemaVersion, Incomplete: r.Run.Incomplete, Coverage: r.Coverage, DataHandling: r.DataHandling},
+		Properties:  sarifRunProps{SchemaVersion: r.SchemaVersion, Incomplete: r.Run.Incomplete, Coverage: r.Coverage, DataHandling: r.DataHandling, UnreliableModel: r.Run.UnreliableModel},
 	}
 	if err := writeInertJSON(w, sarifLog{Schema: sarifSchema, Version: sarifVersion, Runs: []sarifRun{run}}); err != nil {
 		return fmt.Errorf("write SARIF report: %w", err)
@@ -189,7 +193,7 @@ func sarifResults(findings []Finding, index map[string]int) []sarifResult {
 // resultProps are a result's creep properties: its ID and status, the
 // PoC's rate and the stability run's counts.
 func resultProps(f Finding) sarifResultProp {
-	return sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs, Stability: f.Stability}
+	return sarifResultProp{ID: f.ID, Status: f.Status, PoCVerified: f.PoC.Verified, PoCRuns: f.PoC.Runs, Stability: f.Stability, UnreliableModel: f.UnreliableModel}
 }
 
 // resultText is a result's message: class, ID and status, the PoC's rate
@@ -201,6 +205,9 @@ func resultText(f Finding) string {
 	}
 	if f.Stability != nil {
 		notes = append(notes, f.Stability.Text())
+	}
+	if f.UnreliableModel {
+		notes = append(notes, LabelUnreliableModel)
 	}
 	return fmt.Sprintf("%s finding %s (%s)", f.Class, f.ID, strings.Join(notes, ", "))
 }
@@ -223,6 +230,13 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 			Descriptor: sarifDescriptor{ID: "creep/incomplete"},
 			Level:      "error",
 			Message:    sarifMessage{Text: "incomplete run (" + r.Run.Reason + "): not everything was evaluated; this is not a clean result"},
+		})
+	}
+	if r.Run.UnreliableModel {
+		inv.Notifications = append(inv.Notifications, sarifNotification{
+			Descriptor: sarifDescriptor{ID: "creep/unreliable-model"},
+			Level:      "error",
+			Message:    sarifMessage{Text: UnreliableModelNote},
 		})
 	}
 	inv.Notifications = append(inv.Notifications, incrementalNotifications(r.Incremental.Text(r.Coverage.NotEvaluated))...)

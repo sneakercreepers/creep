@@ -1,4 +1,5 @@
 # flag, type, default, commands that accept it (implemented commands only)
+--allow-unfit-model bool     "false" scan resume
 --baseline        string   ""      scan accept resume
 --baseline-write  bool     "false" scan resume
 --changed         string   ""      scan estimate resume

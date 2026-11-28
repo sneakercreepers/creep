@@ -33,6 +33,10 @@ type globalOptions struct {
 	priceIn     float64 // estimate and --stats: currency per 1M input tokens; 0 is unset
 	priceOut    float64 // estimate and --stats: currency per 1M output tokens; 0 is unset
 	changed     string  // scan and estimate: the file listing the changed paths (#26)
+	// allowUnfit is --allow-unfit-model: scan a model the fitness floor
+	// refuses, every finding labeled unreliable_model (#363, ADR 0036). A
+	// flag only, never a config key, so no project file can set it.
+	allowUnfit bool
 	// stability is --stability N: scan and estimate take N samples of
 	// discovery and of every hypothesis (#37, ADR 0024); 1 is one sample.
 	stability int
@@ -86,6 +90,7 @@ func newFlagSet(name string, opts *globalOptions) *flag.FlagSet {
 	fs.BoolVar(&opts.record, "record", opts.record, "")
 	fs.BoolVar(&opts.replay, "replay", opts.replay, "")
 	fs.BoolVar(&opts.recalibrate, "recalibrate", opts.recalibrate, "")
+	fs.BoolVar(&opts.allowUnfit, "allow-unfit-model", opts.allowUnfit, "")
 	fs.BoolVar(&opts.stats, "stats", opts.stats, "")
 	fs.IntVar(&opts.stability, "stability", opts.stability, "")
 	fs.Float64Var(&opts.priceIn, "price-in", opts.priceIn, "")

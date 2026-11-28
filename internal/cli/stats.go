@@ -39,6 +39,7 @@ type runStats struct {
 	cacheUse  gateway.Usage // tokens the recorded replies report: not spent again
 	noUsage   int           // sent replies that reported no token count
 	byPurpose map[string]int
+	cal       calibrationCost // the calibrate-* requests alone (#363)
 }
 
 type phaseTime struct {
@@ -95,6 +96,9 @@ func (st *runStats) addRequest(c gateway.Call, r *gateway.Reply, err error, sent
 	defer st.mu.Unlock()
 	st.requests++
 	st.byPurpose[c.Purpose]++
+	if isCalibration(c) {
+		st.cal.Requests++
+	}
 	switch {
 	case !succeeded(r, err):
 		st.failed++
@@ -110,6 +114,9 @@ func (st *runStats) addSent(c gateway.Call, r *gateway.Reply, err error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	st.sent++
+	if isCalibration(c) {
+		st.cal.Sent++
+	}
 	if !succeeded(r, err) {
 		return
 	}
@@ -119,6 +126,9 @@ func (st *runStats) addSent(c gateway.Call, r *gateway.Reply, err error) {
 		return
 	}
 	st.usage = addUsage(st.usage, u)
+	if isCalibration(c) {
+		st.cal.Usage = addUsage(st.cal.Usage, u)
+	}
 }
 
 // succeeded reports a 200 reply. The gateway and the run-state cache return
@@ -145,6 +155,7 @@ func (st *runStats) print(w io.Writer, p pricing) {
 	defer st.mu.Unlock()
 	fmt.Fprintln(w, "stats:")
 	fmt.Fprintf(w, "  phases: %s\n", st.phaseList())
+	fmt.Fprintf(w, "  calibration: %s\n", st.calibrationCostLocked().text())
 	fmt.Fprintf(w, "  model requests: %d (%d sent, %d from cache, %d failed; cache hit rate %s)\n",
 		st.requests, st.sent, st.cached, st.failed, percent(st.cached, st.requests))
 	if len(st.byPurpose) > 0 {
