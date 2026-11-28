@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "python-eval-request",
+  "class": "code_injection",
+  "applies_to": [".py"],
+  "sources": ["request.args"],
+  "sinks": ["eval("],
+  "hint": "A request value reaches eval() as code: QX7EVALHINT.\nOnly ast.literal_eval() or no eval at all stops this class.",
+  "fixtures": {
+    "vulnerable": {
+      "code": "from flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/calc\")\ndef calc():\n    expr = request.args[\"expr\"]\n    return str(eval(expr))\n",
+      "source_line": 6,
+      "sink_line": 7
+    },
+    "safe": {
+      "code": "import ast\nfrom flask import Flask, request\napp = Flask(__name__)\n\n@app.route(\"/calc\")\ndef calc():\n    expr = request.args[\"expr\"]\n    return str(ast.literal_eval(expr))\n",
+      "source_line": 7,
+      "sink_line": 8
+    }
+  }
+}
