@@ -153,3 +153,51 @@ func TestE2ECellStaysInOneCell(t *testing.T) {
 		t.Errorf("e2eCell = %q", got)
 	}
 }
+
+func TestLastScanLine(t *testing.T) {
+	tests := []struct{ name, stderr, want string }{
+		{"none", "stats:\n  calibration: 3 requests\n", ""},
+		{"error after notice", "creep scan: discovery sends up to 1 whole source files\ncreep scan: calibration: model unfit\nstats:\n", "creep scan: calibration: model unfit"},
+		{"only notice", "creep scan: discovery sends up to 1 whole source files\n", "creep scan: discovery sends up to 1 whole source files"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := lastScanLine(tt.stderr); got != tt.want {
+				t.Errorf("lastScanLine = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestE2EPathProblems(t *testing.T) {
+	ok := func(cmd string) e2eStep { return e2eStep{Command: cmd} }
+	calibrated := e2eScan{Exit: 3, Calibration: "89 requests"}
+	good := e2eResults{Init: ok("creep init"), Doctor: ok("creep doctor"), Estimate: ok("creep estimate"), Why: ok("creep why"), Runs: []e2eScan{calibrated}}
+	with := func(f func(*e2eResults)) e2eResults { r := good; f(&r); return r }
+	tests := []struct {
+		name string
+		res  e2eResults
+		want string // substring of the single problem; "" means none
+	}{
+		{"unfit model is a result", good, ""},
+		{"why not run", with(func(r *e2eResults) { r.Why.Exit = e2eNotRun }), ""},
+		{"init fails", with(func(r *e2eResults) { r.Init.Exit = 2 }), "creep init: exit 2"},
+		{"doctor fails", with(func(r *e2eResults) { r.Doctor.Exit = 3 }), "creep doctor: exit 3"},
+		{"estimate fails", with(func(r *e2eResults) { r.Estimate.Exit = 2 }), "creep estimate: exit 2"},
+		{"why fails", with(func(r *e2eResults) { r.Why.Exit = 2 }), "creep why: exit 2"},
+		{"scan usage error", with(func(r *e2eResults) { r.Runs = []e2eScan{calibrated, {App: "a", Exit: 2}} }), "a  (): exit 2"},
+		{"no calibration", with(func(r *e2eResults) { r.Runs = []e2eScan{{Exit: 3}} }), "no calibration cost"},
+		{"no scans", with(func(r *e2eResults) { r.Runs = nil }), "no calibration cost"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := e2ePathProblems(tt.res)
+			if tt.want == "" && len(got) != 0 {
+				t.Errorf("problems %q, want none", got)
+			}
+			if tt.want != "" && (len(got) != 1 || !strings.Contains(got[0], tt.want)) {
+				t.Errorf("problems %q, want one containing %q", got, tt.want)
+			}
+		})
+	}
+}

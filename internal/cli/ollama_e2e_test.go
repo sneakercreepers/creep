@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,20 +49,42 @@ func TestOllamaEndToEnd(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	res := e2eResults{Model: os.Getenv(e2eModelEnv), Date: time.Now().UTC().Format(time.DateOnly)}
 	twins := e2eTwins(t)
+	if len(twins) == 0 {
+		t.Fatalf("no app directories under %s", e2eApps)
+	}
 	res.Init, res.Doctor, res.Estimate = e2ePrelude(t, twins[0])
 	for _, tw := range twins {
 		res.Runs = append(res.Runs, e2eScanTwin(t, tw)...)
 	}
 	res.Why = e2eWhy(t, res.Runs)
+	writeE2EResults(t, out, res)
+	for _, p := range e2ePathProblems(res) {
+		t.Error(p)
+	}
+}
+
+// e2eNotRun is the exit recorded for a step that had nothing to run on.
+const e2eNotRun = -1
+
+// e2ePathProblems lists how the user path itself broke: every step but a
+// scan must exit 0 (doctor's warnings still exit 0), and no scan may exit
+// 2 or skip the calibration it pays for.
+func e2ePathProblems(res e2eResults) []string {
+	var problems []string
+	for _, st := range []e2eStep{res.Init, res.Doctor, res.Estimate, res.Why} {
+		if st.Exit != exitcode.OK && st.Exit != e2eNotRun {
+			problems = append(problems, fmt.Sprintf("%s: exit %d, want 0: %q", st.Command, st.Exit, st.Lines))
+		}
+	}
 	for _, r := range res.Runs {
 		if r.Exit == exitcode.ConfigError {
-			t.Errorf("%s %s (%s): exit 2: %s", r.App, r.Variant, r.Pass, r.Reason)
+			problems = append(problems, fmt.Sprintf("%s %s (%s): exit 2: %s", r.App, r.Variant, r.Pass, r.Reason))
 		}
 	}
 	if len(res.Runs) == 0 || res.Runs[0].Calibration == "" {
-		t.Error("the first scan printed no calibration cost")
+		problems = append(problems, "the first scan printed no calibration cost")
 	}
-	writeE2EResults(t, out, res)
+	return problems
 }
 
 // e2eTwin is one variant of one test app and the findings it must have.
@@ -160,7 +183,7 @@ func e2eWhy(t *testing.T, runs []e2eScan) e2eStep {
 		t.Chdir(r.repo)
 		return e2eRun(nil, "why", r.firstID)
 	}
-	return e2eStep{Command: "creep why", Exit: -1, Lines: []string{"not run: no scan reported a finding on a vulnerable twin"}}
+	return e2eStep{Command: "creep why", Exit: e2eNotRun, Lines: []string{"not run: no scan reported a finding on a vulnerable twin"}}
 }
 
 // e2eRepo copies tw into a fresh directory and makes it the working one.
