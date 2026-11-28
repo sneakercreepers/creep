@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // envFileName is the file appEnv mounts in the app's working directory,
@@ -52,6 +54,60 @@ func databaseEnv(db Database) map[string]string {
 // the work directory and returns its path, to mount read-only. Names
 // follow the env-variable rule and values hold no line break.
 func (s *Sandbox) writeEnvFile(env map[string]string) (string, error) {
+	lines, err := envLines(env)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(s.work, "env-"+strconv.FormatUint(s.seq.Add(1), 10))
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return "", fmt.Errorf("synthetic env: %w", err)
+	}
+	file := filepath.Join(dir, envFileName)
+	// G306: the container user (65534) must read it; the work directory is
+	// 0700, so no other host user can reach it, and it holds no secret.
+	if err := os.WriteFile(file, []byte(lines), 0o644); err != nil { //nolint:gosec // G306, see above
+		return "", fmt.Errorf("synthetic env: %w", err)
+	}
+	return file, nil
+}
+
+// runEnvPrefix starts the name of the env file the runtime CLI reads for
+// one container; the container's own name follows.
+const runEnvPrefix = "run-env-"
+
+// writeRunEnv writes a container's env as the file its `run` reads with
+// --env-file, so no value is on the CLI's command line. The file is
+// creep's own, never the repository's: created new (O_EXCL) in the 0700
+// work directory, 0600, since only the CLI, as this user, reads it. Docker
+// and Podman read a line as NAME=value with the value verbatim; Podman
+// may unquote a value that starts with a quote, so none may.
+func (s *Sandbox) writeRunEnv(name string, env map[string]string) (string, error) {
+	lines, err := envLines(env)
+	if err != nil {
+		return "", err
+	}
+	file := filepath.Join(s.workReal, runEnvPrefix+name)
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // G304: a new file in the sandbox's own work directory
+	if err != nil {
+		return "", fmt.Errorf("container env: %w", err)
+	}
+	_, err = f.WriteString(lines)
+	if err = errors.Join(err, f.Close()); err != nil {
+		_ = os.Remove(file) //nolint:gosec // G703: the file just created in the sandbox's own work directory
+		return "", fmt.Errorf("container env: %w", err)
+	}
+	return file, nil
+}
+
+// removeRunEnv deletes the env file of a container whose `run` returned.
+func (s *Sandbox) removeRunEnv(name string) {
+	_ = os.Remove(filepath.Join(s.workReal, runEnvPrefix+name)) //nolint:gosec // G703: name is creep's own container name, in the work directory
+}
+
+// envLines renders env sorted, one NAME=value line each. Names follow the
+// env-variable rule; values hold no line break, are valid UTF-8 (Docker
+// refuses a file that is not) and start with no quote.
+func envLines(env map[string]string) (string, error) {
 	if len(env) > maxEnv {
 		return "", fmt.Errorf("synthetic env: %d names: %w", len(env), ErrSpec)
 	}
@@ -62,20 +118,11 @@ func (s *Sandbox) writeEnvFile(env map[string]string) (string, error) {
 	slices.Sort(names)
 	var b strings.Builder
 	for _, name := range names {
-		if !envName.MatchString(name) || !plainValue(env[name]) || isProxyVar(name) {
+		v := env[name]
+		if !envName.MatchString(name) || !plainValue(v) || !utf8.ValidString(v) || strings.HasPrefix(v, `"`) || strings.HasPrefix(v, "'") || isProxyVar(name) {
 			return "", fmt.Errorf("synthetic env: name %q: %w", name, ErrSpec)
 		}
-		b.WriteString(name + "=" + env[name] + "\n")
+		b.WriteString(name + "=" + v + "\n")
 	}
-	dir := filepath.Join(s.work, "env-"+strconv.FormatUint(s.seq.Add(1), 10))
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		return "", fmt.Errorf("synthetic env: %w", err)
-	}
-	file := filepath.Join(dir, envFileName)
-	// G306: the container user (65534) must read it; the work directory is
-	// 0700, so no other host user can reach it, and it holds no secret.
-	if err := os.WriteFile(file, []byte(b.String()), 0o644); err != nil { //nolint:gosec // G306, see above
-		return "", fmt.Errorf("synthetic env: %w", err)
-	}
-	return file, nil
+	return b.String(), nil
 }

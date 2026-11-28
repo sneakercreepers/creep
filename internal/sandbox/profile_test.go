@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -30,6 +31,9 @@ type recorder struct {
 	platform string
 	// workdir answers the working directory inspect; "" is null.
 	workdir string
+	// envs holds each run's env file lines, by container name, read
+	// while the run is in flight, since start removes the file after it.
+	envs map[string][]string
 }
 
 // testPlatform is the fake engine's os/arch, and nativeInspect a base
@@ -42,6 +46,7 @@ const (
 func (r *recorder) run(ctx context.Context, args []string, _ int) (cliResult, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, slices.Clone(args))
+	r.keepEnv(args)
 	r.mu.Unlock()
 	inspect := subcommand(args) == "image" && slices.Contains(args, "inspect")
 	if inspect && r.workdir != "" && slices.Contains(args, "{{json .Config.WorkingDir}}") {
@@ -159,13 +164,13 @@ func allowedOption(o string) bool {
 		return true
 	case strings.HasPrefix(o, "--label="+LabelContainer+"=creep-"+testRunID+"-"):
 		return true
-	case strings.HasPrefix(o, "--env="):
-		name, value, ok := strings.Cut(strings.TrimPrefix(o, "--env="), "=")
-		proxy := false
-		for _, p := range []string{"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "NO_PROXY", "ALL_PROXY"} {
-			proxy = proxy || strings.EqualFold(name, p)
-		}
-		return ok && envName.MatchString(name) && (!proxy || value == "")
+	case strings.HasPrefix(o, "--env-file="):
+		// Only creep's own file for this container: values are never on
+		// the command line (#374), only the empty proxies above are.
+		file := strings.TrimPrefix(o, "--env-file=")
+		inWork := strings.HasPrefix(filepath.Base(filepath.Dir(file)), "creep-sandbox-")
+		ours := strings.HasPrefix(filepath.Base(file), runEnvPrefix+"creep-"+testRunID+"-")
+		return filepath.IsAbs(file) && inWork && ours && !hostPath(file)
 	case strings.HasPrefix(o, "--mount=type=bind,source="):
 		src, _, _ := strings.Cut(strings.TrimPrefix(o, "--mount=type=bind,source="), ",")
 		return strings.HasSuffix(o, ",readonly") && strings.Count(o, ",") == 3 && !hostPath(src)
@@ -256,6 +261,8 @@ func TestHardeningCheckCatchesWeakenedRun(t *testing.T) {
 		"api socket":              insert("--use-api-socket"),
 		"host env copied":         insert("--env=HOME"),
 		"env file":                insert("--env-file=.env"),
+		"repository env file":     insert("--env-file=/repo/" + runEnvPrefix + "creep-" + testRunID + "-1"),
+		"value on command line":   insert("--env=PGPASSWORD=creep-synthetic-x"),
 		"writable mount":          insert("--mount=type=bind,source=/work/a,target=/a"),
 		"socket mount":            insert("--mount=type=bind,source=/run/docker.sock,target=/a,readonly"),
 		"root user":               insert("--user=0"),
