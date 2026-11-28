@@ -69,9 +69,14 @@ func TestMigrateRunsInSandbox(t *testing.T) {
 	if !slices.Equal(argv[at+1:], []string{"--privileged", "-v", "/:/host"}) || slices.Contains(argv[:at], "--privileged") {
 		t.Errorf("migrate run %q: the step must follow the image", argv)
 	}
-	for _, want := range []string{"--network=creep-" + testRunID, "--workdir=/", "--env=DATABASE_URL=" + db.URL(), "--env=PGPASSWORD=" + db.Password} {
+	for _, want := range []string{"--network=creep-" + testRunID, "--workdir=/"} {
 		if !slices.Contains(argv, want) {
 			t.Errorf("migrate run lacks %s: %q", want, argv)
+		}
+	}
+	for _, want := range []string{"DATABASE_URL=" + db.URL(), "PGPASSWORD=" + db.Password} {
+		if !slices.Contains(rec.envOf(argv), want) {
+			t.Errorf("migrate env file lacks %s: %q", want, rec.envOf(argv))
 		}
 	}
 	checkNoHostData(t, rec)
@@ -170,7 +175,7 @@ func TestAppGetsSyntheticEnv(t *testing.T) {
 			t.Errorf("database %t: .env %q, want %q", withDB, file, want)
 		}
 		for _, line := range strings.Split(strings.TrimSpace(want), "\n") {
-			if line != "" && !slices.Contains(argv, "--env="+line) {
+			if line != "" && !slices.Contains(rec.envOf(argv), line) {
 				t.Errorf("database %t: app env lacks %s", withDB, line)
 			}
 		}
@@ -198,6 +203,9 @@ func checkNoHostData(t *testing.T, rec *recorder) {
 	for _, c := range rec.calls {
 		if strings.Contains(strings.Join(c, " "), hostMarker) {
 			t.Errorf("host data in %q", c)
+		}
+		if env := rec.envOf(c); strings.Contains(strings.Join(env, "\n"), hostMarker) {
+			t.Errorf("host data in the env file of %q: %q", c, env)
 		}
 	}
 }

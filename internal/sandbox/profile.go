@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 )
@@ -109,8 +108,12 @@ func hardenedFlags(rt Runtime, network string) []string {
 
 // runArgs is the only builder of a `run` command line: the global flags,
 // the hardened profile, the network, creep's labels, the spec's checked
-// env and mounts, then the image and its command, which the runtime never
-// reads as flags. No option that publishes a port is ever built.
+// env file and mounts, then the image and its command, which the runtime
+// never reads as flags. No option that publishes a port is ever built.
+// No env value goes on the command line, which any host user can read in
+// the process list: after every check, runArgs writes the values to a
+// file of creep's own (writeRunEnv), which start removes once the CLI
+// has returned.
 func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 	if err := checkSpec(spec); err != nil {
 		return nil, err
@@ -138,7 +141,13 @@ func (s *Sandbox) runArgs(name string, spec Spec) ([]string, error) {
 		args = append(args, "--tmpfs="+t+":"+serviceTmpfs)
 	}
 	args = append(args, "--label="+LabelManaged+"=true", "--label="+LabelRun+"="+s.runID, "--label="+LabelContainer+"="+name)
-	args = append(args, envArgs(spec.Env)...)
+	if len(spec.Env) > 0 {
+		file, err := s.writeRunEnv(name, spec.Env)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "--env-file="+file)
+	}
 	args = append(args, mounts...)
 	args = append(args, spec.Image)
 	return append(args, spec.Cmd...), nil
@@ -190,22 +199,9 @@ func isProxyVar(name string) bool {
 }
 
 // plainValue refuses NUL and line breaks, which no argument or variable
-// needs and which could split an --env value.
+// needs and which could split an env file line.
 func plainValue(v string) bool {
 	return len(v) <= maxValueLen && !strings.ContainsAny(v, "\x00\r\n")
-}
-
-func envArgs(env map[string]string) []string {
-	names := make([]string, 0, len(env))
-	for name := range env {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	args := make([]string, 0, len(names))
-	for _, name := range names {
-		args = append(args, "--env="+name+"="+env[name])
-	}
-	return args
 }
 
 func timeoutOf(spec Spec) time.Duration {
