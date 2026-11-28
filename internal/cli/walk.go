@@ -67,7 +67,7 @@ func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
 	if proofs.trusted {
 		return files, nil
 	}
-	return boundVendor(files, weight), nil
+	return boundVendor(ctx, root, files, weight), nil
 }
 
 // withoutWeight drops the weight of a walk that proves no vendor.

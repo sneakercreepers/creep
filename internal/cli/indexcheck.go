@@ -22,8 +22,11 @@ const (
 	// indexCheckEvery is how many entries are compared between two looks
 	// at the scan deadline.
 	indexCheckEvery = 256
-	// mtimeFloor is 2000-01-01 UTC: git records the time it staged a
-	// file, so an earlier one is made up.
+	// mtimeFloor is 2000-01-01 UTC. git records the file's own mtime when
+	// it stages it; a file dated earlier (an archive that keeps 1970
+	// times, a build that pins SOURCE_DATE_EPOCH) makes the index
+	// disagree. That fails safe: the index is only bounded, never believed
+	// less than no index.
 	mtimeFloor = 946_684_800
 	// missingShare bounds the tracked regular files that may be missing
 	// from disk: one, or one in missingShare, whichever is more. A
@@ -53,6 +56,14 @@ const (
 // vendor without bound; any other is bounded (boundVendor). An archive can
 // still ship an index that agrees with its own tree, since it sets both
 // sides. Past the scan deadline the index does not agree.
+//
+// Edges that make a real index disagree, all failing safe (the vendor it
+// proves is bounded, never hidden without bound): a file older than
+// mtimeFloor; many uncommitted deletions or a sparse checkout with most
+// files absent; a file whose executable bit was changed outside git
+// (core.fileMode false on Unix); a file replaced by a directory; an index
+// whose every tracked file was edited since it was written. Cost:
+// one Lstat per entry (BenchmarkIndexMatchesTree).
 func indexMatchesTree(ctx context.Context, root *os.Root, entries []gitindex.Entry) bool {
 	var exact, missing, regular int
 	for i, e := range entries {

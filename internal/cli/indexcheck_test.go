@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -80,4 +82,32 @@ func repeat(e gitindex.Entry, n int) []gitindex.Entry {
 		out[i] = e
 	}
 	return out
+}
+
+// BenchmarkIndexMatchesTree times the agreement check: one Lstat per
+// entry, here 2,000 tracked files in 20 directories.
+func BenchmarkIndexMatchesTree(b *testing.B) {
+	repo := b.TempDir()
+	var entries []gitindex.Entry
+	for i := range 2000 {
+		name := fmt.Sprintf("d%02d/f%04d.py", i%20, i)
+		path := filepath.Join(repo, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			b.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x = 1\n"), 0o600); err != nil {
+			b.Fatal(err)
+		}
+		entries = append(entries, gitindex.Entry{Path: name, Mode: gitModeFile, Size: 6, MtimeSec: mtimeFloor + 1})
+	}
+	root, err := os.OpenRoot(repo)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer root.Close()
+	for b.Loop() {
+		if !indexMatchesTree(context.Background(), root, entries) {
+			b.Fatal("index disagrees")
+		}
+	}
 }

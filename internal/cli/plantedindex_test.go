@@ -23,6 +23,15 @@ func plantedIndex(files map[string]string, tracked []string, stats map[string]gi
 	return out
 }
 
+// withFile returns files with one more.
+func withFile(files map[string]string, name, content string) map[string]string {
+	out := map[string]string{name: content}
+	for k, v := range files {
+		out[k] = v
+	}
+	return out
+}
+
 // TestPlantedIndexNeverExitsZero (#380, #376 auditor M2): an archive that
 // keeps one decoy file beside an index that disagrees with its tree and an
 // ignore file marking the rest of its code vendor never exits 0: vendor
@@ -50,6 +59,10 @@ func TestPlantedIndexNeverExitsZero(t *testing.T) {
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"absent entries beside an exact decoy", plantedIndex(decoy, []string{"a.py", "b.py", "c.py", "main.py"}, map[string]gitindextest.Stat{
 			"main.py": {Size: uint32(len(helloRoute)), MtimeSec: recordedAt}, "a.py": {MtimeSec: recordedAt}, "b.py": {MtimeSec: recordedAt}, "c.py": {MtimeSec: recordedAt}}),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"decoy padded with a binary file", plantedIndex(withFile(decoy, "pad.bin", strings.Repeat("\x00", 2<<20)), tracked, nil),
+			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
+		{"decoy padded with config", plantedIndex(withFile(decoy, "pad.json", "["+strings.Repeat("1,", 256<<10)+"1]"), tracked, nil),
 			exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"index tracking only missing files", plantedIndex(decoy, []string{"gone.py"}, nil), exitcode.Incomplete, string(report.SkipVendorExceedsRead), exceeds},
 		{"decoy only a .gitignore beside", plantedIndex(map[string]string{".gitignore": "src/\n", "README.md": "# x\n", "src/app.py": "@flask"}, []string{".gitignore", "README.md"}, nil),
@@ -99,6 +112,8 @@ func TestVendorBound(t *testing.T) {
 		{"one byte more", "package a\n", "package bb\n", nil, report.SkipVendorExceedsRead},
 		{"far less", strings.Repeat("x", 4096), "package b\n", nil, report.SkipVendor},
 		{"a large .gitignore does not count", "package a\n", "package bb\n", map[string]string{".gitignore": "deps/\n" + strings.Repeat("#\n", 4096)}, report.SkipVendorExceedsRead},
+		{"binary files do not count", "package a\n", "package bb\n", map[string]string{"pad.bin": strings.Repeat("\x00", 4096)}, report.SkipVendorExceedsRead},
+		{"config does not count", "package a\n", "package bb\n", map[string]string{"pad.json": "[" + strings.Repeat("1,", 2048) + "1]"}, report.SkipVendorExceedsRead},
 		{"text formats do not count", "package a\n", "package bb\n", map[string]string{"README.md": strings.Repeat("x", 4096)}, report.SkipVendorExceedsRead},
 		{"vendor text formats do not count", "package a\n", "package b\n", map[string]string{"deps/README.md": strings.Repeat("x", 4096)}, report.SkipVendor},
 	}
