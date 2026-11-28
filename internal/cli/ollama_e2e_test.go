@@ -67,6 +67,7 @@ func TestOllamaEndToEnd(t *testing.T) {
 // e2eTwin is one variant of one test app and the findings it must have.
 type e2eTwin struct {
 	app, variant string
+	dir          string // absolute: every scan changes the working directory
 	expected     []e2eExpected
 }
 
@@ -79,7 +80,11 @@ type e2eExpected struct {
 // e2eTwins lists every app's vulnerable then safe twin, in name order.
 func e2eTwins(t *testing.T) []e2eTwin {
 	t.Helper()
-	entries, err := os.ReadDir(e2eApps)
+	apps, err := filepath.Abs(e2eApps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(apps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +93,7 @@ func e2eTwins(t *testing.T) []e2eTwin {
 		if !e.IsDir() {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(e2eApps, e.Name(), "expected.json"))
+		data, err := os.ReadFile(filepath.Join(apps, e.Name(), "expected.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +101,9 @@ func e2eTwins(t *testing.T) []e2eTwin {
 		if err := json.Unmarshal(data, &exp); err != nil {
 			t.Fatalf("%s: %v", e.Name(), err)
 		}
-		twins = append(twins, e2eTwin{e.Name(), "vulnerable", exp.Vulnerable}, e2eTwin{e.Name(), "safe", nil})
+		dir := filepath.Join(apps, e.Name())
+		twins = append(twins, e2eTwin{e.Name(), "vulnerable", filepath.Join(dir, "vulnerable"), exp.Vulnerable},
+			e2eTwin{e.Name(), "safe", filepath.Join(dir, "safe"), nil})
 	}
 	return twins
 }
@@ -160,7 +167,7 @@ func e2eWhy(t *testing.T, runs []e2eScan) e2eStep {
 func e2eRepo(t *testing.T, tw e2eTwin) string {
 	t.Helper()
 	repo := t.TempDir()
-	copyTree(t, filepath.Join(e2eApps, tw.app, tw.variant), repo)
+	copyTree(t, tw.dir, repo)
 	t.Chdir(repo)
 	return repo
 }
