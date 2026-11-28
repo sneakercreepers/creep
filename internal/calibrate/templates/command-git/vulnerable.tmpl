@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    branch = request.json("@@field@@")
+    branch = trim(lowercase(branch))
+    output = shell("git log --oneline " + branch)
+    return response(200, output)

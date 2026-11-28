@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "template-note",
+  "class": "template_injection",
+  "pad_after": 0,
+  "slots": {
+    "func": ["post_note", "add_comment", "share_note", "save_memo", "write_status", "pin_message"],
+    "field": ["message", "comment", "memo", "remark", "text_body", "caption"]
+  },
+  "vulnerable": {"sink_line": 4, "marker": "templates.render(note,"},
+  "safe": {"sink_line": 4, "marker": "\"note\": note})"}
+}

@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    job = deserialize_object(request.body(), ["map", "text"])
+    jobs.push("@@queue@@", {"name": to_string(job["name"])})
+    return response(202, none)

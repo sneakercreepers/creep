@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    name = request.query("@@field@@")
+    text = templates.render("Dear {{ who }}, your order has shipped.", {"who": name})
+    return response(200, text)

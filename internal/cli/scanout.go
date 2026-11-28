@@ -185,6 +185,7 @@ func printScan(e env, format string, cal calibrate.Calibration, rep *report.Repo
 // mark and the report files written.
 func printScanText(w io.Writer, cal calibrate.Calibration, rep *report.Report, written []string) {
 	fmt.Fprintf(w, "calibration: %s\n", escapeControl(cal.Header()))
+	fmt.Fprintf(w, "calibration scope: %s\n", report.CalibrationScopeNote)
 	printDiscovery(w, rep.Discovery)
 	printFindings(w, rep.Findings)
 	printGaps(w, rep.Coverage.NotEvaluated)

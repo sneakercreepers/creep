@@ -195,11 +195,14 @@ type NotEvaluated struct {
 // external scanners and the classes they would cover (ADR 0010).
 // NotLookedFor is every class no scan looks for (ADR 0034); New always
 // sets it, and a v1 report written before #365 has none.
+// CalibrationScope is what the calibration measured (ADR 0037); New always
+// sets it, and a v1 report written before #358 has none.
 type Coverage struct {
-	Classes      []ClassCoverage   `json:"classes"`
-	NotEvaluated []NotEvaluated    `json:"not_evaluated"`
-	Scanners     []ScannerCoverage `json:"scanners,omitempty"`
-	NotLookedFor []NotLookedFor    `json:"not_looked_for,omitempty"`
+	Classes          []ClassCoverage   `json:"classes"`
+	NotEvaluated     []NotEvaluated    `json:"not_evaluated"`
+	Scanners         []ScannerCoverage `json:"scanners,omitempty"`
+	NotLookedFor     []NotLookedFor    `json:"not_looked_for,omitempty"`
+	CalibrationScope string            `json:"calibration_scope,omitempty"`
 }
 
 // Report is the JSON contract (schema_version 1) and the input of every
@@ -295,7 +298,10 @@ func checkCoverage(in Input, incomplete bool) (Coverage, error) {
 	if err != nil {
 		return Coverage{}, err
 	}
-	return Coverage{Classes: classes, NotEvaluated: skipped, Scanners: scanners, NotLookedFor: NotLookedForClasses()}, nil
+	return Coverage{
+		Classes: classes, NotEvaluated: skipped, Scanners: scanners,
+		NotLookedFor: NotLookedForClasses(), CalibrationScope: CalibrationScope,
+	}, nil
 }
 
 // runInfo is incomplete unless the run state ended complete and the scan

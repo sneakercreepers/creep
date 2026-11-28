@@ -305,7 +305,7 @@ func TestHeader(t *testing.T) {
 	e := newCacheEnv(t)
 	c, _ := e.run(t, e.options(t, calibrated.Add(23*time.Hour)))
 	h := c.Header()
-	for _, want := range []string{`model "replay-model"`, "tier " + string(c.Tier), "calibrated 2026-11-15", "seed 1", "task set " + c.TaskSet[:12], "prompts v1"} {
+	for _, want := range []string{`model "replay-model"`, "tier " + string(c.Tier), "calibrated 2026-11-15", "seed 1", "task set " + c.TaskSet[:12], "prompts v2"} {
 		if !strings.Contains(h, want) {
 			t.Errorf("header %q lacks %q", h, want)
 		}

@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    name = request.query("@@field@@")
+    path = join("/srv/@@dir@@", name)
+    data = read_file(path)
+    return response(200, data)

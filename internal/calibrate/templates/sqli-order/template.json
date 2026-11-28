@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "id": "sqli-order",
+  "class": "sqli",
+  "pad_after": 0,
+  "slots": {
+    "func": ["list_orders", "sorted_users", "browse_catalog", "show_tickets", "rank_scores", "page_events"],
+    "field": ["sort", "order_by", "sort_by", "arrange", "ordering", "sort_key"],
+    "table": ["orders", "users", "catalog", "tickets", "scores", "events"]
+  },
+  "vulnerable": {"sink_line": 3, "marker": "ORDER BY \" + request.query("},
+  "safe": {"sink_line": 6, "marker": "ORDER BY \" + column"}
+}

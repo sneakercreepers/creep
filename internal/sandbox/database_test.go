@@ -28,10 +28,14 @@ func databaseRun(t *testing.T, rec *recorder) []string {
 
 // databaseProblems checks the database's command line: nothing is
 // mounted (the app's migrate step sets up the schema, #364), the data
-// directories are tmpfs, nothing names a volume, and every variable is
-// the fixed set with synthetic values.
-func databaseProblems(argv []string) []string {
+// directories are tmpfs, nothing names a volume, and every variable, on
+// the command line or in its env file, is the fixed set with synthetic
+// values.
+func databaseProblems(argv, env []string) []string {
 	var problems []string
+	for _, kv := range env {
+		problems = append(problems, envProblem(kv)...)
+	}
 	for _, a := range argv[:slices.Index(argv, DatabaseImage)] {
 		switch {
 		case strings.HasPrefix(a, "--mount="):
@@ -80,20 +84,28 @@ func TestDatabaseMountsNoHostPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	argv := databaseRun(t, rec)
-	if p := append(hardeningProblems(argv), databaseProblems(argv)...); len(p) > 0 {
+	env := rec.envOf(argv)
+	if !slices.Contains(env, "POSTGRES_PASSWORD="+db.Password) {
+		t.Errorf("database env file %q lacks the synthetic password", env)
+	}
+	if p := append(hardeningProblems(argv), databaseProblems(argv, env)...); len(p) > 0 {
 		t.Errorf("database run %q: %v", argv, p)
 	}
-	for _, c := range rec.calls {
-		if strings.Contains(strings.Join(c, " "), hostMarker) {
-			t.Errorf("host data in %q", c)
-		}
-	}
+	checkNoHostData(t, rec)
 	if !strings.HasPrefix(db.Password, "creep-synthetic-") || db.URL() != "postgres://creep:"+db.Password+"@db:5432/app?sslmode=disable" {
 		t.Errorf("database %+v, URL %s", db, db.URL())
 	}
 	for name, weak := range databaseWeakened(argv, repo, s.workReal) {
-		if len(databaseProblems(weak))+len(hardeningProblems(weak)) == 0 {
+		if len(databaseProblems(weak, env))+len(hardeningProblems(weak)) == 0 {
 			t.Errorf("%s: weakened database run %q passed", name, weak)
+		}
+	}
+	for name, weak := range map[string][]string{
+		"host variable in env file": append(slices.Clone(env), "DATABASE_URL=postgres://real:"+hostMarker+"@prod.example/app"),
+		"real password in env file": {"POSTGRES_PASSWORD=" + hostMarker},
+	} {
+		if len(databaseProblems(argv, weak)) == 0 {
+			t.Errorf("%s: weakened database env %q passed", name, weak)
 		}
 	}
 }

@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    raw = base64_decode(request.cookie("@@field@@"))
+    prefs = deserialize_object(raw)
+    return response(200, to_string(prefs["theme"]))

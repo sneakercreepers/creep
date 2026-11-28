@@ -58,6 +58,11 @@
           "description": "Vulnerability classes no creep scan looks for, in any language or tier, so the report says nothing about them. Always written since #365; a report written before it has none (ADR 0034).",
           "type": "array",
           "items": { "$ref": "#/definitions/notLookedFor" }
+        },
+        "calibration_scope": {
+          "description": "What the calibration behind the tier and each class's detected / tasks measured: one language-neutral pseudocode task set, so it rates following data from an input to a sink, not knowledge of the repository's languages. Always written since #358; a report written before it has none (ADR 0037).",
+          "type": "string",
+          "enum": ["language_neutral"]
         }
       }
     },

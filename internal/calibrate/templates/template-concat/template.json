@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "id": "template-concat",
+  "class": "template_injection",
+  "pad_after": 0,
+  "slots": {
+    "func": ["shipped_mail", "notify_buyer", "order_notice", "ship_message", "greet_customer", "mail_body"],
+    "field": ["customer", "buyer", "recipient", "client", "person", "addressee"]
+  },
+  "vulnerable": {"sink_line": 4, "marker": "templates.render(source, {})"},
+  "safe": {"sink_line": 3, "marker": "{\"who\": name}"}
+}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sneakercreepers/creep/internal/bench"
+	"github.com/sneakercreepers/creep/internal/calibrate"
 	"github.com/sneakercreepers/creep/internal/config"
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
@@ -56,9 +57,9 @@ func TestBenchRecalibrateMeasuresCost(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatal(err)
 	}
-	// 100 tasks, 3 tool probes, and the first context probe it misses.
-	want := bench.CalibrationCost{Calls: 104, InputTokens: 0, OutputTokens: res.Calibration.OutputTokens, Tier: "S", Fit: false, Unfit: "below_chance"}
-	if res.Calibration == nil || *calCalls != 104 || res.Calibration.OutputTokens == 0 {
+	// 64 tasks, 3 tool probes, and the first context probe it misses.
+	want := bench.CalibrationCost{Calls: calibrate.TaskCount + 4, InputTokens: 0, OutputTokens: res.Calibration.OutputTokens, Tier: "S", Fit: false, Unfit: "below_chance"}
+	if res.Calibration == nil || *calCalls != calibrate.TaskCount+4 || res.Calibration.OutputTokens == 0 {
 		t.Fatalf("calibration %+v after %d calls", res.Calibration, *calCalls)
 	}
 	got := *res.Calibration

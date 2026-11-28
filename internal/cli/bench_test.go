@@ -17,6 +17,7 @@ import (
 	"github.com/sneakercreepers/creep/internal/exitcode"
 	"github.com/sneakercreepers/creep/internal/gateway"
 	"github.com/sneakercreepers/creep/internal/models"
+	"github.com/sneakercreepers/creep/internal/report"
 	"github.com/sneakercreepers/creep/internal/state"
 )
 
@@ -250,13 +251,19 @@ func TestBenchClassesAreCoverageClasses(t *testing.T) {
 	for _, c := range classCoverage(coverageInput{}) {
 		known = append(known, c.Class)
 	}
+	if len(known) != len(calibrate.Classes()) {
+		t.Errorf("coverage classes %v: calibration's, every readable class", known)
+	}
+	// A case may also name a class no scan looks for (idor since #358
+	// dropped it from calibration): every report lists those, so the run
+	// never claims it covered one.
+	for _, n := range report.NotLookedForClasses() {
+		known = append(known, n.Class)
+	}
 	for _, c := range cases {
 		if !slices.Contains(known, c.Class) {
-			t.Errorf("case %s: class %q is not in %v", c.ID, c.Class, known)
+			t.Errorf("case %s: class %q is neither covered nor listed as not looked for: %v", c.ID, c.Class, known)
 		}
-	}
-	if len(known) != len(calibrate.Classes())+len(uncalibratedClasses) {
-		t.Errorf("coverage classes %v: calibration's and the uncalibrated readable ones", known)
 	}
 }
 

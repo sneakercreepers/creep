@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// placeholderMark delimits a slot in a .tmpl file: @@name@@. Neither Python
-// nor JavaScript uses "@@", so it cannot clash with code such as f-strings.
+// placeholderMark delimits a slot in a .tmpl file: @@name@@. The
+// pseudocode has no "@@", so it cannot clash with template text.
 const placeholderMark = "@@"
 
 var (
@@ -22,24 +22,32 @@ var (
 	wordRe  = regexp.MustCompile(`[A-Za-z0-9_$]+`)
 )
 
-// keywordList holds the reserved words and common globals of both languages.
-// A slot value that equals one could change what the code means.
-const keywordList = `and as assert async await break case catch class
-	const constructor continue debugger def default del delete do elif else enum
-	except export extends false False finally for from function global if import
-	in instanceof is lambda let new None nonlocal not null of or pass print
-	prototype raise require return self super switch this throw true True try
-	typeof undefined var void while with yield`
+// keywordList holds the pseudocode's keywords; the builtins come from the
+// task prompt (builtins). A slot value that equals either could change what
+// the code means, for example a handler renamed to shell.
+const keywordList = `and else false for handler if in let none not or return true while`
 
 func isKeyword(w string) bool {
-	return slices.Contains(strings.Fields(keywordList), w)
+	if slices.Contains(strings.Fields(keywordList), w) {
+		return true
+	}
+	calls, fields := builtins()
+	if fields[w] {
+		return true
+	}
+	for call := range calls {
+		if slices.Contains(strings.Split(call, "."), w) {
+			return true
+		}
+	}
+	return false
 }
 
-func validateTemplate(spec templateSpec, dir, vulnCode, safeCode string, fillers map[Language][]string) error {
-	if err := validateHeader(spec, dir, fillers); err != nil {
+func validateTemplate(spec templateSpec, dir, vulnCode, safeCode string, fillers []string) error {
+	if err := validateHeader(spec, dir); err != nil {
 		return err
 	}
-	if err := validateSlots(spec.Slots, codeWords(vulnCode, safeCode, fillers[spec.Language])); err != nil {
+	if err := validateSlots(spec.Slots, codeWords(vulnCode, safeCode, fillers)); err != nil {
 		return err
 	}
 	if err := validatePlaceholders(spec.Slots, vulnCode, safeCode); err != nil {
@@ -51,7 +59,7 @@ func validateTemplate(spec templateSpec, dir, vulnCode, safeCode string, fillers
 	return validateVariant("safe", spec.Safe, spec.PadAfter, safeCode, vulnCode)
 }
 
-func validateHeader(spec templateSpec, dir string, fillers map[Language][]string) error {
+func validateHeader(spec templateSpec, dir string) error {
 	switch {
 	case spec.Version != schemaVersion:
 		return fmt.Errorf("version %d, want %d", spec.Version, schemaVersion)
@@ -59,8 +67,6 @@ func validateHeader(spec templateSpec, dir string, fillers map[Language][]string
 		return fmt.Errorf("id %q must equal the directory name and be lowercase words joined by -", spec.ID)
 	case !slices.Contains(Classes(), spec.Class):
 		return fmt.Errorf("unknown class %q", spec.Class)
-	case len(fillers[spec.Language]) == 0:
-		return fmt.Errorf("language %q has no fillers", spec.Language)
 	}
 	return nil
 }
@@ -105,7 +111,7 @@ func checkSlotValue(v string, words map[string]bool) error {
 }
 
 // codeWords returns every word of both variants, placeholders removed, and
-// of the language's fillers.
+// of the fillers.
 func codeWords(vulnCode, safeCode string, fillers []string) map[string]bool {
 	text := placeholderRe.ReplaceAllString(vulnCode+"\n"+safeCode, " ")
 	text += "\n" + strings.Join(fillers, "\n")

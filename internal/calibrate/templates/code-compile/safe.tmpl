@@ -1,0 +1,7 @@
+handler @@func@@(request):
+    formula = request.json("@@field@@")
+    if formula not in ["x * 2", "x * 3"]:
+        return response(400, none)
+    scorer = make_function("x", "return " + formula)
+    result = scorer(10)
+    return response(200, result)

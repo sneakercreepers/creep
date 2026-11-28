@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "id": "path-read",
+  "class": "path_traversal",
+  "pad_after": 0,
+  "slots": {
+    "func": ["download", "fetch_report", "get_invoice", "read_export", "open_manual", "show_receipt"],
+    "field": ["file_name", "doc", "document", "item", "entry_name", "key"],
+    "dir": ["reports", "invoices", "exports", "manuals", "receipts", "statements"]
+  },
+  "vulnerable": {"sink_line": 4, "marker": "path = join("},
+  "safe": {"sink_line": 6, "marker": "real_path(join("}
+}

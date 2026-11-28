@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    upload = request.file("@@field@@")
+    target = "/srv/@@dir@@/" + upload.filename
+    write_file(target, upload.data)
+    return response(201, none)

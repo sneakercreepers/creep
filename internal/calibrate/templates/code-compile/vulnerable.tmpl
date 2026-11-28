@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    formula = trim(request.json("@@field@@"))
+    scorer = make_function("x", "return " + formula)
+    result = scorer(10)
+    return response(200, result)

@@ -16,12 +16,12 @@ func TestAnswerValidate(t *testing.T) {
 		{"safe", &taskAnswer{Class: classNone}, true},
 		{"safe with a class", &taskAnswer{Class: "sqli"}, false},
 		{"safe with a line", &taskAnswer{Class: classNone, Line: 3}, false},
-		{"vulnerable", &taskAnswer{Vulnerable: true, Class: "idor", Line: 4}, true},
+		{"vulnerable", &taskAnswer{Vulnerable: true, Class: "code_injection", Line: 4}, true},
 		{"vulnerable class none", &taskAnswer{Vulnerable: true, Class: classNone, Line: 4}, false},
 		{"unknown class", &taskAnswer{Vulnerable: true, Class: "xss", Line: 4}, false},
-		{"line 0", &taskAnswer{Vulnerable: true, Class: "idor"}, false},
-		{"negative line", &taskAnswer{Vulnerable: true, Class: "idor", Line: -1}, false},
-		{"line too large", &taskAnswer{Vulnerable: true, Class: "idor", Line: maxAnswerLine + 1}, false},
+		{"line 0", &taskAnswer{Vulnerable: true, Class: "code_injection"}, false},
+		{"negative line", &taskAnswer{Vulnerable: true, Class: "code_injection", Line: -1}, false},
+		{"line too large", &taskAnswer{Vulnerable: true, Class: "code_injection", Line: maxAnswerLine + 1}, false},
 		{"tool", &toolAnswer{Tool: toolListDir, Argument: "lib/x"}, true},
 		{"unknown tool", &toolAnswer{Tool: "exec", Argument: "ls"}, false},
 		{"empty argument", &toolAnswer{Tool: toolReadFile}, false},
@@ -67,7 +67,7 @@ func TestSchemasAndGrammars(t *testing.T) {
 // A byte bounds a token, so the cap holds for every tokenizer. The task
 // prompt names every class and the tools prompt every tool.
 func TestSystemPrompts(t *testing.T) {
-	const maxSystemBytes = 1024
+	const maxSystemBytes = 2048
 	for name, p := range map[string]string{"task": taskSystem, "tools": toolsSystem, "context": contextSystem} {
 		if p == "" || len(p) > maxSystemBytes {
 			t.Errorf("%s prompt is %d bytes, want 1-%d", name, len(p), maxSystemBytes)

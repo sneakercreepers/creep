@@ -23,16 +23,15 @@ func TestAssessFitness(t *testing.T) {
 		reason UnfitReason
 	}{
 		{"perfect", func(*Result) {}, ""},
-		{"40 of 64 right is above chance", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 7, 4: 3}) }, ""},
-		{"39 of 64 right is not", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 7, 4: 4}) }, UnfitBelowChance},
-		{"half the safe twins flagged passes", func(r *Result) { flag(r, 0, 7); flag(r, 2, 7); flag(r, 3, 2) }, ""},
-		{"most safe twins flagged", func(r *Result) { flag(r, 0, 7); flag(r, 2, 7); flag(r, 3, 3) }, UnfitFlagsSafeTwins},
+		{"40 of 64 right is above chance", func(r *Result) { missVulnerable(r, map[int]int{0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 4}) }, ""},
+		{"39 of 64 right is not", func(r *Result) { missVulnerable(r, map[int]int{0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 4, 6: 1}) }, UnfitBelowChance},
+		{"half the safe twins flagged passes", func(r *Result) { flag(r, 0, 4); flag(r, 2, 4); flag(r, 5, 4); flag(r, 7, 4) }, ""},
+		{"most safe twins flagged", func(r *Result) { flag(r, 0, 4); flag(r, 2, 4); flag(r, 5, 4); flag(r, 7, 4); flag(r, 6, 1) }, UnfitFlagsSafeTwins},
 		{"every twin flagged, every vulnerable task right", func(r *Result) {
 			for i := range PlannedClasses() {
 				flag(r, i, r.Classes[i].SafeTwins)
 			}
 		}, UnfitBelowChance},
-		{"unplanned classes do not count", func(r *Result) { flag(r, 5, 7); flag(r, 6, 7); missVulnerable(r, map[int]int{7: 4}) }, ""},
 		{"no safe twins", func(r *Result) {
 			for i := range r.Classes {
 				r.Classes[i].SafeTwins = 0
@@ -87,15 +86,15 @@ func TestUnfitModelRefused(t *testing.T) {
 }
 
 // The recorded tier-M model is fit: the floor leaves a fit model alone.
-// Its one planned safe twin not called safe is the ssrf twin it answered
-// invalidly twice.
+// Its two safe twins not called safe are the template_injection twin it
+// flagged and the ssrf twin it answered invalidly twice.
 func TestFixtureModelIsFit(t *testing.T) {
 	rep, _ := fromFixture(t, "seed1_tier_m")
 	r, err := Run(context.Background(), testOptions(t, 1, rep.send))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Fitness{Fit: true, Planned: ClassScore{Score: newScore(62, 64), SafeTwins: 32, SafeFlagged: 1}}
+	want := Fitness{Fit: true, Planned: ClassScore{Score: newScore(59, 64), SafeTwins: 32, SafeFlagged: 2}}
 	if !r.Fitness.sameVerdict(want) {
 		t.Errorf("fitness %+v, want %+v", r.Fitness, want)
 	}

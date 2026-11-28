@@ -1,0 +1,7 @@
+handler @@func@@(request):
+    column = request.query("@@field@@")
+    if column not in ["title", "created"]:
+        return response(400, none)
+    sql = "SELECT id, title FROM @@table@@ ORDER BY " + column
+    rows = db.query(sql)
+    return response(200, rows)

@@ -123,6 +123,44 @@ func TestOldCacheKeysNeverRead(t *testing.T) {
 	}
 }
 
+// v05TaskSet is the task-set hash of seed 1 under v0.5's Python and
+// JavaScript templates (its TestGenerateGolden), and v05PromptVersion its
+// prompts.
+const (
+	v05TaskSet       = "0320e1388fbfc57ee8d26dd165659c348f3fc361651cb86e2c0aa07143a98983"
+	v05PromptVersion = 1
+)
+
+// Acceptance (#358): a calibration cached by v0.5 is never served after
+// the upgrade. Under its own key it is never looked up; its result signed
+// under the new key still names the old task set and prompts, so it is
+// refused. Either way the model is measured again on the neutral set.
+func TestV05CacheNotServed(t *testing.T) {
+	for _, atNewKey := range []bool{false, true} {
+		e := newCacheEnv(t)
+		first, _ := e.run(t, e.options(t, calibrated))
+		newPath := e.cacheFile(t)
+		if err := os.Remove(newPath); err != nil {
+			t.Fatal(err)
+		}
+		old := e.keyFields(t)
+		old.TaskSet, old.PromptVersion = v05TaskSet, v05PromptVersion
+		stale := first.Result
+		stale.TaskSet, stale.PromptVersion = v05TaskSet, v05PromptVersion
+		key := cacheKey(old)
+		if atNewKey {
+			key = strings.TrimSuffix(filepath.Base(newPath), ".json")
+		}
+		e.saveRaw(t, key, stale)
+		later := calibrated.Add(time.Hour)
+		got, calls := e.run(t, e.options(t, later))
+		if got.Cached || calls == 0 || got.TaskSet == v05TaskSet || got.PromptVersion != PromptVersion {
+			t.Fatalf("new key %v: cached=%v calls=%d task set %s v%d; want a new run on the neutral set",
+				atNewKey, got.Cached, calls, got.TaskSet, got.PromptVersion)
+		}
+	}
+}
+
 func (e *cacheEnv) keyFields(t *testing.T) cacheKeyFields {
 	t.Helper()
 	tasks := mustGenerate(t, cacheSeed)
