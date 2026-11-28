@@ -30,13 +30,35 @@ const (
 // ErrInvalid wraps every reason Parse refuses an index.
 var ErrInvalid = errors.New("git index")
 
-// Parse returns the tracked paths of a version 2, 3 or 4 index with
+// Entry is one tracked path with the stat data git recorded for it, so a
+// caller can check the index against the working tree (#380).
+type Entry struct {
+	Path     string
+	Mode     uint32 // git's mode: 0100644, 0100755, 0120000 (link) or 0160000 (gitlink)
+	Size     uint32 // the file size, truncated to 32 bits as git stores it
+	MtimeSec uint32 // the file's modification time when git last recorded it
+}
+
+// Parse returns the tracked paths of an index Entries accepts.
+func Parse(data []byte) ([]string, error) {
+	entries, err := Entries(data)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, len(entries))
+	for i, e := range entries {
+		paths[i] = e.Path
+	}
+	return paths, nil
+}
+
+// Entries returns the tracked entries of a version 2, 3 or 4 index with
 // a SHA-1 or SHA-256 checksum. The checksum is verified first and decides
 // the hash length, so a misread can never yield made-up paths. An index it
 // cannot read whole, one that needs an extension it does not know (split
 // and sparse indexes), and one written without a checksum (index.skipHash)
 // are errors: the caller then treats every vendor tree as unproven.
-func Parse(data []byte) ([]string, error) {
+func Entries(data []byte) ([]Entry, error) {
 	hashLen, err := hashLength(data)
 	if err != nil {
 		return nil, err
@@ -56,15 +78,17 @@ func Parse(data []byte) ([]string, error) {
 	if int64(count) > int64(len(body)/(statBytes+hashLen+3)) {
 		return nil, fmt.Errorf("%w: %d entries cannot fit in %d bytes", ErrInvalid, count, len(body))
 	}
-	paths := make([]string, 0, count)
+	entries := make([]Entry, 0, count)
 	prev := ""
 	for range count {
+		e := r.stat()
 		if prev, err = r.entry(prev); err != nil {
 			return nil, err
 		}
-		paths = append(paths, prev)
+		e.Path = prev
+		entries = append(entries, e)
 	}
-	return paths, r.extensions()
+	return entries, r.extensions()
 }
 
 // hashLength is 20 for a SHA-1 index and 32 for a SHA-256 one: the
@@ -89,6 +113,20 @@ type reader struct {
 	hashLen int
 	version uint32
 	total   int // path bytes returned so far
+}
+
+// stat reads the stat block of the entry at r.off when it is there whole;
+// entry then refuses an entry cut short.
+func (r *reader) stat() Entry {
+	if len(r.data)-r.off < statBytes {
+		return Entry{}
+	}
+	b := r.data[r.off:]
+	return Entry{
+		MtimeSec: binary.BigEndian.Uint32(b[8:]),
+		Mode:     binary.BigEndian.Uint32(b[24:]),
+		Size:     binary.BigEndian.Uint32(b[36:]),
+	}
 }
 
 // entry reads one index entry and returns its path. prev is the path of

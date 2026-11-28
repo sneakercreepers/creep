@@ -176,7 +176,10 @@
       "required": ["path", "reason"],
       "properties": {
         "path": { "type": "string" },
-        "reason": { "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language", "unchanged", "not_code", "binary"] }
+        "reason": {
+          "description": "vendor, generated, minified, not_code, binary and unchanged are left out by design; any other reason makes the run incomplete. vendor_exceeds_read is a file in an ignored, untracked tree whose git index disagrees with the working tree, when such vendor would hide more code bytes than discovery reads (#380). It was added in v1 additively: a reader validating against an older copy of this schema with a strict enum rejects it.",
+          "enum": ["read_failed", "too_large", "line_too_long", "redact_failed", "run_full", "send_failed", "budget", "lines_shifted", "vendor", "generated", "minified", "not_regular", "invalid_path", "parse_failed", "syntax_error", "truncated", "unsupported_language", "unchanged", "not_code", "binary", "vendor_exceeds_read"]
+        }
       }
     },
     "dataHandling": {

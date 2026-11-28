@@ -25,6 +25,13 @@ type Spec struct {
 	Count    int    // entry count in the header; 0 means len(Paths)
 	Ext      []byte // raw bytes after the entries
 	NoSign   bool
+	Stats    map[string]Stat // by path; a path not named is a regular file of size and mtime 0
+}
+
+// Stat is the stat data Build writes for one entry. A zero Mode is a
+// regular file (0100644).
+type Stat struct {
+	Mode, Size, MtimeSec uint32
 }
 
 // Build writes an index the way git does (gitformat-index.txt).
@@ -51,7 +58,8 @@ func Build(s Spec) []byte {
 
 func writeEntry(b *bytes.Buffer, s Spec, prev, p string) {
 	start := b.Len()
-	b.Write(make([]byte, statBytes+s.HashLen))
+	b.Write(statBlock(s.Stats[p]))
+	b.Write(make([]byte, s.HashLen))
 	flags := uint16(min(len(p), 0xfff)) //nolint:gosec // G115: bounded by min
 	if s.Extended {
 		flags |= flagExtended
@@ -70,6 +78,19 @@ func writeEntry(b *bytes.Buffer, s Spec, prev, p string) {
 	b.WriteString(p)
 	n := b.Len() - start
 	b.Write(make([]byte, (n+8)&^7-n))
+}
+
+// statBlock is ctime, mtime, dev, ino, mode, uid, gid and size, as git
+// lays them out; only mtime seconds, mode and size are set.
+func statBlock(st Stat) []byte {
+	if st.Mode == 0 {
+		st.Mode = 0o100644
+	}
+	b := make([]byte, statBytes)
+	binary.BigEndian.PutUint32(b[8:], st.MtimeSec)
+	binary.BigEndian.PutUint32(b[24:], st.Mode)
+	binary.BigEndian.PutUint32(b[36:], st.Size)
+	return b
 }
 
 // Sign appends the checksum of body: SHA-256 when hashLen says so, SHA-1

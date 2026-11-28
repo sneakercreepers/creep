@@ -14,10 +14,24 @@ import (
 // full, and it gives the tripwire nothing.
 const helloRoute = "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef index():\n    return \"ok\"\n"
 
-// withGitIndex adds a .git/index to files that tracks every file except
-// those at or under one of installed, plus extra paths git tracks that are
-// not files on disk (a submodule). It is how a scan tells an installed
-// dependency tree from committed code.
+// recordedAt is the mtime a test index records: before the test writes
+// its files, as when git staged them and nothing changed since.
+const recordedAt = 1_700_000_000
+
+// gitStats is what git records for each tracked file in files: its size,
+// at recordedAt, so the index agrees with the tree (indexMatchesTree).
+func gitStats(files map[string]string, tracked []string) map[string]gitindextest.Stat {
+	stats := map[string]gitindextest.Stat{}
+	for _, p := range tracked {
+		stats[p] = gitindextest.Stat{Size: uint32(len(files[p])), MtimeSec: recordedAt} //nolint:gosec // G115: test sizes
+	}
+	return stats
+}
+
+// withGitIndex adds a .git/index, as git writes it over files, that
+// tracks every file except those at or under one of installed, plus extra
+// paths git tracks that are not files on disk (a submodule). It is how a
+// scan tells an installed dependency tree from committed code.
 func withGitIndex(files map[string]string, installed []string, extra ...string) map[string]string {
 	out := map[string]string{}
 	tracked := slices.Clone(extra)
@@ -28,7 +42,7 @@ func withGitIndex(files map[string]string, installed []string, extra ...string) 
 		}
 	}
 	slices.Sort(tracked)
-	out[gitIndexPath] = string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked}))
+	out[gitIndexPath] = string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: tracked, Stats: gitStats(files, tracked)}))
 	return out
 }
 
@@ -144,7 +158,7 @@ func TestScanInstalledTreesStayByDesign(t *testing.T) {
 		{"tree in many languages", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/gyp/Find.cs": "class X {}\n", "deps/b/src/b.cc": "int x;\n", "deps/z/main.zig": "pub fn main() void {}\n"}, []string{"deps"}),
 			exitcode.OK, "", []string{"deps/gyp/Find.cs  vendor", "deps/b/src/b.cc  vendor", "deps/z/main.zig  vendor"}},
 		{"sha-256 version 4 index", map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express",
-			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{".gitignore", "main.py"}}))},
+			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{".gitignore", "main.py"}, Stats: gitStats(map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n"}, []string{".gitignore", "main.py"})}))},
 			exitcode.OK, "", []string{"node_modules/app/app.js  vendor"}},
 	})
 }
