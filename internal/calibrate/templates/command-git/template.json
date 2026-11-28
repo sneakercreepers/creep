@@ -7,6 +7,6 @@
     "func": ["show_log", "branch_log", "list_commits", "history", "recent_changes", "commit_log"],
     "field": ["branch_name", "ref", "rev", "refname", "head", "tag"]
   },
-  "vulnerable": {"sink_line": 4, "marker": "shell(\"git log"},
-  "safe": {"sink_line": 6, "marker": "run_process([\"git\""}
+  "vulnerable": {"sink_line": 4, "marker": "trim(lowercase(branch))"},
+  "safe": {"sink_line": 6, "marker": "if not matches(branch,"}
 }

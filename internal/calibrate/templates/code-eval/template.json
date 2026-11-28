@@ -7,6 +7,6 @@
     "func": ["calculate", "compute", "evaluate_sum", "quote_price", "convert_units", "estimate"],
     "field": ["expr", "formula_text", "amount", "value", "input_expr", "calc"]
   },
-  "vulnerable": {"sink_line": 3, "marker": "eval(expression)"},
-  "safe": {"sink_line": 3, "marker": "to_number(expression)"}
+  "vulnerable": {"sink_line": 3, "marker": "trim(request.query("},
+  "safe": {"sink_line": 5, "marker": "if not matches(expression,"}
 }

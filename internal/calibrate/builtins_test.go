@@ -114,8 +114,8 @@ func TestBuiltinsParsedFromPrompt(t *testing.T) {
 	calls, fields := builtins()
 	for _, want := range []string{
 		"request.query", "request.json", "request.cookie", "request.file", "request.body",
-		"db.query", "store.find", "store.first", "shell", "run_process", "templates.render",
-		"eval", "make_function", "deserialize_object", "parse_json", "real_path", "get",
+		"db.query", "store.find", "store.first", "shell", "templates.render",
+		"eval", "make_function", "deserialize_object", "parse_json", "real_path", "matches",
 	} {
 		if !calls[want] {
 			t.Errorf("task prompt does not define %s(", want)

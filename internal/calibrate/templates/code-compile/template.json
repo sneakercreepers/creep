@@ -7,6 +7,6 @@
     "func": ["score_item", "apply_formula", "rate_entry", "weight_value", "grade", "compute_score"],
     "field": ["formula_src", "rule", "scoring", "method", "recipe", "strategy"]
   },
-  "vulnerable": {"sink_line": 3, "marker": "make_function("},
-  "safe": {"sink_line": 7, "marker": "factor * 10"}
+  "vulnerable": {"sink_line": 3, "marker": "trim(request.json("},
+  "safe": {"sink_line": 5, "marker": "if formula not in ["}
 }

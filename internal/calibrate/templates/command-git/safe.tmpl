@@ -1,7 +1,7 @@
 handler @@func@@(request):
     branch = request.json("@@field@@")
-    branch = trim(lowercase(branch))
+    branch = lowercase(branch)
     if not matches(branch, "^[a-z0-9][a-z0-9-]{0,39}$"):
         return response(400, none)
-    output = run_process(["git", "log", "--oneline", branch])
+    output = shell("git log --oneline " + branch)
     return response(200, output)

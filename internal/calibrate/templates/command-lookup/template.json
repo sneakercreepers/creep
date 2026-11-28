@@ -7,6 +7,6 @@
     "func": ["resolve_domain", "dns_lookup", "check_dns", "query_name", "lookup_host", "name_info"],
     "field": ["domain_name", "target", "fqdn", "hostname", "server", "zone"]
   },
-  "vulnerable": {"sink_line": 3, "marker": "shell(\"nslookup \" + domain)"},
-  "safe": {"sink_line": 5, "marker": "run_process([\"nslookup\", domain])"}
+  "vulnerable": {"sink_line": 3, "marker": "trim(request.query("},
+  "safe": {"sink_line": 5, "marker": "if domain not in ["}
 }

@@ -76,13 +76,10 @@ func TestLanguageWordsCatchPerLanguageCode(t *testing.T) {
 	}
 }
 
-// unsafeCalls run caller text as code or a command, or rebuild typed
-// objects: no safe twin calls one, whatever its class.
-var unsafeCalls = []string{"shell(", "eval(", "make_function(", "deserialize_object("}
-
-// A safe twin has no defensible finding in any class (#162): it makes no
-// unsafe call and compiles no template but a string literal. That it uses
-// its own class's mitigation is TestSafeTwinsUseTheirClassMitigation.
+// A safe twin has no defensible finding in any class (#162): it calls no
+// other class's dangerous builtin and compiles no template but a string
+// literal. Its own class's builtin it calls behind that class's mitigation
+// (TestSafeTwinsUseTheirClassMitigation).
 func TestSafeTwinsCleanInEveryClass(t *testing.T) {
 	cat, err := defaultCatalog()
 	if err != nil {
@@ -91,9 +88,9 @@ func TestSafeTwinsCleanInEveryClass(t *testing.T) {
 	renderLiteral := regexp.MustCompile(`templates\.render\(([^"]|$)`)
 	for _, tpl := range cat.templates {
 		code := strings.Join(tpl.safe.lines, "\n")
-		for _, call := range unsafeCalls {
-			if strings.Contains(code, call) {
-				t.Errorf("%s safe twin calls %s", tpl.id, call)
+		for class, sink := range classSinks {
+			if class != tpl.class && sink.MatchString(code) {
+				t.Errorf("%s safe twin calls %s, the %s sink", tpl.id, sink, class)
 			}
 		}
 		if renderLiteral.MatchString(code) {

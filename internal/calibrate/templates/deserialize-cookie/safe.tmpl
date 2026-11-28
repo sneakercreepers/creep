@@ -1,4 +1,4 @@
 handler @@func@@(request):
     raw = base64_decode(request.cookie("@@field@@"))
-    prefs = parse_json(raw)
+    prefs = deserialize_object(raw, ["map", "text"])
     return response(200, to_string(prefs["theme"]))

@@ -8,5 +8,5 @@
     "queue": ["imports", "batch", "nightly", "exports_q", "workers", "backlog"]
   },
   "vulnerable": {"sink_line": 2, "marker": "deserialize_object(request.body())"},
-  "safe": {"sink_line": 2, "marker": "parse_json(request.body())"}
+  "safe": {"sink_line": 2, "marker": "deserialize_object(request.body(), ["}
 }

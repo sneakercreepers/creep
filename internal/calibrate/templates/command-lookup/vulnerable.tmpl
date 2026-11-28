@@ -1,4 +1,4 @@
 handler @@func@@(request):
-    domain = request.query("@@field@@")
+    domain = trim(request.query("@@field@@"))
     output = shell("nslookup " + domain)
     return response(200, output)

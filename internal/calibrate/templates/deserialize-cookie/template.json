@@ -8,5 +8,5 @@
     "field": ["prefs_cookie", "settings", "session", "state", "profile_cookie", "saved"]
   },
   "vulnerable": {"sink_line": 3, "marker": "deserialize_object(raw)"},
-  "safe": {"sink_line": 3, "marker": "parse_json(raw)"}
+  "safe": {"sink_line": 3, "marker": "deserialize_object(raw, ["}
 }

@@ -1,8 +1,7 @@
 handler @@func@@(request):
     formula = request.json("@@field@@")
-    factors = {"double": 2, "triple": 3}
-    factor = get(factors, formula)
-    if factor == none:
+    if formula not in ["x * 2", "x * 3"]:
         return response(400, none)
-    result = factor * 10
+    scorer = make_function("x", "return " + formula)
+    result = scorer(10)
     return response(200, result)
