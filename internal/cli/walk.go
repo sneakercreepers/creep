@@ -50,12 +50,29 @@ func (f repoFiles) sources() int {
 // archive can carry its own .git/index and an ignore file that would list
 // the whole repository vendor (#376 auditor M2), so the walk runs again
 // with no vendor proven and every file is read like first-party code.
+// When the index disagrees with the working tree (a planted one), vendor
+// that hides more code bytes than discovery reads stays unread but is
+// listed vendor_exceeds_read, so the run is incomplete (boundVendor,
+// #380): one decoy file cannot make a planted index pass. An index that
+// agrees with the tree, as git writes it, is not bounded.
 func walkRepo(ctx context.Context, root *os.Root) (repoFiles, error) {
-	files, err := walkOnce(ctx, root, newVendorProofs(ctx, root))
-	if err != nil || readsCode(files.paths) || !hasVendor(files.gaps) {
-		return files, err
+	proofs := newVendorProofs(ctx, root)
+	files, weight, err := walkOnce(ctx, root, proofs)
+	if err != nil {
+		return repoFiles{}, err
 	}
-	return walkOnce(ctx, root, noVendorProofs(ctx, root))
+	if !readsCode(files.paths) && hasVendor(files.gaps) {
+		return withoutWeight(walkOnce(ctx, root, noVendorProofs(ctx, root)))
+	}
+	if proofs.trusted {
+		return files, nil
+	}
+	return boundVendor(ctx, root, files, weight), nil
+}
+
+// withoutWeight drops the weight of a walk that proves no vendor.
+func withoutWeight(files repoFiles, _ codeBytes, err error) (repoFiles, error) {
+	return files, err
 }
 
 // readsCode reports whether discovery opens any of paths other than an
@@ -69,13 +86,13 @@ func readsCode(paths []string) bool {
 	return false
 }
 
-func walkOnce(ctx context.Context, root *os.Root, proofs *vendorProofs) (repoFiles, error) {
+func walkOnce(ctx context.Context, root *os.Root, proofs *vendorProofs) (repoFiles, codeBytes, error) {
 	w := repoWalk{proofs: proofs, tree: newWalkedTree()}
 	if err := fs.WalkDir(root.FS(), ".", w.visit); err != nil {
-		return repoFiles{}, fmt.Errorf("walk repository: %w", err)
+		return repoFiles{}, codeBytes{}, fmt.Errorf("walk repository: %w", err)
 	}
 	resolveLinks(ctx, root, &w.files, w.links, w.tree, w.proofs)
-	return w.files, nil
+	return w.files, w.weight, nil
 }
 
 // hasVendor reports whether any gap is vendor.
@@ -94,6 +111,7 @@ type repoWalk struct {
 	tree   *walkedTree
 	files  repoFiles
 	links  []pendingLink // gaps decided after the walk, in files.gaps order
+	weight codeBytes
 }
 
 func (w *repoWalk) visit(rel string, d fs.DirEntry, err error) error {
@@ -117,8 +135,12 @@ func (w *repoWalk) visit(rel string, d fs.DirEntry, err error) error {
 	}
 	if reason, send := entryGap(rel, w.proofs); !send {
 		w.files.gaps = append(w.files.gaps, report.NotEvaluated{Path: rel, Reason: reason})
+		if reason == report.SkipVendor {
+			w.weight.add(rel, d, true)
+		}
 		return nil
 	}
+	w.weight.add(rel, d, false)
 	w.files.paths = append(w.files.paths, rel)
 	if discover.MaybeSource(rel) {
 		w.tree.markRead(rel)

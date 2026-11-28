@@ -144,6 +144,7 @@ func TestVendorProofsStopAtDeadline(t *testing.T) {
 			repo := t.TempDir()
 			writeTreeFile(t, repo, ".gitignore", "deps/\n")
 			writeTreeFile(t, repo, "deps/ok/addon.c", "int x;\n")
+			writeTreeFile(t, repo, "app.py", "print(1)\n")
 			writeTreeFile(t, repo, gitIndexPath, string(gitindextest.Build(gitindextest.Spec{Version: 2, Paths: []string{"app.py"}})))
 			root, err := os.OpenRoot(repo)
 			if err != nil {

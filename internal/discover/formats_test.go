@@ -143,3 +143,28 @@ func TestFormatsNameNoLanguage(t *testing.T) {
 		}
 	}
 }
+
+// TestReadsAsText (#380): only a file discovery reads whole as text counts
+// toward the CLI's vendor bound; binary bytes, a NUL, a text format never
+// opened and config (not_code when too large) do not.
+func TestReadsAsText(t *testing.T) {
+	tests := []struct {
+		name string
+		head string
+		want bool
+	}{
+		{"app.zig", "pub fn main() void {}\n", true},
+		{"logo.png", "text named like an image\n", true},
+		{"logo.png", "\x89PNG\r\n\x1a\n\x00", false},
+		{"pad.bin", strings.Repeat("\x00", 64), false},
+		{"app.py", "x = 1\x00\n", false},
+		{"notes.md", "# notes\n", false},
+		{"settings.json", "{}\n", false},
+		{"blob", "\xff\xfe\xfd\x00", false},
+	}
+	for _, tt := range tests {
+		if got := ReadsAsText(tt.name, []byte(tt.head)); got != tt.want {
+			t.Errorf("ReadsAsText(%q, %q) = %v, want %v", tt.name, tt.head, got, tt.want)
+		}
+	}
+}
