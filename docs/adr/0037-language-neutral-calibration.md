@@ -1,6 +1,6 @@
 # ADR 0037: Language-neutral calibration
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
 - **Supersedes:** decision D5 of [ADR 0017](0017-language-agnostic-analysis.md) ("calibration templates stay Python and JS").

@@ -3,7 +3,7 @@
 - **Status:** Accepted (maintainer, 2026-11-27)
 - **Date:** 2026-11-27
 - **Deciders:** @Ludocius
-- **Amended by:** [ADR 0037](0037-language-neutral-calibration.md) (Proposed: the planned classes are every calibrated class, 8 tasks each; see [Amendment](#amendment-358-adr-0037-proposed))
+- **Amended by:** [ADR 0037](0037-language-neutral-calibration.md) (Accepted: the planned classes are every calibrated class, 8 tasks each; see [Amendment](#amendment-358-adr-0037-proposed))
 - **Fitness function:** the row "An unfit model is refused or every finding is labeled" of [architecture.md §9](../architecture.md#9-fitness-functions)
 - **Changes:** exit code 3 gains a reason (a model the fitness floor refuses); a new CLI flag `--allow-unfit-model` (`scan`, `resume`); JSON v1 and SARIF gain an optional `unreliable_model` on a finding and on the run, Markdown and the text summary print the label; the calibration result (cache entry) gains `fitness` and per-class `safe_twins` and `safe_flagged`; the tier rules read only the classes the planner can plan; `creep bench --recalibrate` adds an optional `calibration` object to the bench results v1; `--stats` prints a `calibration:` line. All additive: no exit code, field or flag is removed or retyped, no new dependency, package or network path.
 
@@ -50,7 +50,7 @@ A result that does not score every calibrated class is unfit, so a zero value is
 - Tests: `calibrate/fitness_test.go:TestUnfitModelRefused` (a replayed model that answers "vulnerable" to every task is refused, and again from the cache with no call), `TestAssessFitness` (both floors at their boundaries, unplanned classes ignored), `cli/unfit_test.go:TestScanRefusesUnfitModel` (exit 3, no call past the floor, no report; no config key; refused on `estimate` and `mcp`), `TestAllowUnfitModelLabelsFindings` (label in every format), `report/unreliable_test.go`, cache-forging cases in `TestUntrustedCacheRecalibrates`, `TestPlannedClassesMatchPlannerKinds`, `cli/benchcal_test.go`, `tools/benchgate:TestNightlyBenchMeasuresCalibration`.
 - `template_injection`, `code_injection` and `insecure_deserialization` (the last two since #369) are planned but have no calibration tasks, so neither the tier nor the floor can read them; their findings carry the `unreliable_model` label like any other when the floor is overridden, and `cli/plannermap_test.go:TestPlannedClassesMatchPlannerKinds` fails on any other planned class that is neither calibrated nor listed uncalibrated. #358 replaces the task set and covers adding them; `PlannedClasses` and the floor carry over, and it may stop measuring `idor` and `missing_auth`.
 
-## Amendment (#358, ADR 0037; Proposed)
+## Amendment (#358, ADR 0037; Accepted by the maintainer, 2026-11-27)
 
 The language-neutral task set makes the planned classes and the calibrated classes the same eight: `sqli`, `nosql_injection`, `command_injection`, `path_traversal`, `ssrf`, `template_injection`, `code_injection`, `insecure_deserialization`, 8 tasks each (4 safe twins), 64 in all. `idor`, `missing_auth` and `prototype_pollution` are no longer measured. The counts this ADR states stay as they are, now over every task rather than 64 of 100:
 
