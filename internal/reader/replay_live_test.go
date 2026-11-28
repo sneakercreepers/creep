@@ -24,7 +24,7 @@ const liveTier = TierS
 
 const liveNote = "Recorded live from the pinned Ollama model by .github/workflows/live-record.yml through the gateway (egress.log, redaction); " +
 	"reply bodies normalized by gatewaytest.Normalize (message content byte for byte, no response ID). " +
-	"Outcomes are what the model answered, not expected.json: the model is unfit (ADR 0036)."+liveVaries
+	"Outcomes are what the model answered, not expected.json: the model is unfit (ADR 0036)." + liveVaries
 
 // liveVaries is said in every live header: a rerun answers differently.
 const liveVaries = " Live replies vary between runs of the same pinned model (the committed reader run agreed with expected.json on 7 of 18, a rerun on 9 of 18): the committed run is the reviewed one."
