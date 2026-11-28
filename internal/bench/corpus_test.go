@@ -113,7 +113,7 @@ func matchesAny(res []*regexp.Regexp, s string) bool {
 // The check itself catches a copied line, with slots filled.
 func TestDisjointnessCatchesCopiedLine(t *testing.T) {
 	templates := templateLines(t)
-	copied := `    found = mongo.find_one("accounts", {"email": name})`
+	copied := `    found = store.first("accounts", {"email": name})`
 	if !matchesAny(templates, normalize(copied)) {
 		t.Fatal("a line copied from nosql-find-one with its slots filled was not caught")
 	}

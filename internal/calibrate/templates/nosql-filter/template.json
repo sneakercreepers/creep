@@ -6,7 +6,7 @@
   "slots": {
     "func": ["search_docs", "list_tasks", "query_devices", "find_assets", "filter_jobs", "browse_files"],
     "field": ["filter", "selector", "conditions", "spec", "rule", "constraint"],
-    "coll": ["docs", "tasks", "devices", "assets", "jobs", "files"]
+    "coll": ["docs", "tasks", "devices", "assets", "runs", "files"]
   },
   "vulnerable": {"sink_line": 3, "marker": "parse_json(request.query("},
   "safe": {"sink_line": 3, "marker": "{\"status\": to_string(request.query("}

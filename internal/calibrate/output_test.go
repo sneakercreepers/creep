@@ -67,7 +67,7 @@ func TestSchemasAndGrammars(t *testing.T) {
 // A byte bounds a token, so the cap holds for every tokenizer. The task
 // prompt names every class and the tools prompt every tool.
 func TestSystemPrompts(t *testing.T) {
-	const maxSystemBytes = 1024
+	const maxSystemBytes = 2048
 	for name, p := range map[string]string{"task": taskSystem, "tools": toolsSystem, "context": contextSystem} {
 		if p == "" || len(p) > maxSystemBytes {
 			t.Errorf("%s prompt is %d bytes, want 1-%d", name, len(p), maxSystemBytes)

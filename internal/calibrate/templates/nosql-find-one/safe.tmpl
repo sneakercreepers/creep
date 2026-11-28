@@ -1,4 +1,4 @@
 handler @@func@@(request):
     name = to_string(request.json("@@field@@"))
-    found = mongo.find_one("@@coll@@", {"@@field@@": name})
+    found = store.first("@@coll@@", {"@@field@@": name})
     return response(200, found != none)

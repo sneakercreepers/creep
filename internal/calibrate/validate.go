@@ -22,18 +22,25 @@ var (
 	wordRe  = regexp.MustCompile(`[A-Za-z0-9_$]+`)
 )
 
-// keywordList holds the pseudocode's keywords and every builtin the task
-// prompt describes (prompts/task.txt). A slot value that equals one could
-// change what the code means, for example a handler renamed to shell.
-const keywordList = `and else false for handler if in let none not or return true while
-	request query json cookie file body response db mongo find find_one shell
-	run_process read_file write_file real_path join starts_with http_get
-	http_post url_of parse_url templates render eval make_function
-	deserialize_object parse_json to_string to_number matches trim lowercase
-	base64_decode session_user`
+// keywordList holds the pseudocode's keywords; the builtins come from the
+// task prompt (builtins). A slot value that equals either could change what
+// the code means, for example a handler renamed to shell.
+const keywordList = `and else false for handler if in let none not or return true while`
 
 func isKeyword(w string) bool {
-	return slices.Contains(strings.Fields(keywordList), w)
+	if slices.Contains(strings.Fields(keywordList), w) {
+		return true
+	}
+	calls, fields := builtins()
+	if fields[w] {
+		return true
+	}
+	for call := range calls {
+		if slices.Contains(strings.Split(call, "."), w) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateTemplate(spec templateSpec, dir, vulnCode, safeCode string, fillers []string) error {

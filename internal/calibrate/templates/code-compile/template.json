@@ -8,5 +8,5 @@
     "field": ["formula_src", "rule", "scoring", "method", "recipe", "strategy"]
   },
   "vulnerable": {"sink_line": 3, "marker": "make_function("},
-  "safe": {"sink_line": 7, "marker": "scorers.get(formula)"}
+  "safe": {"sink_line": 7, "marker": "factor * 10"}
 }

@@ -1,8 +1,8 @@
 handler @@func@@(request):
     formula = request.json("@@field@@")
-    scorers = {"double": double_it, "square": square_it}
-    scorer = scorers.get(formula)
-    if scorer == none:
+    factors = {"double": 2, "triple": 3}
+    factor = get(factors, formula)
+    if factor == none:
         return response(400, none)
-    result = scorer(10)
+    result = factor * 10
     return response(200, result)
