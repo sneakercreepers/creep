@@ -14,6 +14,10 @@ import (
 // full, and it gives the tripwire nothing.
 const helloRoute = "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef index():\n    return \"ok\"\n"
 
+// largeRoute is helloRoute with more first-party code than a test
+// install holds, as the vendor bound needs for a complete run (#380).
+var largeRoute = helloRoute + strings.Repeat("# first-party code outweighs the install\n", 100)
+
 // withGitIndex adds a .git/index to files that tracks every file except
 // those at or under one of installed, plus extra paths git tracks that are
 // not files on disk (a submodule). It is how a scan tells an installed
@@ -89,15 +93,15 @@ func TestScanDoesNotTrustDeclaredSkips(t *testing.T) {
 		{"generated header", withGitIndex(map[string]string{"app.py": generated + "@flask"}, none), exitcode.GateExceeded, "", []string{"probable  sqli  app.py:"}},
 		{"padded with one long line", withGitIndex(map[string]string{"app.js": padding + "@express"}, none), exitcode.GateExceeded, "", []string{"probable  command_injection  app.js:"}},
 		{"min.js name", withGitIndex(map[string]string{"app.min.js": "@express"}, none), exitcode.GateExceeded, "", []string{"probable  command_injection  app.min.js:"}},
-		{"ignored venv", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "venv/\n", "venv/lib/app.py": "@flask"}, []string{"venv"}), exitcode.OK, "",
+		{"ignored venv", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": "venv/\n", "venv/lib/app.py": "@flask"}, []string{"venv"}), exitcode.OK, "",
 			[]string{"venv/lib/app.py  vendor", "coverage excludes 1 file left out by design (vendor 1), listed above"}},
-		{"ignored build output", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "/out\n", "out/app.js": "@express"}, []string{"out"}), exitcode.OK, "",
+		{"ignored build output", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": "/out\n", "out/app.js": "@express"}, []string{"out"}), exitcode.OK, "",
 			[]string{"out/app.js  vendor"}},
-		{"ignored by a file pattern", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "*.gen.js\n", "web/app.gen.js": "@express"}, []string{"web/app.gen.js"}), exitcode.OK, "",
+		{"ignored by a file pattern", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": "*.gen.js\n", "web/app.gen.js": "@express"}, []string{"web/app.gen.js"}), exitcode.OK, "",
 			[]string{"web/app.gen.js  vendor"}},
-		{"ignored in info/exclude", withGitIndex(map[string]string{"main.py": helloRoute, gitExcludePath: "local/\n", "local/app.py": "@flask"}, []string{"local", ".git"}), exitcode.OK, "",
+		{"ignored in info/exclude", withGitIndex(map[string]string{"main.py": largeRoute, gitExcludePath: "local/\n", "local/app.py": "@flask"}, []string{"local", ".git"}), exitcode.OK, "",
 			[]string{"local/app.py  vendor"}},
-		{"generated, no route", withGitIndex(map[string]string{"main.py": helloRoute, "api_pb2.py": generated + "import os\n"}, none), exitcode.OK, "",
+		{"generated, no route", withGitIndex(map[string]string{"main.py": largeRoute, "api_pb2.py": generated + "import os\n"}, none), exitcode.OK, "",
 			[]string{"api_pb2.py  generated", "coverage excludes 1 file left out by design (generated 1), listed above"}},
 	})
 }
@@ -113,7 +117,7 @@ func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 	none := []string(nil)
 	runBydesignCases(t, []bydesignCase{
 		{"committed ignored tree", withGitIndex(express, none), exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"committed file in an ignored tree", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/index.js": "x()\n", "deps/app.js": "@express"},
+		{"committed file in an ignored tree", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": "deps/\n", "deps/index.js": "x()\n", "deps/app.js": "@express"},
 			[]string{"deps/app.js"}), exitcode.GateExceeded, "", []string{"probable  command_injection  deps/app.js:"}},
 		{"negated file", withGitIndex(map[string]string{".gitignore": "*.js\n!app.js\n", "app.js": "@express"}, []string{"app.js"}), exitcode.GateExceeded, "", []string{"probable  command_injection  app.js:"}},
 		{"tree inside a submodule", withGitIndex(map[string]string{".gitignore": "node_modules/\n", "web/node_modules/app/app.js": "@express"}, []string{"web"}, "web"),
@@ -128,7 +132,7 @@ func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 		{"no git index", express, exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
 		{"unreadable git index", map[string]string{".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express", gitIndexPath: "DIRC not an index"},
 			exitcode.GateExceeded, "", []string{"probable  command_injection  node_modules/app/app.js:"}},
-		{"untracked, not ignored", withGitIndex(map[string]string{"main.py": helloRoute, "vendor/x/y.go": "package y\n"}, []string{"vendor"}),
+		{"untracked, not ignored", withGitIndex(map[string]string{"main.py": largeRoute, "vendor/x/y.go": "package y\n"}, []string{"vendor"}),
 			exitcode.OK, "", []string{"language go 1, language python 1"}},
 	})
 }
@@ -139,11 +143,11 @@ func TestScanDoesNotTrustForgedMarks(t *testing.T) {
 // helpers in other languages.
 func TestScanInstalledTreesStayByDesign(t *testing.T) {
 	runBydesignCases(t, []bydesignCase{
-		{"tree with a C extension", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": ".venv/\n", ".venv/lib/m/_speedups.c": "int x;\n", ".venv/lib/m/__init__.py": "x = 1\n"}, []string{".venv"}),
+		{"tree with a C extension", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": ".venv/\n", ".venv/lib/m/_speedups.c": "int x;\n", ".venv/lib/m/__init__.py": "x = 1\n"}, []string{".venv"}),
 			exitcode.OK, "", []string{".venv/lib/m/_speedups.c  vendor", "coverage excludes 2 files left out by design (vendor 2), listed above"}},
-		{"tree in many languages", withGitIndex(map[string]string{"main.py": helloRoute, ".gitignore": "deps/\n", "deps/gyp/Find.cs": "class X {}\n", "deps/b/src/b.cc": "int x;\n", "deps/z/main.zig": "pub fn main() void {}\n"}, []string{"deps"}),
+		{"tree in many languages", withGitIndex(map[string]string{"main.py": largeRoute, ".gitignore": "deps/\n", "deps/gyp/Find.cs": "class X {}\n", "deps/b/src/b.cc": "int x;\n", "deps/z/main.zig": "pub fn main() void {}\n"}, []string{"deps"}),
 			exitcode.OK, "", []string{"deps/gyp/Find.cs  vendor", "deps/b/src/b.cc  vendor", "deps/z/main.zig  vendor"}},
-		{"sha-256 version 4 index", map[string]string{"main.py": helloRoute, ".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express",
+		{"sha-256 version 4 index", map[string]string{"main.py": largeRoute, ".gitignore": "node_modules/\n", "node_modules/app/app.js": "@express",
 			gitIndexPath: string(gitindextest.Build(gitindextest.Spec{Version: 4, HashLen: 32, Paths: []string{".gitignore", "main.py"}}))},
 			exitcode.OK, "", []string{"node_modules/app/app.js  vendor"}},
 	})
