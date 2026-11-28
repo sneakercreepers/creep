@@ -53,8 +53,12 @@ func TestOllamaEndToEnd(t *testing.T) {
 		t.Fatalf("no app directories under %s", e2eApps)
 	}
 	res.Init, res.Doctor, res.Estimate = e2ePrelude(t, twins[0])
+	writeE2EResults(t, out, res)
 	for _, tw := range twins {
 		res.Runs = append(res.Runs, e2eScanTwin(t, tw)...)
+		// Rewritten after every twin, so a go test timeout still leaves
+		// the results so far for the artifact.
+		writeE2EResults(t, out, res)
 	}
 	res.Why = e2eWhy(t, res.Runs)
 	writeE2EResults(t, out, res)
