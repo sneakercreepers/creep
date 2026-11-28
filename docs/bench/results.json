@@ -285,8 +285,6 @@
     }
   ],
   "unmeasured_classes": [
-    "missing_auth",
-    "prototype_pollution",
     "code_injection",
     "insecure_deserialization"
   ],

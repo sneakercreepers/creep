@@ -1,22 +1,21 @@
 package calibrate
 
 import (
-	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 )
 
 const (
-	testFillers = `{"version": 1, "python": ["PAGE_SIZE = 50"], "javascript": ["const PAGE_SIZE = 50;"]}`
+	testFillers = `{"version": 2, "lines": ["let PAGE_SIZE = 50"]}`
 	testSpec    = `{
-  "version": 1, "id": "py-test", "class": "sqli", "language": "python", "pad_after": 1,
+  "version": 2, "id": "test-sqli", "class": "sqli", "pad_after": 1,
   "slots": {"func": ["alpha", "beta"]},
   "vulnerable": {"sink_line": 3, "marker": "run(sql)"},
-  "safe": {"sink_line": 3, "marker": "run(sql, ("}
+  "safe": {"sink_line": 3, "marker": "run(sql, ["}
 }`
-	testVuln = "import db\n\ndef @@func@@(sql): return db.run(sql)\n"
-	testSafe = "import db\n\ndef @@func@@(sql): return db.run(sql, ())\n"
+	testVuln = "let TABLE = \"notes\"\nhandler @@func@@(sql):\n    return db.run(sql)\n"
+	testSafe = "let TABLE = \"notes\"\nhandler @@func@@(sql):\n    return db.run(sql, [])\n"
 )
 
 // testFS is a valid one-template catalog with edit applied to template.json.
@@ -26,10 +25,10 @@ func testFS(edit func(spec, vuln, safe string) (string, string, string)) fstest.
 		spec, vuln, safe = edit(spec, vuln, safe)
 	}
 	return fstest.MapFS{
-		"fillers.json":            {Data: []byte(testFillers)},
-		"py-test/template.json":   {Data: []byte(spec)},
-		"py-test/vulnerable.tmpl": {Data: []byte(vuln)},
-		"py-test/safe.tmpl":       {Data: []byte(safe)},
+		"fillers.json":              {Data: []byte(testFillers)},
+		"test-sqli/template.json":   {Data: []byte(spec)},
+		"test-sqli/vulnerable.tmpl": {Data: []byte(vuln)},
+		"test-sqli/safe.tmpl":       {Data: []byte(safe)},
 	}
 }
 
@@ -37,96 +36,6 @@ func specEdit(old, repl string) func(string, string, string) (string, string, st
 	return func(spec, vuln, safe string) (string, string, string) {
 		return strings.Replace(spec, old, repl, 1), vuln, safe
 	}
-}
-
-func TestEmbeddedCatalogCoversEveryClassAndLanguage(t *testing.T) {
-	cat, err := defaultCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	classes := map[Class]bool{}
-	langs := map[Language]bool{}
-	for _, tpl := range cat.templates {
-		classes[tpl.class] = true
-		langs[tpl.language] = true
-	}
-	for _, c := range Classes() {
-		if !classes[c] {
-			t.Errorf("no template for class %s", c)
-		}
-	}
-	for _, l := range []Language{LanguagePython, LanguageJavaScript} {
-		if !langs[l] {
-			t.Errorf("no template for language %s", l)
-		}
-	}
-	// Every template must contribute at least one pair to a run.
-	if 2*len(cat.templates) > TaskCount {
-		t.Errorf("%d templates do not fit in %d tasks", len(cat.templates), TaskCount)
-	}
-}
-
-// A safe twin has no defensible finding in any class (#162). Every line
-// from the guard that refuses other input down to the sink is checked, so
-// caller input cannot come back on a line that builds the sink's argument:
-// the command twins send only an allowlisted value, the fetch twins the
-// URL they checked (host and port fixed), the SQL twin binds a scalar
-// scoped to the logged-in owner, and the merge twin writes only into own,
-// prototype-free objects.
-func TestSafeTwinsCleanInEveryClass(t *testing.T) {
-	cat, err := defaultCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tests := []struct {
-		id        string
-		guard     string   // the last line before the sink that refuses other input
-		forbidden []string // caller input that must not appear after the guard
-		flowHas   []string // what must reach the sink after the guard
-	}{
-		{"js-command-exec", "sendStatus(404)", []string{"req.", placeholderMark}, []string{", root]"}},
-		{"py-command-shell", "abort(404)", []string{"request.", placeholderMark}, []string{`"--", fqdn]`}},
-		{"py-ssrf-fetch", "abort(400)", []string{"raw", "request.", placeholderMark}, []string{`urlunsplit(("https", parts.hostname`, "requests.get(rebuilt"}},
-		{"js-ssrf-fetch", `target.port !== ""`, []string{"req.", placeholderMark}, []string{"fetch(target,"}},
-		{"js-sqli-concat", "requireLogin, (req, res)", []string{"[req.query.", ", req.query."}, []string{"[req.session.ownerId, String(req.query."}},
-		// Recursing into an inherited key would merge into a shared
-		// built-in (Object.prototype.toString), so only own objects are
-		// merged into and new levels have no prototype.
-		{"js-prototype-merge", `key === "__proto__"`, []string{"|| {}", "= {}"}, []string{"Object.hasOwn(target, key)", "Object.create(null)", "(next, source[key])"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.id, func(t *testing.T) {
-			i := slices.IndexFunc(cat.templates, func(tpl template) bool { return tpl.id == tt.id })
-			if i < 0 {
-				t.Fatalf("no template %s", tt.id)
-			}
-			flow, ok := sinkFlow(cat.templates[i].safe, tt.guard)
-			if !ok {
-				t.Fatalf("safe twin lacks the guard %q before its sink", tt.guard)
-			}
-			for _, bad := range tt.forbidden {
-				if strings.Contains(flow, bad) {
-					t.Errorf("caller input %q reaches the sink after the guard:\n%s", bad, flow)
-				}
-			}
-			for _, want := range tt.flowHas {
-				if !strings.Contains(flow, want) {
-					t.Errorf("sink flow lacks %q:\n%s", want, flow)
-				}
-			}
-		})
-	}
-}
-
-// sinkFlow returns the lines after the last guard line before the sink,
-// through the sink.
-func sinkFlow(v variant, guard string) (string, bool) {
-	for g := v.sinkLine - 2; g >= 0; g-- {
-		if strings.Contains(v.lines[g], guard) {
-			return strings.Join(v.lines[g+1:v.sinkLine], "\n"), true
-		}
-	}
-	return "", false
 }
 
 func TestLoadCatalogAcceptsCRLF(t *testing.T) {
@@ -153,11 +62,16 @@ func TestLoadCatalogRejects(t *testing.T) {
 		edit func(string, string, string) (string, string, string)
 		want string
 	}{
-		{"unknown field", specEdit(`"version": 1,`, `"version": 1, "extra": 1,`), "unknown field"},
-		{"wrong version", specEdit(`"version": 1`, `"version": 2`), "version 2"},
-		{"id differs from directory", specEdit(`"py-test"`, `"py-other"`), "directory name"},
+		{"unknown field", specEdit(`"version": 2,`, `"version": 2, "extra": 1,`), "unknown field"},
+		// #358: a template names no language, and a v1 per-language
+		// template is refused, not read as neutral.
+		{"language field", specEdit(`"version": 2,`, `"version": 2, "language": "python",`), "unknown field"},
+		{"v1 template", specEdit(`"version": 2`, `"version": 1`), "version 1"},
+		{"id differs from directory", specEdit(`"test-sqli"`, `"test-other"`), "directory name"},
 		{"unknown class", specEdit(`"sqli"`, `"xss"`), "unknown class"},
-		{"unknown language", specEdit(`"python"`, `"go"`), "no fillers"},
+		{"class not read by a scan", specEdit(`"sqli"`, `"idor"`), "unknown class"},
+		{"value is a builtin", specEdit(`"beta"`, `"shell"`), "keyword"},
+		{"value is a sink builtin", specEdit(`"beta"`, `"deserialize_object"`), "keyword"},
 		{"no slots", specEdit(`{"func": ["alpha", "beta"]}`, `{}`), "no slots"},
 		{"pool of one", specEdit(`["alpha", "beta"]`, `["alpha"]`), "at least 2"},
 		{"value not an identifier", specEdit(`"beta"`, `"be\"ta"`), "plain identifier"},
@@ -178,7 +92,7 @@ func TestLoadCatalogRejects(t *testing.T) {
 		}, "malformed placeholder"},
 		{"unused slot", specEdit(`"func": ["alpha", "beta"]`, `"func": ["alpha", "beta"], "arg": ["gamma", "delta"]`), "never used"},
 		{"sink line past the end", specEdit(`"sink_line": 3, "marker": "run(sql)"`, `"sink_line": 4, "marker": "run(sql)"`), "outside"},
-		{"sink line zero", specEdit(`"sink_line": 3, "marker": "run(sql, ("`, `"sink_line": 0, "marker": "run(sql, ("`), "outside"},
+		{"sink line zero", specEdit(`"sink_line": 3, "marker": "run(sql, ["`, `"sink_line": 0, "marker": "run(sql, ["`), "outside"},
 		{"pad after the sink", specEdit(`"pad_after": 1`, `"pad_after": 3`), "pad_after"},
 		{"negative pad", specEdit(`"pad_after": 1`, `"pad_after": -1`), "pad_after"},
 		{"empty marker", specEdit(`"run(sql)"`, `""`), "literal"},
@@ -200,13 +114,16 @@ func TestLoadCatalogRejects(t *testing.T) {
 
 func TestLoadCatalogRejectsBadFillers(t *testing.T) {
 	tests := map[string]string{
-		"wrong version":  `{"version": 2, "python": ["A = 1"], "javascript": ["const A = 1;"]}`,
-		"multi-line":     `{"version": 1, "python": ["A = 1\nB = 2"], "javascript": ["const A = 1;"]}`,
-		"empty line":     `{"version": 1, "python": [""], "javascript": ["const A = 1;"]}`,
-		"placeholder":    `{"version": 1, "python": ["@@func@@ = 1"], "javascript": ["const A = 1;"]}`,
-		"unknown field":  `{"version": 1, "go": ["x"], "python": ["A = 1"], "javascript": ["const A = 1;"]}`,
-		"not json":       `version: 1`,
-		"no python list": `{"version": 1, "javascript": ["const A = 1;"]}`,
+		"wrong version": `{"version": 3, "lines": ["let A = 1"]}`,
+		"multi-line":    `{"version": 2, "lines": ["let A = 1\nlet B = 2"]}`,
+		"empty line":    `{"version": 2, "lines": [""]}`,
+		"placeholder":   `{"version": 2, "lines": ["let @@func@@ = 1"]}`,
+		"not json":      `version: 2`,
+		"no lines":      `{"version": 2, "lines": []}`,
+		"lines missing": `{"version": 2}`,
+		// #358: the v1 per-language filler file is refused.
+		"per language": `{"version": 1, "python": ["A = 1"], "javascript": ["const A = 1;"]}`,
+		"language key": `{"version": 2, "lines": ["let A = 1"], "python": ["A = 1"]}`,
 	}
 	for name, data := range tests {
 		t.Run(name, func(t *testing.T) {

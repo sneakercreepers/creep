@@ -1,0 +1,6 @@
+handler @@func@@(request):
+    expression = request.query("@@field@@")
+    if not matches(expression, "^[0-9]{1,9}( [+*-] [0-9]{1,9}){0,8}$"):
+        return response(400, none)
+    total = eval(expression)
+    return response(200, total)

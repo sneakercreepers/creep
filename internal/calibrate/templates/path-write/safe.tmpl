@@ -1,0 +1,8 @@
+handler @@func@@(request):
+    upload = request.file("@@field@@")
+    stored = upload.filename
+    if not matches(stored, "^[a-z0-9_]{1,32}$"):
+        return response(400, none)
+    target = "/srv/@@dir@@/" + stored
+    write_file(target, upload.data)
+    return response(201, none)

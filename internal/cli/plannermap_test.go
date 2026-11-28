@@ -63,9 +63,9 @@ func TestSinkKindMappingIsExhaustive(t *testing.T) {
 }
 
 // calibrate.PlannedClasses, the classes that decide the tier and the
-// fitness floor (#363), are exactly the calibrated classes a mapped
-// discover kind reports: a kind the planner learns, or one it drops,
-// fails here until the tier rule follows.
+// fitness floor (#363), are exactly the classes a mapped discover kind
+// reports, and every one of them is calibrated (#358): a kind the planner
+// learns, or one it drops, fails here until the task set follows.
 func TestPlannedClassesMatchPlannerKinds(t *testing.T) {
 	planned := map[string]bool{}
 	for k := discover.SinkKind(1); k != 0; k++ {
@@ -73,16 +73,10 @@ func TestPlannedClassesMatchPlannerKinds(t *testing.T) {
 			continue
 		}
 		class := calibrate.Class(kindClass(k))
-		switch {
-		case slices.Contains(calibrate.Classes(), class):
-			planned[string(class)] = true
-		case !slices.Contains(uncalibratedClasses, string(class)):
-			// A planned class must be measured, or be named as one calibration
-			// has no tasks for (template, code injection and deserialization
-			// since #365): those cannot enter the tier or the floor until the
-			// task set (#358) measures them.
-			t.Errorf("discover kind %s plans class %s, which is neither calibrated nor listed uncalibrated", k, class)
+		if !slices.Contains(calibrate.Classes(), class) {
+			t.Errorf("discover kind %s plans class %s, which calibration does not measure", k, class)
 		}
+		planned[string(class)] = true
 	}
 	want := map[string]bool{}
 	for _, c := range calibrate.PlannedClasses() {

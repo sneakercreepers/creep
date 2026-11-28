@@ -5,30 +5,27 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
 
 // classTasks is how many tasks Generate gives each class, for every seed:
-// 64 of them in the planned classes.
-var classTasks = map[Class]int{
-	ClassSQLi: 14, ClassNoSQLInjection: 8, ClassCommandInjection: 14, ClassPathTraversal: 14,
-	ClassSSRF: 14, ClassIDOR: 14, ClassMissingAuth: 14, ClassPrototypePollution: 8,
-}
+// 8 each, 64 in all, every one of them in a planned class.
+const classTasks = 8
 
-// perfectResult is a full-marks calibration over 100 tasks, half of each
+// perfectResult is a full-marks calibration over 64 tasks, half of each
 // class's tasks safe twins.
 func perfectResult() Result {
 	r := Result{
-		Structured: newStructuredCheck(100, 0),
+		Structured: newStructuredCheck(TaskCount, 0),
 		Tools:      newToolCheck(3, 3),
 		Context:    ContextCheck{EffectiveBytes: 128 << 10},
-		Overall:    newScore(100, 100),
+		Overall:    newScore(TaskCount, TaskCount),
 	}
 	for _, c := range Classes() {
-		n := classTasks[c]
-		r.Classes = append(r.Classes, ClassScore{Class: c, Score: newScore(n, n), SafeTwins: n / 2})
+		r.Classes = append(r.Classes, ClassScore{Class: c, Score: newScore(classTasks, classTasks), SafeTwins: classTasks / 2})
 	}
 	return r
 }
@@ -57,21 +54,25 @@ func TestAssignTier(t *testing.T) {
 		{"context just under 32 KiB", func(r *Result) { r.Context.EffectiveBytes = 32<<10 - 1 }, TierS},
 		{"one tool probe wrong", func(r *Result) { r.Tools = newToolCheck(3, 2) }, TierM},
 		{"no tool probes", func(r *Result) { r.Tools = newToolCheck(0, 0) }, TierM},
-		{"class at L floor", func(r *Result) { r.Classes[0].Score = newScore(11, 14) }, TierL},
-		{"class just under L floor", func(r *Result) { r.Classes[0].Score = newScore(10, 14) }, TierM},
-		{"class at M floor", func(r *Result) { r.Classes[0].Score = newScore(7, 14) }, TierM},
-		{"class just under M floor", func(r *Result) { r.Classes[0].Score = newScore(6, 14) }, TierS},
+		{"3 of 64 invalid passes", func(r *Result) { r.Structured = newStructuredCheck(TaskCount, 3) }, TierL},
+		{"4 of 64 invalid fails", func(r *Result) { r.Structured = newStructuredCheck(TaskCount, 4) }, TierS},
+		{"class at L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 1}) }, TierL},
+		{"class just under L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 2}) }, TierM},
+		{"class at M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3}) }, TierM},
+		{"class just under M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 4}) }, TierS},
+		// #358: the classes calibration did not measure before decide the
+		// tier like the others.
+		{"deserialization just under M floor", func(r *Result) { missVulnerable(r, map[int]int{7: 4}) }, TierS},
+		{"template injection just under L floor", func(r *Result) { missVulnerable(r, map[int]int{5: 2}) }, TierM},
 		{"class not measured", func(r *Result) { r.Classes[3].Score = newScore(0, 0) }, TierS},
 		{"class missing", func(r *Result) { r.Classes = r.Classes[1:] }, TierS},
-		// The overall bound is over the 64 planned tasks: L needs 55, M 44.
-		{"planned overall at L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 2: 3, 3: 3}) }, TierL},
-		{"planned overall under L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 2: 3, 3: 3, 4: 1}) }, TierM},
-		{"planned overall at M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 6}) }, TierM},
-		{"planned overall under M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 7, 2: 7, 3: 7}) }, TierS},
-		// #363: classes the planner cannot plan neither lower nor lift a tier,
-		// and the all-tasks score is reported, not gated on.
-		{"unplanned classes all wrong", func(r *Result) { missVulnerable(r, map[int]int{5: 7, 6: 7, 7: 4}) }, TierL},
-		{"unplanned class not measured", func(r *Result) { r.Classes[7].Score = newScore(0, 0) }, TierL},
+		// The overall bound is over the 64 planned tasks: L needs 55, which
+		// every class at its L floor (7 of 8, 56 in all) already passes, and
+		// M needs 44, which binds before the class floor (5 of 8, 40 in all).
+		{"every class at L floor", func(r *Result) { missVulnerable(r, map[int]int{0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1}) }, TierL},
+		{"planned overall at M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2}) }, TierM},
+		{"planned overall under M floor", func(r *Result) { missVulnerable(r, map[int]int{0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3}) }, TierS},
+		// The all-tasks score is reported, not gated on.
 		{"all-tasks overall is not read", func(r *Result) { r.Overall = newScore(0, 100) }, TierL},
 		{"duplicated class", func(r *Result) { r.Classes[7] = r.Classes[0] }, TierS},
 		{"zero tasks", func(r *Result) { *r = Result{} }, TierS},
@@ -84,6 +85,14 @@ func TestAssignTier(t *testing.T) {
 				t.Errorf("tier = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+// #358: calibration measures exactly the classes a scan plans, so no
+// planned class goes unmeasured and no unplanned one sways the tier.
+func TestPlannedClassesAreCalibrated(t *testing.T) {
+	if !slices.Equal(PlannedClasses(), Classes()) {
+		t.Errorf("PlannedClasses %v, Classes %v", PlannedClasses(), Classes())
 	}
 }
 

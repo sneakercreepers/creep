@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    sql = "SELECT id, title FROM @@table@@ ORDER BY " + request.query("@@field@@")
+    rows = db.query(sql)
+    return response(200, rows)

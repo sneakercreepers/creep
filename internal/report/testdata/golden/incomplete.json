@@ -219,7 +219,8 @@
         "class": "business_logic",
         "cwe": "CWE-840"
       }
-    ]
+    ],
+    "calibration_scope": "language_neutral"
   },
   "data_handling": {
     "requests": 3,

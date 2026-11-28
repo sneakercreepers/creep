@@ -24,6 +24,8 @@ Run `creep why <id>` for the evidence behind a finding.
 | `path_traversal` | `partial` | 3 / 6 | 0.188 – 0.812 |
 | `ssrf` | `not evaluated` | 0 / 0 | 0.000 – 1.000 |
 
+The calibration measures following data from an input to a sink on language-neutral pseudocode tasks, not knowledge of the repository's languages.
+
 ## Not looked for
 
 creep does not look for these classes in any language, so this report says nothing about them:

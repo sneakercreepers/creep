@@ -1,0 +1,5 @@
+handler @@func@@(request):
+    note = request.json("@@field@@")
+    user = session_user(request)
+    text = templates.render(note, {"user": user.name})
+    return response(200, text)

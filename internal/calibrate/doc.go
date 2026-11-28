@@ -5,10 +5,20 @@
 // tasks are generated instead: Generate turns a seed into TaskCount tasks by
 // mutating vulnerability templates.
 //
+//   - The task set is language-neutral (ADR 0037, #358): every template is
+//     a short program in one minimal pseudocode (input, transform, sink),
+//     whose builtins the task prompt defines, and no template, task, type
+//     or code path names a source language. What the tier decides (step
+//     size, context per call, step cap) depends on keeping the closed
+//     schema, usable context and following data from an input to a sink,
+//     so calibration measures only those, and a model gets the same tier
+//     on every repository. Adding a language to discovery never touches
+//     this package; a test fails if a language name appears in the set.
 //   - Templates are data, not code (docs/architecture.md §5, §8): each one is
-//     a directory under templates/ holding template.json (class, language,
-//     identifier pools, sink lines and markers) and a vulnerable.tmpl and
-//     safe.tmpl twin. Adding a template adds a directory, not Go code.
+//     a directory under templates/ holding template.json (class, identifier
+//     pools, sink lines and markers) and a vulnerable.tmpl and safe.tmpl
+//     twin. Every class has the same number of templates (two), so every
+//     class gets 8 tasks. Adding a template adds a directory, not Go code.
 //   - A mutation only renames identifiers, drawn from the template's own
 //     pools, and inserts neutral constant lines before the sink. Loading
 //     refuses a pool value that is not a plain identifier, is a keyword,
@@ -31,9 +41,10 @@
 //     a twin a precise model could rightly flag under another class would
 //     penalize the best models (#162). Caller input reaches a sink only in
 //     a form the sink cannot misread: an allowlisted value, the value that
-//     was checked, a bound scalar parameter or a path confined to a root;
-//     a twin that reads per-owner rows scopes them to the logged-in owner,
-//     and a merge writes only into own, prototype-free objects.
+//     was checked, a bound parameter, a value converted to a string or a
+//     number, a path confined to a root or a URL with host and port fixed;
+//     no safe twin runs text as code or a command, rebuilds typed objects
+//     or compiles a template that is not a literal.
 //
 // Templates hold no real secret or hostname; hosts use the reserved
 // .invalid top-level domain.
@@ -52,7 +63,7 @@
 //     wrong and counts against the structured-output check. Any other
 //     failure ends the run with no Result.
 //   - Each class gets a 95% Wilson interval. Tiers use the interval's lower
-//     bound, never the point score, because classes have as few as 8 tasks;
+//     bound, never the point score, because a class has only 8 tasks;
 //     the comparison is exact rational arithmetic, so the tier of a recorded
 //     run is the same on every platform. A class with no tasks is
 //     unmeasured and keeps the model at tier S.
@@ -86,7 +97,10 @@
 //     entry; an alias such as "-latest" that moves to a new snapshot is
 //     measured again only after MaxAge, or with --recalibrate. A new creep
 //     whose templates, prompts or key fields changed never reuses a tier:
-//     entries under older keys are never looked up again.
+//     entries under older keys are never looked up again. The key holds
+//     nothing from the scanned repository, so the same model gets the same
+//     entry, and tier, on every repository; the neutral set (#358) changed
+//     the task-set hash and PromptVersion 2, so a v0.5 entry is a miss.
 //   - A cached result is used only when its age is in [0, MaxAge), its line
 //     is authenticated by internal/state, it decodes strictly, it matches
 //     the key, its context check and class counts are ones a run can

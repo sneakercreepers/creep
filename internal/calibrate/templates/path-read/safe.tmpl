@@ -1,0 +1,7 @@
+handler @@func@@(request):
+    name = request.query("@@field@@")
+    path = real_path(join("/srv/@@dir@@", name))
+    if not starts_with(path, "/srv/@@dir@@/"):
+        return response(404, none)
+    data = read_file(path)
+    return response(200, data)

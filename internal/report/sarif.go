@@ -244,6 +244,10 @@ func sarifInvocationOf(r *Report) sarifInvocation {
 		Descriptor: sarifDescriptor{ID: "creep/not-looked-for"},
 		Level:      "note",
 		Message:    sarifMessage{Text: "not looked for in any language: " + NotLookedForText()},
+	}, sarifNotification{
+		Descriptor: sarifDescriptor{ID: "creep/calibration-scope"},
+		Level:      "note",
+		Message:    sarifMessage{Text: CalibrationScopeNote},
 	})
 	if summary := ByDesignSummary(r.Coverage.NotEvaluated); summary != "" {
 		inv.Notifications = append(inv.Notifications, sarifNotification{

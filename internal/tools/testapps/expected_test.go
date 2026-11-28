@@ -16,8 +16,8 @@ const (
 )
 
 // classes is the closed set of vulnerability classes an expected finding may
-// name. Adding one is a schema change, and calibrate.Classes() must gain it
-// too (TestClassesMatchCalibrate).
+// name. Adding one is a schema change, and it must be calibrated or listed
+// as not looked for (TestClassesMatchCalibrate).
 var classes = map[string]bool{
 	"sqli": true, "nosql_injection": true, "command_injection": true,
 	"ssrf": true, "path_traversal": true, "idor": true,

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "id": "path-write",
+  "class": "path_traversal",
+  "pad_after": 0,
+  "slots": {
+    "func": ["store_upload", "save_attachment", "put_file", "receive_file", "accept_upload", "attach"],
+    "field": ["attachment", "document", "blob", "payload_file", "content", "part"],
+    "dir": ["uploads", "attachments", "inbox", "incoming", "dropbox", "spool"]
+  },
+  "vulnerable": {"sink_line": 4, "marker": "+ upload.filename"},
+  "safe": {"sink_line": 7, "marker": "+ stored"}
+}

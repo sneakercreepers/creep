@@ -1,0 +1,6 @@
+handler @@func@@(request):
+    address = parse_url(request.query("@@field@@"))
+    if address.scheme != "https" or address.host != "images.example.invalid" or address.port != none:
+        return response(400, none)
+    reply = http_get(url_of("https", "images.example.invalid", address.path))
+    return response(200, reply.body)

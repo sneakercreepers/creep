@@ -63,6 +63,15 @@
             },
             {
               "descriptor": {
+                "id": "creep/calibration-scope"
+              },
+              "level": "note",
+              "message": {
+                "text": "calibration measures following data from an input to a sink on language-neutral pseudocode tasks, not knowledge of the repository's languages"
+              }
+            },
+            {
+              "descriptor": {
                 "id": "creep/by-design"
               },
               "level": "note",
@@ -475,7 +484,8 @@
               "class": "business_logic",
               "cwe": "CWE-840"
             }
-          ]
+          ],
+          "calibration_scope": "language_neutral"
         },
         "data_handling": {
           "requests": 3,

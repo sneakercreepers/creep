@@ -7,17 +7,14 @@ import (
 	"github.com/sneakercreepers/creep/internal/report"
 )
 
-// Reader classes calibration does not measure yet. Code eval and
-// deserialization were folded into command_injection before #365.
+// Report names of the classes calibration added with the neutral task set
+// (#358). Code eval and deserialization were folded into
+// command_injection before #365.
 const (
-	classTemplateInjection = "template_injection"
-	classCodeInjection     = "code_injection"
-	classDeserialization   = "insecure_deserialization"
+	classTemplateInjection = string(calibrate.ClassTemplateInjection)
+	classCodeInjection     = string(calibrate.ClassCodeInjection)
+	classDeserialization   = string(calibrate.ClassDeserialization)
 )
-
-// uncalibratedClasses are the readable classes coverage lists after the
-// calibrated ones, in this order.
-var uncalibratedClasses = []string{classTemplateInjection, classCodeInjection, classDeserialization}
 
 // kindClass names the report class of a discover sink kind, using the
 // calibration's names so findings and coverage rows agree. An unmapped kind
@@ -76,16 +73,15 @@ type coverageInput struct {
 	planned  bool // false when the planner refused the input or there was no route to plan
 }
 
-// classCoverage lists every calibrated class, then the uncalibrated
-// readable ones.
-// A class the pipeline cannot evaluate is not evaluated; a readable one is
-// partial when anything that could hold it was not evaluated in full.
+// classCoverage lists every calibrated class, which since #358 is every
+// readable one. A class the pipeline cannot evaluate is not evaluated; a
+// readable one is partial when anything that could hold it was not
+// evaluated in full.
 func classCoverage(in coverageInput) []report.ClassCoverage {
-	names := make([]string, 0, len(calibrate.Classes())+len(uncalibratedClasses))
+	names := make([]string, 0, len(calibrate.Classes()))
 	for _, c := range calibrate.Classes() {
 		names = append(names, string(c))
 	}
-	names = append(names, uncalibratedClasses...)
 	out := make([]report.ClassCoverage, len(names))
 	for i, name := range names {
 		out[i] = report.ClassCoverage{Class: name, Status: classStatus(name, in)}

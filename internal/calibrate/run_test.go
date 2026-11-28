@@ -12,66 +12,45 @@ import (
 	"github.com/sneakercreepers/creep/internal/models"
 )
 
-// Acceptance (#90): a recorded run replays to the same scores and tier,
-// with no network and no key. The fixture is a tier-M model: it misses two
-// prototype_pollution tasks, points one sqli answer three lines off, flags
-// one safe idor twin, answers one ssrf twin invalidly twice, passes every
-// tool probe and answers the 128 KiB context probe wrongly. #162 changed
-// only the request hashes of the 23 calls that send one of the six
-// rewritten safe twins; every reply, and so the tier, is the one recorded
-// for #90.
+// Acceptance (#90, #358): a recorded run replays to the same scores and
+// tier, with no network and no key, and a fixture covers each of S, M and
+// L (fixture_test.go says what each synthesized model gets wrong).
 func TestRunReplayIsDeterministic(t *testing.T) {
-	var first Result
-	for i := range 2 {
-		rep, n := fromFixture(t, "seed1_tier_m")
-		r, err := Run(context.Background(), testOptions(t, 1, rep.send))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if rep.replies != n || len(rep.calls) != n {
-			t.Fatalf("run used %d of %d recorded replies in %d calls", rep.replies, n, len(rep.calls))
-		}
-		if i == 0 {
-			first = r
-			continue
-		}
-		if !reflect.DeepEqual(r, first) {
-			t.Fatalf("replay differs:\n%+v\n%+v", r, first)
-		}
+	for _, fm := range fixtureModels() {
+		t.Run(fm.name, func(t *testing.T) {
+			if *updateFixtures {
+				recordFixture(t, fm)
+			}
+			var first Result
+			for i := range 2 {
+				rep, n := fromFixture(t, fm.name)
+				r, err := Run(context.Background(), testOptions(t, 1, rep.send))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if rep.replies != n || len(rep.calls) != n {
+					t.Fatalf("run used %d of %d recorded replies in %d calls", rep.replies, n, len(rep.calls))
+				}
+				if i == 1 && !reflect.DeepEqual(r, first) {
+					t.Fatalf("replay differs:\n%+v\n%+v", r, first)
+				}
+				first = r
+			}
+			checkFixtureResult(t, fm, first)
+		})
 	}
-	checkFixtureResult(t, first)
 }
 
-func checkFixtureResult(t *testing.T, r Result) {
-	t.Helper()
-	if r.Tier != TierM {
-		t.Errorf("tier = %s, want M", r.Tier)
+// The fixtures cover every tier assignTier can return.
+func TestFixturesCoverEveryTier(t *testing.T) {
+	covered := map[Tier]bool{}
+	for _, fm := range fixtureModels() {
+		covered[fm.tier] = true
 	}
-	if r.Overall.Correct != 95 || r.Overall.Total != 100 {
-		t.Errorf("overall = %d/%d, want 95/100", r.Overall.Correct, r.Overall.Total)
-	}
-	want := map[Class][2]int{
-		ClassSQLi: {13, 14}, ClassNoSQLInjection: {8, 8}, ClassCommandInjection: {14, 14},
-		ClassPathTraversal: {14, 14}, ClassSSRF: {13, 14}, ClassIDOR: {13, 14},
-		ClassMissingAuth: {14, 14}, ClassPrototypePollution: {6, 8},
-	}
-	for _, c := range r.Classes {
-		if got := [2]int{c.Correct, c.Total}; got != want[c.Class] {
-			t.Errorf("%s = %v, want %v", c.Class, got, want[c.Class])
+	for _, tier := range Tiers() {
+		if !covered[tier] {
+			t.Errorf("no replay fixture for tier %s", tier)
 		}
-	}
-	checks := r.Structured == StructuredCheck{Total: 100, Invalid: 1, Passed: true} &&
-		r.Tools == ToolCheck{Probes: 3, Correct: 3, Passed: true} &&
-		r.Context == ContextCheck{EffectiveBytes: 32 << 10, StoppedAt: 128 << 10, Stop: ContextStopWrongAnswer}
-	if !checks {
-		t.Errorf("checks = %+v %+v %+v", r.Structured, r.Tools, r.Context)
-	}
-	tasks, err := Generate(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Seed != 1 || r.TaskSet != taskSetHash(tasks) || r.PromptVersion != PromptVersion {
-		t.Errorf("result does not identify its tasks: %d %s %d", r.Seed, r.TaskSet, r.PromptVersion)
 	}
 }
 
@@ -134,11 +113,11 @@ func TestRunOutcomes(t *testing.T) {
 		tools      int
 		context    int
 	}{
-		{"perfect model", o.answer, TierL, 100, StructuredCheck{100, 0, true}, 3, 128 << 10},
-		{"all wrong", func(user string) string { return opposite(o, user) }, TierS, 0, StructuredCheck{100, 0, true}, 0, 0},
-		{"always safe", func(string) string { return taskJSON(false, "", 0) }, TierS, 50, StructuredCheck{100, 0, true}, 0, 0},
-		{"invalid output", func(string) string { return `{"vulnerable":true,"class":"xss","line":1}` }, TierS, 0, StructuredCheck{100, 100, false}, 0, 0},
-		{"not json", func(string) string { return "I think it is fine." }, TierS, 0, StructuredCheck{100, 100, false}, 0, 0},
+		{"perfect model", o.answer, TierL, 64, StructuredCheck{64, 0, true}, 3, 128 << 10},
+		{"all wrong", func(user string) string { return opposite(o, user) }, TierS, 0, StructuredCheck{64, 0, true}, 0, 0},
+		{"always safe", func(string) string { return taskJSON(false, "", 0) }, TierS, 32, StructuredCheck{64, 0, true}, 0, 0},
+		{"invalid output", func(string) string { return `{"vulnerable":true,"class":"xss","line":1}` }, TierS, 0, StructuredCheck{64, 64, false}, 0, 0},
+		{"not json", func(string) string { return "I think it is fine." }, TierS, 0, StructuredCheck{64, 64, false}, 0, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,7 +138,7 @@ func TestRunOutcomes(t *testing.T) {
 // opposite answers every call wrongly but validly.
 func opposite(o oracle, user string) string {
 	if task, ok := o.task(user); ok {
-		return taskJSON(!task.Vulnerable, "idor", 1)
+		return taskJSON(!task.Vulnerable, "ssrf", 1)
 	}
 	if strings.Contains(user, "what string is assigned") {
 		return `{"value":"wrong"}`
@@ -188,8 +167,8 @@ func TestRunFailures(t *testing.T) {
 		want error
 	}{
 		{"status on a task", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, statusAt(0, 500).send) }, models.ErrStatus},
-		{"status on a tool probe", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, statusAt(101, 429).send) }, models.ErrStatus},
-		{"status on a context probe", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, statusAt(104, 503).send) }, models.ErrStatus},
+		{"status on a tool probe", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, statusAt(TaskCount+1, 429).send) }, models.ErrStatus},
+		{"status on a context probe", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, statusAt(TaskCount+4, 503).send) }, models.ErrStatus},
 		{"transport error", context.Background(), func(t *testing.T) Options { return testOptions(t, 1, (&replayer{next: noReply}).send) }, nil},
 		{"canceled", canceled, func(t *testing.T) Options { return testOptions(t, 1, contextSend) }, context.Canceled},
 		{"no model", context.Background(), func(t *testing.T) Options { return Options{Seed: 1, Redactor: newRedactor(t)} }, ErrOptions},

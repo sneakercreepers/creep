@@ -15,8 +15,9 @@ import (
 //go:embed templates
 var embeddedTemplates embed.FS
 
-// schemaVersion is the template.json and fillers.json schema this code reads.
-const schemaVersion = 1
+// schemaVersion is the template.json and fillers.json schema this code
+// reads. Version 2 is the neutral pseudocode set (#358): no language field.
+const schemaVersion = 2
 
 type variantSpec struct {
 	SinkLine int    `json:"sink_line"`
@@ -27,7 +28,6 @@ type templateSpec struct {
 	Version    int                 `json:"version"`
 	ID         string              `json:"id"`
 	Class      Class               `json:"class"`
-	Language   Language            `json:"language"`
 	PadAfter   int                 `json:"pad_after"` // fillers go after this many lines
 	Slots      map[string][]string `json:"slots"`
 	Vulnerable variantSpec         `json:"vulnerable"`
@@ -35,9 +35,8 @@ type templateSpec struct {
 }
 
 type fillersSpec struct {
-	Version    int      `json:"version"`
-	Python     []string `json:"python"`
-	JavaScript []string `json:"javascript"`
+	Version int      `json:"version"`
+	Lines   []string `json:"lines"`
 }
 
 // variant is one rendered side of a template, before mutation.
@@ -50,7 +49,6 @@ type variant struct {
 type template struct {
 	id        string
 	class     Class
-	language  Language
 	padAfter  int
 	slotNames []string // sorted, so draws never depend on map order
 	slots     map[string][]string
@@ -65,10 +63,10 @@ func (t template) variant(vulnerable bool) variant {
 	return t.safe
 }
 
-// catalog is every template, sorted by id, and the filler lines per language.
+// catalog is every template, sorted by id, and the neutral filler lines.
 type catalog struct {
 	templates []template
-	fillers   map[Language][]string
+	fillers   []string
 }
 
 func defaultCatalog() (catalog, error) {
@@ -105,7 +103,7 @@ func loadCatalog(fsys fs.FS) (catalog, error) {
 	return cat, nil
 }
 
-func loadFillers(fsys fs.FS) (map[Language][]string, error) {
+func loadFillers(fsys fs.FS) ([]string, error) {
 	var spec fillersSpec
 	if err := decodeFile(fsys, "fillers.json", &spec); err != nil {
 		return nil, err
@@ -113,18 +111,18 @@ func loadFillers(fsys fs.FS) (map[Language][]string, error) {
 	if spec.Version != schemaVersion {
 		return nil, fmt.Errorf("fillers.json: version %d, want %d", spec.Version, schemaVersion)
 	}
-	fillers := map[Language][]string{LanguagePython: spec.Python, LanguageJavaScript: spec.JavaScript}
-	for _, lang := range []Language{LanguagePython, LanguageJavaScript} {
-		for _, line := range fillers[lang] {
-			if line == "" || strings.ContainsAny(line, "\r\n") || strings.Contains(line, placeholderMark) {
-				return nil, fmt.Errorf("fillers.json: %s filler %q is not one plain line", lang, line)
-			}
+	if len(spec.Lines) == 0 {
+		return nil, errors.New("fillers.json: no filler lines")
+	}
+	for _, line := range spec.Lines {
+		if line == "" || strings.ContainsAny(line, "\r\n") || strings.Contains(line, placeholderMark) {
+			return nil, fmt.Errorf("fillers.json: filler %q is not one plain line", line)
 		}
 	}
-	return fillers, nil
+	return spec.Lines, nil
 }
 
-func loadTemplate(fsys fs.FS, dir string, fillers map[Language][]string) (template, error) {
+func loadTemplate(fsys fs.FS, dir string, fillers []string) (template, error) {
 	var spec templateSpec
 	if err := decodeFile(fsys, dir+"/template.json", &spec); err != nil {
 		return template{}, err
@@ -146,7 +144,7 @@ func loadTemplate(fsys fs.FS, dir string, fillers map[Language][]string) (templa
 	}
 	sort.Strings(names)
 	return template{
-		id: spec.ID, class: spec.Class, language: spec.Language, padAfter: spec.PadAfter,
+		id: spec.ID, class: spec.Class, padAfter: spec.PadAfter,
 		slotNames: names, slots: spec.Slots,
 		vuln: variant{lines: splitLines(vulnCode), sinkLine: spec.Vulnerable.SinkLine, marker: spec.Vulnerable.Marker},
 		safe: variant{lines: splitLines(safeCode), sinkLine: spec.Safe.SinkLine, marker: spec.Safe.Marker},

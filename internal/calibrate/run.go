@@ -18,7 +18,7 @@ import (
 // PromptVersion names the prompts in prompts/ and the scoring rules. A
 // change to either changes results, so it bumps this and needs the
 // affects-results label.
-const PromptVersion = 1
+const PromptVersion = 2
 
 // lineTolerance is how far an answer's line may be from the task's sink
 // line and still count: a model may point at the source line just above

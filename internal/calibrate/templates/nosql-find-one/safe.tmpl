@@ -1,0 +1,4 @@
+handler @@func@@(request):
+    name = to_string(request.json("@@field@@"))
+    found = store.first("@@coll@@", {"@@field@@": name})
+    return response(200, found != none)
